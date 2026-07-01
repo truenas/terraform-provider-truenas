@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
 )
 
 var _ provider.Provider = &TrueNASProvider{}
@@ -141,11 +142,15 @@ func (p *TrueNASProvider) Configure(ctx context.Context, req provider.ConfigureR
 }
 
 func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resource {
-	return []func() resource.Resource{}
+	return []func() resource.Resource{
+		dataset.NewResource,
+	}
 }
 
 func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{}
+	return []func() datasource.DataSource{
+		dataset.NewDataSource,
+	}
 }
 
 // envOrVal returns the string value of a types.String, falling back to an env var.
