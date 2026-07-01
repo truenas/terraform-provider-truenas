@@ -1,6 +1,10 @@
 package dataset
 
-import "github.com/hashicorp/terraform-plugin-framework/types"
+import (
+	"strings"
+
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
 
 // DatasetModel maps to the TrueNAS pool.dataset API fields.
 type DatasetModel struct {
@@ -31,16 +35,16 @@ type DatasetModel struct {
 func (m *DatasetModel) apiPayload() map[string]any {
 	p := map[string]any{"name": m.Name.ValueString()}
 	if !m.Type.IsNull() && !m.Type.IsUnknown() {
-		p["type"] = m.Type.ValueString()
+		p["type"] = strings.ToUpper(m.Type.ValueString())
 	}
 	if !m.Compression.IsNull() && !m.Compression.IsUnknown() {
-		p["compression"] = m.Compression.ValueString()
+		p["compression"] = strings.ToUpper(m.Compression.ValueString())
 	}
 	if !m.AClType.IsNull() && !m.AClType.IsUnknown() {
-		p["acltype"] = m.AClType.ValueString()
+		p["acltype"] = strings.ToUpper(m.AClType.ValueString())
 	}
 	if !m.ShareType.IsNull() && !m.ShareType.IsUnknown() {
-		p["share_type"] = m.ShareType.ValueString()
+		p["share_type"] = strings.ToUpper(m.ShareType.ValueString())
 	}
 	if !m.Comments.IsNull() && !m.Comments.IsUnknown() {
 		p["comments"] = m.Comments.ValueString()

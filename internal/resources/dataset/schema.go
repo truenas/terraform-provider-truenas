@@ -37,7 +37,7 @@ func resourceSchema() schema.Schema {
 			"compression": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Compression algorithm, e.g. lz4, zstd, off.",
+				Description: "Compression algorithm. Case-insensitive: lz4, zstd, off, etc.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
