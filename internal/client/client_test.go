@@ -181,3 +181,82 @@ func TestAuthPassword_Success(t *testing.T) {
 	}
 }
 
+func TestCallJob_Success(t *testing.T) {
+	jobDone := make(chan struct{})
+	srv := echoServer(t, func(conn *websocket.Conn, msg map[string]any) {
+		switch msg["method"] {
+		case "pool.scrub":
+			// Return a job ID
+			conn.WriteJSON(map[string]any{"id": msg["id"], "msg": "result", "result": float64(42)})
+		case "core.get_jobs":
+			select {
+			case <-jobDone:
+				conn.WriteJSON(map[string]any{
+					"id":  msg["id"],
+					"msg": "result",
+					"result": []any{map[string]any{
+						"id":     float64(42),
+						"state":  "SUCCESS",
+						"result": "done",
+					}},
+				})
+			default:
+				conn.WriteJSON(map[string]any{
+					"id":  msg["id"],
+					"msg": "result",
+					"result": []any{map[string]any{
+						"id":    float64(42),
+						"state": "RUNNING",
+					}},
+				})
+				close(jobDone)
+			}
+		}
+	})
+	defer srv.Close()
+
+	c := client.New(wsURL(srv)+"/websocket", nil)
+	c.Connect(context.Background(), nil)
+
+	raw, err := c.CallJob(context.Background(), "pool.scrub", "tank")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result string
+	json.Unmarshal(raw, &result)
+	if result != "done" {
+		t.Errorf("got %q want %q", result, "done")
+	}
+}
+
+func TestCallJob_Failure(t *testing.T) {
+	srv := echoServer(t, func(conn *websocket.Conn, msg map[string]any) {
+		switch msg["method"] {
+		case "pool.scrub":
+			conn.WriteJSON(map[string]any{"id": msg["id"], "msg": "result", "result": float64(99)})
+		case "core.get_jobs":
+			conn.WriteJSON(map[string]any{
+				"id":  msg["id"],
+				"msg": "result",
+				"result": []any{map[string]any{
+					"id":    float64(99),
+					"state": "FAILED",
+					"error": "disk error",
+				}},
+			})
+		}
+	})
+	defer srv.Close()
+
+	c := client.New(wsURL(srv)+"/websocket", nil)
+	c.Connect(context.Background(), nil)
+
+	_, err := c.CallJob(context.Background(), "pool.scrub", "tank")
+	if err == nil {
+		t.Fatal("expected error for failed job")
+	}
+	if !strings.Contains(err.Error(), "disk error") {
+		t.Errorf("expected job error message, got: %v", err)
+	}
+}
+
