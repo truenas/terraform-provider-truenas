@@ -136,3 +136,48 @@ func TestNew_WSS_Rejection(t *testing.T) {
 	}
 }
 
+func TestAuthAPIKey_Success(t *testing.T) {
+	srv := echoServer(t, func(conn *websocket.Conn, msg map[string]any) {
+		if msg["method"] == "auth.login_with_api_key" {
+			conn.WriteJSON(map[string]any{"id": msg["id"], "msg": "result", "result": true})
+		}
+	})
+	defer srv.Close()
+
+	c := client.New(wsURL(srv)+"/websocket", nil)
+	c.Connect(context.Background(), nil)
+	if err := client.AuthAPIKey(context.Background(), c, "1-testkey"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAuthAPIKey_Failure(t *testing.T) {
+	srv := echoServer(t, func(conn *websocket.Conn, msg map[string]any) {
+		if msg["method"] == "auth.login_with_api_key" {
+			conn.WriteJSON(map[string]any{"id": msg["id"], "msg": "result", "result": false})
+		}
+	})
+	defer srv.Close()
+
+	c := client.New(wsURL(srv)+"/websocket", nil)
+	c.Connect(context.Background(), nil)
+	if err := client.AuthAPIKey(context.Background(), c, "bad"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestAuthPassword_Success(t *testing.T) {
+	srv := echoServer(t, func(conn *websocket.Conn, msg map[string]any) {
+		if msg["method"] == "auth.login" {
+			conn.WriteJSON(map[string]any{"id": msg["id"], "msg": "result", "result": true})
+		}
+	})
+	defer srv.Close()
+
+	c := client.New(wsURL(srv)+"/websocket", nil)
+	c.Connect(context.Background(), nil)
+	if err := client.AuthPassword(context.Background(), c, "root", "pass"); err != nil {
+		t.Fatal(err)
+	}
+}
+
