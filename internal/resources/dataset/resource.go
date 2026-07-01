@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
@@ -60,7 +61,10 @@ func (r *DatasetResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	r.responseToModel(&apiResp, &plan)
+	resp.Diagnostics.Append(r.responseToModel(&apiResp, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -87,7 +91,10 @@ func (r *DatasetResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	r.responseToModel(&apiResp, &state)
+	resp.Diagnostics.Append(r.responseToModel(&apiResp, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -120,7 +127,10 @@ func (r *DatasetResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	r.responseToModel(&apiResp, &plan)
+	resp.Diagnostics.Append(r.responseToModel(&apiResp, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -131,7 +141,7 @@ func (r *DatasetResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 
-	_, err := r.client.Call(ctx, "pool.dataset.delete", state.Name.ValueString(),
+	_, err := r.client.CallJob(ctx, "pool.dataset.delete", state.Name.ValueString(),
 		map[string]any{"recursive": true})
 	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Delete dataset failed", err.Error())
@@ -156,11 +166,15 @@ func (r *DatasetResource) ImportState(ctx context.Context, req resource.ImportSt
 		return
 	}
 
-	r.responseToModel(&apiResp, &state)
+	resp.Diagnostics.Append(r.responseToModel(&apiResp, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func (r *DatasetResource) responseToModel(api *apiResponse, m *DatasetModel) {
+func (r *DatasetResource) responseToModel(api *apiResponse, m *DatasetModel) diag.Diagnostics {
+	var diags diag.Diagnostics
 	m.ID = types.StringValue(api.Name)
 	m.Name = types.StringValue(api.Name)
 	m.Type = types.StringValue(api.Type)
@@ -172,18 +186,37 @@ func (r *DatasetResource) responseToModel(api *apiResponse, m *DatasetModel) {
 	m.ShareType = types.StringValue(api.Properties.ShareType.Value)
 	m.Comments = types.StringValue(api.Properties.Comments.Value)
 
-	m.Quota = types.Int64Value(parseInt64OrZero(api.Properties.Quota.Value))
-	m.RefQuota = types.Int64Value(parseInt64OrZero(api.Properties.RefQuota.Value))
-	m.Reservation = types.Int64Value(parseInt64OrZero(api.Properties.Reservation.Value))
+	q, err := parseInt64OrZero(api.Properties.Quota.Value)
+	if err != nil {
+		diags.AddWarning("Unexpected quota value", err.Error())
+	}
+	m.Quota = types.Int64Value(q)
+
+	rq, err := parseInt64OrZero(api.Properties.RefQuota.Value)
+	if err != nil {
+		diags.AddWarning("Unexpected refquota value", err.Error())
+	}
+	m.RefQuota = types.Int64Value(rq)
+
+	res, err := parseInt64OrZero(api.Properties.Reservation.Value)
+	if err != nil {
+		diags.AddWarning("Unexpected reservation value", err.Error())
+	}
+	m.Reservation = types.Int64Value(res)
+
 	if api.Properties.VolSize.Parsed != 0 {
 		m.VolSize = types.Int64Value(api.Properties.VolSize.Parsed)
 	}
+	return diags
 }
 
-func parseInt64OrZero(s string) int64 {
+func parseInt64OrZero(s string) (int64, error) {
 	if s == "none" || s == "" {
-		return 0
+		return 0, nil
 	}
-	v, _ := strconv.ParseInt(s, 10, 64)
-	return v
+	v, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("unexpected quota value %q: %w", s, err)
+	}
+	return v, nil
 }

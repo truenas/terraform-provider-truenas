@@ -27,10 +27,16 @@ var (
 // Client returns a singleton *client.Client connected to the acceptance test TrueNAS.
 func Client() *client.Client {
 	clientOnce.Do(func() {
-		apiKey := os.Getenv("TRUENAS_API_KEY")
 		tlsCfg, _ := client.BuildTLSConfig(true, "")
 		c := client.New(TestTrueNASEndpoint, tlsCfg)
-		authFn := func(ctx context.Context) error { return client.AuthAPIKey(ctx, c, apiKey) }
+		var authFn func(ctx context.Context) error
+		if apiKey := os.Getenv("TRUENAS_API_KEY"); apiKey != "" {
+			authFn = func(ctx context.Context) error { return client.AuthAPIKey(ctx, c, apiKey) }
+		} else {
+			username := os.Getenv("TRUENAS_USERNAME")
+			password := os.Getenv("TRUENAS_PASSWORD")
+			authFn = func(ctx context.Context) error { return client.AuthPassword(ctx, c, username, password) }
+		}
 		if err := c.Connect(context.Background(), authFn); err != nil {
 			panic("acctest: cannot connect to TrueNAS: " + err.Error())
 		}

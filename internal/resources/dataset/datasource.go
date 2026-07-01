@@ -76,6 +76,9 @@ func (d *DatasetDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	}
 
 	r := &DatasetResource{}
-	r.responseToModel(&apiResp, &state)
+	resp.Diagnostics.Append(r.responseToModel(&apiResp, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

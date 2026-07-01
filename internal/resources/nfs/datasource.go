@@ -77,6 +77,9 @@ func (d *NFSShareDataSource) Read(ctx context.Context, req datasource.ReadReques
 	}
 
 	r := &NFSShareResource{}
-	r.responseToModel(ctx, &apiResp, &state)
+	resp.Diagnostics.Append(r.responseToModel(ctx, &apiResp, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

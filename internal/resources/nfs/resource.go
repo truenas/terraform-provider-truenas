@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
@@ -57,7 +58,10 @@ func (r *NFSShareResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	r.responseToModel(ctx, &apiResp, &plan)
+	resp.Diagnostics.Append(r.responseToModel(ctx, &apiResp, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -90,7 +94,10 @@ func (r *NFSShareResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 
-	r.responseToModel(ctx, &apiResp, &state)
+	resp.Diagnostics.Append(r.responseToModel(ctx, &apiResp, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -124,7 +131,10 @@ func (r *NFSShareResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 
-	r.responseToModel(ctx, &apiResp, &plan)
+	resp.Diagnostics.Append(r.responseToModel(ctx, &apiResp, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -166,11 +176,15 @@ func (r *NFSShareResource) ImportState(ctx context.Context, req resource.ImportS
 	}
 
 	var state NFSShareModel
-	r.responseToModel(ctx, &apiResp, &state)
+	resp.Diagnostics.Append(r.responseToModel(ctx, &apiResp, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func (r *NFSShareResource) responseToModel(ctx context.Context, api *apiResponse, m *NFSShareModel) {
+func (r *NFSShareResource) responseToModel(ctx context.Context, api *apiResponse, m *NFSShareModel) diag.Diagnostics {
+	var diags diag.Diagnostics
 	m.ID = types.StringValue(strconv.FormatInt(api.ID, 10))
 	m.Path = types.StringValue(api.Path)
 	m.Comment = types.StringValue(api.Comment)
@@ -179,8 +193,11 @@ func (r *NFSShareResource) responseToModel(ctx context.Context, api *apiResponse
 	m.MapRoot = types.StringValue(api.MapRoot)
 	m.MapGroup = types.StringValue(api.MapGroup)
 
-	networks, _ := types.ListValueFrom(ctx, types.StringType, api.Networks)
+	networks, d := types.ListValueFrom(ctx, types.StringType, api.Networks)
+	diags.Append(d...)
 	m.Networks = networks
-	hosts, _ := types.ListValueFrom(ctx, types.StringType, api.Hosts)
+	hosts, d := types.ListValueFrom(ctx, types.StringType, api.Hosts)
+	diags.Append(d...)
 	m.Hosts = hosts
+	return diags
 }

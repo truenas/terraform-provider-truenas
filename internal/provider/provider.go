@@ -47,7 +47,7 @@ func (p *TrueNASProvider) Schema(_ context.Context, _ provider.SchemaRequest, re
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
 				Description: "TrueNAS WebSocket endpoint, e.g. wss://192.168.1.68/websocket. Env: TRUENAS_ENDPOINT",
-				Required:    true,
+				Optional:    true,
 			},
 			"api_key": schema.StringAttribute{
 				Description: "TrueNAS API key. Mutually exclusive with username/password. Env: TRUENAS_API_KEY",
