@@ -55,9 +55,8 @@ type Client struct {
 	endpoint  string
 	tlsConfig *tls.Config
 
-	connMu        sync.Mutex
-	conn          *websocket.Conn
-	authenticated bool
+	connMu  sync.Mutex
+	conn    *websocket.Conn
 
 	writeMu sync.Mutex
 
@@ -104,7 +103,6 @@ func (c *Client) Connect(ctx context.Context, authenticateFn func(ctx context.Co
 
 	c.connMu.Lock()
 	c.conn = conn
-	c.authenticated = false
 	c.connMu.Unlock()
 
 	go c.readLoop(conn)
@@ -114,9 +112,6 @@ func (c *Client) Connect(ctx context.Context, authenticateFn func(ctx context.Co
 			c.Close()
 			return err
 		}
-		c.connMu.Lock()
-		c.authenticated = true
-		c.connMu.Unlock()
 	}
 
 	return nil
@@ -130,7 +125,6 @@ func (c *Client) readLoop(conn *websocket.Conn) {
 			c.connMu.Lock()
 			if c.conn == conn {
 				c.conn = nil
-				c.authenticated = false
 			}
 			c.connMu.Unlock()
 			return
@@ -168,8 +162,18 @@ func (c *Client) Call(ctx context.Context, method string, params ...any) (json.R
 	c.pending[id] = p
 	c.pendingMu.Unlock()
 
+	c.connMu.Lock()
+	conn := c.conn
+	c.connMu.Unlock()
+	if conn == nil {
+		c.pendingMu.Lock()
+		delete(c.pending, id)
+		c.pendingMu.Unlock()
+		return nil, fmt.Errorf("not connected")
+	}
+
 	c.writeMu.Lock()
-	err := c.conn.WriteJSON(map[string]any{
+	err := conn.WriteJSON(map[string]any{
 		"id":     id,
 		"msg":    "method",
 		"method": method,
@@ -202,7 +206,6 @@ func (c *Client) Call(ctx context.Context, method string, params ...any) (json.R
 func (c *Client) Close() error {
 	c.connMu.Lock()
 	defer c.connMu.Unlock()
-	c.authenticated = false
 	if c.conn != nil {
 		err := c.conn.Close()
 		c.conn = nil

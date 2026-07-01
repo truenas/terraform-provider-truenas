@@ -3,7 +3,6 @@ package client_test
 import (
 	"context"
 	"encoding/json"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -137,4 +136,3 @@ func TestNew_WSS_Rejection(t *testing.T) {
 	}
 }
 
-var _ net.Listener = (*net.TCPListener)(nil) // import check
