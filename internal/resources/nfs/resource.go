@@ -101,8 +101,12 @@ func (r *NFSShareResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 
-	id, _ := strconv.ParseInt(plan.ID.ValueString(), 10, 64)
-	_, err := r.client.Call(ctx, "sharing.nfs.update", id, plan.apiPayload())
+	id, err := strconv.ParseInt(plan.ID.ValueString(), 10, 64)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid NFS share ID", plan.ID.ValueString())
+		return
+	}
+	_, err = r.client.Call(ctx, "sharing.nfs.update", id, plan.apiPayload())
 	if err != nil {
 		resp.Diagnostics.AddError("Update NFS share failed", err.Error())
 		return
@@ -131,8 +135,12 @@ func (r *NFSShareResource) Delete(ctx context.Context, req resource.DeleteReques
 		return
 	}
 
-	id, _ := strconv.ParseInt(state.ID.ValueString(), 10, 64)
-	_, err := r.client.Call(ctx, "sharing.nfs.delete", id)
+	id, err := strconv.ParseInt(state.ID.ValueString(), 10, 64)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid NFS share ID", state.ID.ValueString())
+		return
+	}
+	_, err = r.client.Call(ctx, "sharing.nfs.delete", id)
 	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Delete NFS share failed", err.Error())
 	}

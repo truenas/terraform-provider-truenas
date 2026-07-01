@@ -1,6 +1,10 @@
 package nfs
 
-import "github.com/hashicorp/terraform-plugin-framework/types"
+import (
+	"context"
+
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
 
 type NFSShareModel struct {
 	ID       types.String `tfsdk:"id"`
@@ -42,6 +46,18 @@ func (m *NFSShareModel) apiPayload() map[string]any {
 	}
 	if !m.MapGroup.IsNull() && !m.MapGroup.IsUnknown() {
 		p["maproot_group"] = m.MapGroup.ValueString()
+	}
+	if !m.Networks.IsNull() && !m.Networks.IsUnknown() {
+		var nets []string
+		if diags := m.Networks.ElementsAs(context.Background(), &nets, false); !diags.HasError() {
+			p["networks"] = nets
+		}
+	}
+	if !m.Hosts.IsNull() && !m.Hosts.IsUnknown() {
+		var hosts []string
+		if diags := m.Hosts.ElementsAs(context.Background(), &hosts, false); !diags.HasError() {
+			p["hosts"] = hosts
+		}
 	}
 	return p
 }
