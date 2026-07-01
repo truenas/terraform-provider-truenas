@@ -8,14 +8,13 @@ import (
 
 // DatasetModel maps to the TrueNAS pool.dataset API fields.
 type DatasetModel struct {
-	// Terraform ID (set to dataset name)
 	ID types.String `tfsdk:"id"`
 
 	// Required
 	Name types.String `tfsdk:"name"`
 
 	// Optional with TrueNAS defaults
-	Type        types.String `tfsdk:"type"`        // FILESYSTEM | VOLUME
+	Type        types.String `tfsdk:"type"`
 	Compression types.String `tfsdk:"compression"`
 	AClType     types.String `tfsdk:"acltype"`
 	ShareType   types.String `tfsdk:"share_type"`
@@ -23,7 +22,7 @@ type DatasetModel struct {
 	Quota       types.Int64  `tfsdk:"quota"`
 	RefQuota    types.Int64  `tfsdk:"refquota"`
 	Reservation types.Int64  `tfsdk:"reservation"`
-	VolSize     types.Int64  `tfsdk:"volsize"` // VOLUME only
+	VolSize     types.Int64  `tfsdk:"volsize"`
 
 	// Computed
 	MountPoint types.String `tfsdk:"mountpoint"`
@@ -64,23 +63,44 @@ func (m *DatasetModel) apiPayload() map[string]any {
 	return p
 }
 
-// apiResponse holds the fields we read back from the TrueNAS API.
+// apiResponse matches the flat JSON structure returned by pool.dataset.get_instance.
+// Fields are at the root level (no "properties" wrapper). Quota fields use *int64
+// because TrueNAS returns JSON null when no limit is set.
 type apiResponse struct {
 	Name       string `json:"name"`
 	Type       string `json:"type"`
 	MountPoint string `json:"mountpoint"`
 	Encrypted  bool   `json:"encrypted"`
 	Pool       string `json:"pool"`
-	Properties struct {
-		Compression struct{ Value string `json:"value"` } `json:"compression"`
-		AClType     struct{ Value string `json:"value"` } `json:"acltype"`
-		ShareType   struct{ Value string `json:"value"` } `json:"share_type"`
-		Quota       struct{ Value string `json:"value"` } `json:"quota"`
-		RefQuota    struct{ Value string `json:"value"` } `json:"refquota"`
-		Reservation struct{ Value string `json:"value"` } `json:"reservation"`
-		Comments    struct{ Value string `json:"value"` } `json:"org.freenas:description"`
-		VolSize     struct {
-			Parsed int64 `json:"parsed"`
-		} `json:"volsize"`
-	} `json:"properties"`
+
+	Compression struct {
+		Parsed string `json:"parsed"` // lowercase: "lz4"
+	} `json:"compression"`
+
+	AClType struct {
+		Parsed string `json:"parsed"` // lowercase: "posix", "nfsv4", "off"
+	} `json:"acltype"`
+
+	Quota struct {
+		Parsed *int64 `json:"parsed"` // null when unlimited
+	} `json:"quota"`
+
+	RefQuota struct {
+		Parsed *int64 `json:"parsed"`
+	} `json:"refquota"`
+
+	Reservation struct {
+		Parsed *int64 `json:"parsed"`
+	} `json:"reservation"`
+
+	VolSize struct {
+		Parsed int64 `json:"parsed"` // 0 for FILESYSTEM datasets
+	} `json:"volsize"`
+
+	// Comments live under user_properties in SCALE 24+
+	UserProperties struct {
+		Comments struct {
+			Value string `json:"value"`
+		} `json:"comments"`
+	} `json:"user_properties"`
 }

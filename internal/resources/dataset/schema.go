@@ -53,11 +53,9 @@ func resourceSchema() schema.Schema {
 			},
 			"share_type": schema.StringAttribute{
 				Optional:    true,
-				Computed:    true,
-				Description: "Optimised share type: unix or windows. Case-insensitive.",
+				Description: "Optimised share type: UNIX or WINDOWS (write-only, not returned by API).",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
-					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"comments": schema.StringAttribute{

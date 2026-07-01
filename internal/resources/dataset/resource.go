@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -182,47 +181,44 @@ func (r *DatasetResource) ImportState(ctx context.Context, req resource.ImportSt
 }
 
 func (r *DatasetResource) responseToModel(api *apiResponse, m *DatasetModel) diag.Diagnostics {
-	var diags diag.Diagnostics
 	m.ID = types.StringValue(api.Name)
 	m.Name = types.StringValue(api.Name)
-	m.Type = types.StringValue(strings.ToLower(api.Type))
+	m.Type = preserveCase(m.Type, api.Type)
 	m.MountPoint = types.StringValue(api.MountPoint)
 	m.Encrypted = types.BoolValue(api.Encrypted)
 	m.Pool = types.StringValue(api.Pool)
-	m.Compression = types.StringValue(strings.ToLower(api.Properties.Compression.Value))
-	m.AClType = types.StringValue(strings.ToLower(api.Properties.AClType.Value))
-	m.ShareType = types.StringValue(strings.ToLower(api.Properties.ShareType.Value))
-	m.Comments = types.StringValue(api.Properties.Comments.Value)
+	m.Compression = preserveCase(m.Compression, api.Compression.Parsed)
+	m.AClType = preserveCase(m.AClType, api.AClType.Parsed)
+	m.Comments = types.StringValue(api.UserProperties.Comments.Value)
+	// ShareType is write-only (not returned by API); preserve plan/state value as-is.
 
-	q, err := parseInt64OrZero(api.Properties.Quota.Value)
-	if err != nil {
-		diags.AddWarning("Unexpected quota value", err.Error())
+	if api.Quota.Parsed != nil {
+		m.Quota = types.Int64Value(*api.Quota.Parsed)
+	} else {
+		m.Quota = types.Int64Value(0)
 	}
-	m.Quota = types.Int64Value(q)
-
-	rq, err := parseInt64OrZero(api.Properties.RefQuota.Value)
-	if err != nil {
-		diags.AddWarning("Unexpected refquota value", err.Error())
+	if api.RefQuota.Parsed != nil {
+		m.RefQuota = types.Int64Value(*api.RefQuota.Parsed)
+	} else {
+		m.RefQuota = types.Int64Value(0)
 	}
-	m.RefQuota = types.Int64Value(rq)
-
-	res, err := parseInt64OrZero(api.Properties.Reservation.Value)
-	if err != nil {
-		diags.AddWarning("Unexpected reservation value", err.Error())
+	if api.Reservation.Parsed != nil {
+		m.Reservation = types.Int64Value(*api.Reservation.Parsed)
+	} else {
+		m.Reservation = types.Int64Value(0)
 	}
-	m.Reservation = types.Int64Value(res)
-
-	m.VolSize = types.Int64Value(api.Properties.VolSize.Parsed)
-	return diags
+	m.VolSize = types.Int64Value(api.VolSize.Parsed)
+	return nil
 }
 
-func parseInt64OrZero(s string) (int64, error) {
-	if s == "none" || s == "" {
-		return 0, nil
+// preserveCase returns current if it matches apiVal case-insensitively (preserving
+// the user's chosen casing), or a lowercased apiVal otherwise (drift or first read).
+func preserveCase(current types.String, apiVal string) types.String {
+	if current.IsNull() || current.IsUnknown() {
+		return types.StringValue(strings.ToLower(apiVal))
 	}
-	v, err := strconv.ParseInt(s, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("unexpected quota value %q: %w", s, err)
+	if strings.EqualFold(current.ValueString(), apiVal) {
+		return current
 	}
-	return v, nil
+	return types.StringValue(strings.ToLower(apiVal))
 }
