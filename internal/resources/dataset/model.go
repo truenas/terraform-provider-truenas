@@ -70,6 +70,7 @@ type apiResponse struct {
 	Properties struct {
 		Compression struct{ Value string `json:"value"` } `json:"compression"`
 		AClType     struct{ Value string `json:"value"` } `json:"acltype"`
+		ShareType   struct{ Value string `json:"value"` } `json:"share_type"`
 		Quota       struct{ Value string `json:"value"` } `json:"quota"`
 		RefQuota    struct{ Value string `json:"value"` } `json:"refquota"`
 		Reservation struct{ Value string `json:"value"` } `json:"reservation"`

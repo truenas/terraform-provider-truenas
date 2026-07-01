@@ -169,18 +169,21 @@ func (r *DatasetResource) responseToModel(api *apiResponse, m *DatasetModel) {
 	m.Pool = types.StringValue(api.Pool)
 	m.Compression = types.StringValue(api.Properties.Compression.Value)
 	m.AClType = types.StringValue(api.Properties.AClType.Value)
+	m.ShareType = types.StringValue(api.Properties.ShareType.Value)
 	m.Comments = types.StringValue(api.Properties.Comments.Value)
 
-	if q, err := strconv.ParseInt(api.Properties.Quota.Value, 10, 64); err == nil {
-		m.Quota = types.Int64Value(q)
-	}
-	if q, err := strconv.ParseInt(api.Properties.RefQuota.Value, 10, 64); err == nil {
-		m.RefQuota = types.Int64Value(q)
-	}
-	if q, err := strconv.ParseInt(api.Properties.Reservation.Value, 10, 64); err == nil {
-		m.Reservation = types.Int64Value(q)
-	}
+	m.Quota = types.Int64Value(parseInt64OrZero(api.Properties.Quota.Value))
+	m.RefQuota = types.Int64Value(parseInt64OrZero(api.Properties.RefQuota.Value))
+	m.Reservation = types.Int64Value(parseInt64OrZero(api.Properties.Reservation.Value))
 	if api.Properties.VolSize.Parsed != 0 {
 		m.VolSize = types.Int64Value(api.Properties.VolSize.Parsed)
 	}
+}
+
+func parseInt64OrZero(s string) int64 {
+	if s == "none" || s == "" {
+		return 0
+	}
+	v, _ := strconv.ParseInt(s, 10, 64)
+	return v
 }

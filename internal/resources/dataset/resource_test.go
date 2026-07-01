@@ -57,9 +57,12 @@ func testAccCheckDatasetDestroyed(name string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		c := acctest.Client()
 		_, err := c.Call(context.Background(), "pool.dataset.get_instance", name)
-		if err != nil && client.IsNotFound(err) {
-			return nil
+		if err != nil {
+			if client.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("error checking dataset %s: %v", name, err)
 		}
-		return fmt.Errorf("dataset %s still exists: %v", name, err)
+		return fmt.Errorf("dataset %s still exists", name)
 	}
 }

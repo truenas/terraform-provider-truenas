@@ -2,6 +2,7 @@ package dataset
 
 import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 )
@@ -71,21 +72,33 @@ func resourceSchema() schema.Schema {
 				Optional:    true,
 				Computed:    true,
 				Description: "Quota in bytes (0 = unlimited).",
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			"refquota": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
 				Description: "Referenced quota in bytes (0 = unlimited).",
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			"reservation": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
 				Description: "Reserved space in bytes.",
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			"volsize": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
 				Description: "Volume size in bytes. Required for type=VOLUME.",
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			"mountpoint": schema.StringAttribute{
 				Computed:    true,
