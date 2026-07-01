@@ -1,11 +1,33 @@
 package dataset
 
 import (
+	"context"
+	"strings"
+
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+// upperCaseModifier normalizes string plan values to uppercase so that
+// user-supplied lowercase enum values (e.g. "lz4") match the uppercase
+// canonical form TrueNAS returns ("LZ4"), preventing false inconsistencies.
+type upperCaseModifier struct{}
+
+func (upperCaseModifier) Description(_ context.Context) string {
+	return "Normalizes value to uppercase."
+}
+func (upperCaseModifier) MarkdownDescription(_ context.Context) string {
+	return "Normalizes value to uppercase."
+}
+func (upperCaseModifier) PlanModifyString(_ context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if req.PlanValue.IsUnknown() || req.PlanValue.IsNull() {
+		return
+	}
+	resp.PlanValue = types.StringValue(strings.ToUpper(req.PlanValue.ValueString()))
+}
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
@@ -32,14 +54,16 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
+					upperCaseModifier{},
 				},
 			},
 			"compression": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Compression algorithm. Case-insensitive: lz4, zstd, off, etc.",
+				Description: "Compression algorithm. Case-insensitive: LZ4, ZSTD, OFF, etc.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+					upperCaseModifier{},
 				},
 			},
 			"acltype": schema.StringAttribute{
@@ -49,6 +73,7 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
+					upperCaseModifier{},
 				},
 			},
 			"share_type": schema.StringAttribute{
@@ -58,6 +83,7 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
+					upperCaseModifier{},
 				},
 			},
 			"comments": schema.StringAttribute{

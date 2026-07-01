@@ -49,15 +49,22 @@ func (r *DatasetResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "pool.dataset.create", plan.apiPayload())
+	_, err := r.client.Call(ctx, "pool.dataset.create", plan.apiPayload())
 	if err != nil {
 		resp.Diagnostics.AddError("Create dataset failed", err.Error())
 		return
 	}
 
+	// Read back via get_instance for canonical state (create response omits some properties).
+	raw, err := r.client.Call(ctx, "pool.dataset.get_instance", plan.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read after create failed", err.Error())
+		return
+	}
+
 	var apiResp apiResponse
 	if err := json.Unmarshal(raw, &apiResp); err != nil {
-		resp.Diagnostics.AddError("Parse create response", err.Error())
+		resp.Diagnostics.AddError("Parse read response", err.Error())
 		return
 	}
 
