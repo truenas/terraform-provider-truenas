@@ -204,9 +204,7 @@ func (r *DatasetResource) responseToModel(api *apiResponse, m *DatasetModel) dia
 	}
 	m.Reservation = types.Int64Value(res)
 
-	if api.Properties.VolSize.Parsed != 0 {
-		m.VolSize = types.Int64Value(api.Properties.VolSize.Parsed)
-	}
+	m.VolSize = types.Int64Value(api.Properties.VolSize.Parsed)
 	return diags
 }
 
