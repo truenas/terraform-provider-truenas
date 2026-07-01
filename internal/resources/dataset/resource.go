@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -184,13 +185,13 @@ func (r *DatasetResource) responseToModel(api *apiResponse, m *DatasetModel) dia
 	var diags diag.Diagnostics
 	m.ID = types.StringValue(api.Name)
 	m.Name = types.StringValue(api.Name)
-	m.Type = types.StringValue(api.Type)
+	m.Type = types.StringValue(strings.ToLower(api.Type))
 	m.MountPoint = types.StringValue(api.MountPoint)
 	m.Encrypted = types.BoolValue(api.Encrypted)
 	m.Pool = types.StringValue(api.Pool)
-	m.Compression = types.StringValue(api.Properties.Compression.Value)
-	m.AClType = types.StringValue(api.Properties.AClType.Value)
-	m.ShareType = types.StringValue(api.Properties.ShareType.Value)
+	m.Compression = types.StringValue(strings.ToLower(api.Properties.Compression.Value))
+	m.AClType = types.StringValue(strings.ToLower(api.Properties.AClType.Value))
+	m.ShareType = types.StringValue(strings.ToLower(api.Properties.ShareType.Value))
 	m.Comments = types.StringValue(api.Properties.Comments.Value)
 
 	q, err := parseInt64OrZero(api.Properties.Quota.Value)
