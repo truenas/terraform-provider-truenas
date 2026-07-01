@@ -1,0 +1,7 @@
+terraform-provider-truenas
+terraform-provider-truenas_*
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+docs/
