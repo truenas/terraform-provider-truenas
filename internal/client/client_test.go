@@ -79,8 +79,8 @@ func TestCall_APIError(t *testing.T) {
 			"id":  msg["id"],
 			"msg": "result",
 			"error": map[string]any{
-				"code":    2,
-				"message": "Dataset tank/missing not found",
+				"error":  2,
+				"reason": "Dataset tank/missing not found",
 			},
 		})
 	})

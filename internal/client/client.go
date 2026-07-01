@@ -15,9 +15,10 @@ import (
 )
 
 // APIError is a TrueNAS WebSocket API error.
+// TrueNAS wire format: {"error": <int>, "reason": "<string>", "trace": ...}
 type APIError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	Code    int    `json:"error"`
+	Message string `json:"reason"`
 	Trace   any    `json:"trace,omitempty"`
 }
 
