@@ -70,12 +70,12 @@ func TestPoolAPIPayload(t *testing.T) {
 	}
 
 	// Verify autotrim
-	autotrim, ok := payload["autotrim"].(map[string]any)
+	autotrim, ok := payload["autotrim"].(string)
 	if !ok {
-		t.Fatal("autotrim is not map[string]any")
+		t.Fatal("autotrim is not string")
 	}
-	if autotrim["enabled"] != true {
-		t.Errorf("expected autotrim.enabled=true, got %v", autotrim["enabled"])
+	if autotrim != "ON" {
+		t.Errorf("expected autotrim=\"ON\", got %q", autotrim)
 	}
 
 	// Verify topology

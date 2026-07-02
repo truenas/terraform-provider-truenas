@@ -55,19 +55,27 @@ func (r *SnapshotResource) Create(ctx context.Context, req resource.CreateReques
 		"recursive": plan.Recursive.ValueBool(),
 	}
 
-	raw, err := r.client.Call(ctx, "pool.snapshot.create", payload)
+	_, err := r.client.Call(ctx, "pool.snapshot.create", payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Create snapshot failed", err.Error())
 		return
 	}
 
-	var api snapshotAPI
-	if err := json.Unmarshal(raw, &api); err != nil {
-		resp.Diagnostics.AddError("Parse create response", err.Error())
+	// pool.snapshot.create returns the snapshot name string, not a full object.
+	// Read back via get_instance for canonical state.
+	snapID := plan.Dataset.ValueString() + "@" + plan.Name.ValueString()
+	raw, err := r.client.Call(ctx, "pool.snapshot.get_instance", snapID)
+	if err != nil {
+		resp.Diagnostics.AddError("Read after create failed", err.Error())
 		return
 	}
 
-	// preserve write-only recursive from plan
+	var api snapshotAPI
+	if err := json.Unmarshal(raw, &api); err != nil {
+		resp.Diagnostics.AddError("Parse read response", err.Error())
+		return
+	}
+
 	responseToModel(&api, &plan)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }

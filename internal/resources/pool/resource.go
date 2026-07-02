@@ -111,8 +111,8 @@ func (r *PoolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	// Only autotrim is updatable; topology and name are ForceNew.
-	_, err := r.client.Call(ctx, "pool.update", plan.ID.ValueInt64(),
-		map[string]any{"autotrim": map[string]any{"enabled": plan.AutoTrim.ValueBool()}})
+	_, err := r.client.CallJob(ctx, "pool.update", plan.ID.ValueInt64(),
+		map[string]any{"autotrim": autotrimStr(plan.AutoTrim.ValueBool())})
 	if err != nil {
 		resp.Diagnostics.AddError("Update pool failed", err.Error())
 		return

@@ -57,6 +57,9 @@ func (m *PeriodicSnapshotModel) apiPayload(ctx context.Context) (map[string]any,
 	if !m.Exclude.IsNull() && !m.Exclude.IsUnknown() {
 		diags.Append(m.Exclude.ElementsAs(ctx, &exclude, false)...)
 	}
+	if exclude == nil {
+		exclude = []string{}
+	}
 	p := map[string]any{
 		"dataset":        m.Dataset.ValueString(),
 		"recursive":      m.Recursive.ValueBool(),

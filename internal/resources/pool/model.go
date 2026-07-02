@@ -128,6 +128,14 @@ func responseToModel(ctx context.Context, api *poolAPI, m *PoolModel) diag.Diagn
 	return diags
 }
 
+// autotrimStr converts a boolean autotrim value to the TrueNAS string format.
+func autotrimStr(on bool) string {
+	if on {
+		return "ON"
+	}
+	return "OFF"
+}
+
 // vdevDisks extracts the flat list of disk names from a vdev's children.
 func vdevDisks(v poolVdev) []string {
 	disks := make([]string, len(v.Children))
@@ -173,7 +181,7 @@ func (m *PoolModel) apiPayload(ctx context.Context) (map[string]any, diag.Diagno
 			"cache": cacheVdevs,
 			"spare": spareDisks,
 		},
-		"autotrim": map[string]any{"enabled": m.AutoTrim.ValueBool()},
+		"autotrim": autotrimStr(m.AutoTrim.ValueBool()),
 	}
 	return p, diags
 }
