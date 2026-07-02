@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_extent"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/nfs"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/periodic_snapshot"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/pool"
@@ -150,6 +151,7 @@ func (p *TrueNASProvider) Configure(ctx context.Context, req provider.ConfigureR
 func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		dataset.NewResource,
+		iscsi_extent.NewResource,
 		nfs.NewResource,
 		periodic_snapshot.NewResource,
 		pool.NewResource,
@@ -162,6 +164,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		dataset.NewDataSource,
+		iscsi_extent.NewDataSource,
 		nfs.NewDataSource,
 		periodic_snapshot.NewDataSource,
 		pool.NewDataSource,
