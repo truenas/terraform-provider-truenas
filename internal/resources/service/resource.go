@@ -182,7 +182,10 @@ func (r *ServiceResource) Delete(ctx context.Context, req resource.DeleteRequest
 
 	svc, err := r.lookupByName(ctx, state.Name.ValueString())
 	if err != nil {
-		// Service not found — nothing to do.
+		if client.IsNotFound(err) {
+			return
+		}
+		resp.Diagnostics.AddError("Failed to look up service", err.Error())
 		return
 	}
 	// Best-effort: disable autostart and stop the service. Errors are ignored
