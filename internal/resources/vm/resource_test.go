@@ -90,6 +90,31 @@ func TestVMSchema(t *testing.T) {
 	}
 }
 
+// TestVMSchema_OptionalComputedHavePlanModifiers verifies that all Optional+Computed
+// attributes (except status) have at least one plan modifier.
+func TestVMSchema_OptionalComputedHavePlanModifiers(t *testing.T) {
+	s := resourceSchema()
+	for name, attr := range s.Attributes {
+		if name == "status" {
+			continue
+		}
+		switch a := attr.(type) {
+		case schema.StringAttribute:
+			if a.Optional && a.Computed && len(a.PlanModifiers) == 0 {
+				t.Errorf("%s: Optional+Computed without plan modifier", name)
+			}
+		case schema.Int64Attribute:
+			if a.Optional && a.Computed && len(a.PlanModifiers) == 0 {
+				t.Errorf("%s: Optional+Computed without plan modifier", name)
+			}
+		case schema.BoolAttribute:
+			if a.Optional && a.Computed && len(a.PlanModifiers) == 0 {
+				t.Errorf("%s: Optional+Computed without plan modifier", name)
+			}
+		}
+	}
+}
+
 // TestVMApiPayload_OmitsUnsetOptionals verifies that apiPayload does not send
 // keys for null/unknown optional fields (e.g. no "vcpus": 0).
 func TestVMApiPayload_OmitsUnsetOptionals(t *testing.T) {

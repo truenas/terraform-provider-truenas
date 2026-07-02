@@ -27,6 +27,9 @@ func resourceSchema() schema.Schema {
 				Optional:    true,
 				Computed:    true,
 				Description: "Optional VM description.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"memory": schema.Int64Attribute{
 				Required:    true,
