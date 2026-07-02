@@ -42,9 +42,7 @@ func (d *UserDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 			"sudo_commands":          dschema.ListAttribute{Computed: true, ElementType: types.StringType},
 			"sudo_commands_nopasswd": dschema.ListAttribute{Computed: true, ElementType: types.StringType},
 			"groups":                 dschema.ListAttribute{Computed: true, ElementType: types.Int64Type},
-			// password is write-only on the resource; not exposed in data source
-			"password": dschema.StringAttribute{Computed: true, Sensitive: true, Description: "Not available in data source (write-only on resource)."},
-			"builtin":  dschema.BoolAttribute{Computed: true},
+			"builtin":                dschema.BoolAttribute{Computed: true},
 			"immutable": dschema.BoolAttribute{Computed: true},
 			"local":    dschema.BoolAttribute{Computed: true},
 		},
@@ -67,7 +65,7 @@ func (d *UserDataSource) Configure(_ context.Context, req datasource.ConfigureRe
 }
 
 func (d *UserDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var state UserModel
+	var state UserDatasourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -95,7 +93,7 @@ func (d *UserDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 		return
 	}
 
-	resp.Diagnostics.Append(responseToModel(ctx, &results[0], &state)...)
+	resp.Diagnostics.Append(responseToDataSourceModel(ctx, &results[0], &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}

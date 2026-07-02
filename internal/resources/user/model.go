@@ -31,6 +31,87 @@ type UserModel struct {
 	Local     types.Bool `tfsdk:"local"`
 }
 
+// UserDatasourceModel is UserModel without the write-only password field.
+type UserDatasourceModel struct {
+	ID                   types.Int64  `tfsdk:"id"`
+	UID                  types.Int64  `tfsdk:"uid"`
+	Username             types.String `tfsdk:"username"`
+	FullName             types.String `tfsdk:"full_name"`
+	Email                types.String `tfsdk:"email"`
+	Home                 types.String `tfsdk:"home"`
+	Shell                types.String `tfsdk:"shell"`
+	Locked               types.Bool   `tfsdk:"locked"`
+	PasswordDisabled     types.Bool   `tfsdk:"password_disabled"`
+	SMB                  types.Bool   `tfsdk:"smb"`
+	SSHPasswordEnabled   types.Bool   `tfsdk:"ssh_password_enabled"`
+	SSHPubKey            types.String `tfsdk:"sshpubkey"`
+	SudoCommands         types.List   `tfsdk:"sudo_commands"`
+	SudoCommandsNoPasswd types.List   `tfsdk:"sudo_commands_nopasswd"`
+	Groups               types.List   `tfsdk:"groups"`
+	Builtin              types.Bool   `tfsdk:"builtin"`
+	Immutable            types.Bool   `tfsdk:"immutable"`
+	Local                types.Bool   `tfsdk:"local"`
+}
+
+// responseToDataSourceModel maps an API response onto a UserDatasourceModel.
+func responseToDataSourceModel(ctx context.Context, api *userAPI, m *UserDatasourceModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+
+	m.ID = types.Int64Value(api.ID)
+	m.UID = types.Int64Value(api.UID)
+	m.Username = types.StringValue(api.Username)
+	m.FullName = types.StringValue(api.FullName)
+
+	if api.Email != nil {
+		m.Email = types.StringValue(*api.Email)
+	} else {
+		m.Email = types.StringValue("")
+	}
+
+	m.Home = types.StringValue(api.Home)
+	m.Shell = types.StringValue(api.Shell)
+	m.Locked = types.BoolValue(api.Locked)
+	m.PasswordDisabled = types.BoolValue(api.PasswordDisabled)
+	m.SMB = types.BoolValue(api.SMB)
+	m.SSHPasswordEnabled = types.BoolValue(api.SSHPasswordEnabled)
+
+	if api.SSHPubKey != nil {
+		m.SSHPubKey = types.StringValue(*api.SSHPubKey)
+	} else {
+		m.SSHPubKey = types.StringValue("")
+	}
+
+	sudoCmds := api.SudoCommands
+	if sudoCmds == nil {
+		sudoCmds = []string{}
+	}
+	sl, d := types.ListValueFrom(ctx, types.StringType, sudoCmds)
+	diags.Append(d...)
+	m.SudoCommands = sl
+
+	sudoCmdsNP := api.SudoCommandsNoPasswd
+	if sudoCmdsNP == nil {
+		sudoCmdsNP = []string{}
+	}
+	snl, d2 := types.ListValueFrom(ctx, types.StringType, sudoCmdsNP)
+	diags.Append(d2...)
+	m.SudoCommandsNoPasswd = snl
+
+	grps := api.Groups
+	if grps == nil {
+		grps = []int64{}
+	}
+	gl, d3 := types.ListValueFrom(ctx, types.Int64Type, grps)
+	diags.Append(d3...)
+	m.Groups = gl
+
+	m.Builtin = types.BoolValue(api.Builtin)
+	m.Immutable = types.BoolValue(api.Immutable)
+	m.Local = types.BoolValue(api.Local)
+
+	return diags
+}
+
 // userAPI is the JSON wire format for a TrueNAS user object.
 type userAPI struct {
 	ID                   int64    `json:"id"`
@@ -119,7 +200,9 @@ func responseToModel(ctx context.Context, api *userAPI, m *UserModel) diag.Diagn
 // createPayload includes uid and username (only for initial creation).
 func (m *UserModel) createPayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
 	p, diags := m.basePayload(ctx)
-	p["uid"] = m.UID.ValueInt64()
+	if !m.UID.IsNull() && !m.UID.IsUnknown() {
+		p["uid"] = m.UID.ValueInt64()
+	}
 	p["username"] = m.Username.ValueString()
 	return p, diags
 }
