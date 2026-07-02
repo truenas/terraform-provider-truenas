@@ -12,12 +12,17 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/group"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_extent"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_initiator"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_target"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/nfs"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/periodic_snapshot"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/pool"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/service"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/smb"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/snapshot"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/user"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/zvol"
 )
 
@@ -151,12 +156,17 @@ func (p *TrueNASProvider) Configure(ctx context.Context, req provider.ConfigureR
 func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		dataset.NewResource,
+		group.NewResource,
 		iscsi_extent.NewResource,
+		iscsi_initiator.NewResource,
+		iscsi_target.NewResource,
 		nfs.NewResource,
 		periodic_snapshot.NewResource,
 		pool.NewResource,
+		service.NewResource,
 		smb.NewResource,
 		snapshot.NewResource,
+		user.NewResource,
 		zvol.NewResource,
 	}
 }
@@ -164,12 +174,17 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		dataset.NewDataSource,
+		group.NewDataSource,
 		iscsi_extent.NewDataSource,
+		iscsi_initiator.NewDataSource,
+		iscsi_target.NewDataSource,
 		nfs.NewDataSource,
 		periodic_snapshot.NewDataSource,
 		pool.NewDataSource,
+		service.NewDataSource,
 		smb.NewDataSource,
 		snapshot.NewDataSource,
+		user.NewDataSource,
 		zvol.NewDataSource,
 	}
 }
