@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
 
@@ -32,7 +33,6 @@ func (d *SnapshotDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 			},
 			"dataset":   dschema.StringAttribute{Computed: true},
 			"name":      dschema.StringAttribute{Computed: true},
-			"recursive": dschema.BoolAttribute{Computed: true},
 			"pool":      dschema.StringAttribute{Computed: true},
 			"createtxg": dschema.StringAttribute{Computed: true},
 		},
@@ -53,13 +53,13 @@ func (d *SnapshotDataSource) Configure(_ context.Context, req datasource.Configu
 }
 
 func (d *SnapshotDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var state SnapshotModel
-	resp.Diagnostics.Append(req.Config.Get(ctx, &state)...)
+	var config SnapshotDatasourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	raw, err := d.client.Call(ctx, "pool.snapshot.get_instance", state.ID.ValueString())
+	raw, err := d.client.Call(ctx, "pool.snapshot.get_instance", config.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Read snapshot failed", err.Error())
 		return
@@ -71,6 +71,12 @@ func (d *SnapshotDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	responseToModel(&api, &state)
+	state := SnapshotDatasourceModel{
+		ID:        types.StringValue(api.ID),
+		Dataset:   types.StringValue(api.Dataset),
+		Name:      types.StringValue(api.SnapshotName),
+		Pool:      types.StringValue(api.Pool),
+		CreateTxg: types.StringValue(api.CreateTxg),
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

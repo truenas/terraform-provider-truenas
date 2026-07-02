@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 )
@@ -34,6 +35,9 @@ func resourceSchema() schema.Schema {
 			"recursive": schema.BoolAttribute{
 				Optional:    true,
 				Description: "Take recursive snapshot of child datasets (write-only; not stored in state).",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
+				},
 			},
 			"pool": schema.StringAttribute{
 				Computed:    true,

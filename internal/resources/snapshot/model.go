@@ -13,6 +13,16 @@ type SnapshotModel struct {
 	CreateTxg types.String `tfsdk:"createtxg"`
 }
 
+// SnapshotDatasourceModel is used by the snapshot data source; it omits
+// Recursive because the API never returns that field.
+type SnapshotDatasourceModel struct {
+	ID        types.String `tfsdk:"id"`
+	Dataset   types.String `tfsdk:"dataset"`
+	Name      types.String `tfsdk:"name"`
+	Pool      types.String `tfsdk:"pool"`
+	CreateTxg types.String `tfsdk:"createtxg"`
+}
+
 // snapshotAPI matches the JSON returned by pool.snapshot.get_instance / pool.snapshot.create.
 type snapshotAPI struct {
 	ID           string `json:"id"`
