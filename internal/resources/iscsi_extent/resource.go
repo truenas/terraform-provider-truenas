@@ -137,6 +137,7 @@ func (r *ISCSIExtentResource) Update(ctx context.Context, req resource.UpdateReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	delete(payload, "name") // name is not allowed in update
 
 	_, err := r.client.Call(ctx, "iscsi.extent.update", plan.ID.ValueInt64(), payload)
 	if err != nil {
