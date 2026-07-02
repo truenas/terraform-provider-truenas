@@ -140,6 +140,40 @@ func TestGroupCreatePayload(t *testing.T) {
 	}
 }
 
+// TestGroupCreatePayload_NullGID verifies that createPayload does NOT include gid
+// when GID is null, avoiding the root group conflict (gid: 0).
+func TestGroupCreatePayload_NullGID(t *testing.T) {
+	ctx := context.Background()
+
+	m := GroupModel{
+		GID:                  types.Int64Null(),
+		Name:                 types.StringValue("testgroup"),
+		SMB:                  types.BoolValue(true),
+		SudoCommands:         types.ListValueMust(types.StringType, []attr.Value{}),
+		SudoCommandsNoPasswd: types.ListValueMust(types.StringType, []attr.Value{}),
+		Builtin:              types.BoolValue(false),
+		Immutable:            types.BoolValue(false),
+		Local:                types.BoolValue(true),
+	}
+
+	payload, diags := m.createPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("createPayload returned errors: %v", diags)
+	}
+
+	// gid must NOT be present in create payload when null.
+	if _, ok := payload["gid"]; ok {
+		t.Error("createPayload should not contain 'gid' when GID is null")
+	}
+
+	// name must still be present.
+	if v, ok := payload["name"]; !ok {
+		t.Error("createPayload missing 'name'")
+	} else if v != "testgroup" {
+		t.Errorf("payload[name] = %v, want testgroup", v)
+	}
+}
+
 // TestGroupUpdatePayload verifies that updatePayload omits gid and name.
 func TestGroupUpdatePayload(t *testing.T) {
 	ctx := context.Background()

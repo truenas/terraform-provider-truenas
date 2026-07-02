@@ -70,7 +70,9 @@ func responseToModel(ctx context.Context, api *groupAPI, m *GroupModel) diag.Dia
 // createPayload includes gid and name (only for initial creation).
 func (m *GroupModel) createPayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
 	p, diags := m.basePayload(ctx)
-	p["gid"] = m.GID.ValueInt64()
+	if !m.GID.IsNull() && !m.GID.IsUnknown() {
+		p["gid"] = m.GID.ValueInt64()
+	}
 	p["name"] = m.Name.ValueString()
 	return p, diags
 }
