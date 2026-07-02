@@ -13,6 +13,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/nfs"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/pool"
 )
 
 var _ provider.Provider = &TrueNASProvider{}
@@ -146,6 +147,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 	return []func() resource.Resource{
 		dataset.NewResource,
 		nfs.NewResource,
+		pool.NewResource,
 	}
 }
 
@@ -153,6 +155,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 	return []func() datasource.DataSource{
 		dataset.NewDataSource,
 		nfs.NewDataSource,
+		pool.NewDataSource,
 	}
 }
 
