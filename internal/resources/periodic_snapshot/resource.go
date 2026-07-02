@@ -52,7 +52,7 @@ func (r *PeriodicSnapshotResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "pool.snapshottask.create", payload)
+	raw, err := r.client.CallJob(ctx, "pool.snapshottask.create", payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Create periodic snapshot task failed", err.Error())
 		return
@@ -127,7 +127,7 @@ func (r *PeriodicSnapshotResource) Update(ctx context.Context, req resource.Upda
 	}
 
 	id := plan.ID.ValueInt64()
-	_, err := r.client.Call(ctx, "pool.snapshottask.update", id, payload)
+	_, err := r.client.CallJob(ctx, "pool.snapshottask.update", id, payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Update periodic snapshot task failed", err.Error())
 		return
@@ -159,7 +159,7 @@ func (r *PeriodicSnapshotResource) Delete(ctx context.Context, req resource.Dele
 		return
 	}
 
-	_, err := r.client.Call(ctx, "pool.snapshottask.delete", state.ID.ValueInt64())
+	_, err := r.client.CallJob(ctx, "pool.snapshottask.delete", state.ID.ValueInt64())
 	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Delete periodic snapshot task failed", err.Error())
 	}
