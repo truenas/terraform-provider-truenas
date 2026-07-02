@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/app"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/group"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_extent"
@@ -23,6 +24,8 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/smb"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/snapshot"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/user"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/vm"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/vm_device"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/zvol"
 )
 
@@ -155,6 +158,7 @@ func (p *TrueNASProvider) Configure(ctx context.Context, req provider.ConfigureR
 
 func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
+		app.NewResource,
 		dataset.NewResource,
 		group.NewResource,
 		iscsi_extent.NewResource,
@@ -167,12 +171,15 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		smb.NewResource,
 		snapshot.NewResource,
 		user.NewResource,
+		vm.NewResource,
+		vm_device.NewResource,
 		zvol.NewResource,
 	}
 }
 
 func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
+		app.NewDataSource,
 		dataset.NewDataSource,
 		group.NewDataSource,
 		iscsi_extent.NewDataSource,
@@ -185,6 +192,8 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		smb.NewDataSource,
 		snapshot.NewDataSource,
 		user.NewDataSource,
+		vm.NewDataSource,
+		vm_device.NewDataSource,
 		zvol.NewDataSource,
 	}
 }
