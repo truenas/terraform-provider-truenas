@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"encoding/json"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -79,8 +78,15 @@ func responseToDatasourceModel(api *appAPI, m *AppDatasourceModel) {
 	m.UpgradeAvailable = types.BoolValue(api.UpgradeAvailable)
 }
 
+// needsUpgrade reports whether plan carries a known, non-null version that
+// differs from state's version, meaning Update must call app.upgrade before
+// doing anything else (see AppResource.Update).
+func needsUpgrade(plan, state *AppModel) bool {
+	return !plan.Version.IsNull() && !plan.Version.IsUnknown() && !plan.Version.Equal(state.Version)
+}
+
 // createPayload builds the app.create argument.
-func (m *AppModel) createPayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
+func (m *AppModel) createPayload() (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	p := map[string]any{
 		"app_name": m.Name.ValueString(),
@@ -109,7 +115,7 @@ func (m *AppModel) createPayload(ctx context.Context) (map[string]any, diag.Diag
 }
 
 // updatePayload builds the second arg of app.update (app_name is passed separately).
-func (m *AppModel) updatePayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
+func (m *AppModel) updatePayload() (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	p := map[string]any{}
 	if !m.ComposeYAML.IsNull() && !m.ComposeYAML.IsUnknown() && m.ComposeYAML.ValueString() != "" {

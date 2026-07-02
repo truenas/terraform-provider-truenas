@@ -82,9 +82,11 @@ func responseToModel(api *vmAPI, m *VMModel) {
 // TrueNAS API contract (e.g. vcpus: 0 must never be sent explicitly).
 func (m *VMModel) apiPayload() map[string]any {
 	p := map[string]any{
-		"name":        m.Name.ValueString(),
-		"memory":      m.Memory.ValueInt64(),
-		"description": m.Description.ValueString(),
+		"name":   m.Name.ValueString(),
+		"memory": m.Memory.ValueInt64(),
+	}
+	if !m.Description.IsNull() && !m.Description.IsUnknown() {
+		p["description"] = m.Description.ValueString()
 	}
 	if !m.VCPUs.IsNull() && !m.VCPUs.IsUnknown() {
 		p["vcpus"] = m.VCPUs.ValueInt64()

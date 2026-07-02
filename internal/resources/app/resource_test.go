@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -98,7 +97,7 @@ func TestCreatePayload_OmitsUnsetOptionalFields(t *testing.T) {
 		Values:      types.StringNull(),
 	}
 
-	payload, diags := m.createPayload(context.Background())
+	payload, diags := m.createPayload()
 	if diags.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
@@ -133,7 +132,7 @@ func TestCreatePayload_IncludesSetFields(t *testing.T) {
 		Values:      types.StringValue(`{"foo":"bar"}`),
 	}
 
-	payload, diags := m.createPayload(context.Background())
+	payload, diags := m.createPayload()
 	if diags.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
@@ -185,7 +184,7 @@ func TestCreatePayload_InvalidValuesJSONProducesDiagnostic(t *testing.T) {
 		Values: types.StringValue(`{not valid json`),
 	}
 
-	_, diags := m.createPayload(context.Background())
+	_, diags := m.createPayload()
 	if !diags.HasError() {
 		t.Fatal("expected createPayload to produce an error diagnostic for invalid values JSON")
 	}
@@ -257,6 +256,36 @@ func TestResponseToModel_IDIsAppName(t *testing.T) {
 	}
 	if m.Name.ValueString() != "plex" {
 		t.Errorf("Name = %q, want app name string \"plex\"", m.Name.ValueString())
+	}
+}
+
+// TestNeedsUpgrade verifies that needsUpgrade correctly detects a
+// plan-vs-state version change, which drives the app.upgrade call in Update.
+// A regression here previously caused version changes to be silently
+// dropped (the read-back would overwrite plan.Version with the old value,
+// producing "Provider produced inconsistent result after apply").
+func TestNeedsUpgrade(t *testing.T) {
+	cases := []struct {
+		name         string
+		planVersion  types.String
+		stateVersion types.String
+		want         bool
+	}{
+		{"version changed", types.StringValue("1.2.4"), types.StringValue("1.2.3"), true},
+		{"version unchanged", types.StringValue("1.2.3"), types.StringValue("1.2.3"), false},
+		{"plan version null", types.StringNull(), types.StringValue("1.2.3"), false},
+		{"plan version unknown", types.StringUnknown(), types.StringValue("1.2.3"), false},
+		{"state version null, plan set", types.StringValue("1.2.3"), types.StringNull(), true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			plan := &AppModel{Version: tc.planVersion}
+			state := &AppModel{Version: tc.stateVersion}
+			if got := needsUpgrade(plan, state); got != tc.want {
+				t.Errorf("needsUpgrade() = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 

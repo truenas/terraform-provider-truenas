@@ -59,7 +59,7 @@ func (r *AppResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
-	payload, diags := plan.createPayload(ctx)
+	payload, diags := plan.createPayload()
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -87,6 +87,20 @@ func (r *AppResource) Create(ctx context.Context, req resource.CreateRequest, re
 	if !plan.Running.IsNull() && !plan.Running.IsUnknown() && !plan.Running.ValueBool() && api.State == "RUNNING" {
 		if _, err := r.client.CallJob(ctx, "app.stop", name); err != nil {
 			resp.Diagnostics.AddError("Failed to stop app", err.Error())
+			return
+		}
+		api, err = r.getInstance(ctx, name)
+		if err != nil {
+			resp.Diagnostics.AddError("Read-back failed", err.Error())
+			return
+		}
+	}
+
+	// If the plan explicitly requests the app be running, and it is not
+	// currently running, start it and re-read.
+	if !plan.Running.IsNull() && !plan.Running.IsUnknown() && plan.Running.ValueBool() && api.State != "RUNNING" {
+		if _, err := r.client.CallJob(ctx, "app.start", name); err != nil {
+			resp.Diagnostics.AddError("Failed to start app", err.Error())
 			return
 		}
 		api, err = r.getInstance(ctx, name)
@@ -144,9 +158,22 @@ func (r *AppResource) Update(ctx context.Context, req resource.UpdateRequest, re
 
 	name := plan.Name.ValueString()
 
+	// version changed -> app.upgrade (must run before app.update / read-back,
+	// otherwise the read-back overwrites plan.Version with the old value and
+	// Terraform aborts with "Provider produced inconsistent result after
+	// apply").
+	if needsUpgrade(&plan, &state) {
+		if _, err := r.client.CallJob(ctx, "app.upgrade", name, map[string]any{
+			"app_version": plan.Version.ValueString(),
+		}); err != nil {
+			resp.Diagnostics.AddError("Failed to upgrade app", err.Error())
+			return
+		}
+	}
+
 	// values or compose config changed -> app.update
 	if !plan.Values.Equal(state.Values) || !plan.ComposeYAML.Equal(state.ComposeYAML) {
-		updatePayload, diags := plan.updatePayload(ctx)
+		updatePayload, diags := plan.updatePayload()
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return
