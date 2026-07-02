@@ -2,6 +2,7 @@ package smb
 
 import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -109,10 +110,16 @@ func resourceSchema() schema.Schema {
 			"vuid": schema.StringAttribute{
 				Computed:    true,
 				Description: "Vendor unique identifier assigned by TrueNAS.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"locked": schema.BoolAttribute{
 				Computed:    true,
 				Description: "Whether the share path is currently locked.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
