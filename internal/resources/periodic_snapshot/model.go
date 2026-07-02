@@ -54,7 +54,9 @@ type taskAPI struct {
 func (m *PeriodicSnapshotModel) apiPayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	var exclude []string
-	diags.Append(m.Exclude.ElementsAs(ctx, &exclude, false)...)
+	if !m.Exclude.IsNull() && !m.Exclude.IsUnknown() {
+		diags.Append(m.Exclude.ElementsAs(ctx, &exclude, false)...)
+	}
 	p := map[string]any{
 		"dataset":        m.Dataset.ValueString(),
 		"recursive":      m.Recursive.ValueBool(),
