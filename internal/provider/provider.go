@@ -15,6 +15,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/nfs"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/periodic_snapshot"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/pool"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/smb"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/snapshot"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/zvol"
 )
@@ -152,6 +153,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		nfs.NewResource,
 		periodic_snapshot.NewResource,
 		pool.NewResource,
+		smb.NewResource,
 		snapshot.NewResource,
 		zvol.NewResource,
 	}
@@ -163,6 +165,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		nfs.NewDataSource,
 		periodic_snapshot.NewDataSource,
 		pool.NewDataSource,
+		smb.NewDataSource,
 		snapshot.NewDataSource,
 		zvol.NewDataSource,
 	}
