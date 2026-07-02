@@ -51,7 +51,7 @@ func (r *ServiceResource) lookupByName(ctx context.Context, name string) (*servi
 		return nil, err
 	}
 	if len(results) == 0 {
-		return nil, fmt.Errorf("service not found: %s", name)
+		return nil, &client.APIError{Code: 2, Message: "service not found: " + name}
 	}
 	return &results[0], nil
 }

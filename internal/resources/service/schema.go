@@ -2,6 +2,7 @@ package service
 
 import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 )
@@ -21,14 +22,16 @@ func resourceSchema() schema.Schema {
 				Description:   "Service name: nfs, cifs, ssh, ftp, iscsitarget, snmp, ups, nvmet, webshare.",
 			},
 			"enabled": schema.BoolAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "Whether the service starts automatically on boot.",
+				Optional:      true,
+				Computed:      true,
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+				Description:   "Whether the service starts automatically on boot.",
 			},
 			"running": schema.BoolAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "Whether the service is currently running. Set to true to start, false to stop.",
+				Optional:      true,
+				Computed:      true,
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+				Description:   "Whether the service is currently running. Set to true to start, false to stop.",
 			},
 		},
 	}
