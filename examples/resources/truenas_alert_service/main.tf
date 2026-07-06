@@ -1,3 +1,4 @@
+# Email alert service — sends WARNING and above to the ops mailbox.
 resource "truenas_alert_service" "ops_mail" {
   name  = "ops-email"
   level = "WARNING"
@@ -6,3 +7,39 @@ resource "truenas_alert_service" "ops_mail" {
     email = "ops@example.com"
   })
 }
+
+# Slack alert service — attributes shape depends on the "type" key.
+resource "truenas_alert_service" "ops_slack" {
+  name    = "ops-slack"
+  level   = "CRITICAL"
+  enabled = true
+  attributes = jsonencode({
+    type = "Slack"
+    url  = "https://hooks.slack.com/services/T000/B000/XXXX"
+  })
+}
+
+# SNMP trap receiver.
+resource "truenas_alert_service" "snmp" {
+  name  = "noc-snmp"
+  level = "ERROR"
+  attributes = jsonencode({
+    type      = "SNMPTrap"
+    host      = "192.168.1.10"
+    port      = 162
+    community = "public"
+    v3        = false
+  })
+}
+
+# Look up an existing alert service by name.
+data "truenas_alert_service" "existing" {
+  name = "SNMP Trap"
+}
+
+output "existing_alert_level" {
+  value = data.truenas_alert_service.existing.level
+}
+
+# Import an alert service created in the UI (numeric ID):
+#   terraform import truenas_alert_service.ops_mail 1
