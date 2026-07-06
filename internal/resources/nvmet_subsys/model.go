@@ -52,8 +52,7 @@ type nvmetSubsysAPI struct {
 }
 
 // responseToModel maps an API response onto a Terraform model. Nil pointer
-// fields (ana, ieee_oui, pi_enable, qid_max) map to their zero values
-// (false, "", false, 0) rather than leaving the model attribute null/unknown.
+// fields (ana, pi_enable, qid_max) map to null; ieee_oui maps to empty string.
 func responseToModel(_ context.Context, api *nvmetSubsysAPI, m *NVMetSubsysModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
@@ -66,7 +65,7 @@ func responseToModel(_ context.Context, api *nvmetSubsysAPI, m *NVMetSubsysModel
 	if api.ANA != nil {
 		m.ANA = types.BoolValue(*api.ANA)
 	} else {
-		m.ANA = types.BoolValue(false)
+		m.ANA = types.BoolNull()
 	}
 
 	if api.IEEEOUI != nil {
@@ -78,20 +77,20 @@ func responseToModel(_ context.Context, api *nvmetSubsysAPI, m *NVMetSubsysModel
 	if api.PIEnable != nil {
 		m.PIEnable = types.BoolValue(*api.PIEnable)
 	} else {
-		m.PIEnable = types.BoolValue(false)
+		m.PIEnable = types.BoolNull()
 	}
 
 	if api.QIDMax != nil {
 		m.QIDMax = types.Int64Value(*api.QIDMax)
 	} else {
-		m.QIDMax = types.Int64Value(0)
+		m.QIDMax = types.Int64Null()
 	}
 
 	return diags
 }
 
 // responseToDataSourceModel maps an API response onto an
-// NVMetSubsysDataSourceModel using the same nil-pointer-to-zero-value rules
+// NVMetSubsysDataSourceModel using the same nil-pointer-to-null rules
 // as responseToModel.
 func responseToDataSourceModel(_ context.Context, api *nvmetSubsysAPI, m *NVMetSubsysDataSourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
@@ -105,7 +104,7 @@ func responseToDataSourceModel(_ context.Context, api *nvmetSubsysAPI, m *NVMetS
 	if api.ANA != nil {
 		m.ANA = types.BoolValue(*api.ANA)
 	} else {
-		m.ANA = types.BoolValue(false)
+		m.ANA = types.BoolNull()
 	}
 
 	if api.IEEEOUI != nil {
@@ -117,13 +116,13 @@ func responseToDataSourceModel(_ context.Context, api *nvmetSubsysAPI, m *NVMetS
 	if api.PIEnable != nil {
 		m.PIEnable = types.BoolValue(*api.PIEnable)
 	} else {
-		m.PIEnable = types.BoolValue(false)
+		m.PIEnable = types.BoolNull()
 	}
 
 	if api.QIDMax != nil {
 		m.QIDMax = types.Int64Value(*api.QIDMax)
 	} else {
-		m.QIDMax = types.Int64Value(0)
+		m.QIDMax = types.Int64Null()
 	}
 
 	return diags

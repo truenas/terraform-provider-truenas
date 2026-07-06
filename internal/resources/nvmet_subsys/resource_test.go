@@ -283,8 +283,8 @@ func TestUpdatePayload_NoNameKey(t *testing.T) {
 	}
 }
 
-// TestResponseToModel_NilPointers verifies that nil ana/ieee_oui/pi_enable/
-// qid_max fields from the API map to their zero values (false/""/false/0).
+// TestResponseToModel_NilPointers verifies that nil ana/pi_enable/qid_max
+// fields from the API map to null, while ieee_oui maps to empty string.
 func TestResponseToModel_NilPointers(t *testing.T) {
 	ctx := context.Background()
 
@@ -306,17 +306,17 @@ func TestResponseToModel_NilPointers(t *testing.T) {
 		t.Fatalf("responseToModel returned diagnostic errors: %v", diags)
 	}
 
-	if m.ANA.ValueBool() != false {
-		t.Errorf("ANA = %v, want false when API returns nil", m.ANA.ValueBool())
+	if !m.ANA.IsNull() {
+		t.Errorf("ANA = %v (IsNull=%v), want null when API returns nil", m.ANA, m.ANA.IsNull())
 	}
 	if m.IEEEOUI.ValueString() != "" {
 		t.Errorf("IEEEOUI = %q, want empty string when API returns nil", m.IEEEOUI.ValueString())
 	}
-	if m.PIEnable.ValueBool() != false {
-		t.Errorf("PIEnable = %v, want false when API returns nil", m.PIEnable.ValueBool())
+	if !m.PIEnable.IsNull() {
+		t.Errorf("PIEnable = %v (IsNull=%v), want null when API returns nil", m.PIEnable, m.PIEnable.IsNull())
 	}
-	if m.QIDMax.ValueInt64() != 0 {
-		t.Errorf("QIDMax = %v, want 0 when API returns nil", m.QIDMax.ValueInt64())
+	if !m.QIDMax.IsNull() {
+		t.Errorf("QIDMax = %v (IsNull=%v), want null when API returns nil", m.QIDMax, m.QIDMax.IsNull())
 	}
 }
 
