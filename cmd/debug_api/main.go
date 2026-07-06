@@ -104,6 +104,19 @@ func main() {
 		pp("vm.query (first item)", firstItem(call(c, "vm.query", []any{})))
 		pp("vm.device.query (first item)", firstItem(call(c, "vm.device.query", []any{})))
 	}
+	if section == "replication" || section == "all" {
+		pp("replication.query (first item)", firstItem(call(c, "replication.query", []any{})))
+	}
+	if section == "cloudsync" || section == "all" {
+		pp("cloudsync.query (first item)", firstItem(call(c, "cloudsync.query", []any{})))
+		pp("cloudsync.credentials.query (first item)", firstItem(call(c, "cloudsync.credentials.query", []any{})))
+	}
+	if section == "interface" || section == "all" {
+		pp("interface.query (first item)", firstItem(call(c, "interface.query", []any{})))
+	}
+	if section == "staticroute" || section == "all" {
+		pp("staticroute.query (first item)", firstItem(call(c, "staticroute.query", []any{})))
+	}
 	if section == "methods" {
 		prefix := "vm."
 		if len(os.Args) > 2 {
