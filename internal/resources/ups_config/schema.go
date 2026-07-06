@@ -135,8 +135,9 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 			},
 			"complete_identifier": schema.StringAttribute{
-				Computed:    true,
-				Description: "Server-derived, fully-qualified UPS identifier. Read-only: never sent to TrueNAS.",
+				Computed:      true,
+				Description:   "Server-derived, fully-qualified UPS identifier. Read-only: never sent to TrueNAS.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 		},
 	}

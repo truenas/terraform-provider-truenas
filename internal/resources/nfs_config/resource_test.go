@@ -76,8 +76,7 @@ func TestNFSConfigSchema_IDIsComputed(t *testing.T) {
 
 // TestNFSConfigSchema_ComputedOnlyTrioNeverOptional verifies that
 // managed_nfsd, v4_krb_enabled, and keytab_has_nfs_spn are Computed-only
-// (never Optional) and carry NO plan modifiers, since these are
-// server-mutable values that must never be pinned to the prior state.
+// (never Optional) and carry UseStateForUnknown plan modifiers.
 func TestNFSConfigSchema_ComputedOnlyTrioNeverOptional(t *testing.T) {
 	s := resourceSchema()
 
@@ -96,8 +95,8 @@ func TestNFSConfigSchema_ComputedOnlyTrioNeverOptional(t *testing.T) {
 		if boolAttr.IsOptional() || boolAttr.IsRequired() {
 			t.Errorf("%q should be Computed-only (not Optional/Required)", name)
 		}
-		if len(boolAttr.PlanModifiers) != 0 {
-			t.Errorf("%q should have NO plan modifiers (server-mutable); got %d", name, len(boolAttr.PlanModifiers))
+		if len(boolAttr.PlanModifiers) == 0 {
+			t.Errorf("%q should have plan modifiers (UseStateForUnknown)", name)
 		}
 	}
 }

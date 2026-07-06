@@ -112,16 +112,19 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
 			"managed_nfsd": schema.BoolAttribute{
-				Computed:    true,
-				Description: "Whether the NFS server daemon is currently managed/running. Server-computed; never sent to nfs.update.",
+				Computed:      true,
+				Description:   "Whether the NFS server daemon is currently managed/running. Server-computed; never sent to nfs.update.",
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
 			"v4_krb_enabled": schema.BoolAttribute{
-				Computed:    true,
-				Description: "Whether Kerberos is currently enabled/active for NFSv4. Server-computed; never sent to nfs.update.",
+				Computed:      true,
+				Description:   "Whether Kerberos is currently enabled/active for NFSv4. Server-computed; never sent to nfs.update.",
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
 			"keytab_has_nfs_spn": schema.BoolAttribute{
-				Computed:    true,
-				Description: "Whether the system keytab currently has an NFS service principal name. Server-computed; never sent to nfs.update.",
+				Computed:      true,
+				Description:   "Whether the system keytab currently has an NFS service principal name. Server-computed; never sent to nfs.update.",
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
 		},
 	}

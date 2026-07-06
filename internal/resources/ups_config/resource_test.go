@@ -65,9 +65,8 @@ func TestUPSConfigSchema_MonPwdIsSensitiveWriteOnly(t *testing.T) {
 }
 
 // TestUPSConfigSchema_CompleteIdentifierIsComputedOnly verifies that
-// "complete_identifier" is Computed-only, with no plan modifiers (it is
-// server-derived and always recomputed from other fields on read, so
-// UseStateForUnknown would incorrectly freeze a stale value).
+// "complete_identifier" is Computed-only with UseStateForUnknown plan modifiers
+// (it is server-derived and should never be sent to ups.update).
 func TestUPSConfigSchema_CompleteIdentifierIsComputedOnly(t *testing.T) {
 	s := resourceSchema()
 
@@ -85,8 +84,8 @@ func TestUPSConfigSchema_CompleteIdentifierIsComputedOnly(t *testing.T) {
 	if strAttr.IsOptional() || strAttr.IsRequired() {
 		t.Error("'complete_identifier' should be Computed-only (not Optional/Required)")
 	}
-	if len(strAttr.PlanModifiers) != 0 {
-		t.Error("'complete_identifier' should have NO plan modifiers (server-derived, no UseStateForUnknown)")
+	if len(strAttr.PlanModifiers) == 0 {
+		t.Error("'complete_identifier' should have plan modifiers (UseStateForUnknown)")
 	}
 }
 
@@ -166,7 +165,6 @@ func TestResponseToModel_MonPwdNeverSet(t *testing.T) {
 		Identifier: "ups",
 		Mode:       "MASTER",
 		MonUser:    "monuser",
-		MonPwd:     "", // API always returns empty/masked
 	}
 
 	m := &UPSConfigModel{MonPwd: types.StringValue("super-secret")}

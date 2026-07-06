@@ -90,7 +90,6 @@ type upsConfigAPI struct {
 	ShutdownTimer      int64   `json:"shutdowntimer"`
 	ShutdownCmd        *string `json:"shutdowncmd"`
 	MonUser            string  `json:"monuser"`
-	MonPwd             string  `json:"monpwd"`
 	ExtraUsers         string  `json:"extrausers"`
 	RMonitor           bool    `json:"rmonitor"`
 	PowerDown          bool    `json:"powerdown"`
