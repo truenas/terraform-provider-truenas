@@ -12,17 +12,22 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/app"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/cloudsync"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/cloudsync_credentials"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/group"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_extent"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_initiator"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_target"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/nfs"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/network_interface"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/periodic_snapshot"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/pool"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/replication"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/service"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/smb"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/snapshot"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/static_route"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/user"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/vm"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/vm_device"
@@ -159,17 +164,22 @@ func (p *TrueNASProvider) Configure(ctx context.Context, req provider.ConfigureR
 func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		app.NewResource,
+		cloudsync.NewResource,
+		cloudsync_credentials.NewResource,
 		dataset.NewResource,
 		group.NewResource,
 		iscsi_extent.NewResource,
 		iscsi_initiator.NewResource,
 		iscsi_target.NewResource,
 		nfs.NewResource,
+		network_interface.NewResource,
 		periodic_snapshot.NewResource,
 		pool.NewResource,
+		replication.NewResource,
 		service.NewResource,
 		smb.NewResource,
 		snapshot.NewResource,
+		static_route.NewResource,
 		user.NewResource,
 		vm.NewResource,
 		vm_device.NewResource,
@@ -180,17 +190,22 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		app.NewDataSource,
+		cloudsync.NewDataSource,
+		cloudsync_credentials.NewDataSource,
 		dataset.NewDataSource,
 		group.NewDataSource,
 		iscsi_extent.NewDataSource,
 		iscsi_initiator.NewDataSource,
 		iscsi_target.NewDataSource,
 		nfs.NewDataSource,
+		network_interface.NewDataSource,
 		periodic_snapshot.NewDataSource,
 		pool.NewDataSource,
+		replication.NewDataSource,
 		service.NewDataSource,
 		smb.NewDataSource,
 		snapshot.NewDataSource,
+		static_route.NewDataSource,
 		user.NewDataSource,
 		vm.NewDataSource,
 		vm_device.NewDataSource,
