@@ -259,4 +259,3 @@ func TestCallJob_Failure(t *testing.T) {
 		t.Errorf("expected job error message, got: %v", err)
 	}
 }
-

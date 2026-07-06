@@ -20,8 +20,8 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"name": schema.StringAttribute{
-				Required:    true,
-				Description: "Name of the iSCSI extent.",
+				Required:      true,
+				Description:   "Name of the iSCSI extent.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"type": schema.StringAttribute{

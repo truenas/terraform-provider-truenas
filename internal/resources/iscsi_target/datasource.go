@@ -27,11 +27,11 @@ func (d *ISCSITargetDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 	resp.Schema = dschema.Schema{
 		Description: "Fetches a TrueNAS iSCSI target by name.",
 		Attributes: map[string]dschema.Attribute{
-			"id":           dschema.Int64Attribute{Computed: true, Description: "Numeric iSCSI target ID."},
-			"name":         dschema.StringAttribute{Required: true, Description: "iSCSI target name to look up."},
-			"alias":        dschema.StringAttribute{Computed: true},
-			"mode":         dschema.StringAttribute{Computed: true},
-			"rel_tgt_id":   dschema.Int64Attribute{Computed: true},
+			"id":            dschema.Int64Attribute{Computed: true, Description: "Numeric iSCSI target ID."},
+			"name":          dschema.StringAttribute{Required: true, Description: "iSCSI target name to look up."},
+			"alias":         dschema.StringAttribute{Computed: true},
+			"mode":          dschema.StringAttribute{Computed: true},
+			"rel_tgt_id":    dschema.Int64Attribute{Computed: true},
 			"auth_networks": dschema.ListAttribute{Computed: true, ElementType: types.StringType},
 			"groups": dschema.ListNestedAttribute{
 				Computed: true,

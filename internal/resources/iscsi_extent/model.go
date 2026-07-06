@@ -11,11 +11,11 @@ import (
 type ISCSIExtentModel struct {
 	ID             types.Int64  `tfsdk:"id"`
 	Name           types.String `tfsdk:"name"`
-	Type           types.String `tfsdk:"type"`           // DISK or FILE
-	Disk           types.String `tfsdk:"disk"`           // Optional: zvol path e.g. "zvol/tank/myvol"
-	Path           types.String `tfsdk:"path"`           // Optional: file path (FILE type)
+	Type           types.String `tfsdk:"type"` // DISK or FILE
+	Disk           types.String `tfsdk:"disk"` // Optional: zvol path e.g. "zvol/tank/myvol"
+	Path           types.String `tfsdk:"path"` // Optional: file path (FILE type)
 	Comment        types.String `tfsdk:"comment"`
-	Blocksize      types.Int64  `tfsdk:"blocksize"`      // 512, 1024, 2048, 4096
+	Blocksize      types.Int64  `tfsdk:"blocksize"` // 512, 1024, 2048, 4096
 	PBlocksize     types.Bool   `tfsdk:"pblocksize"`
 	AvailThreshold types.Int64  `tfsdk:"avail_threshold"` // 0 = unset (maps from nil)
 	InsecureTPC    types.Bool   `tfsdk:"insecure_tpc"`

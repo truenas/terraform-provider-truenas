@@ -18,7 +18,7 @@ type MailModel struct {
 	OutgoingServer types.String `tfsdk:"outgoingserver"`
 	Port           types.Int64  `tfsdk:"port"`
 	Security       types.String `tfsdk:"security"` // PLAIN, SSL, TLS
-	SMTP           types.Bool   `tfsdk:"smtp"`      // SMTP auth enabled
+	SMTP           types.Bool   `tfsdk:"smtp"`     // SMTP auth enabled
 	User           types.String `tfsdk:"user"`
 	Pass           types.String `tfsdk:"pass"` // write-only, Sensitive
 }

@@ -11,7 +11,7 @@ import (
 // TargetGroupModel maps to the nested groups list items.
 type TargetGroupModel struct {
 	Portal     types.Int64  `tfsdk:"portal"`
-	Initiator  types.Int64  `tfsdk:"initiator"` // nullable → 0 = unset
+	Initiator  types.Int64  `tfsdk:"initiator"`  // nullable → 0 = unset
 	Auth       types.Int64  `tfsdk:"auth"`       // nullable → 0 = unset
 	AuthMethod types.String `tfsdk:"authmethod"` // NONE, CHAP, CHAP_MUTUAL
 }
@@ -21,9 +21,9 @@ type ISCSITargetModel struct {
 	ID           types.Int64  `tfsdk:"id"`
 	Name         types.String `tfsdk:"name"`
 	Alias        types.String `tfsdk:"alias"`         // Optional, nullable
-	Mode         types.String `tfsdk:"mode"`           // ISCSI, FC, BOTH
-	Groups       types.List   `tfsdk:"groups"`         // List[TargetGroupModel]
-	AuthNetworks types.List   `tfsdk:"auth_networks"`  // List[String]
+	Mode         types.String `tfsdk:"mode"`          // ISCSI, FC, BOTH
+	Groups       types.List   `tfsdk:"groups"`        // List[TargetGroupModel]
+	AuthNetworks types.List   `tfsdk:"auth_networks"` // List[String]
 	RelTgtID     types.Int64  `tfsdk:"rel_tgt_id"`    // Computed only
 }
 

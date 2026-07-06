@@ -56,8 +56,8 @@ type Client struct {
 	endpoint  string
 	tlsConfig *tls.Config
 
-	connMu  sync.Mutex
-	conn    *websocket.Conn
+	connMu sync.Mutex
+	conn   *websocket.Conn
 
 	writeMu sync.Mutex
 

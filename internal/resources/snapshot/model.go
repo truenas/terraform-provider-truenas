@@ -4,7 +4,7 @@ import "github.com/hashicorp/terraform-plugin-framework/types"
 
 // SnapshotModel is the Terraform state model for truenas_snapshot.
 type SnapshotModel struct {
-	ID        types.String `tfsdk:"id"`        // "dataset@snapname"
+	ID        types.String `tfsdk:"id"` // "dataset@snapname"
 	Dataset   types.String `tfsdk:"dataset"`
 	Name      types.String `tfsdk:"name"`      // snapshot name only (no "@")
 	Recursive types.Bool   `tfsdk:"recursive"` // write-only; not in API response
