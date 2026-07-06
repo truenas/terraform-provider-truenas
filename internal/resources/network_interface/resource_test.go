@@ -199,6 +199,43 @@ func TestPayload_MTUNonZeroIncluded(t *testing.T) {
 	}
 }
 
+// TestCreatePayload_AliasEmptyTypeOmitted verifies that an alias whose type
+// is unset (empty string) does not send "type": "" in the payload -- TrueNAS
+// infers INET/INET6 from the address itself.
+func TestCreatePayload_AliasEmptyTypeOmitted(t *testing.T) {
+	ctx := context.Background()
+	m := baseModel(t, ctx, "BRIDGE")
+
+	aliasModels := []AliasModel{
+		{
+			Address: types.StringValue("10.0.0.1"),
+			Netmask: types.Int64Value(24),
+			Type:    types.StringValue(""),
+		},
+	}
+	aliasList, diags := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: aliasAttrTypes}, aliasModels)
+	if diags.HasError() {
+		t.Fatalf("building alias list: %v", diags)
+	}
+	m.Aliases = aliasList
+
+	payload, diags := m.createPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("createPayload diags: %v", diags)
+	}
+
+	aliases, ok := payload["aliases"].([]map[string]any)
+	if !ok || len(aliases) != 1 {
+		t.Fatalf("payload aliases = %#v, want one alias map", payload["aliases"])
+	}
+	if _, ok := aliases[0]["type"]; ok {
+		t.Errorf("alias payload should not contain %q key when type is empty, got %#v", "type", aliases[0])
+	}
+	if aliases[0]["address"] != "10.0.0.1" {
+		t.Errorf("alias address = %v, want 10.0.0.1", aliases[0]["address"])
+	}
+}
+
 // TestValidateCreateType_PhysicalRejected verifies that creating a PHYSICAL
 // interface is rejected.
 func TestValidateCreateType_PhysicalRejected(t *testing.T) {

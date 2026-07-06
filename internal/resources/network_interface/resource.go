@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -12,6 +13,12 @@ import (
 
 var _ resource.Resource = &NetworkInterfaceResource{}
 var _ resource.ResourceWithImportState = &NetworkInterfaceResource{}
+
+// stagingMu serializes the stage→commit→checkin lifecycle. TrueNAS stages
+// interface changes globally, so concurrent applies of multiple
+// truenas_network_interface resources would otherwise commit or roll back
+// each other's pending changes.
+var stagingMu sync.Mutex
 
 // NetworkInterfaceResource implements the truenas_network_interface resource.
 //
@@ -97,6 +104,9 @@ func (r *NetworkInterfaceResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
+	stagingMu.Lock()
+	defer stagingMu.Unlock()
+
 	if _, err := r.client.Call(ctx, "interface.create", payload); err != nil {
 		_, _ = r.client.Call(ctx, "interface.rollback")
 		resp.Diagnostics.AddError("Create interface failed", err.Error())
@@ -165,6 +175,9 @@ func (r *NetworkInterfaceResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
+	stagingMu.Lock()
+	defer stagingMu.Unlock()
+
 	if _, err := r.client.Call(ctx, "interface.update", plan.ID.ValueString(), payload); err != nil {
 		_, _ = r.client.Call(ctx, "interface.rollback")
 		resp.Diagnostics.AddError("Update interface failed", err.Error())
@@ -176,6 +189,10 @@ func (r *NetworkInterfaceResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
+	// If this read-back fails, the update was already committed successfully;
+	// we just surface the error and leave prior state in place. Terraform
+	// keeps the last-known-good state and the next refresh/plan will read
+	// the real (already-applied) config and self-heal, so no data is lost.
 	api, err := r.getInstance(ctx, plan.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after update failed", err.Error())
@@ -204,6 +221,9 @@ func (r *NetworkInterfaceResource) Delete(ctx context.Context, req resource.Dele
 		)
 		return
 	}
+
+	stagingMu.Lock()
+	defer stagingMu.Unlock()
 
 	_, err := r.client.Call(ctx, "interface.delete", state.ID.ValueString())
 	if err != nil {

@@ -160,11 +160,16 @@ func (m *NetworkInterfaceModel) basePayload(ctx context.Context) (map[string]any
 	}
 	aliasesPayload := make([]map[string]any, 0, len(aliasItems))
 	for _, a := range aliasItems {
-		aliasesPayload = append(aliasesPayload, map[string]any{
+		alias := map[string]any{
 			"address": a.Address.ValueString(),
 			"netmask": a.Netmask.ValueInt64(),
-			"type":    a.Type.ValueString(),
-		})
+		}
+		// Omit type when unset -- TrueNAS infers INET/INET6 from the address;
+		// sending an empty string is rejected/incorrect.
+		if !a.Type.IsNull() && !a.Type.IsUnknown() && a.Type.ValueString() != "" {
+			alias["type"] = a.Type.ValueString()
+		}
+		aliasesPayload = append(aliasesPayload, alias)
 	}
 
 	p := map[string]any{
