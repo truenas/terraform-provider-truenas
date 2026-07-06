@@ -19,9 +19,13 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cloudsync_credentials"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/group"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_auth"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_extent"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_global"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_initiator"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_portal"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_target"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_targetextent"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/mail"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/nfs"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/network_interface"
@@ -177,9 +181,13 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		cloudsync_credentials.NewResource,
 		dataset.NewResource,
 		group.NewResource,
+		iscsi_auth.NewResource,
 		iscsi_extent.NewResource,
+		iscsi_global.NewResource,
 		iscsi_initiator.NewResource,
+		iscsi_portal.NewResource,
 		iscsi_target.NewResource,
+		iscsi_targetextent.NewResource,
 		mail.NewResource,
 		nfs.NewResource,
 		network_interface.NewResource,
@@ -209,9 +217,13 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		cloudsync_credentials.NewDataSource,
 		dataset.NewDataSource,
 		group.NewDataSource,
+		iscsi_auth.NewDataSource,
 		iscsi_extent.NewDataSource,
+		iscsi_global.NewDataSource,
 		iscsi_initiator.NewDataSource,
+		iscsi_portal.NewDataSource,
 		iscsi_target.NewDataSource,
+		iscsi_targetextent.NewDataSource,
 		mail.NewDataSource,
 		nfs.NewDataSource,
 		network_interface.NewDataSource,
