@@ -53,7 +53,7 @@ func (d *NTPServerDataSource) Configure(_ context.Context, req datasource.Config
 }
 
 func (d *NTPServerDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var state NTPServerModel
+	var state NTPServerDataSourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -80,9 +80,6 @@ func (d *NTPServerDataSource) Read(ctx context.Context, req datasource.ReadReque
 		return
 	}
 
-	resp.Diagnostics.Append(responseToModel(ctx, &results[0], &state)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	responseToDataSourceModel(&results[0], &state)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

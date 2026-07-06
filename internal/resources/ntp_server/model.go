@@ -19,6 +19,27 @@ type NTPServerModel struct {
 	Force   types.Bool   `tfsdk:"force"` // write-only validation bypass; never populated from API responses
 }
 
+// NTPServerDataSourceModel is NTPServerModel without the write-only force field.
+type NTPServerDataSourceModel struct {
+	ID      types.Int64  `tfsdk:"id"`
+	Address types.String `tfsdk:"address"`
+	Burst   types.Bool   `tfsdk:"burst"`
+	IBurst  types.Bool   `tfsdk:"iburst"`
+	Prefer  types.Bool   `tfsdk:"prefer"`
+	MinPoll types.Int64  `tfsdk:"minpoll"`
+	MaxPoll types.Int64  `tfsdk:"maxpoll"`
+}
+
+func responseToDataSourceModel(api *ntpServerAPI, m *NTPServerDataSourceModel) {
+	m.ID = types.Int64Value(api.ID)
+	m.Address = types.StringValue(api.Address)
+	m.Burst = types.BoolValue(api.Burst)
+	m.IBurst = types.BoolValue(api.IBurst)
+	m.Prefer = types.BoolValue(api.Prefer)
+	m.MinPoll = types.Int64Value(api.MinPoll)
+	m.MaxPoll = types.Int64Value(api.MaxPoll)
+}
+
 // ntpServerAPI is the JSON wire format for a TrueNAS NTP server object.
 type ntpServerAPI struct {
 	ID      int64  `json:"id"`

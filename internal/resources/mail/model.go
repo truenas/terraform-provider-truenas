@@ -104,7 +104,9 @@ func responseToDataSourceModel(api *mailAPI, m *MailDataSourceModel) diag.Diagno
 // its current value" on Create and simply "not part of this plan" is not
 // possible since Computed always resolves to a known value before apply,
 // but the guard keeps this function safe to reuse for partial payloads).
-// user is only included when non-empty. pass is only included when set
+// user is only included when known (non-null, non-unknown); a known empty
+// string is sent as nil so that a previously set user can be cleared. pass
+// is only included when set
 // (write-only; a null/unknown value means "leave the current password
 // alone").
 func (m *MailModel) updatePayload() map[string]any {
@@ -128,8 +130,12 @@ func (m *MailModel) updatePayload() map[string]any {
 	if !m.SMTP.IsNull() && !m.SMTP.IsUnknown() {
 		p["smtp"] = m.SMTP.ValueBool()
 	}
-	if !m.User.IsUnknown() && m.User.ValueString() != "" {
-		p["user"] = m.User.ValueString()
+	if !m.User.IsNull() && !m.User.IsUnknown() {
+		if v := m.User.ValueString(); v != "" {
+			p["user"] = v
+		} else {
+			p["user"] = nil
+		}
 	}
 	if !m.Pass.IsNull() && !m.Pass.IsUnknown() {
 		p["pass"] = m.Pass.ValueString()

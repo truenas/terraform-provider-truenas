@@ -340,8 +340,9 @@ func TestUpdatePayload_PassOnlyWhenSet(t *testing.T) {
 	}
 }
 
-// TestUpdatePayload_UserOnlyWhenNonEmpty verifies that user is included only
-// when its string value is non-empty.
+// TestUpdatePayload_UserOnlyWhenNonEmpty verifies that user is omitted when
+// null/unknown, sent as nil when explicitly cleared to an empty string (so a
+// previously set user can be cleared), and sent as-is when non-empty.
 func TestUpdatePayload_UserOnlyWhenNonEmpty(t *testing.T) {
 	base := func() *MailModel {
 		return &MailModel{
@@ -365,8 +366,10 @@ func TestUpdatePayload_UserOnlyWhenNonEmpty(t *testing.T) {
 	m2 := base()
 	m2.User = types.StringValue("")
 	p2 := m2.updatePayload()
-	if _, ok := p2["user"]; ok {
-		t.Error("expected 'user' to be omitted when empty string")
+	if v, ok := p2["user"]; !ok {
+		t.Error("expected 'user' to be present (nil) when explicitly set to empty string")
+	} else if v != nil {
+		t.Errorf("expected 'user' = nil when explicitly set to empty string, got %v", v)
 	}
 
 	m3 := base()
@@ -374,6 +377,13 @@ func TestUpdatePayload_UserOnlyWhenNonEmpty(t *testing.T) {
 	p3 := m3.updatePayload()
 	if _, ok := p3["user"]; ok {
 		t.Error("expected 'user' to be omitted when null")
+	}
+
+	m4 := base()
+	m4.User = types.StringUnknown()
+	p4 := m4.updatePayload()
+	if _, ok := p4["user"]; ok {
+		t.Error("expected 'user' to be omitted when unknown")
 	}
 }
 
