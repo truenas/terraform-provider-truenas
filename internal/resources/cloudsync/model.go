@@ -72,6 +72,10 @@ type cloudSyncAPI struct {
 // response, which may be an embedded object ({"id": N, ...}) or a bare
 // integer ID depending on the calling method / API version.
 func decodeCredentialsID(raw json.RawMessage) (int64, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0, fmt.Errorf("credentials is null in API response")
+	}
+
 	var obj struct {
 		ID int64 `json:"id"`
 	}
@@ -152,7 +156,7 @@ func (m *CloudSyncModel) apiPayload(ctx context.Context) (map[string]any, diag.D
 	if diags.HasError() {
 		return nil, diags
 	}
-	return map[string]any{
+	p := map[string]any{
 		"description":   m.Description.ValueString(),
 		"path":          m.Path.ValueString(),
 		"credentials":   m.Credentials.ValueInt64(),
@@ -166,13 +170,28 @@ func (m *CloudSyncModel) apiPayload(ctx context.Context) (map[string]any, diag.D
 			"month":  m.Schedule.Month.ValueString(),
 			"dow":    m.Schedule.Dow.ValueString(),
 		},
-		"enabled":     m.Enabled.ValueBool(),
-		"snapshot":    m.Snapshot.ValueBool(),
-		"include":     include,
-		"exclude":     exclude,
-		"pre_script":  m.PreScript.ValueString(),
-		"post_script": m.PostScript.ValueString(),
-	}, diags
+		"include": include,
+		"exclude": exclude,
+	}
+
+	// Optional+Computed scalars: send only when the user has set a value.
+	// When unset, the plan value is Unknown and ValueBool()/ValueString()
+	// would return zero values, silently sending wrong data (e.g.
+	// "enabled": false disables the task).
+	if !m.Enabled.IsNull() && !m.Enabled.IsUnknown() {
+		p["enabled"] = m.Enabled.ValueBool()
+	}
+	if !m.Snapshot.IsNull() && !m.Snapshot.IsUnknown() {
+		p["snapshot"] = m.Snapshot.ValueBool()
+	}
+	if !m.PreScript.IsNull() && !m.PreScript.IsUnknown() {
+		p["pre_script"] = m.PreScript.ValueString()
+	}
+	if !m.PostScript.IsNull() && !m.PostScript.IsUnknown() {
+		p["post_script"] = m.PostScript.ValueString()
+	}
+
+	return p, diags
 }
 
 // responseToModel maps a cloudSyncAPI response into a CloudSyncModel. It

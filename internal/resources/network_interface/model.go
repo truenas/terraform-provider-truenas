@@ -204,11 +204,17 @@ func (m *NetworkInterfaceModel) basePayload(ctx context.Context) (map[string]any
 		if lagPorts == nil {
 			lagPorts = []string{}
 		}
-		p["lag_protocol"] = m.LagProtocol.ValueString()
+		if !m.LagProtocol.IsNull() && !m.LagProtocol.IsUnknown() {
+			p["lag_protocol"] = m.LagProtocol.ValueString()
+		}
 		p["lag_ports"] = lagPorts
 	case "VLAN":
-		p["vlan_parent_interface"] = m.VlanParentInterface.ValueString()
-		p["vlan_tag"] = m.VlanTag.ValueInt64()
+		if !m.VlanParentInterface.IsNull() && !m.VlanParentInterface.IsUnknown() {
+			p["vlan_parent_interface"] = m.VlanParentInterface.ValueString()
+		}
+		if !m.VlanTag.IsNull() && !m.VlanTag.IsUnknown() {
+			p["vlan_tag"] = m.VlanTag.ValueInt64()
+		}
 	}
 
 	return p, diags

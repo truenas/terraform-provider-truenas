@@ -12,6 +12,7 @@ import (
 
 var _ resource.Resource = &ReplicationResource{}
 var _ resource.ResourceWithImportState = &ReplicationResource{}
+var _ resource.ResourceWithValidateConfig = &ReplicationResource{}
 
 // ReplicationResource implements the truenas_replication_task resource.
 type ReplicationResource struct{ client *client.Client }
@@ -40,6 +41,39 @@ func (r *ReplicationResource) Configure(_ context.Context, req resource.Configur
 		return
 	}
 	r.client = c
+}
+
+// nameRegexConflict reports whether config sets name_regex together with
+// naming_schema and/or also_include_naming_schema: the API rejects that
+// combination, so ValidateConfig surfaces it as a config-time error rather
+// than a Create/Update API failure. Split out from ValidateConfig so the
+// boolean logic can be unit-tested without the full plugin-framework config
+// harness.
+func nameRegexConflict(config *ReplicationModel) bool {
+	hasRegex := !config.NameRegex.IsNull() && !config.NameRegex.IsUnknown() && config.NameRegex.ValueString() != ""
+	hasSchema := !config.NamingSchema.IsNull() && !config.NamingSchema.IsUnknown() && len(config.NamingSchema.Elements()) > 0
+	hasAlso := !config.AlsoIncludeNamingSchema.IsNull() && !config.AlsoIncludeNamingSchema.IsUnknown() && len(config.AlsoIncludeNamingSchema.Elements()) > 0
+
+	return hasRegex && (hasSchema || hasAlso)
+}
+
+// ValidateConfig enforces that name_regex is mutually exclusive with
+// naming_schema and also_include_naming_schema: the API rejects combining
+// them, so surface that as a config-time error rather than a Create/Update
+// API failure.
+func (r *ReplicationResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var config ReplicationModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if nameRegexConflict(&config) {
+		resp.Diagnostics.AddError(
+			"Conflicting attributes",
+			"name_regex is mutually exclusive with naming_schema and also_include_naming_schema.",
+		)
+	}
 }
 
 func (r *ReplicationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

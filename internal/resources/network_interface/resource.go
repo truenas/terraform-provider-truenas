@@ -64,7 +64,9 @@ func (r *NetworkInterfaceResource) commitAndCheckin(ctx context.Context) error {
 		"rollback":        true,
 	}); err != nil {
 		// discard staged changes so the failed plan doesn't poison later applies
-		_, _ = r.client.Call(ctx, "interface.rollback")
+		if _, rbErr := r.client.Call(ctx, "interface.rollback"); rbErr != nil {
+			return fmt.Errorf("commit failed: %w; rollback of staged changes also failed: %v", err, rbErr)
+		}
 		return err
 	}
 	if _, err := r.client.Call(ctx, "interface.checkin"); err != nil {
@@ -108,8 +110,11 @@ func (r *NetworkInterfaceResource) Create(ctx context.Context, req resource.Crea
 	defer stagingMu.Unlock()
 
 	if _, err := r.client.Call(ctx, "interface.create", payload); err != nil {
-		_, _ = r.client.Call(ctx, "interface.rollback")
 		resp.Diagnostics.AddError("Create interface failed", err.Error())
+		if _, rbErr := r.client.Call(ctx, "interface.rollback"); rbErr != nil {
+			resp.Diagnostics.AddError("Rollback of staged changes also failed",
+				"Staged interface changes may remain pending on TrueNAS: "+rbErr.Error())
+		}
 		return
 	}
 
@@ -179,8 +184,11 @@ func (r *NetworkInterfaceResource) Update(ctx context.Context, req resource.Upda
 	defer stagingMu.Unlock()
 
 	if _, err := r.client.Call(ctx, "interface.update", plan.ID.ValueString(), payload); err != nil {
-		_, _ = r.client.Call(ctx, "interface.rollback")
 		resp.Diagnostics.AddError("Update interface failed", err.Error())
+		if _, rbErr := r.client.Call(ctx, "interface.rollback"); rbErr != nil {
+			resp.Diagnostics.AddError("Rollback of staged changes also failed",
+				"Staged interface changes may remain pending on TrueNAS: "+rbErr.Error())
+		}
 		return
 	}
 
@@ -231,8 +239,11 @@ func (r *NetworkInterfaceResource) Delete(ctx context.Context, req resource.Dele
 			// Nothing was staged; no need to commit.
 			return
 		}
-		_, _ = r.client.Call(ctx, "interface.rollback")
 		resp.Diagnostics.AddError("Delete interface failed", err.Error())
+		if _, rbErr := r.client.Call(ctx, "interface.rollback"); rbErr != nil {
+			resp.Diagnostics.AddError("Rollback of staged changes also failed",
+				"Staged interface changes may remain pending on TrueNAS: "+rbErr.Error())
+		}
 		return
 	}
 

@@ -132,6 +132,47 @@ func TestDecodeCredentialsID_Invalid(t *testing.T) {
 	}
 }
 
+// TestDecodeCredentialsID_Null verifies that a JSON null credentials field
+// returns an explicit error rather than silently decoding to 0. Without the
+// null check, json.Unmarshal([]byte("null"), &obj) succeeds leaving obj's
+// zero value, and decodeCredentialsID would wrongly return (0, nil).
+func TestDecodeCredentialsID_Null(t *testing.T) {
+	raw := json.RawMessage(`null`)
+
+	_, err := decodeCredentialsID(raw)
+	if err == nil {
+		t.Fatal("expected error for null credentials, got none")
+	}
+}
+
+// TestDecodeCredentialsID_Empty verifies that an empty (zero-length) raw
+// message is also treated as an error, not decoded to 0.
+func TestDecodeCredentialsID_Empty(t *testing.T) {
+	raw := json.RawMessage(``)
+
+	_, err := decodeCredentialsID(raw)
+	if err == nil {
+		t.Fatal("expected error for empty credentials, got none")
+	}
+}
+
+// TestResponseToModel_CredentialsNull verifies that responseToModel surfaces
+// an error diagnostic (rather than silently defaulting Credentials to 0)
+// when the API returns a null credentials field.
+func TestResponseToModel_CredentialsNull(t *testing.T) {
+	ctx := context.Background()
+	api := &cloudSyncAPI{
+		ID:          1,
+		Description: "task",
+		Credentials: json.RawMessage(`null`),
+	}
+	var m CloudSyncModel
+	diags := responseToModel(ctx, api, &m)
+	if !diags.HasError() {
+		t.Fatal("expected error diagnostics for null credentials, got none")
+	}
+}
+
 // TestApiPayload_IncludeExcludeNil verifies that null/unknown include and
 // exclude lists produce empty slices, never nil, in the payload.
 func TestApiPayload_IncludeExcludeNil(t *testing.T) {
@@ -159,6 +200,30 @@ func TestApiPayload_IncludeExcludeNil(t *testing.T) {
 	}
 	if exclude == nil || len(exclude) != 0 {
 		t.Errorf("payload[exclude] = %v, want empty slice", exclude)
+	}
+}
+
+// TestApiPayload_OmitsUnsetOptionals verifies that enabled, snapshot,
+// pre_script, and post_script are omitted from the payload when null/unknown
+// (the plan-modifier state for unset Optional+Computed attributes), rather
+// than being sent as their Go zero values (false/"").
+func TestApiPayload_OmitsUnsetOptionals(t *testing.T) {
+	ctx := context.Background()
+	m := validCloudSyncModel()
+	m.Enabled = types.BoolNull()
+	m.Snapshot = types.BoolUnknown()
+	m.PreScript = types.StringNull()
+	m.PostScript = types.StringUnknown()
+
+	payload, diags := m.apiPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("apiPayload returned diagnostics errors: %v", diags)
+	}
+
+	for _, key := range []string{"enabled", "snapshot", "pre_script", "post_script"} {
+		if _, ok := payload[key]; ok {
+			t.Errorf("payload should not contain unset optional key %q, got %v", key, payload[key])
+		}
 	}
 }
 

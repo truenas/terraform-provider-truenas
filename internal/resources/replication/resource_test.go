@@ -552,6 +552,60 @@ func TestReplicationApiPayload_OmitsUnsetOptionals(t *testing.T) {
 	}
 }
 
+// TestNameRegexConflict verifies the mutual-exclusion boolean logic used by
+// ReplicationResource.ValidateConfig: name_regex conflicts with a non-empty
+// naming_schema and/or also_include_naming_schema, but not when only one of
+// the two attribute groups is set, and unknown values (not yet known at
+// plan time) are treated as absent so partially-unknown configs don't
+// falsely trip the check.
+func TestNameRegexConflict(t *testing.T) {
+	strList := func(vals ...string) types.List {
+		elems := make([]attr.Value, 0, len(vals))
+		for _, v := range vals {
+			elems = append(elems, types.StringValue(v))
+		}
+		return types.ListValueMust(types.StringType, elems)
+	}
+	emptyList := types.ListValueMust(types.StringType, []attr.Value{})
+	nullList := types.ListNull(types.StringType)
+	unknownList := types.ListUnknown(types.StringType)
+
+	cases := []struct {
+		name                    string
+		nameRegex               types.String
+		namingSchema            types.List
+		alsoIncludeNamingSchema types.List
+		want                    bool
+	}{
+		{"regex alone", types.StringValue("^auto-.*$"), nullList, nullList, false},
+		{"naming_schema alone", types.StringValue(""), strList("auto-%Y"), nullList, false},
+		{"also_include alone", types.StringValue(""), nullList, strList("auto-%Y"), false},
+		{"regex + naming_schema", types.StringValue("^auto-.*$"), strList("auto-%Y"), nullList, true},
+		{"regex + also_include", types.StringValue("^auto-.*$"), nullList, strList("auto-%Y"), true},
+		{"regex + both", types.StringValue("^auto-.*$"), strList("auto-%Y"), strList("auto-%Y"), true},
+		{"regex + empty lists", types.StringValue("^auto-.*$"), emptyList, emptyList, false},
+		{"regex null", types.StringNull(), strList("auto-%Y"), nullList, false},
+		{"regex empty string", types.StringValue(""), strList("auto-%Y"), nullList, false},
+		{"regex unknown", types.StringUnknown(), strList("auto-%Y"), nullList, false},
+		{"naming_schema unknown", types.StringValue("^auto-.*$"), unknownList, nullList, false},
+		{"also_include unknown", types.StringValue("^auto-.*$"), nullList, unknownList, false},
+		{"nothing set", types.StringValue(""), nullList, nullList, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &ReplicationModel{
+				NameRegex:               tc.nameRegex,
+				NamingSchema:            tc.namingSchema,
+				AlsoIncludeNamingSchema: tc.alsoIncludeNamingSchema,
+			}
+			if got := nameRegexConflict(config); got != tc.want {
+				t.Errorf("nameRegexConflict() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // baseModel builds a fully-populated, valid ReplicationModel for payload tests.
 func baseModel(ctx context.Context, t *testing.T) ReplicationModel {
 	t.Helper()

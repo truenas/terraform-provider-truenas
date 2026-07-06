@@ -130,6 +130,73 @@ func TestCreatePayload_LinkAggregation(t *testing.T) {
 	}
 }
 
+// TestCreatePayload_LagFieldsUnsetOmitted verifies that lag_protocol is
+// omitted from the payload when null/unknown, rather than sent as "" (the
+// Go zero value for types.String), which would incorrectly overwrite the
+// API's chosen default.
+func TestCreatePayload_LagFieldsUnsetOmitted(t *testing.T) {
+	ctx := context.Background()
+	m := baseModel(t, ctx, "LINK_AGGREGATION")
+	m.LagProtocol = types.StringNull()
+	m.LagPorts = stringList(t, ctx, []string{"eth1"})
+
+	payload, diags := m.createPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("createPayload diags: %v", diags)
+	}
+	if _, ok := payload["lag_protocol"]; ok {
+		t.Errorf("payload should not contain lag_protocol when unset, got %v", payload["lag_protocol"])
+	}
+
+	m2 := baseModel(t, ctx, "LINK_AGGREGATION")
+	m2.LagProtocol = types.StringUnknown()
+	m2.LagPorts = stringList(t, ctx, []string{"eth1"})
+
+	payload2, diags2 := m2.createPayload(ctx)
+	if diags2.HasError() {
+		t.Fatalf("createPayload diags: %v", diags2)
+	}
+	if _, ok := payload2["lag_protocol"]; ok {
+		t.Errorf("payload should not contain lag_protocol when unknown, got %v", payload2["lag_protocol"])
+	}
+}
+
+// TestCreatePayload_VlanFieldsUnsetOmitted verifies that vlan_parent_interface
+// and vlan_tag are omitted from the payload when null/unknown, rather than
+// sent as ""/0.
+func TestCreatePayload_VlanFieldsUnsetOmitted(t *testing.T) {
+	ctx := context.Background()
+	m := baseModel(t, ctx, "VLAN")
+	m.VlanParentInterface = types.StringNull()
+	m.VlanTag = types.Int64Null()
+
+	payload, diags := m.createPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("createPayload diags: %v", diags)
+	}
+	if _, ok := payload["vlan_parent_interface"]; ok {
+		t.Errorf("payload should not contain vlan_parent_interface when unset, got %v", payload["vlan_parent_interface"])
+	}
+	if _, ok := payload["vlan_tag"]; ok {
+		t.Errorf("payload should not contain vlan_tag when unset, got %v", payload["vlan_tag"])
+	}
+
+	m2 := baseModel(t, ctx, "VLAN")
+	m2.VlanParentInterface = types.StringUnknown()
+	m2.VlanTag = types.Int64Unknown()
+
+	payload2, diags2 := m2.createPayload(ctx)
+	if diags2.HasError() {
+		t.Fatalf("createPayload diags: %v", diags2)
+	}
+	if _, ok := payload2["vlan_parent_interface"]; ok {
+		t.Errorf("payload should not contain vlan_parent_interface when unknown, got %v", payload2["vlan_parent_interface"])
+	}
+	if _, ok := payload2["vlan_tag"]; ok {
+		t.Errorf("payload should not contain vlan_tag when unknown, got %v", payload2["vlan_tag"])
+	}
+}
+
 // TestUpdatePayload_NoNameOrType verifies the update payload never carries
 // name or type, unlike the create payload.
 func TestUpdatePayload_NoNameOrType(t *testing.T) {
