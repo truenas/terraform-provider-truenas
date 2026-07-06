@@ -18,6 +18,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cloudsync"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cloudsync_credentials"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/ftp_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/group"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_auth"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_extent"
@@ -28,6 +29,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_targetextent"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/mail"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/nfs"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/nfs_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/network_interface"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/ntp_server"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/periodic_snapshot"
@@ -35,10 +37,14 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/replication"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/service"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/smb"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/smb_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/snapshot"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/snmp_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/static_route"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/ssh_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/tunable"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/user"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/ups_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/vm"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/vm_device"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/zvol"
@@ -180,6 +186,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		cloudsync.NewResource,
 		cloudsync_credentials.NewResource,
 		dataset.NewResource,
+		ftp_config.NewResource,
 		group.NewResource,
 		iscsi_auth.NewResource,
 		iscsi_extent.NewResource,
@@ -190,6 +197,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		iscsi_targetextent.NewResource,
 		mail.NewResource,
 		nfs.NewResource,
+		nfs_config.NewResource,
 		network_interface.NewResource,
 		ntp_server.NewResource,
 		periodic_snapshot.NewResource,
@@ -197,10 +205,14 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		replication.NewResource,
 		service.NewResource,
 		smb.NewResource,
+		smb_config.NewResource,
 		snapshot.NewResource,
+		snmp_config.NewResource,
 		static_route.NewResource,
+		ssh_config.NewResource,
 		tunable.NewResource,
 		user.NewResource,
+		ups_config.NewResource,
 		vm.NewResource,
 		vm_device.NewResource,
 		zvol.NewResource,
@@ -216,6 +228,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		cloudsync.NewDataSource,
 		cloudsync_credentials.NewDataSource,
 		dataset.NewDataSource,
+		ftp_config.NewDataSource,
 		group.NewDataSource,
 		iscsi_auth.NewDataSource,
 		iscsi_extent.NewDataSource,
@@ -226,6 +239,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		iscsi_targetextent.NewDataSource,
 		mail.NewDataSource,
 		nfs.NewDataSource,
+		nfs_config.NewDataSource,
 		network_interface.NewDataSource,
 		ntp_server.NewDataSource,
 		periodic_snapshot.NewDataSource,
@@ -233,10 +247,14 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		replication.NewDataSource,
 		service.NewDataSource,
 		smb.NewDataSource,
+		smb_config.NewDataSource,
 		snapshot.NewDataSource,
+		snmp_config.NewDataSource,
 		static_route.NewDataSource,
+		ssh_config.NewDataSource,
 		tunable.NewDataSource,
 		user.NewDataSource,
+		ups_config.NewDataSource,
 		vm.NewDataSource,
 		vm_device.NewDataSource,
 		zvol.NewDataSource,
