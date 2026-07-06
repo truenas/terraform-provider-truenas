@@ -28,6 +28,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_target"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_targetextent"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/mail"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/network_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/network_interface"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/nfs"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/nfs_config"
@@ -42,6 +43,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/periodic_snapshot"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/pool"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/replication"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/replication_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/service"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/smb"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/smb_config"
@@ -49,6 +51,9 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/snmp_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/ssh_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/static_route"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/system_advanced"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/system_dataset"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/system_general"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/tunable"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/ups_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/user"
@@ -205,6 +210,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		mail.NewResource,
 		nfs.NewResource,
 		nfs_config.NewResource,
+		network_config.NewResource,
 		network_interface.NewResource,
 		ntp_server.NewResource,
 		nvmet_global.NewResource,
@@ -217,6 +223,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		periodic_snapshot.NewResource,
 		pool.NewResource,
 		replication.NewResource,
+		replication_config.NewResource,
 		service.NewResource,
 		smb.NewResource,
 		smb_config.NewResource,
@@ -224,6 +231,9 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		snmp_config.NewResource,
 		static_route.NewResource,
 		ssh_config.NewResource,
+		system_advanced.NewResource,
+		system_dataset.NewResource,
+		system_general.NewResource,
 		tunable.NewResource,
 		user.NewResource,
 		ups_config.NewResource,
@@ -254,6 +264,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		mail.NewDataSource,
 		nfs.NewDataSource,
 		nfs_config.NewDataSource,
+		network_config.NewDataSource,
 		network_interface.NewDataSource,
 		ntp_server.NewDataSource,
 		nvmet_global.NewDataSource,
@@ -266,6 +277,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		periodic_snapshot.NewDataSource,
 		pool.NewDataSource,
 		replication.NewDataSource,
+		replication_config.NewDataSource,
 		service.NewDataSource,
 		smb.NewDataSource,
 		smb_config.NewDataSource,
@@ -273,6 +285,9 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		snmp_config.NewDataSource,
 		static_route.NewDataSource,
 		ssh_config.NewDataSource,
+		system_advanced.NewDataSource,
+		system_dataset.NewDataSource,
+		system_general.NewDataSource,
 		tunable.NewDataSource,
 		user.NewDataSource,
 		ups_config.NewDataSource,
