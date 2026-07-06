@@ -241,7 +241,8 @@ func TestISCSIAuthApiPayload_UnknownOptionalFieldsOmitted(t *testing.T) {
 }
 
 // TestISCSIAuthResponseToModel verifies field mapping when the API returns
-// non-empty values for everything.
+// non-empty values for everything. Secret/PeerSecret are write-only and must
+// never be assigned from the API response.
 func TestISCSIAuthResponseToModel(t *testing.T) {
 	api := &iscsiAuthAPI{
 		ID:            7,
@@ -268,82 +269,68 @@ func TestISCSIAuthResponseToModel(t *testing.T) {
 	if m.User.ValueString() != "chapuser" {
 		t.Errorf("User = %v, want 'chapuser'", m.User.ValueString())
 	}
-	if m.Secret.ValueString() != "apisecret" {
-		t.Errorf("Secret = %v, want 'apisecret' (API returned non-empty, should take API value)", m.Secret.ValueString())
-	}
 	if m.PeerUser.ValueString() != "peeruser" {
 		t.Errorf("PeerUser = %v, want 'peeruser'", m.PeerUser.ValueString())
-	}
-	if m.PeerSecret.ValueString() != "apipeersecret" {
-		t.Errorf("PeerSecret = %v, want 'apipeersecret' (API returned non-empty, should take API value)", m.PeerSecret.ValueString())
 	}
 	if m.DiscoveryAuth.ValueString() != "CHAP" {
 		t.Errorf("DiscoveryAuth = %v, want 'CHAP'", m.DiscoveryAuth.ValueString())
 	}
+	if !m.Secret.IsNull() {
+		t.Errorf("Secret = %v, want null (write-only, never read back from API)", m.Secret)
+	}
+	if !m.PeerSecret.IsNull() {
+		t.Errorf("PeerSecret = %v, want null (write-only, never read back from API)", m.PeerSecret)
+	}
 }
 
-// TestISCSIAuthResponseToModel_SecretPreservation verifies that when the API
-// returns an empty secret/peersecret but the model already holds a non-empty
-// value (e.g. set by the user in a prior plan), the model's value is
-// preserved rather than being wiped out.
-func TestISCSIAuthResponseToModel_SecretPreservation(t *testing.T) {
+// TestISCSIAuthResponseToModel_SecretsWriteOnly verifies that responseToModel
+// never assigns to Secret/PeerSecret regardless of what the API returns:
+// whatever the caller already had in the model (set or null) survives
+// unchanged. This is the fix for the "Provider produced inconsistent result
+// after apply" error: peersecret is Optional and NOT Computed, so rewriting
+// a null planned value to a known "" after apply is a state consistency
+// violation.
+func TestISCSIAuthResponseToModel_SecretsWriteOnly(t *testing.T) {
 	api := &iscsiAuthAPI{
 		ID:            1,
 		Tag:           1,
 		User:          "u",
-		Secret:        "", // API masked/omitted the secret
+		Secret:        "apisecret",
 		PeerUser:      "peer",
-		PeerSecret:    "", // API masked/omitted the peer secret
+		PeerSecret:    "apipeersecret",
 		DiscoveryAuth: "NONE",
 	}
 
-	m := ISCSIAuthModel{
+	// Case 1: model already holds values set by the user in the plan -> left
+	// exactly as-is.
+	set := ISCSIAuthModel{
 		Secret:     types.StringValue("user-set-secret"),
 		PeerSecret: types.StringValue("user-set-peersecret"),
 	}
-
-	diags := responseToModel(api, &m)
+	diags := responseToModel(api, &set)
 	if diags.HasError() {
 		t.Fatalf("responseToModel returned diagnostic errors: %v", diags)
 	}
-
-	if m.Secret.ValueString() != "user-set-secret" {
-		t.Errorf("Secret = %v, want 'user-set-secret' (API returned empty, should keep model value)", m.Secret.ValueString())
+	if set.Secret.ValueString() != "user-set-secret" {
+		t.Errorf("Secret = %v, want unchanged 'user-set-secret'", set.Secret.ValueString())
 	}
-	if m.PeerSecret.ValueString() != "user-set-peersecret" {
-		t.Errorf("PeerSecret = %v, want 'user-set-peersecret' (API returned empty, should keep model value)", m.PeerSecret.ValueString())
-	}
-}
-
-// TestISCSIAuthResponseToModel_EmptyApiAndEmptyModel verifies that when both
-// the API and the model have no secret value, the result is an empty (but
-// known, non-null) string rather than null/unknown.
-func TestISCSIAuthResponseToModel_EmptyApiAndEmptyModel(t *testing.T) {
-	api := &iscsiAuthAPI{
-		ID:            1,
-		Tag:           1,
-		User:          "u",
-		Secret:        "",
-		PeerUser:      "",
-		PeerSecret:    "",
-		DiscoveryAuth: "NONE",
+	if set.PeerSecret.ValueString() != "user-set-peersecret" {
+		t.Errorf("PeerSecret = %v, want unchanged 'user-set-peersecret'", set.PeerSecret.ValueString())
 	}
 
-	var m ISCSIAuthModel // Secret/PeerSecret start as null zero values
-
-	diags := responseToModel(api, &m)
+	// Case 2: model has null Secret/PeerSecret (e.g. peersecret omitted by
+	// the user, or immediately after import) -> stays null, never coerced to
+	// "".
+	var null ISCSIAuthModel
+	diags = responseToModel(api, &null)
 	if diags.HasError() {
 		t.Fatalf("responseToModel returned diagnostic errors: %v", diags)
 	}
-
-	if m.Secret.IsNull() || m.Secret.IsUnknown() {
-		t.Error("Secret should be a known, non-null empty string, not null/unknown")
+	if !null.Secret.IsNull() {
+		t.Errorf("Secret = %v, want null (must stay null, not be coerced to \"\")", null.Secret)
 	}
-	if m.Secret.ValueString() != "" {
-		t.Errorf("Secret = %v, want ''", m.Secret.ValueString())
-	}
-	if m.PeerSecret.IsNull() || m.PeerSecret.IsUnknown() {
-		t.Error("PeerSecret should be a known, non-null empty string, not null/unknown")
+	if !null.PeerSecret.IsNull() {
+		t.Errorf("PeerSecret = %v, want null (must stay null, not be coerced to \"\")", null.PeerSecret)
 	}
 }
 

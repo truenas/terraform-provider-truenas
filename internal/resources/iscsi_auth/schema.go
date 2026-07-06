@@ -27,9 +27,10 @@ func resourceSchema() schema.Schema {
 				Description: "CHAP username presented by the initiator.",
 			},
 			"secret": schema.StringAttribute{
-				Required:    true,
-				Sensitive:   true,
-				Description: "CHAP secret (password) for the initiator. Must be 12-16 characters.",
+				Required:  true,
+				Sensitive: true,
+				Description: "CHAP secret (password) for the initiator. Must be 12-16 characters. " +
+					"Write-only; not read back from the API. After import, the first plan will propose setting it.",
 			},
 			"peeruser": schema.StringAttribute{
 				Optional:    true,
@@ -40,9 +41,10 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"peersecret": schema.StringAttribute{
-				Optional:    true,
-				Sensitive:   true,
-				Description: "Peer secret for mutual CHAP. Must be 12-16 characters. Omit or leave empty to disable mutual CHAP.",
+				Optional:  true,
+				Sensitive: true,
+				Description: "Peer secret for mutual CHAP. Must be 12-16 characters. Omit or leave empty to disable mutual CHAP. " +
+					"Write-only; not read back from the API. After import, the first plan will propose setting it if configured.",
 			},
 			"discovery_auth": schema.StringAttribute{
 				Optional:    true,

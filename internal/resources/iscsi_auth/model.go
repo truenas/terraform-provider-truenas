@@ -8,11 +8,11 @@ import (
 // ISCSIAuthModel is the Terraform state model for truenas_iscsi_auth.
 type ISCSIAuthModel struct {
 	ID            types.Int64  `tfsdk:"id"`
-	Tag           types.Int64  `tfsdk:"tag"`  // group ID referenced by target groups' "auth"
+	Tag           types.Int64  `tfsdk:"tag"` // group ID referenced by target groups' "auth"
 	User          types.String `tfsdk:"user"`
-	Secret        types.String `tfsdk:"secret"`        // Sensitive
-	PeerUser      types.String `tfsdk:"peeruser"`      // mutual CHAP
-	PeerSecret    types.String `tfsdk:"peersecret"`    // Sensitive
+	Secret        types.String `tfsdk:"secret"`         // Sensitive
+	PeerUser      types.String `tfsdk:"peeruser"`       // mutual CHAP
+	PeerSecret    types.String `tfsdk:"peersecret"`     // Sensitive
 	DiscoveryAuth types.String `tfsdk:"discovery_auth"` // NONE, CHAP, CHAP_MUTUAL
 }
 
@@ -40,12 +40,14 @@ type iscsiAuthAPI struct {
 
 // responseToModel maps an API response onto a Terraform model.
 //
-// Secret preservation: whether the API echoes secret/peersecret back in
-// query/get_instance responses is unverified, and TrueNAS may mask secrets
-// with an empty string. To avoid silently wiping a secret the user set, this
-// function only overwrites Secret/PeerSecret with the API's value when the
-// API returns a non-empty string. If the API returns an empty string and the
-// model already holds a non-empty value, the model value is kept.
+// Secret/PeerSecret are write-only: they are never assigned here, and
+// whatever value the caller already has in m.Secret/m.PeerSecret (from plan
+// or prior state) is left untouched. peersecret is Optional and NOT
+// Computed, so if it is rewritten to "" here whenever the user omits it (or
+// the API doesn't echo it back), Terraform Core reports "Provider produced
+// inconsistent result after apply" because the planned value was null but
+// the applied value became a known empty string. Mirrors the convention in
+// internal/resources/mail (Pass) and internal/resources/user (Password).
 func responseToModel(api *iscsiAuthAPI, m *ISCSIAuthModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
@@ -55,19 +57,8 @@ func responseToModel(api *iscsiAuthAPI, m *ISCSIAuthModel) diag.Diagnostics {
 	m.PeerUser = types.StringValue(api.PeerUser)
 	m.DiscoveryAuth = types.StringValue(api.DiscoveryAuth)
 
-	if api.Secret != "" {
-		m.Secret = types.StringValue(api.Secret)
-	} else if m.Secret.IsNull() || m.Secret.IsUnknown() {
-		m.Secret = types.StringValue("")
-	}
-	// else: API returned empty, model already holds a non-empty value: keep it.
-
-	if api.PeerSecret != "" {
-		m.PeerSecret = types.StringValue(api.PeerSecret)
-	} else if m.PeerSecret.IsNull() || m.PeerSecret.IsUnknown() {
-		m.PeerSecret = types.StringValue("")
-	}
-	// else: API returned empty, model already holds a non-empty value: keep it.
+	// NOTE: Secret and PeerSecret are NOT set here (write-only, never read
+	// back from the API).
 
 	return diags
 }
