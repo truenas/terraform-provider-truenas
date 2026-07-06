@@ -19,8 +19,8 @@ const sshConfigResourceID = "ssh_config"
 // modeled: they are server-managed and are excluded entirely from this
 // resource.
 type SSHConfigModel struct {
-	ID                  types.String `tfsdk:"id"` // fixed: "ssh_config"
-	BindIface           types.List   `tfsdk:"bindiface"`             // List[String]
+	ID                  types.String `tfsdk:"id"`        // fixed: "ssh_config"
+	BindIface           types.List   `tfsdk:"bindiface"` // List[String]
 	Compression         types.Bool   `tfsdk:"compression"`
 	KerberosAuth        types.Bool   `tfsdk:"kerberosauth"`
 	Options             types.String `tfsdk:"options"`
