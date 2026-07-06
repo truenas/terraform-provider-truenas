@@ -159,6 +159,12 @@ func main() {
 			}
 		}
 	}
+	if section == "iscsi2" || section == "all" {
+		pp("iscsi.portal.query (first item)", firstItem(call(c, "iscsi.portal.query", []any{})))
+		pp("iscsi.targetextent.query (first item)", firstItem(call(c, "iscsi.targetextent.query", []any{})))
+		pp("iscsi.auth.query (first item)", firstItem(call(c, "iscsi.auth.query", []any{})))
+		pp("iscsi.global.config", call(c, "iscsi.global.config"))
+	}
 	if section == "namespaces" {
 		raw, err := c.Call(context.Background(), "core.get_methods")
 		if err != nil {
