@@ -182,6 +182,13 @@ func main() {
 		pp("nvmet.host_subsys.query (first item)", firstItem(call(c, "nvmet.host_subsys.query", []any{})))
 		pp("nvmet.port_subsys.query (first item)", firstItem(call(c, "nvmet.port_subsys.query", []any{})))
 	}
+	if section == "syssingletons" || section == "all" {
+		pp("system.general.config", call(c, "system.general.config"))
+		pp("system.advanced.config", call(c, "system.advanced.config"))
+		pp("network.configuration.config", call(c, "network.configuration.config"))
+		pp("systemdataset.config", call(c, "systemdataset.config"))
+		pp("replication.config.config", call(c, "replication.config.config"))
+	}
 	if section == "namespaces" {
 		raw, err := c.Call(context.Background(), "core.get_methods")
 		if err != nil {
