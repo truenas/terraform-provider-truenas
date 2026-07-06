@@ -86,7 +86,9 @@ func decodeSubsysID(raw json.RawMessage) (int64, error) {
 }
 
 // responseToModel maps an API response onto a Terraform model. A nil
-// Filesize maps to 0 rather than leaving the model attribute null/unknown.
+// Filesize maps to null rather than 0, so that an update payload built from
+// this model omits it (see guardedFields) instead of sending an explicit 0
+// that overwrites a server-side null.
 func responseToModel(_ context.Context, api *nvmetNamespaceAPI, m *NVMetNamespaceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
@@ -109,15 +111,15 @@ func responseToModel(_ context.Context, api *nvmetNamespaceAPI, m *NVMetNamespac
 	if api.Filesize != nil {
 		m.Filesize = types.Int64Value(*api.Filesize)
 	} else {
-		m.Filesize = types.Int64Value(0)
+		m.Filesize = types.Int64Null()
 	}
 
 	return diags
 }
 
 // responseToDataSourceModel maps an API response onto an
-// NVMetNamespaceDataSourceModel using the same nil-pointer-to-zero-value
-// rule as responseToModel.
+// NVMetNamespaceDataSourceModel using the same nil-pointer-to-null rule as
+// responseToModel.
 func responseToDataSourceModel(_ context.Context, api *nvmetNamespaceAPI, m *NVMetNamespaceDataSourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
@@ -140,7 +142,7 @@ func responseToDataSourceModel(_ context.Context, api *nvmetNamespaceAPI, m *NVM
 	if api.Filesize != nil {
 		m.Filesize = types.Int64Value(*api.Filesize)
 	} else {
-		m.Filesize = types.Int64Value(0)
+		m.Filesize = types.Int64Null()
 	}
 
 	return diags

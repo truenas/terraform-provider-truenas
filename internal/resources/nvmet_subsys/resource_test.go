@@ -132,10 +132,10 @@ func TestCreatePayload_NameAlwaysPresent(t *testing.T) {
 	}
 }
 
-// TestCreatePayload_EmptySubNQNOmitted verifies that an explicitly empty
-// subnqn (known, but "") is omitted from the create payload just like a
-// null/unknown value.
-func TestCreatePayload_EmptySubNQNOmitted(t *testing.T) {
+// TestCreatePayload_EmptySubNQNSendsNull verifies the three-way rule for
+// subnqn/ieee_oui: null/unknown is omitted, but an explicitly known empty
+// string is sent as an explicit JSON null (clear), distinct from omission.
+func TestCreatePayload_EmptySubNQNSendsNull(t *testing.T) {
 	ctx := context.Background()
 
 	m := NVMetSubsysModel{
@@ -152,11 +152,48 @@ func TestCreatePayload_EmptySubNQNOmitted(t *testing.T) {
 		t.Fatalf("createPayload returned diagnostic errors: %v", diags)
 	}
 
+	subnqn, ok := payload["subnqn"]
+	if !ok {
+		t.Fatal("expected 'subnqn' key present (explicit null) for empty string, got omitted")
+	}
+	if subnqn != nil {
+		t.Errorf("payload[subnqn] = %v, want nil", subnqn)
+	}
+
+	ieeeOUI, ok := payload["ieee_oui"]
+	if !ok {
+		t.Fatal("expected 'ieee_oui' key present (explicit null) for empty string, got omitted")
+	}
+	if ieeeOUI != nil {
+		t.Errorf("payload[ieee_oui] = %v, want nil", ieeeOUI)
+	}
+}
+
+// TestCreatePayload_NullSubNQNOmitted verifies that a null/unknown subnqn/
+// ieee_oui (never set in config) is omitted entirely, distinct from an
+// explicit empty string which sends a JSON null.
+func TestCreatePayload_NullSubNQNOmitted(t *testing.T) {
+	ctx := context.Background()
+
+	m := NVMetSubsysModel{
+		Name:     types.StringValue("test-subsys"),
+		SubNQN:   types.StringNull(),
+		IEEEOUI:  types.StringUnknown(),
+		ANA:      types.BoolNull(),
+		PIEnable: types.BoolNull(),
+		QIDMax:   types.Int64Null(),
+	}
+
+	payload, diags := m.createPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("createPayload returned diagnostic errors: %v", diags)
+	}
+
 	if _, ok := payload["subnqn"]; ok {
-		t.Errorf("expected 'subnqn' to be omitted for empty string, got %v", payload["subnqn"])
+		t.Errorf("expected 'subnqn' to be omitted for null, got %v", payload["subnqn"])
 	}
 	if _, ok := payload["ieee_oui"]; ok {
-		t.Errorf("expected 'ieee_oui' to be omitted for empty string, got %v", payload["ieee_oui"])
+		t.Errorf("expected 'ieee_oui' to be omitted for unknown, got %v", payload["ieee_oui"])
 	}
 }
 
@@ -231,8 +268,12 @@ func TestUpdatePayload_NoNameKey(t *testing.T) {
 	if payload["ana"] != false {
 		t.Errorf("payload[ana] = %v, want false", payload["ana"])
 	}
-	if _, ok := payload["ieee_oui"]; ok {
-		t.Error("expected 'ieee_oui' to be omitted for empty string")
+	ieeeOUI, ok := payload["ieee_oui"]
+	if !ok {
+		t.Fatal("expected 'ieee_oui' key present (explicit null) for empty string, got omitted")
+	}
+	if ieeeOUI != nil {
+		t.Errorf("payload[ieee_oui] = %v, want nil (explicit clear)", ieeeOUI)
 	}
 	if _, ok := payload["pi_enable"]; ok {
 		t.Error("expected 'pi_enable' to be omitted (null)")

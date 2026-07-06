@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -68,6 +70,23 @@ func TestNVMetNamespaceSchema(t *testing.T) {
 		}
 	}
 
+	// nsid is immutable after creation (omitted from updatePayload), so it
+	// must carry RequiresReplace in addition to UseStateForUnknown.
+	nsidAttr, ok := s.Attributes["nsid"]
+	if !ok {
+		t.Fatal("schema missing 'nsid' attribute")
+	}
+	nsidInt64, ok := nsidAttr.(schema.Int64Attribute)
+	if !ok {
+		t.Fatalf("'nsid' attribute is %T, want schema.Int64Attribute", nsidAttr)
+	}
+	if !hasUseStateForUnknown(nsidInt64.PlanModifiers) {
+		t.Error("'nsid' should have UseStateForUnknown plan modifier")
+	}
+	if !hasRequiresReplace(nsidInt64.PlanModifiers) {
+		t.Error("'nsid' should have RequiresReplace plan modifier (immutable after creation)")
+	}
+
 	deviceTypeAttr, ok := s.Attributes["device_type"]
 	if !ok {
 		t.Fatal("schema missing 'device_type' attribute")
@@ -128,6 +147,29 @@ func TestNVMetNamespaceSchema(t *testing.T) {
 	if len(lockedBool.PlanModifiers) != 0 {
 		t.Error("'locked' should NOT have plan modifiers (server-mutable, no UseStateForUnknown)")
 	}
+}
+
+// hasRequiresReplace and hasUseStateForUnknown identify plan modifiers by
+// description, since the concrete types returned by int64planmodifier are
+// unexported.
+func hasRequiresReplace(modifiers []planmodifier.Int64) bool {
+	want := int64planmodifier.RequiresReplace().Description(context.Background())
+	for _, m := range modifiers {
+		if m.Description(context.Background()) == want {
+			return true
+		}
+	}
+	return false
+}
+
+func hasUseStateForUnknown(modifiers []planmodifier.Int64) bool {
+	want := int64planmodifier.UseStateForUnknown().Description(context.Background())
+	for _, m := range modifiers {
+		if m.Description(context.Background()) == want {
+			return true
+		}
+	}
+	return false
 }
 
 // TestCreatePayload_KeysAlwaysPresent verifies that "subsys_id" and
@@ -284,7 +326,9 @@ func TestDecodeSubsysID_Null(t *testing.T) {
 }
 
 // TestResponseToModel_FilesizeNil verifies that a nil filesize from the API
-// (typical for ZVOL-backed namespaces) maps to 0.
+// (typical for ZVOL-backed namespaces) maps to null rather than 0, so that a
+// subsequent update payload built from this model omits "filesize" instead
+// of sending an explicit 0 that would overwrite a server-side null.
 func TestResponseToModel_FilesizeNil(t *testing.T) {
 	ctx := context.Background()
 
@@ -307,8 +351,8 @@ func TestResponseToModel_FilesizeNil(t *testing.T) {
 		t.Fatalf("responseToModel returned diagnostic errors: %v", diags)
 	}
 
-	if m.Filesize.ValueInt64() != 0 {
-		t.Errorf("Filesize = %v, want 0 when API returns nil", m.Filesize.ValueInt64())
+	if !m.Filesize.IsNull() {
+		t.Errorf("Filesize = %v, want null when API returns nil", m.Filesize)
 	}
 }
 

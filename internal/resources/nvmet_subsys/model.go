@@ -132,13 +132,22 @@ func responseToDataSourceModel(_ context.Context, api *nvmetSubsysAPI, m *NVMetS
 // guardedFields builds the set of optional payload fields shared by create
 // and update: subnqn, allow_any_host, ana, ieee_oui, pi_enable, qid_max.
 // Each is included only when its model value is known (not null, not
-// unknown); subnqn and ieee_oui are additionally omitted when the known
-// value is an empty string.
+// unknown).
+//
+// subnqn and ieee_oui use a three-way rule instead of the simple guard:
+// null/unknown are omitted (no opinion), an explicit empty string sends an
+// explicit JSON null (clears the server-side value), and any other value is
+// sent as-is. Without this, an explicit "" would be indistinguishable from
+// "unset" and could never clear a previously-set subnqn/ieee_oui.
 func (m *NVMetSubsysModel) guardedFields() map[string]any {
 	p := map[string]any{}
 
-	if !m.SubNQN.IsNull() && !m.SubNQN.IsUnknown() && m.SubNQN.ValueString() != "" {
-		p["subnqn"] = m.SubNQN.ValueString()
+	if !m.SubNQN.IsNull() && !m.SubNQN.IsUnknown() {
+		if m.SubNQN.ValueString() == "" {
+			p["subnqn"] = nil
+		} else {
+			p["subnqn"] = m.SubNQN.ValueString()
+		}
 	}
 	if !m.AllowAnyHost.IsNull() && !m.AllowAnyHost.IsUnknown() {
 		p["allow_any_host"] = m.AllowAnyHost.ValueBool()
@@ -146,8 +155,12 @@ func (m *NVMetSubsysModel) guardedFields() map[string]any {
 	if !m.ANA.IsNull() && !m.ANA.IsUnknown() {
 		p["ana"] = m.ANA.ValueBool()
 	}
-	if !m.IEEEOUI.IsNull() && !m.IEEEOUI.IsUnknown() && m.IEEEOUI.ValueString() != "" {
-		p["ieee_oui"] = m.IEEEOUI.ValueString()
+	if !m.IEEEOUI.IsNull() && !m.IEEEOUI.IsUnknown() {
+		if m.IEEEOUI.ValueString() == "" {
+			p["ieee_oui"] = nil
+		} else {
+			p["ieee_oui"] = m.IEEEOUI.ValueString()
+		}
 	}
 	if !m.PIEnable.IsNull() && !m.PIEnable.IsUnknown() {
 		p["pi_enable"] = m.PIEnable.ValueBool()

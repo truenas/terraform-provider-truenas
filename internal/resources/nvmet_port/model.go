@@ -55,8 +55,10 @@ type nvmetPortAPI struct {
 }
 
 // responseToModel maps an API response onto a Terraform model. Nil pointer
-// fields (inline_data_size, max_queue_size, pi_enable) map to their zero
-// values (0, 0, false) rather than leaving the model attribute null/unknown.
+// fields (inline_data_size, max_queue_size, pi_enable) map to null rather
+// than a zero value, so that an update payload built from this model omits
+// them (see guardedFields) instead of sending an explicit 0/false that
+// overwrites a server-side null.
 func responseToModel(_ context.Context, api *nvmetPortAPI, m *NVMetPortModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
@@ -71,26 +73,26 @@ func responseToModel(_ context.Context, api *nvmetPortAPI, m *NVMetPortModel) di
 	if api.InlineDataSize != nil {
 		m.InlineDataSize = types.Int64Value(*api.InlineDataSize)
 	} else {
-		m.InlineDataSize = types.Int64Value(0)
+		m.InlineDataSize = types.Int64Null()
 	}
 
 	if api.MaxQueueSize != nil {
 		m.MaxQueueSize = types.Int64Value(*api.MaxQueueSize)
 	} else {
-		m.MaxQueueSize = types.Int64Value(0)
+		m.MaxQueueSize = types.Int64Null()
 	}
 
 	if api.PIEnable != nil {
 		m.PIEnable = types.BoolValue(*api.PIEnable)
 	} else {
-		m.PIEnable = types.BoolValue(false)
+		m.PIEnable = types.BoolNull()
 	}
 
 	return diags
 }
 
 // responseToDataSourceModel maps an API response onto an
-// NVMetPortDataSourceModel using the same nil-pointer-to-zero-value rules as
+// NVMetPortDataSourceModel using the same nil-pointer-to-null rules as
 // responseToModel.
 func responseToDataSourceModel(_ context.Context, api *nvmetPortAPI, m *NVMetPortDataSourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
@@ -106,19 +108,19 @@ func responseToDataSourceModel(_ context.Context, api *nvmetPortAPI, m *NVMetPor
 	if api.InlineDataSize != nil {
 		m.InlineDataSize = types.Int64Value(*api.InlineDataSize)
 	} else {
-		m.InlineDataSize = types.Int64Value(0)
+		m.InlineDataSize = types.Int64Null()
 	}
 
 	if api.MaxQueueSize != nil {
 		m.MaxQueueSize = types.Int64Value(*api.MaxQueueSize)
 	} else {
-		m.MaxQueueSize = types.Int64Value(0)
+		m.MaxQueueSize = types.Int64Null()
 	}
 
 	if api.PIEnable != nil {
 		m.PIEnable = types.BoolValue(*api.PIEnable)
 	} else {
-		m.PIEnable = types.BoolValue(false)
+		m.PIEnable = types.BoolNull()
 	}
 
 	return diags

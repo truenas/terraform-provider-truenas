@@ -231,8 +231,10 @@ func TestUpdatePayload_NoAddrTrtypeKey(t *testing.T) {
 }
 
 // TestResponseToModel_NilPointers verifies that nil inline_data_size/
-// max_queue_size/pi_enable fields from the API map to their zero values
-// (0/0/false).
+// max_queue_size/pi_enable fields from the API map to null rather than a
+// zero value, so that a subsequent update payload built from this model
+// omits them (see guardedFields) instead of sending an explicit 0/false
+// that would overwrite a server-side null.
 func TestResponseToModel_NilPointers(t *testing.T) {
 	ctx := context.Background()
 
@@ -255,14 +257,14 @@ func TestResponseToModel_NilPointers(t *testing.T) {
 		t.Fatalf("responseToModel returned diagnostic errors: %v", diags)
 	}
 
-	if m.InlineDataSize.ValueInt64() != 0 {
-		t.Errorf("InlineDataSize = %v, want 0 when API returns nil", m.InlineDataSize.ValueInt64())
+	if !m.InlineDataSize.IsNull() {
+		t.Errorf("InlineDataSize = %v, want null when API returns nil", m.InlineDataSize)
 	}
-	if m.MaxQueueSize.ValueInt64() != 0 {
-		t.Errorf("MaxQueueSize = %v, want 0 when API returns nil", m.MaxQueueSize.ValueInt64())
+	if !m.MaxQueueSize.IsNull() {
+		t.Errorf("MaxQueueSize = %v, want null when API returns nil", m.MaxQueueSize)
 	}
-	if m.PIEnable.ValueBool() != false {
-		t.Errorf("PIEnable = %v, want false when API returns nil", m.PIEnable.ValueBool())
+	if !m.PIEnable.IsNull() {
+		t.Errorf("PIEnable = %v, want null when API returns nil", m.PIEnable)
 	}
 }
 

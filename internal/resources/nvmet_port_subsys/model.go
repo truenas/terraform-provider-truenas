@@ -46,11 +46,17 @@ func decodeEmbeddedID(raw json.RawMessage, fieldName string) (int64, error) {
 		return 0, fmt.Errorf("%s is null in API response", fieldName)
 	}
 
-	var obj struct {
-		ID int64 `json:"id"`
-	}
+	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &obj); err == nil {
-		return obj.ID, nil
+		idRaw, ok := obj["id"]
+		if !ok || len(idRaw) == 0 || string(idRaw) == "null" {
+			return 0, fmt.Errorf("%s object has no non-null \"id\" field in API response: %q", fieldName, string(raw))
+		}
+		var id int64
+		if err := json.Unmarshal(idRaw, &id); err != nil {
+			return 0, fmt.Errorf("cannot decode %s.id field %q as integer: %w", fieldName, string(idRaw), err)
+		}
+		return id, nil
 	}
 
 	var id int64

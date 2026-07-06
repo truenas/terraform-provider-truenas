@@ -60,6 +60,7 @@ func resourceSchema() schema.Schema {
 				Description: "Namespace ID within the subsystem. Auto-assigned by TrueNAS when unset. Immutable after creation.",
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.UseStateForUnknown(),
+					int64planmodifier.RequiresReplace(),
 				},
 			},
 			// Computed-only (server-generated)

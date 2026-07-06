@@ -39,6 +39,16 @@ func TestAccNVMetHost_basic(t *testing.T) {
 				),
 			},
 			{
+				// hostnqn is mutable in place (no RequiresReplace): verify
+				// that changing it updates the existing resource rather than
+				// forcing a create/destroy.
+				Config: acctest.ProviderConfig() + testAccNVMetHostConfig(
+					"nqn.2014-08.org.nvmexpress:uuid:tf-acc-host-renamed", "tf-acc host updated", "tf-acc-dhchap-key-1"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_nvmet_host.test", "hostnqn", "nqn.2014-08.org.nvmexpress:uuid:tf-acc-host-renamed"),
+				),
+			},
+			{
 				ResourceName:            "truenas_nvmet_host.test",
 				ImportState:             true,
 				ImportStateVerify:       true,

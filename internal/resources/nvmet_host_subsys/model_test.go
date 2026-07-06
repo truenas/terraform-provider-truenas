@@ -157,6 +157,26 @@ func TestDecodeEmbeddedID_Null(t *testing.T) {
 	}
 }
 
+// TestDecodeEmbeddedID_ObjectWithoutID verifies that an object shape missing
+// the "id" key returns an error rather than silently defaulting to 0.
+func TestDecodeEmbeddedID_ObjectWithoutID(t *testing.T) {
+	if _, err := decodeEmbeddedID(json.RawMessage(`{}`), "host"); err == nil {
+		t.Error("expected error for object without id, got nil")
+	}
+	if _, err := decodeEmbeddedID(json.RawMessage(`{"name":"x"}`), "host"); err == nil {
+		t.Error("expected error for object without id, got nil")
+	}
+}
+
+// TestDecodeEmbeddedID_ObjectNullID verifies that an object shape whose "id"
+// key is explicitly null returns an error rather than silently defaulting
+// to 0.
+func TestDecodeEmbeddedID_ObjectNullID(t *testing.T) {
+	if _, err := decodeEmbeddedID(json.RawMessage(`{"id":null}`), "host"); err == nil {
+		t.Error("expected error for object with null id, got nil")
+	}
+}
+
 // TestHostSubsysResponseToModel verifies that responseToModel decodes both
 // embedded host and subsys objects and populates the model correctly.
 func TestHostSubsysResponseToModel(t *testing.T) {
