@@ -58,10 +58,10 @@ func TestReplicationConfigSchema_MaxParallelOptionalComputed(t *testing.T) {
 	}
 }
 
-// TestResponseToModel_NilMapsToInt64Null verifies that a nil
-// max_parallel_replication_tasks on the wire maps to Int64Null (not a zero
-// value), and that a non-nil value maps through unchanged.
-func TestResponseToModel_NilMapsToInt64Null(t *testing.T) {
+// TestResponseToModel_NilMapsToZeroSentinel verifies that a nil
+// max_parallel_replication_tasks on the wire maps to 0 (the "unlimited"
+// sentinel), and that a non-nil value maps through unchanged.
+func TestResponseToModel_NilMapsToZeroSentinel(t *testing.T) {
 	api := &replicationConfigAPI{ID: 1, MaxParallelReplicationTasks: nil}
 
 	m := &ReplicationConfigModel{}
@@ -69,8 +69,8 @@ func TestResponseToModel_NilMapsToInt64Null(t *testing.T) {
 	if diags.HasError() {
 		t.Fatalf("unexpected error: %v", diags)
 	}
-	if !m.MaxParallelReplicationTasks.IsNull() {
-		t.Errorf("MaxParallelReplicationTasks = %v, want null", m.MaxParallelReplicationTasks)
+	if m.MaxParallelReplicationTasks.ValueInt64() != 0 {
+		t.Errorf("MaxParallelReplicationTasks = %v, want 0", m.MaxParallelReplicationTasks)
 	}
 	if m.ID.ValueString() != replicationConfigResourceID {
 		t.Errorf("ID = %q, want %q", m.ID.ValueString(), replicationConfigResourceID)
@@ -88,9 +88,9 @@ func TestResponseToModel_NilMapsToInt64Null(t *testing.T) {
 	}
 }
 
-// TestResponseToDataSourceModel_NilMapsToInt64Null mirrors
-// TestResponseToModel_NilMapsToInt64Null for the datasource model.
-func TestResponseToDataSourceModel_NilMapsToInt64Null(t *testing.T) {
+// TestResponseToDataSourceModel_NilMapsToZeroSentinel mirrors
+// TestResponseToModel_NilMapsToZeroSentinel for the datasource model.
+func TestResponseToDataSourceModel_NilMapsToZeroSentinel(t *testing.T) {
 	api := &replicationConfigAPI{ID: 1, MaxParallelReplicationTasks: nil}
 
 	m := &ReplicationConfigDataSourceModel{}
@@ -98,8 +98,8 @@ func TestResponseToDataSourceModel_NilMapsToInt64Null(t *testing.T) {
 	if diags.HasError() {
 		t.Fatalf("unexpected error: %v", diags)
 	}
-	if !m.MaxParallelReplicationTasks.IsNull() {
-		t.Errorf("MaxParallelReplicationTasks = %v, want null", m.MaxParallelReplicationTasks)
+	if m.MaxParallelReplicationTasks.ValueInt64() != 0 {
+		t.Errorf("MaxParallelReplicationTasks = %v, want 0", m.MaxParallelReplicationTasks)
 	}
 
 	v := int64(3)

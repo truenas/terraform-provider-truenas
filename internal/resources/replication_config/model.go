@@ -36,10 +36,9 @@ type replicationConfigAPI struct {
 }
 
 // responseToModel maps an API response onto a Terraform model. A nil
-// max_parallel_replication_tasks maps to Int64Null rather than a zero
-// value, so that an update payload built from this model omits it (see
-// updatePayload) instead of sending an explicit 0 that overwrites a
-// server-side null.
+// max_parallel_replication_tasks on the wire maps to Int64Value(0), the
+// sentinel meaning "unlimited", to preserve the explicit-0 round trip: user
+// sets 0 → payload sends nil → server stores nil → read-back maps to 0.
 func responseToModel(_ context.Context, api *replicationConfigAPI, m *ReplicationConfigModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
@@ -48,14 +47,14 @@ func responseToModel(_ context.Context, api *replicationConfigAPI, m *Replicatio
 	if api.MaxParallelReplicationTasks != nil {
 		m.MaxParallelReplicationTasks = types.Int64Value(*api.MaxParallelReplicationTasks)
 	} else {
-		m.MaxParallelReplicationTasks = types.Int64Null()
+		m.MaxParallelReplicationTasks = types.Int64Value(0)
 	}
 
 	return diags
 }
 
 // responseToDataSourceModel maps an API response onto a
-// ReplicationConfigDataSourceModel using the same nil-pointer-to-null rule
+// ReplicationConfigDataSourceModel using the same nil-pointer-to-0 rule
 // as responseToModel.
 func responseToDataSourceModel(_ context.Context, api *replicationConfigAPI, m *ReplicationConfigDataSourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
@@ -65,7 +64,7 @@ func responseToDataSourceModel(_ context.Context, api *replicationConfigAPI, m *
 	if api.MaxParallelReplicationTasks != nil {
 		m.MaxParallelReplicationTasks = types.Int64Value(*api.MaxParallelReplicationTasks)
 	} else {
-		m.MaxParallelReplicationTasks = types.Int64Null()
+		m.MaxParallelReplicationTasks = types.Int64Value(0)
 	}
 
 	return diags
