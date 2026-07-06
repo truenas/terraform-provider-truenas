@@ -117,6 +117,17 @@ func main() {
 	if section == "staticroute" || section == "all" {
 		pp("staticroute.query (first item)", firstItem(call(c, "staticroute.query", []any{})))
 	}
+	if section == "alerts" || section == "all" {
+		pp("alertservice.query (first item)", firstItem(call(c, "alertservice.query", []any{})))
+		pp("alertclasses.config", call(c, "alertclasses.config"))
+	}
+	if section == "system" || section == "all" {
+		pp("boot.environment.query (first item)", firstItem(call(c, "boot.environment.query", []any{})))
+		pp("bootenv.query (first item)", firstItem(call(c, "bootenv.query", []any{})))
+		pp("tunable.query (first item)", firstItem(call(c, "tunable.query", []any{})))
+		pp("system.ntpserver.query (all)", call(c, "system.ntpserver.query", []any{}))
+		pp("mail.config", call(c, "mail.config"))
+	}
 	if section == "methods" {
 		prefix := "vm."
 		if len(os.Args) > 2 {
