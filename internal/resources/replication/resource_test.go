@@ -511,6 +511,47 @@ func TestResponseToModel_ScheduleSetAndEmbeddedTasks(t *testing.T) {
 	}
 }
 
+func TestReplicationApiPayload_OmitsUnsetOptionals(t *testing.T) {
+	ctx := context.Background()
+
+	m := ReplicationModel{
+		Name:                    types.StringValue("test-task"),
+		Direction:               types.StringValue("PUSH"),
+		Transport:               types.StringValue("LOCAL"),
+		SSHCredentials:          types.Int64Null(),
+		Sudo:                    types.BoolNull(),
+		SourceDatasets:          types.ListValueMust(types.StringType, []attr.Value{types.StringValue("tank/data")}),
+		TargetDataset:           types.StringValue("backup/data"),
+		Recursive:               types.BoolValue(true),
+		Exclude:                 types.ListNull(types.StringType),
+		Properties:              types.BoolNull(),
+		Replicate:               types.BoolNull(),
+		PeriodicSnapshotTasks:   types.ListNull(types.Int64Type),
+		NamingSchema:            types.ListNull(types.StringType),
+		AlsoIncludeNamingSchema: types.ListNull(types.StringType),
+		NameRegex:               types.StringNull(),
+		Auto:                    types.BoolValue(true),
+		Schedule:                types.ObjectNull(scheduleAttrTypes),
+		RetentionPolicy:         types.StringValue("NONE"),
+		LifetimeValue:           types.Int64Null(),
+		LifetimeUnit:            types.StringNull(),
+		Readonly:                types.StringNull(),
+		Enabled:                 types.BoolNull(),
+		Retries:                 types.Int64Null(),
+	}
+
+	payload, diags := m.apiPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("apiPayload returned errors: %v", diags)
+	}
+
+	for _, key := range []string{"sudo", "properties", "replicate", "readonly", "enabled", "retries"} {
+		if _, ok := payload[key]; ok {
+			t.Errorf("payload should not contain unset optional key %q, got %v", key, payload[key])
+		}
+	}
+}
+
 // baseModel builds a fully-populated, valid ReplicationModel for payload tests.
 func baseModel(ctx context.Context, t *testing.T) ReplicationModel {
 	t.Helper()

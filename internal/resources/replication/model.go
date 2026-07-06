@@ -272,19 +272,37 @@ func (m *ReplicationModel) apiPayload(ctx context.Context) (map[string]any, diag
 		"direction":               m.Direction.ValueString(),
 		"transport":               m.Transport.ValueString(),
 		"ssh_credentials":         sshCredentials,
-		"sudo":                    m.Sudo.ValueBool(),
 		"source_datasets":         sourceDatasets,
 		"target_dataset":          m.TargetDataset.ValueString(),
 		"recursive":               m.Recursive.ValueBool(),
 		"exclude":                 exclude,
-		"properties":              m.Properties.ValueBool(),
-		"replicate":               m.Replicate.ValueBool(),
 		"periodic_snapshot_tasks": periodicSnapshotTasks,
 		"auto":                    m.Auto.ValueBool(),
 		"retention_policy":        m.RetentionPolicy.ValueString(),
-		"readonly":                m.Readonly.ValueString(),
-		"enabled":                 m.Enabled.ValueBool(),
-		"retries":                 m.Retries.ValueInt64(),
+	}
+
+	// Optional+Computed scalars: send only when the user has set a value.
+	// When unset, the plan value is Unknown and ValueBool()/ValueString()/
+	// ValueInt64() would return zero values, silently sending wrong data
+	// (e.g. "enabled": false disables the task, "readonly": "" is an
+	// invalid enum, "retries": 0 overrides the API default).
+	if !m.Sudo.IsNull() && !m.Sudo.IsUnknown() {
+		p["sudo"] = m.Sudo.ValueBool()
+	}
+	if !m.Properties.IsNull() && !m.Properties.IsUnknown() {
+		p["properties"] = m.Properties.ValueBool()
+	}
+	if !m.Replicate.IsNull() && !m.Replicate.IsUnknown() {
+		p["replicate"] = m.Replicate.ValueBool()
+	}
+	if !m.Readonly.IsNull() && !m.Readonly.IsUnknown() {
+		p["readonly"] = m.Readonly.ValueString()
+	}
+	if !m.Enabled.IsNull() && !m.Enabled.IsUnknown() {
+		p["enabled"] = m.Enabled.ValueBool()
+	}
+	if !m.Retries.IsNull() && !m.Retries.IsUnknown() {
+		p["retries"] = m.Retries.ValueInt64()
 	}
 
 	// name_regex: send only when non-empty. When set, naming_schema and
