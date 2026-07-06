@@ -117,8 +117,10 @@ func TestSystemGeneralSchema_WritableFieldsOptionalComputed(t *testing.T) {
 
 // TestSystemGeneralSchema_ComputedOnlyTrio verifies that
 // ui_certificate_name, usage_collection_is_set, and wizardshown are
-// Computed-only (not Optional). ui_certificate_name additionally carries a
-// UseStateForUnknown plan modifier per spec; the other two carry none.
+// Computed-only (not Optional) with NO plan modifiers:
+// ui_certificate_name is derived from ui_certificate and changes when the
+// certificate is reassigned, so carrying prior state forward would trip
+// Terraform's post-apply consistency check.
 func TestSystemGeneralSchema_ComputedOnlyTrio(t *testing.T) {
 	s := resourceSchema()
 
@@ -133,8 +135,8 @@ func TestSystemGeneralSchema_ComputedOnlyTrio(t *testing.T) {
 	if !nameStr.IsComputed() || nameStr.IsOptional() {
 		t.Error("'ui_certificate_name' should be Computed-only")
 	}
-	if len(nameStr.PlanModifiers) == 0 {
-		t.Error("'ui_certificate_name' should have plan modifiers (UseStateForUnknown)")
+	if len(nameStr.PlanModifiers) != 0 {
+		t.Error("'ui_certificate_name' should have NO plan modifiers (derived from ui_certificate)")
 	}
 
 	for _, name := range []string{"usage_collection_is_set", "wizardshown"} {

@@ -121,9 +121,12 @@ func resourceSchema() schema.Schema {
 			},
 			// Computed-only (server-generated)
 			"ui_certificate_name": schema.StringAttribute{
-				Computed:      true,
-				Description:   "Name of the certificate currently assigned to the web UI. Server-computed; never sent to system.general.update.",
-				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+				Computed: true,
+				// No UseStateForUnknown: this value is derived from
+				// ui_certificate, so it legitimately changes when the user
+				// reassigns the UI certificate; carrying the prior state
+				// forward would trip Terraform's post-apply consistency check.
+				Description: "Name of the certificate currently assigned to the web UI. Server-computed; never sent to system.general.update.",
 			},
 			"usage_collection_is_set": schema.BoolAttribute{
 				Computed:    true,
