@@ -30,6 +30,13 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/mail"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/network_interface"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/nfs"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/nvmet_global"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/nvmet_host"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/nvmet_host_subsys"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/nvmet_namespace"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/nvmet_port"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/nvmet_port_subsys"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/nvmet_subsys"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/nfs_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/ntp_server"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/periodic_snapshot"
@@ -200,6 +207,13 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		nfs_config.NewResource,
 		network_interface.NewResource,
 		ntp_server.NewResource,
+		nvmet_global.NewResource,
+		nvmet_host.NewResource,
+		nvmet_host_subsys.NewResource,
+		nvmet_namespace.NewResource,
+		nvmet_port.NewResource,
+		nvmet_port_subsys.NewResource,
+		nvmet_subsys.NewResource,
 		periodic_snapshot.NewResource,
 		pool.NewResource,
 		replication.NewResource,
@@ -242,6 +256,13 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		nfs_config.NewDataSource,
 		network_interface.NewDataSource,
 		ntp_server.NewDataSource,
+		nvmet_global.NewDataSource,
+		nvmet_host.NewDataSource,
+		nvmet_host_subsys.NewDataSource,
+		nvmet_namespace.NewDataSource,
+		nvmet_port.NewDataSource,
+		nvmet_port_subsys.NewDataSource,
+		nvmet_subsys.NewDataSource,
 		periodic_snapshot.NewDataSource,
 		pool.NewDataSource,
 		replication.NewDataSource,
