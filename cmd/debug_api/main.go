@@ -165,6 +165,23 @@ func main() {
 		pp("iscsi.auth.query (first item)", firstItem(call(c, "iscsi.auth.query", []any{})))
 		pp("iscsi.global.config", call(c, "iscsi.global.config"))
 	}
+	if section == "svcconfig" || section == "all" {
+		pp("ssh.config", call(c, "ssh.config"))
+		pp("ftp.config", call(c, "ftp.config"))
+		pp("snmp.config", call(c, "snmp.config"))
+		pp("ups.config", call(c, "ups.config"))
+		pp("smb.config", call(c, "smb.config"))
+		pp("nfs.config", call(c, "nfs.config"))
+	}
+	if section == "nvmet" || section == "all" {
+		pp("nvmet.global.config", call(c, "nvmet.global.config"))
+		pp("nvmet.subsys.query (first item)", firstItem(call(c, "nvmet.subsys.query", []any{})))
+		pp("nvmet.port.query (first item)", firstItem(call(c, "nvmet.port.query", []any{})))
+		pp("nvmet.namespace.query (first item)", firstItem(call(c, "nvmet.namespace.query", []any{})))
+		pp("nvmet.host.query (first item)", firstItem(call(c, "nvmet.host.query", []any{})))
+		pp("nvmet.host_subsys.query (first item)", firstItem(call(c, "nvmet.host_subsys.query", []any{})))
+		pp("nvmet.port_subsys.query (first item)", firstItem(call(c, "nvmet.port_subsys.query", []any{})))
+	}
 	if section == "namespaces" {
 		raw, err := c.Call(context.Background(), "core.get_methods")
 		if err != nil {
