@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
@@ -24,6 +25,19 @@ func call(c *client.Client, method string, params ...any) any {
 	var v any
 	json.Unmarshal(raw, &v)
 	return v
+}
+
+func lastDot(s string) int {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == '.' {
+			return i
+		}
+	}
+	return -1
+}
+
+func sortStrings(s []string) {
+	sort.Strings(s)
 }
 
 func firstItem(v any) any {
@@ -143,6 +157,29 @@ func main() {
 			if len(name) >= len(prefix) && name[:len(prefix)] == prefix {
 				pp(name, info)
 			}
+		}
+	}
+	if section == "namespaces" {
+		raw, err := c.Call(context.Background(), "core.get_methods")
+		if err != nil {
+			log.Fatal(err)
+		}
+		var methods map[string]any
+		json.Unmarshal(raw, &methods)
+		seen := map[string]bool{}
+		for name := range methods {
+			// namespace = everything before the last dot
+			if i := lastDot(name); i > 0 {
+				seen[name[:i]] = true
+			}
+		}
+		var names []string
+		for ns := range seen {
+			names = append(names, ns)
+		}
+		sortStrings(names)
+		for _, ns := range names {
+			fmt.Println(ns)
 		}
 	}
 	if section == "appmethods" {
