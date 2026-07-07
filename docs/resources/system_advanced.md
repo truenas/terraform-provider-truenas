@@ -25,6 +25,8 @@ resource "truenas_system_advanced" "config" {
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `advancedmode` (Boolean) Whether advanced mode is shown in the web UI.
 - `anonstats` (Boolean) Whether anonymous usage statistics are sent.
 - `autotune` (Boolean) Whether the autotune script runs at boot to tune system parameters.
@@ -40,7 +42,7 @@ resource "truenas_system_advanced" "config" {
 - `nvidia` (Boolean) Whether the NVIDIA driver is installed/enabled.
 - `overprovision` (Number) Amount, in GiB, of swap-on-ZFS overprovisioning. A value of 0 clears the overprovision setting (null on the wire).
 - `powerdaemon` (Boolean) Whether the power management daemon (powerd) is enabled.
-- `sed_passwd` (String, Sensitive) Global password for Self-Encrypting Drives (SED) (write-only; not stored in state, and never read back from TrueNAS).
+- `sed_passwd` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Global password for Self-Encrypting Drives (SED) (never read back from TrueNAS). Write-only: never stored in Terraform state. Requires Terraform >= 1.11.
 - `sed_user` (String) SED user used to unlock drives: one of USER or MASTER.
 - `serialconsole` (Boolean) Whether the serial console is enabled.
 - `serialport` (String) Serial port device used for the serial console (e.g. "ttyS0").

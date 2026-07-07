@@ -26,6 +26,8 @@ resource "truenas_snmp_config" "config" {
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `community` (String) SNMP community string.
 - `contact` (String) Contact information for the SNMP administrator.
 - `location` (String) Physical location of the system, exposed via SNMP.
@@ -34,8 +36,8 @@ resource "truenas_snmp_config" "config" {
 - `traps` (Boolean) Whether SNMP traps are enabled.
 - `v3` (Boolean) Whether SNMPv3 support is enabled.
 - `v3_authtype` (String) SNMPv3 authentication type: one of "" (none), MD5, SHA.
-- `v3_password` (String, Sensitive) SNMPv3 authentication password (write-only; not stored in state, and never read back from TrueNAS).
-- `v3_privpassphrase` (String, Sensitive) SNMPv3 privacy passphrase (write-only; not stored in state, and never read back from TrueNAS).
+- `v3_password` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SNMPv3 authentication password (never read back from TrueNAS). Write-only: never stored in Terraform state. Requires Terraform >= 1.11.
+- `v3_privpassphrase` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SNMPv3 privacy passphrase (never read back from TrueNAS). Write-only: never stored in Terraform state. Requires Terraform >= 1.11.
 - `v3_privproto` (String) SNMPv3 privacy protocol: one of AES, DES, or null/empty for none.
 - `v3_username` (String) SNMPv3 username.
 - `zilstat` (Boolean) Whether zilstat reporting is enabled.
