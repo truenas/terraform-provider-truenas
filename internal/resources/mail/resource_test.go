@@ -58,6 +58,9 @@ func TestMailSchema_PassIsSensitiveWriteOnly(t *testing.T) {
 	if passStr.IsRequired() {
 		t.Error("'pass' should not be Required")
 	}
+	if !passStr.IsWriteOnly() {
+		t.Error("'pass' should be WriteOnly")
+	}
 }
 
 // TestMailSchema_OtherFieldsAreOptionalComputed verifies that every

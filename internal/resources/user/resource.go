@@ -49,6 +49,15 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
+	// write-only: the framework nulls WriteOnly attributes in req.Plan, so
+	// the actual password value (if any) is only available via req.Config.
+	var cfg UserModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.Password = cfg.Password
+
 	payload, diags := plan.createPayload(ctx)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -133,6 +142,14 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 	plan.ID = state.ID
+
+	// write-only: value lives in config, not plan.
+	var cfg UserModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.Password = cfg.Password
 
 	payload, diags := plan.updatePayload(ctx)
 	resp.Diagnostics.Append(diags...)

@@ -49,6 +49,17 @@ func (r *NVMetHostResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
+	// write-only: the framework nulls WriteOnly attributes in req.Plan, so
+	// the actual dhchap_key/dhchap_ctrl_key values are only available via
+	// req.Config.
+	var cfg NVMetHostModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.DHChapKey = cfg.DHChapKey
+	plan.DHChapCtrlKey = cfg.DHChapCtrlKey
+
 	payload, diags := plan.createPayload(ctx)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -131,6 +142,15 @@ func (r *NVMetHostResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 	plan.ID = state.ID
+
+	// write-only: value lives in config, not plan.
+	var cfg NVMetHostModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.DHChapKey = cfg.DHChapKey
+	plan.DHChapCtrlKey = cfg.DHChapCtrlKey
 
 	payload, diags := plan.updatePayload(ctx)
 	resp.Diagnostics.Append(diags...)

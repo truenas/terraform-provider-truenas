@@ -100,9 +100,11 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"monpwd": schema.StringAttribute{
-				Optional:    true,
-				Sensitive:   true,
-				Description: "Password used to monitor the UPS (write-only; not stored in state, and never read back from TrueNAS).",
+				Optional:  true,
+				Sensitive: true,
+				WriteOnly: true,
+				Description: "Password used to monitor the UPS (never read back from TrueNAS). " +
+					"Write-only: never stored in Terraform state. Requires Terraform >= 1.11.",
 			},
 			"extrausers": schema.StringAttribute{
 				Optional:      true,

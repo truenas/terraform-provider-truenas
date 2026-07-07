@@ -63,6 +63,15 @@ func (r *SystemAdvancedResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 
+	// write-only: the framework nulls WriteOnly attributes in req.Plan, so
+	// the actual sed_passwd value is only available via req.Config.
+	var cfg SystemAdvancedModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.SedPasswd = cfg.SedPasswd
+
 	payload, diags := plan.updatePayload(ctx)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -115,6 +124,14 @@ func (r *SystemAdvancedResource) Update(ctx context.Context, req resource.Update
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// write-only: value lives in config, not plan.
+	var cfg SystemAdvancedModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.SedPasswd = cfg.SedPasswd
 
 	payload, diags := plan.updatePayload(ctx)
 	resp.Diagnostics.Append(diags...)

@@ -62,6 +62,15 @@ func (r *MailResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
+	// write-only: the framework nulls WriteOnly attributes in req.Plan, so
+	// the actual pass value is only available via req.Config.
+	var cfg MailModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.Pass = cfg.Pass
+
 	// mail.update requires several fields (at minimum fromemail) on every
 	// call, so the live config is fetched first and merged with the plan's
 	// known values: this lets a config that sets only one field (e.g.
@@ -123,6 +132,14 @@ func (r *MailResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// write-only: value lives in config, not plan.
+	var cfg MailModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.Pass = cfg.Pass
 
 	// See Create: mail.update requires several fields on every call, so the
 	// live config is fetched first and merged with the plan's known values.

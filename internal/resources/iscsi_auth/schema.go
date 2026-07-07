@@ -29,8 +29,9 @@ func resourceSchema() schema.Schema {
 			"secret": schema.StringAttribute{
 				Required:  true,
 				Sensitive: true,
+				WriteOnly: true,
 				Description: "CHAP secret (password) for the initiator. Must be 12-16 characters. " +
-					"Write-only; not read back from the API. After import, the first plan will propose setting it.",
+					"Write-only: never stored in Terraform state. Requires Terraform >= 1.11.",
 			},
 			"peeruser": schema.StringAttribute{
 				Optional:    true,
@@ -43,8 +44,9 @@ func resourceSchema() schema.Schema {
 			"peersecret": schema.StringAttribute{
 				Optional:  true,
 				Sensitive: true,
+				WriteOnly: true,
 				Description: "Peer secret for mutual CHAP. Must be 12-16 characters. Omit or leave empty to disable mutual CHAP. " +
-					"Write-only; not read back from the API. After import, the first plan will propose setting it if configured.",
+					"Write-only: never stored in Terraform state. Requires Terraform >= 1.11.",
 			},
 			"discovery_auth": schema.StringAttribute{
 				Optional:    true,

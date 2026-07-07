@@ -73,6 +73,9 @@ func TestNVMetHostSchema(t *testing.T) {
 	if keyStr.IsComputed() {
 		t.Error("'dhchap_key' should NOT be Computed")
 	}
+	if !keyStr.IsWriteOnly() {
+		t.Error("'dhchap_key' should be WriteOnly")
+	}
 	if keyStr.IsRequired() {
 		t.Error("'dhchap_key' should not be Required")
 	}
@@ -94,6 +97,9 @@ func TestNVMetHostSchema(t *testing.T) {
 	}
 	if ctrlKeyStr.IsComputed() {
 		t.Error("'dhchap_ctrl_key' should NOT be Computed")
+	}
+	if !ctrlKeyStr.IsWriteOnly() {
+		t.Error("'dhchap_ctrl_key' should be WriteOnly")
 	}
 	if ctrlKeyStr.IsRequired() {
 		t.Error("'dhchap_ctrl_key' should not be Required")

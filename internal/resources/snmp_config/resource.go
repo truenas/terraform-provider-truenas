@@ -62,6 +62,17 @@ func (r *SNMPConfigResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
+	// write-only: the framework nulls WriteOnly attributes in req.Plan, so
+	// the actual v3_password/v3_privpassphrase values are only available via
+	// req.Config.
+	var cfg SNMPConfigModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.V3Password = cfg.V3Password
+	plan.V3PrivPassphrase = cfg.V3PrivPassphrase
+
 	if _, err := r.client.Call(ctx, "snmp.update", plan.updatePayload()); err != nil {
 		resp.Diagnostics.AddError("Create SNMP configuration failed", err.Error())
 		return
@@ -114,6 +125,15 @@ func (r *SNMPConfigResource) Update(ctx context.Context, req resource.UpdateRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// write-only: value lives in config, not plan.
+	var cfg SNMPConfigModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.V3Password = cfg.V3Password
+	plan.V3PrivPassphrase = cfg.V3PrivPassphrase
 
 	if _, err := r.client.Call(ctx, "snmp.update", plan.updatePayload()); err != nil {
 		resp.Diagnostics.AddError("Update SNMP configuration failed", err.Error())

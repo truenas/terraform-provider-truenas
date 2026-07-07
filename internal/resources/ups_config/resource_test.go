@@ -62,6 +62,9 @@ func TestUPSConfigSchema_MonPwdIsSensitiveWriteOnly(t *testing.T) {
 	if strAttr.IsRequired() {
 		t.Error("'monpwd' should not be Required")
 	}
+	if !strAttr.IsWriteOnly() {
+		t.Error("'monpwd' should be WriteOnly")
+	}
 }
 
 // TestUPSConfigSchema_CompleteIdentifierIsComputedOnly verifies that

@@ -172,6 +172,9 @@ func TestSystemAdvancedSchema_SedPasswdIsWriteOnlySecret(t *testing.T) {
 	if !strAttr.IsSensitive() {
 		t.Error("'sed_passwd' should be Sensitive")
 	}
+	if !strAttr.IsWriteOnly() {
+		t.Error("'sed_passwd' should be WriteOnly")
+	}
 }
 
 // TestSystemAdvancedSchema_ComputedOnlyPair verifies that anonstats_token

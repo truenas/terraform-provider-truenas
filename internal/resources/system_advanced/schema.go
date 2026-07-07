@@ -118,8 +118,9 @@ func resourceSchema() schema.Schema {
 			"sed_passwd": schema.StringAttribute{
 				Optional:  true,
 				Sensitive: true,
-				Description: "Global password for Self-Encrypting Drives (SED) (write-only; not stored in " +
-					"state, and never read back from TrueNAS).",
+				WriteOnly: true,
+				Description: "Global password for Self-Encrypting Drives (SED) (never read back from " +
+					"TrueNAS). Write-only: never stored in Terraform state. Requires Terraform >= 1.11.",
 			},
 			"sed_user": schema.StringAttribute{
 				Optional:      true,

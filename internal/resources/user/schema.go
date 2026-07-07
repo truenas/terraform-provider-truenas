@@ -114,7 +114,8 @@ func resourceSchema() schema.Schema {
 			"password": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
-				Description: "User password (write-only; not stored in state).",
+				WriteOnly:   true,
+				Description: "User password. Write-only: never stored in Terraform state. Requires Terraform >= 1.11.",
 			},
 			// Computed-only — server generated
 			"builtin": schema.BoolAttribute{

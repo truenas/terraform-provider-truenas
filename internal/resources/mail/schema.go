@@ -64,9 +64,11 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"pass": schema.StringAttribute{
-				Optional:    true,
-				Sensitive:   true,
-				Description: "SMTP authentication password (write-only; not stored in state, and never read back from TrueNAS).",
+				Optional:  true,
+				Sensitive: true,
+				WriteOnly: true,
+				Description: "SMTP authentication password (never read back from TrueNAS). " +
+					"Write-only: never stored in Terraform state. Requires Terraform >= 1.11.",
 			},
 		},
 	}

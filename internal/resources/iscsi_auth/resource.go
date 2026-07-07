@@ -49,6 +49,16 @@ func (r *ISCSIAuthResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
+	// write-only: the framework nulls WriteOnly attributes in req.Plan, so
+	// the actual secret/peersecret values are only available via req.Config.
+	var cfg ISCSIAuthModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.Secret = cfg.Secret
+	plan.PeerSecret = cfg.PeerSecret
+
 	payload := plan.apiPayload()
 
 	raw, err := r.client.Call(ctx, "iscsi.auth.create", payload)
@@ -127,6 +137,15 @@ func (r *ISCSIAuthResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 	plan.ID = state.ID
+
+	// write-only: value lives in config, not plan.
+	var cfg ISCSIAuthModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.Secret = cfg.Secret
+	plan.PeerSecret = cfg.PeerSecret
 
 	payload := plan.apiPayload()
 

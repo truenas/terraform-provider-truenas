@@ -82,9 +82,11 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"v3_password": schema.StringAttribute{
-				Optional:    true,
-				Sensitive:   true,
-				Description: "SNMPv3 authentication password (write-only; not stored in state, and never read back from TrueNAS).",
+				Optional:  true,
+				Sensitive: true,
+				WriteOnly: true,
+				Description: "SNMPv3 authentication password (never read back from TrueNAS). " +
+					"Write-only: never stored in Terraform state. Requires Terraform >= 1.11.",
 			},
 			"v3_privproto": schema.StringAttribute{
 				Optional:      true,
@@ -93,9 +95,11 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"v3_privpassphrase": schema.StringAttribute{
-				Optional:    true,
-				Sensitive:   true,
-				Description: "SNMPv3 privacy passphrase (write-only; not stored in state, and never read back from TrueNAS).",
+				Optional:  true,
+				Sensitive: true,
+				WriteOnly: true,
+				Description: "SNMPv3 privacy passphrase (never read back from TrueNAS). " +
+					"Write-only: never stored in Terraform state. Requires Terraform >= 1.11.",
 			},
 		},
 	}

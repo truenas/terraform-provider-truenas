@@ -33,14 +33,16 @@ func resourceSchema() schema.Schema {
 			"dhchap_key": schema.StringAttribute{
 				Optional:  true,
 				Sensitive: true,
+				WriteOnly: true,
 				Description: "DH-CHAP key used by this host to authenticate to a subsystem. " +
-					"Write-only; not read back from the API. After import, the first plan will propose setting it if configured.",
+					"Write-only: never stored in Terraform state. Requires Terraform >= 1.11.",
 			},
 			"dhchap_ctrl_key": schema.StringAttribute{
 				Optional:  true,
 				Sensitive: true,
+				WriteOnly: true,
 				Description: "DH-CHAP controller key used for bidirectional authentication. " +
-					"Write-only; not read back from the API. After import, the first plan will propose setting it if configured.",
+					"Write-only: never stored in Terraform state. Requires Terraform >= 1.11.",
 			},
 			"dhchap_dhgroup": schema.StringAttribute{
 				Optional:    true,

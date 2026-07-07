@@ -62,6 +62,15 @@ func (r *UPSConfigResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
+	// write-only: the framework nulls WriteOnly attributes in req.Plan, so
+	// the actual monpwd value is only available via req.Config.
+	var cfg UPSConfigModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.MonPwd = cfg.MonPwd
+
 	// ups.update requires several fields (at minimum port and driver) on
 	// every call, so the live config is fetched first and merged with the
 	// plan's known values: this lets a config that sets only one field
@@ -123,6 +132,14 @@ func (r *UPSConfigResource) Update(ctx context.Context, req resource.UpdateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// write-only: value lives in config, not plan.
+	var cfg UPSConfigModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.MonPwd = cfg.MonPwd
 
 	// See Create: ups.update requires several fields on every call, so the
 	// live config is fetched first and merged with the plan's known values.

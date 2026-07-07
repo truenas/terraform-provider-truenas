@@ -76,6 +76,9 @@ func TestISCSIAuthSchema(t *testing.T) {
 	if secretStr.IsComputed() {
 		t.Error("'secret' should not be Computed")
 	}
+	if !secretStr.IsWriteOnly() {
+		t.Error("'secret' should be WriteOnly")
+	}
 
 	// peeruser must be StringAttribute, Optional+Computed.
 	peerUserAttr, ok := s.Attributes["peeruser"]
@@ -113,6 +116,9 @@ func TestISCSIAuthSchema(t *testing.T) {
 	}
 	if peerSecretStr.IsRequired() {
 		t.Error("'peersecret' should not be Required")
+	}
+	if !peerSecretStr.IsWriteOnly() {
+		t.Error("'peersecret' should be WriteOnly")
 	}
 
 	// discovery_auth must be StringAttribute, Optional+Computed.

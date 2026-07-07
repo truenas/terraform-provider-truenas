@@ -80,6 +80,9 @@ func TestUserSchema(t *testing.T) {
 	if !passwordStr.IsSensitive() {
 		t.Error("'password' should be Sensitive")
 	}
+	if !passwordStr.IsWriteOnly() {
+		t.Error("'password' should be WriteOnly")
+	}
 
 	// builtin, immutable, local must be Computed-only.
 	for _, field := range []string{"builtin", "immutable", "local"} {

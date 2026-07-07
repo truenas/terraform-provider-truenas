@@ -32,7 +32,7 @@ Working examples for every resource are under [`examples/resources/`](examples/r
 
 ## Requirements
 
-- [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.5
+- [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.11 (write-only secret attributes)
 - [Go](https://go.dev/doc/install) >= 1.25 (to build from source)
 - TrueNAS SCALE 24.10+ (`truenas_app` and `truenas_nvmet_*` need 24.10/25.x APIs;
   the rest works on earlier SCALE releases)

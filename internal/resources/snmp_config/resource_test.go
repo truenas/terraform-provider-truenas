@@ -64,6 +64,9 @@ func TestSNMPConfigSchema_SecretsAreSensitiveWriteOnly(t *testing.T) {
 		if strAttr.IsRequired() {
 			t.Errorf("%q should not be Required", name)
 		}
+		if !strAttr.IsWriteOnly() {
+			t.Errorf("%q should be WriteOnly", name)
+		}
 	}
 }
 
