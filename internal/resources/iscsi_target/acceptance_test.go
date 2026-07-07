@@ -1,8 +1,99 @@
 package iscsi_target_test
 
-// Acceptance tests for truenas_iscsi_target require a live TrueNAS instance
-// and are skipped unless TF_ACC=1 is set along with TRUENAS_API_KEY and
-// TRUENAS_HOST environment variables.
-//
-// These tests are intentionally left as stubs until a live test environment
-// is available.
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"testing"
+
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/truenas/terraform-provider-truenas/internal/acctest"
+)
+
+// TestAccISCSITarget_basic creates an own portal fixture (listening on
+// 0.0.0.0:13262, distinct from the box's live portal/target, id=1
+// "proxmox"), creates an iSCSI target referencing it, checks attributes,
+// updates the alias in place, imports by id, and verifies destruction.
+func TestAccISCSITarget_basic(t *testing.T) {
+	name := acctest.RandName("tf-acc-target")
+	portalComment := acctest.RandName("tf-acc-target-portal")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckISCSITargetDestroyed(name),
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccISCSITargetConfig(portalComment, name, "initial-alias"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet("truenas_iscsi_target.test", "id"),
+					resource.TestCheckResourceAttr("truenas_iscsi_target.test", "name", name),
+					resource.TestCheckResourceAttr("truenas_iscsi_target.test", "mode", "ISCSI"),
+					resource.TestCheckResourceAttr("truenas_iscsi_target.test", "alias", "initial-alias"),
+					resource.TestCheckResourceAttr("truenas_iscsi_target.test", "groups.0.authmethod", "NONE"),
+					resource.TestCheckResourceAttrPair("truenas_iscsi_target.test", "groups.0.portal", "truenas_iscsi_portal.fixture", "id"),
+					resource.TestCheckResourceAttrSet("truenas_iscsi_target.test", "rel_tgt_id"),
+				),
+			},
+			// Update the alias in place.
+			{
+				Config: acctest.ProviderConfig() + testAccISCSITargetConfig(portalComment, name, "updated-alias"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_iscsi_target.test", "alias", "updated-alias"),
+				),
+			},
+			{
+				ResourceName:      "truenas_iscsi_target.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func testAccISCSITargetConfig(portalComment, name, alias string) string {
+	return fmt.Sprintf(`
+resource "truenas_iscsi_portal" "fixture" {
+  comment = %q
+  listen = [
+    {
+      ip   = "0.0.0.0"
+      port = 13262
+    }
+  ]
+}
+
+resource "truenas_iscsi_target" "test" {
+  name  = %q
+  alias = %q
+  mode  = "ISCSI"
+  groups = [
+    {
+      portal     = truenas_iscsi_portal.fixture.id
+      authmethod = "NONE"
+    }
+  ]
+}
+`, portalComment, name, alias)
+}
+
+func testAccCheckISCSITargetDestroyed(name string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		c := acctest.Client()
+		raw, err := c.Call(context.Background(), "iscsi.target.query", [][]any{{"name", "=", name}})
+		if err != nil {
+			return fmt.Errorf("error checking iscsi target %s: %v", name, err)
+		}
+		var results []struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &results); err != nil {
+			return fmt.Errorf("error parsing iscsi.target.query response: %v", err)
+		}
+		if len(results) > 0 {
+			return fmt.Errorf("iscsi target %s still exists", name)
+		}
+		return nil
+	}
+}

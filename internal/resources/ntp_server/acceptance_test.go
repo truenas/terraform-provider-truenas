@@ -1,41 +1,44 @@
 package ntp_server_test
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/truenas/terraform-provider-truenas/internal/acctest"
 )
 
 // TestAccNTPServer_basic tests create, update, and import of an NTP server.
-// It requires:
-//   - TrueNAS_API_KEY set in the environment (checked by acctest.PreCheck)
-//   - A running TrueNAS SCALE instance
+//
+// It uses 203.0.113.1, the TEST-NET-3 documentation address (RFC 5737),
+// which is never reachable, so force=true is required at create time. It
+// never references or modifies the box's own (debian pool) NTP servers.
 func TestAccNTPServer_basic(t *testing.T) {
-	if os.Getenv("TF_ACC") == "" {
-		t.Skip("Acceptance tests skipped: set TF_ACC=1 and ensure a TrueNAS instance is available")
-	}
+	const address = "203.0.113.1"
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckNTPServerDestroyed(address),
 		Steps: []resource.TestStep{
 			{
-				Config: acctest.ProviderConfig() + testAccNTPServerConfig("tf-acc-ntp-1.example.com", 4, 10),
+				Config: acctest.ProviderConfig() + testAccNTPServerConfig(address, false),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("truenas_ntp_server.test", "address", "tf-acc-ntp-1.example.com"),
-					resource.TestCheckResourceAttr("truenas_ntp_server.test", "minpoll", "4"),
-					resource.TestCheckResourceAttr("truenas_ntp_server.test", "maxpoll", "10"),
+					resource.TestCheckResourceAttr("truenas_ntp_server.test", "address", address),
+					resource.TestCheckResourceAttr("truenas_ntp_server.test", "iburst", "false"),
+					resource.TestCheckResourceAttr("truenas_ntp_server.test", "burst", "false"),
+					resource.TestCheckResourceAttr("truenas_ntp_server.test", "prefer", "false"),
 					resource.TestCheckResourceAttrSet("truenas_ntp_server.test", "id"),
 				),
 			},
+			// Update prefer in place.
 			{
-				Config: acctest.ProviderConfig() + testAccNTPServerConfig("tf-acc-ntp-1.example.com", 5, 9),
+				Config: acctest.ProviderConfig() + testAccNTPServerConfig(address, true),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("truenas_ntp_server.test", "minpoll", "5"),
-					resource.TestCheckResourceAttr("truenas_ntp_server.test", "maxpoll", "9"),
+					resource.TestCheckResourceAttr("truenas_ntp_server.test", "prefer", "true"),
 				),
 			},
 			{
@@ -48,13 +51,34 @@ func TestAccNTPServer_basic(t *testing.T) {
 	})
 }
 
-func testAccNTPServerConfig(address string, minpoll, maxpoll int) string {
+func testAccNTPServerConfig(address string, prefer bool) string {
 	return fmt.Sprintf(`
 resource "truenas_ntp_server" "test" {
   address = %q
-  minpoll = %d
-  maxpoll = %d
+  iburst  = false
+  burst   = false
+  prefer  = %v
   force   = true
 }
-`, address, minpoll, maxpoll)
+`, address, prefer)
+}
+
+func testAccCheckNTPServerDestroyed(address string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		c := acctest.Client()
+		raw, err := c.Call(context.Background(), "system.ntpserver.query", [][]any{{"address", "=", address}})
+		if err != nil {
+			return fmt.Errorf("error checking ntp server %s: %v", address, err)
+		}
+		var results []struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &results); err != nil {
+			return fmt.Errorf("error parsing system.ntpserver.query response: %v", err)
+		}
+		if len(results) > 0 {
+			return fmt.Errorf("ntp server %s still exists", address)
+		}
+		return nil
+	}
 }

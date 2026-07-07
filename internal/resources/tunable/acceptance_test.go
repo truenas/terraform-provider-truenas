@@ -1,42 +1,47 @@
 package tunable_test
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/truenas/terraform-provider-truenas/internal/acctest"
 )
 
-// TestAccTunable_basic tests create, update, and import of a sysctl tunable.
-// It requires:
-//   - TRUENAS_API_KEY set in the environment (checked by acctest.PreCheck)
-//   - TF_ACC=1
+// TestAccTunable_basic tests create, update, and import of a sysctl
+// tunable.
+//
+// It uses fs.suid_dumpable=0, which is an inert sysctl already at its
+// kernel default value on TrueNAS SCALE: applying it is a no-op for the
+// running system, so this test cannot change any live behavior.
 func TestAccTunable_basic(t *testing.T) {
-	if os.Getenv("TF_ACC") == "" {
-		t.Skip("Acceptance tests skipped: set TF_ACC=1")
-	}
+	const varName = "fs.suid_dumpable"
+	const value = "0"
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckTunableDestroyed(varName),
 		Steps: []resource.TestStep{
 			{
-				Config: acctest.ProviderConfig() + testAccTunableConfig("kernel.threads-max", "100000", "tf-acc test tunable"),
+				Config: acctest.ProviderConfig() + testAccTunableConfig(varName, value, "tf-acc tunable"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("truenas_tunable.test", "var", "kernel.threads-max"),
-					resource.TestCheckResourceAttr("truenas_tunable.test", "value", "100000"),
-					resource.TestCheckResourceAttr("truenas_tunable.test", "comment", "tf-acc test tunable"),
+					resource.TestCheckResourceAttr("truenas_tunable.test", "var", varName),
+					resource.TestCheckResourceAttr("truenas_tunable.test", "value", value),
+					resource.TestCheckResourceAttr("truenas_tunable.test", "comment", "tf-acc tunable"),
+					resource.TestCheckResourceAttr("truenas_tunable.test", "enabled", "true"),
 					resource.TestCheckResourceAttrSet("truenas_tunable.test", "id"),
 					resource.TestCheckResourceAttrSet("truenas_tunable.test", "type"),
 				),
 			},
+			// Update the comment in place.
 			{
-				Config: acctest.ProviderConfig() + testAccTunableConfig("kernel.threads-max", "200000", "tf-acc test tunable updated"),
+				Config: acctest.ProviderConfig() + testAccTunableConfig(varName, value, "tf-acc tunable updated"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("truenas_tunable.test", "value", "200000"),
-					resource.TestCheckResourceAttr("truenas_tunable.test", "comment", "tf-acc test tunable updated"),
+					resource.TestCheckResourceAttr("truenas_tunable.test", "comment", "tf-acc tunable updated"),
 				),
 			},
 			{
@@ -54,7 +59,29 @@ func testAccTunableConfig(varName, value, comment string) string {
 resource "truenas_tunable" "test" {
   var     = %q
   value   = %q
+  type    = "SYSCTL"
   comment = %q
+  enabled = true
 }
 `, varName, value, comment)
+}
+
+func testAccCheckTunableDestroyed(varName string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		c := acctest.Client()
+		raw, err := c.Call(context.Background(), "tunable.query", [][]any{{"var", "=", varName}})
+		if err != nil {
+			return fmt.Errorf("error checking tunable %s: %v", varName, err)
+		}
+		var results []struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &results); err != nil {
+			return fmt.Errorf("error parsing tunable.query response: %v", err)
+		}
+		if len(results) > 0 {
+			return fmt.Errorf("tunable %s still exists", varName)
+		}
+		return nil
+	}
 }

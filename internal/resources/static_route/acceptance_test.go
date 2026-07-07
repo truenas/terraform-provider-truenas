@@ -1,41 +1,43 @@
 package static_route_test
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/truenas/terraform-provider-truenas/internal/acctest"
 )
 
-// TestAccStaticRoute_basic tests create, update, and import of a static route.
-// It requires:
-//   - TrueNAS_API_KEY set in the environment (checked by acctest.PreCheck)
-//   - A running TrueNAS SCALE instance
+// TestAccStaticRoute_basic tests create, update, and import of a static
+// route. The destination uses the TEST-NET-2 documentation range
+// (RFC 5737), which is never routable on the test network.
 func TestAccStaticRoute_basic(t *testing.T) {
-	if os.Getenv("TF_ACC") == "" {
-		t.Skip("Acceptance tests skipped: set TF_ACC=1 and ensure a TrueNAS instance is available")
-	}
+	const destination = "198.51.100.0/24"
+	const gateway = "192.168.1.254"
+	description := acctest.RandName("tf-acc-route")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckStaticRouteDestroyed(destination),
 		Steps: []resource.TestStep{
 			{
-				Config: acctest.ProviderConfig() + testAccStaticRouteConfig("10.20.0.0/16", "10.20.0.1", "tf-acc-route"),
+				Config: acctest.ProviderConfig() + testAccStaticRouteConfig(destination, gateway, description),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("truenas_static_route.test", "destination", "10.20.0.0/16"),
-					resource.TestCheckResourceAttr("truenas_static_route.test", "gateway", "10.20.0.1"),
-					resource.TestCheckResourceAttr("truenas_static_route.test", "description", "tf-acc-route"),
+					resource.TestCheckResourceAttr("truenas_static_route.test", "destination", destination),
+					resource.TestCheckResourceAttr("truenas_static_route.test", "gateway", gateway),
+					resource.TestCheckResourceAttr("truenas_static_route.test", "description", description),
 					resource.TestCheckResourceAttrSet("truenas_static_route.test", "id"),
 				),
 			},
+			// Update the description in place.
 			{
-				Config: acctest.ProviderConfig() + testAccStaticRouteConfig("10.20.0.0/16", "10.20.0.2", "tf-acc-route-updated"),
+				Config: acctest.ProviderConfig() + testAccStaticRouteConfig(destination, gateway, description+"-updated"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("truenas_static_route.test", "gateway", "10.20.0.2"),
-					resource.TestCheckResourceAttr("truenas_static_route.test", "description", "tf-acc-route-updated"),
+					resource.TestCheckResourceAttr("truenas_static_route.test", "description", description+"-updated"),
 				),
 			},
 			{
@@ -55,4 +57,24 @@ resource "truenas_static_route" "test" {
   description = %q
 }
 `, destination, gateway, description)
+}
+
+func testAccCheckStaticRouteDestroyed(destination string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		c := acctest.Client()
+		raw, err := c.Call(context.Background(), "staticroute.query", [][]any{{"destination", "=", destination}})
+		if err != nil {
+			return fmt.Errorf("error checking static route %s: %v", destination, err)
+		}
+		var results []struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &results); err != nil {
+			return fmt.Errorf("error parsing staticroute.query response: %v", err)
+		}
+		if len(results) > 0 {
+			return fmt.Errorf("static route %s still exists", destination)
+		}
+		return nil
+	}
 }

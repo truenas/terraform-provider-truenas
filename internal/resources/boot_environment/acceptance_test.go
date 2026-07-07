@@ -51,7 +51,7 @@ func TestAccBootEnvironment_basic(t *testing.T) {
 	acctest.PreCheck(t)
 
 	sourceName := activeBootEnvironmentName(t)
-	cloneName := "tf-acc-be-clone"
+	cloneName := acctest.RandName("tf-acc-be")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
@@ -96,7 +96,7 @@ func TestAccBootEnvironment_datasource(t *testing.T) {
 	acctest.PreCheck(t)
 
 	sourceName := activeBootEnvironmentName(t)
-	cloneName := "tf-acc-be-clone-ds"
+	cloneName := acctest.RandName("tf-acc-be-ds")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
