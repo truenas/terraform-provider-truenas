@@ -71,6 +71,10 @@ resource "truenas_vm_device" "test" {
     resolution = "1024x768"
     wait       = false
     web        = false
+    # API requires a password for display devices and distinct SPICE/web ports.
+    password = "tfacc-spice-pw"
+    port     = 15900
+    web_port = 15901
   })
 %s}
 `, vmName, orderLine)
