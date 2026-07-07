@@ -72,7 +72,7 @@ func (d *ISCSITargetDataSource) Read(ctx context.Context, req datasource.ReadReq
 
 	// Query by name: iscsi.target.query([["name", "=", "<name>"]])
 	queryFilters := []any{[]any{"name", "=", state.Name.ValueString()}}
-	raw, err := d.client.Call(ctx, "iscsi.target.query", queryFilters)
+	raw, err := d.client.CallRead(ctx, "iscsi.target.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query iSCSI targets failed", err.Error())
 		return

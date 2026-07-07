@@ -45,7 +45,7 @@ func (r *SystemDatasetResource) Configure(_ context.Context, req resource.Config
 
 // fetchConfig calls systemdataset.config and unmarshals the response.
 func (r *SystemDatasetResource) fetchConfig(ctx context.Context) (*systemDatasetAPI, error) {
-	raw, err := r.client.Call(ctx, "systemdataset.config")
+	raw, err := r.client.CallRead(ctx, "systemdataset.config")
 	if err != nil {
 		return nil, err
 	}

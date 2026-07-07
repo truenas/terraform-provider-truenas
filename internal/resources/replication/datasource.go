@@ -86,7 +86,7 @@ func (d *ReplicationDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
-	raw, err := d.client.Call(ctx, "replication.query",
+	raw, err := d.client.CallRead(ctx, "replication.query",
 		[]any{[]any{"name", "=", state.Name.ValueString()}})
 	if err != nil {
 		resp.Diagnostics.AddError("Query replication tasks failed", err.Error())

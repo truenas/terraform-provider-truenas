@@ -44,7 +44,7 @@ func (r *MailResource) Configure(_ context.Context, req resource.ConfigureReques
 
 // fetchConfig calls mail.config and unmarshals the response.
 func (r *MailResource) fetchConfig(ctx context.Context) (*mailAPI, error) {
-	raw, err := r.client.Call(ctx, "mail.config")
+	raw, err := r.client.CallRead(ctx, "mail.config")
 	if err != nil {
 		return nil, err
 	}

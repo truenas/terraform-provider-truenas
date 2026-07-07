@@ -64,7 +64,7 @@ func (d *GroupDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 
 	// Query by group name: group.query([["group", "=", "<name>"]])
 	queryFilters := []any{[]any{"group", "=", state.Name.ValueString()}}
-	raw, err := d.client.Call(ctx, "group.query", queryFilters)
+	raw, err := d.client.CallRead(ctx, "group.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query groups failed", err.Error())
 		return

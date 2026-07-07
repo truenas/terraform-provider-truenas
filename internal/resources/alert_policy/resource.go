@@ -44,7 +44,7 @@ func (r *AlertPolicyResource) Configure(_ context.Context, req resource.Configur
 
 // fetchConfig calls alertclasses.config and unmarshals the response.
 func (r *AlertPolicyResource) fetchConfig(ctx context.Context) (*alertClassesAPI, error) {
-	raw, err := r.client.Call(ctx, "alertclasses.config")
+	raw, err := r.client.CallRead(ctx, "alertclasses.config")
 	if err != nil {
 		return nil, err
 	}

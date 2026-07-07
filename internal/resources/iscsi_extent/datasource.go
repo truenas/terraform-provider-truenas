@@ -73,7 +73,7 @@ func (d *ISCSIExtentDataSource) Read(ctx context.Context, req datasource.ReadReq
 
 	// Query by name: iscsi.extent.query([["name","=","<name>"]])
 	queryFilters := []any{[]any{"name", "=", state.Name.ValueString()}}
-	raw, err := d.client.Call(ctx, "iscsi.extent.query", queryFilters)
+	raw, err := d.client.CallRead(ctx, "iscsi.extent.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query iSCSI extents failed", err.Error())
 		return

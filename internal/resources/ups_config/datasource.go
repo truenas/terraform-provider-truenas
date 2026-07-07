@@ -130,7 +130,7 @@ func (d *UPSConfigDataSource) Configure(_ context.Context, req datasource.Config
 func (d *UPSConfigDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var state UPSConfigDataSourceModel
 
-	raw, err := d.client.Call(ctx, "ups.config")
+	raw, err := d.client.CallRead(ctx, "ups.config")
 	if err != nil {
 		resp.Diagnostics.AddError("Read UPS configuration failed", err.Error())
 		return

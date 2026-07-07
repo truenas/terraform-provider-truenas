@@ -63,7 +63,7 @@ func (d *AlertServiceDataSource) Read(ctx context.Context, req datasource.ReadRe
 
 	// Query by name: alertservice.query([["name", "=", "<name>"]])
 	queryFilters := []any{[]any{"name", "=", state.Name.ValueString()}}
-	raw, err := d.client.Call(ctx, "alertservice.query", queryFilters)
+	raw, err := d.client.CallRead(ctx, "alertservice.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query alert service failed", err.Error())
 		return

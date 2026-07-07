@@ -77,7 +77,7 @@ func (r *NetworkInterfaceResource) commitAndCheckin(ctx context.Context) error {
 
 // getInstance reads back an interface by name via interface.get_instance.
 func (r *NetworkInterfaceResource) getInstance(ctx context.Context, name string) (*interfaceAPI, error) {
-	raw, err := r.client.Call(ctx, "interface.get_instance", name)
+	raw, err := r.client.CallRead(ctx, "interface.get_instance", name)
 	if err != nil {
 		return nil, err
 	}

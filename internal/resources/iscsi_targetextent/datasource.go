@@ -57,7 +57,7 @@ func (d *TargetExtentDataSource) Read(ctx context.Context, req datasource.ReadRe
 		return
 	}
 
-	raw, err := d.client.Call(ctx, "iscsi.targetextent.get_instance", state.ID.ValueInt64())
+	raw, err := d.client.CallRead(ctx, "iscsi.targetextent.get_instance", state.ID.ValueInt64())
 	if err != nil {
 		resp.Diagnostics.AddError("Read iSCSI target/extent association failed", err.Error())
 		return

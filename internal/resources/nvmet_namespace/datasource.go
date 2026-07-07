@@ -65,7 +65,7 @@ func (d *NVMetNamespaceDataSource) Read(ctx context.Context, req datasource.Read
 
 	// Query by device_path: nvmet.namespace.query([["device_path","=","<path>"]])
 	queryFilters := []any{[]any{"device_path", "=", state.DevicePath.ValueString()}}
-	raw, err := d.client.Call(ctx, "nvmet.namespace.query", queryFilters)
+	raw, err := d.client.CallRead(ctx, "nvmet.namespace.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query NVMe-oF namespaces failed", err.Error())
 		return

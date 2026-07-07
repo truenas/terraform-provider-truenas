@@ -73,7 +73,7 @@ func (d *NVMeTGlobalDataSource) Configure(_ context.Context, req datasource.Conf
 func (d *NVMeTGlobalDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var state NVMeTGlobalDataSourceModel
 
-	raw, err := d.client.Call(ctx, "nvmet.global.config")
+	raw, err := d.client.CallRead(ctx, "nvmet.global.config")
 	if err != nil {
 		resp.Diagnostics.AddError("Read NVMe-oF global configuration failed", err.Error())
 		return

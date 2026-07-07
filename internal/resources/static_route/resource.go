@@ -68,7 +68,7 @@ func (r *StaticRouteResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	raw, err = r.client.Call(ctx, "staticroute.get_instance", created.ID)
+	raw, err = r.client.CallRead(ctx, "staticroute.get_instance", created.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after create failed", err.Error())
 		return
@@ -94,7 +94,7 @@ func (r *StaticRouteResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "staticroute.get_instance", state.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "staticroute.get_instance", state.ID.ValueInt64())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -144,7 +144,7 @@ func (r *StaticRouteResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "staticroute.get_instance", plan.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "staticroute.get_instance", plan.ID.ValueInt64())
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after update failed", err.Error())
 		return
@@ -183,7 +183,7 @@ func (r *StaticRouteResource) ImportState(ctx context.Context, req resource.Impo
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "staticroute.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "staticroute.get_instance", id)
 	if err != nil {
 		resp.Diagnostics.AddError("Import static route failed", err.Error())
 		return

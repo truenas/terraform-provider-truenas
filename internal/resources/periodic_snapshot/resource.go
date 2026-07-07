@@ -64,7 +64,7 @@ func (r *PeriodicSnapshotResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
-	raw, err = r.client.Call(ctx, "pool.snapshottask.get_instance", created.ID)
+	raw, err = r.client.CallRead(ctx, "pool.snapshottask.get_instance", created.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after create failed", err.Error())
 		return
@@ -90,7 +90,7 @@ func (r *PeriodicSnapshotResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "pool.snapshottask.get_instance", state.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "pool.snapshottask.get_instance", state.ID.ValueInt64())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -133,7 +133,7 @@ func (r *PeriodicSnapshotResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "pool.snapshottask.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "pool.snapshottask.get_instance", id)
 	if err != nil {
 		resp.Diagnostics.AddError("Read after update failed", err.Error())
 		return
@@ -172,7 +172,7 @@ func (r *PeriodicSnapshotResource) ImportState(ctx context.Context, req resource
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "pool.snapshottask.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "pool.snapshottask.get_instance", id)
 	if err != nil {
 		resp.Diagnostics.AddError("Import periodic snapshot task failed", err.Error())
 		return

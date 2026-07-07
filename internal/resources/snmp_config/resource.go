@@ -44,7 +44,7 @@ func (r *SNMPConfigResource) Configure(_ context.Context, req resource.Configure
 
 // fetchConfig calls snmp.config and unmarshals the response.
 func (r *SNMPConfigResource) fetchConfig(ctx context.Context) (*snmpConfigAPI, error) {
-	raw, err := r.client.Call(ctx, "snmp.config")
+	raw, err := r.client.CallRead(ctx, "snmp.config")
 	if err != nil {
 		return nil, err
 	}

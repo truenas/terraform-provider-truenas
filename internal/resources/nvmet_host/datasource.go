@@ -63,7 +63,7 @@ func (d *NVMetHostDataSource) Read(ctx context.Context, req datasource.ReadReque
 
 	// Query by hostnqn: nvmet.host.query([["hostnqn","=","<hostnqn>"]])
 	queryFilters := []any{[]any{"hostnqn", "=", state.HostNQN.ValueString()}}
-	raw, err := d.client.Call(ctx, "nvmet.host.query", queryFilters)
+	raw, err := d.client.CallRead(ctx, "nvmet.host.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query NVMe-oF hosts failed", err.Error())
 		return

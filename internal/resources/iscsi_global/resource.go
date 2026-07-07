@@ -44,7 +44,7 @@ func (r *ISCSIGlobalResource) Configure(_ context.Context, req resource.Configur
 
 // fetchConfig calls iscsi.global.config and unmarshals the response.
 func (r *ISCSIGlobalResource) fetchConfig(ctx context.Context) (*iscsiGlobalAPI, error) {
-	raw, err := r.client.Call(ctx, "iscsi.global.config")
+	raw, err := r.client.CallRead(ctx, "iscsi.global.config")
 	if err != nil {
 		return nil, err
 	}

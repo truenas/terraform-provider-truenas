@@ -62,7 +62,7 @@ func (d *ISCSIAuthDataSource) Read(ctx context.Context, req datasource.ReadReque
 	}
 
 	queryFilters := []any{[]any{"tag", "=", state.Tag.ValueInt64()}}
-	raw, err := d.client.Call(ctx, "iscsi.auth.query", queryFilters)
+	raw, err := d.client.CallRead(ctx, "iscsi.auth.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query iSCSI auth entries failed", err.Error())
 		return

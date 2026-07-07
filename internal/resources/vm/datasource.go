@@ -69,7 +69,7 @@ func (d *VMDataSource) Read(ctx context.Context, req datasource.ReadRequest, res
 	}
 
 	queryFilters := []any{[]any{"name", "=", state.Name.ValueString()}}
-	raw, err := d.client.Call(ctx, "vm.query", queryFilters)
+	raw, err := d.client.CallRead(ctx, "vm.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query VMs failed", err.Error())
 		return

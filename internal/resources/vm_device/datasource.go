@@ -68,7 +68,7 @@ func (d *VMDeviceDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	raw, err := d.client.Call(ctx, "vm.device.get_instance", state.ID.ValueInt64())
+	raw, err := d.client.CallRead(ctx, "vm.device.get_instance", state.ID.ValueInt64())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.Diagnostics.AddError(

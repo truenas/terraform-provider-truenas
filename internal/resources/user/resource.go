@@ -79,7 +79,7 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 	if apiResp == nil {
 		// Bare-int shape — read back full state via get_instance.
-		raw2, err := r.client.Call(ctx, "user.get_instance", userID)
+		raw2, err := r.client.CallRead(ctx, "user.get_instance", userID)
 		if err != nil {
 			resp.Diagnostics.AddError("Read-back after create failed", err.Error())
 			return
@@ -105,7 +105,7 @@ func (r *UserResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "user.get_instance", state.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "user.get_instance", state.ID.ValueInt64())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -163,7 +163,7 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "user.get_instance", plan.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "user.get_instance", plan.ID.ValueInt64())
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after update failed", err.Error())
 		return
@@ -202,7 +202,7 @@ func (r *UserResource) ImportState(ctx context.Context, req resource.ImportState
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "user.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "user.get_instance", id)
 	if err != nil {
 		resp.Diagnostics.AddError("Import user failed", err.Error())
 		return

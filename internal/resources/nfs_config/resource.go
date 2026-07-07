@@ -46,7 +46,7 @@ func (r *NFSConfigResource) Configure(_ context.Context, req resource.ConfigureR
 
 // fetchConfig calls nfs.config and unmarshals the response.
 func (r *NFSConfigResource) fetchConfig(ctx context.Context) (*nfsConfigAPI, error) {
-	raw, err := r.client.Call(ctx, "nfs.config")
+	raw, err := r.client.CallRead(ctx, "nfs.config")
 	if err != nil {
 		return nil, err
 	}

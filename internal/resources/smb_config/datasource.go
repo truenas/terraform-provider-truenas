@@ -145,7 +145,7 @@ func (d *SMBConfigDataSource) Configure(_ context.Context, req datasource.Config
 func (d *SMBConfigDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var state SMBConfigDataSourceModel
 
-	raw, err := d.client.Call(ctx, "smb.config")
+	raw, err := d.client.CallRead(ctx, "smb.config")
 	if err != nil {
 		resp.Diagnostics.AddError("Read SMB configuration failed", err.Error())
 		return

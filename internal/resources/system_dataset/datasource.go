@@ -75,7 +75,7 @@ func (d *SystemDatasetDataSource) Configure(_ context.Context, req datasource.Co
 func (d *SystemDatasetDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var state SystemDatasetDataSourceModel
 
-	raw, err := d.client.Call(ctx, "systemdataset.config")
+	raw, err := d.client.CallRead(ctx, "systemdataset.config")
 	if err != nil {
 		resp.Diagnostics.AddError("Read system dataset configuration failed", err.Error())
 		return

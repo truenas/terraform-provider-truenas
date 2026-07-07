@@ -45,7 +45,7 @@ func (r *SystemGeneralResource) Configure(_ context.Context, req resource.Config
 
 // fetchConfig calls system.general.config and unmarshals the response.
 func (r *SystemGeneralResource) fetchConfig(ctx context.Context) (*systemGeneralAPI, error) {
-	raw, err := r.client.Call(ctx, "system.general.config")
+	raw, err := r.client.CallRead(ctx, "system.general.config")
 	if err != nil {
 		return nil, err
 	}

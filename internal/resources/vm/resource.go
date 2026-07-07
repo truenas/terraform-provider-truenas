@@ -44,7 +44,7 @@ func (r *VMResource) Configure(_ context.Context, req resource.ConfigureRequest,
 
 // getInstance reads back a VM by ID via vm.get_instance.
 func (r *VMResource) getInstance(ctx context.Context, id int64) (*vmAPI, error) {
-	raw, err := r.client.Call(ctx, "vm.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "vm.get_instance", id)
 	if err != nil {
 		return nil, err
 	}

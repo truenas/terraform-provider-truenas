@@ -53,7 +53,7 @@ func (d *ServiceDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 
-	raw, err := d.client.Call(ctx, "service.query", [][]any{{"service", "=", state.Name.ValueString()}})
+	raw, err := d.client.CallRead(ctx, "service.query", [][]any{{"service", "=", state.Name.ValueString()}})
 	if err != nil {
 		resp.Diagnostics.AddError("Read service failed", err.Error())
 		return

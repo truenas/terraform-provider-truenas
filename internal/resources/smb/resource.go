@@ -68,7 +68,7 @@ func (r *SMBShareResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	raw, err = r.client.Call(ctx, "sharing.smb.get_instance", created.ID)
+	raw, err = r.client.CallRead(ctx, "sharing.smb.get_instance", created.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after create failed", err.Error())
 		return
@@ -94,7 +94,7 @@ func (r *SMBShareResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "sharing.smb.get_instance", state.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "sharing.smb.get_instance", state.ID.ValueInt64())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -144,7 +144,7 @@ func (r *SMBShareResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "sharing.smb.get_instance", plan.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "sharing.smb.get_instance", plan.ID.ValueInt64())
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after update failed", err.Error())
 		return
@@ -183,7 +183,7 @@ func (r *SMBShareResource) ImportState(ctx context.Context, req resource.ImportS
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "sharing.smb.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "sharing.smb.get_instance", id)
 	if err != nil {
 		resp.Diagnostics.AddError("Import SMB share failed", err.Error())
 		return

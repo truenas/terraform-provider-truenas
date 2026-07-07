@@ -70,7 +70,7 @@ func (r *GroupResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	if apiResp == nil {
 		// Bare-int shape — read back full state via get_instance.
-		raw2, err := r.client.Call(ctx, "group.get_instance", groupID)
+		raw2, err := r.client.CallRead(ctx, "group.get_instance", groupID)
 		if err != nil {
 			resp.Diagnostics.AddError("Read-back after create failed", err.Error())
 			return
@@ -96,7 +96,7 @@ func (r *GroupResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "group.get_instance", state.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "group.get_instance", state.ID.ValueInt64())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -146,7 +146,7 @@ func (r *GroupResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "group.get_instance", plan.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "group.get_instance", plan.ID.ValueInt64())
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after update failed", err.Error())
 		return
@@ -185,7 +185,7 @@ func (r *GroupResource) ImportState(ctx context.Context, req resource.ImportStat
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "group.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "group.get_instance", id)
 	if err != nil {
 		resp.Diagnostics.AddError("Import group failed", err.Error())
 		return

@@ -128,7 +128,7 @@ func (d *SystemGeneralDataSource) Configure(_ context.Context, req datasource.Co
 func (d *SystemGeneralDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var state SystemGeneralDataSourceModel
 
-	raw, err := d.client.Call(ctx, "system.general.config")
+	raw, err := d.client.CallRead(ctx, "system.general.config")
 	if err != nil {
 		resp.Diagnostics.AddError("Read system general configuration failed", err.Error())
 		return

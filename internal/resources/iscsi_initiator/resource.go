@@ -68,7 +68,7 @@ func (r *ISCSIInitiatorResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 
-	raw, err = r.client.Call(ctx, "iscsi.initiator.get_instance", created.ID)
+	raw, err = r.client.CallRead(ctx, "iscsi.initiator.get_instance", created.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after create failed", err.Error())
 		return
@@ -94,7 +94,7 @@ func (r *ISCSIInitiatorResource) Read(ctx context.Context, req resource.ReadRequ
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "iscsi.initiator.get_instance", state.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "iscsi.initiator.get_instance", state.ID.ValueInt64())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -144,7 +144,7 @@ func (r *ISCSIInitiatorResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "iscsi.initiator.get_instance", plan.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "iscsi.initiator.get_instance", plan.ID.ValueInt64())
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after update failed", err.Error())
 		return
@@ -183,7 +183,7 @@ func (r *ISCSIInitiatorResource) ImportState(ctx context.Context, req resource.I
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "iscsi.initiator.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "iscsi.initiator.get_instance", id)
 	if err != nil {
 		resp.Diagnostics.AddError("Import iSCSI initiator failed", err.Error())
 		return

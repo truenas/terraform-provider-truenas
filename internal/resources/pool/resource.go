@@ -80,7 +80,7 @@ func (r *PoolResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "pool.get_instance", state.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "pool.get_instance", state.ID.ValueInt64())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -119,7 +119,7 @@ func (r *PoolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	// Re-read to get computed fields after update.
-	raw, err := r.client.Call(ctx, "pool.get_instance", plan.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "pool.get_instance", plan.ID.ValueInt64())
 	if err != nil {
 		resp.Diagnostics.AddError("Read after update failed", err.Error())
 		return
@@ -153,7 +153,7 @@ func (r *PoolResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 
 func (r *PoolResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Import by pool name: query for pool with matching name, take first result.
-	raw, err := r.client.Call(ctx, "pool.query", [][]any{{"name", "=", req.ID}})
+	raw, err := r.client.CallRead(ctx, "pool.query", [][]any{{"name", "=", req.ID}})
 	if err != nil {
 		resp.Diagnostics.AddError("Import pool failed", err.Error())
 		return

@@ -68,7 +68,7 @@ func (r *NTPServerResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	raw, err = r.client.Call(ctx, "system.ntpserver.get_instance", created.ID)
+	raw, err = r.client.CallRead(ctx, "system.ntpserver.get_instance", created.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after create failed", err.Error())
 		return
@@ -94,7 +94,7 @@ func (r *NTPServerResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "system.ntpserver.get_instance", state.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "system.ntpserver.get_instance", state.ID.ValueInt64())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -144,7 +144,7 @@ func (r *NTPServerResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "system.ntpserver.get_instance", plan.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "system.ntpserver.get_instance", plan.ID.ValueInt64())
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after update failed", err.Error())
 		return
@@ -183,7 +183,7 @@ func (r *NTPServerResource) ImportState(ctx context.Context, req resource.Import
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "system.ntpserver.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "system.ntpserver.get_instance", id)
 	if err != nil {
 		resp.Diagnostics.AddError("Import NTP server failed", err.Error())
 		return

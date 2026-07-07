@@ -69,7 +69,7 @@ func deleteBlocked(state *BootEnvironmentModel) bool {
 
 // lookupByName queries a boot environment by name.
 func (r *BootEnvironmentResource) lookupByName(ctx context.Context, name string) (*bootEnvAPI, error) {
-	raw, err := r.client.Call(ctx, "boot.environment.query", [][]any{{"id", "=", name}})
+	raw, err := r.client.CallRead(ctx, "boot.environment.query", [][]any{{"id", "=", name}})
 	if err != nil {
 		return nil, err
 	}

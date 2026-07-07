@@ -63,7 +63,7 @@ func (d *NVMetSubsysDataSource) Read(ctx context.Context, req datasource.ReadReq
 
 	// Query by name: nvmet.subsys.query([["name","=","<name>"]])
 	queryFilters := []any{[]any{"name", "=", state.Name.ValueString()}}
-	raw, err := d.client.Call(ctx, "nvmet.subsys.query", queryFilters)
+	raw, err := d.client.CallRead(ctx, "nvmet.subsys.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query NVMe-oF subsystems failed", err.Error())
 		return

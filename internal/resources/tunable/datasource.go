@@ -61,7 +61,7 @@ func (d *TunableDataSource) Read(ctx context.Context, req datasource.ReadRequest
 
 	// Query by var: tunable.query([["var", "=", "<name>"]])
 	queryFilters := []any{[]any{"var", "=", state.Var.ValueString()}}
-	raw, err := d.client.Call(ctx, "tunable.query", queryFilters)
+	raw, err := d.client.CallRead(ctx, "tunable.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query tunables failed", err.Error())
 		return

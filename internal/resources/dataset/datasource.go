@@ -63,7 +63,7 @@ func (d *DatasetDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 
-	raw, err := d.client.Call(ctx, "pool.dataset.get_instance", state.Name.ValueString())
+	raw, err := d.client.CallRead(ctx, "pool.dataset.get_instance", state.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Read dataset failed", err.Error())
 		return

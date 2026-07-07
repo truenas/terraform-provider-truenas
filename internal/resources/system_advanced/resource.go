@@ -45,7 +45,7 @@ func (r *SystemAdvancedResource) Configure(_ context.Context, req resource.Confi
 
 // fetchConfig calls system.advanced.config and unmarshals the response.
 func (r *SystemAdvancedResource) fetchConfig(ctx context.Context) (*systemAdvancedAPI, error) {
-	raw, err := r.client.Call(ctx, "system.advanced.config")
+	raw, err := r.client.CallRead(ctx, "system.advanced.config")
 	if err != nil {
 		return nil, err
 	}

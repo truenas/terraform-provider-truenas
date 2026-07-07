@@ -107,7 +107,7 @@ func (d *NetworkConfigDataSource) Configure(_ context.Context, req datasource.Co
 func (d *NetworkConfigDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var state NetworkConfigDataSourceModel
 
-	raw, err := d.client.Call(ctx, "network.configuration.config")
+	raw, err := d.client.CallRead(ctx, "network.configuration.config")
 	if err != nil {
 		resp.Diagnostics.AddError("Read network configuration failed", err.Error())
 		return

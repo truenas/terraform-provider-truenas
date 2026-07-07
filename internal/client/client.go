@@ -58,6 +58,13 @@ type Client struct {
 
 	connMu sync.Mutex
 	conn   *websocket.Conn
+	authFn func(ctx context.Context) error // stored by Connect; replayed by reconnect
+
+	// reconnectMu serializes reconnect attempts. connMu alone isn't enough
+	// because dial() does network I/O while holding it only briefly (to set
+	// c.conn); without this, two concurrent CallRead retries could both see
+	// conn==nil and race to open two connections.
+	reconnectMu sync.Mutex
 
 	writeMu sync.Mutex
 
@@ -77,7 +84,19 @@ func New(endpoint string, tlsCfg *tls.Config) *Client {
 }
 
 // Connect dials the WebSocket, performs the DDP handshake, then calls authenticateFn (if non-nil).
+// authenticateFn is retained so a later reconnect (see reconnect) can replay
+// the same handshake+auth path after a transport failure.
 func (c *Client) Connect(ctx context.Context, authenticateFn func(ctx context.Context) error) error {
+	c.connMu.Lock()
+	c.authFn = authenticateFn
+	c.connMu.Unlock()
+	return c.dial(ctx)
+}
+
+// dial opens the websocket connection, performs the DDP handshake, and (if
+// an authFn was stored by Connect) authenticates. Shared by Connect and
+// reconnect so there is exactly one implementation of the handshake path.
+func (c *Client) dial(ctx context.Context) error {
 	dialer := websocket.Dialer{
 		HandshakeTimeout: 10 * time.Second,
 		TLSClientConfig:  c.tlsConfig,
@@ -104,18 +123,41 @@ func (c *Client) Connect(ctx context.Context, authenticateFn func(ctx context.Co
 
 	c.connMu.Lock()
 	c.conn = conn
+	authFn := c.authFn
 	c.connMu.Unlock()
 
 	go c.readLoop(conn)
 
-	if authenticateFn != nil {
-		if err := authenticateFn(ctx); err != nil {
+	if authFn != nil {
+		if err := authFn(ctx); err != nil {
 			c.Close()
 			return err
 		}
 	}
 
 	return nil
+}
+
+// reconnect re-dials the connection using the same handshake+auth path as
+// Connect, but only when there is no live connection (conn == nil, e.g.
+// after readLoop observed a transport failure). It is a no-op if a
+// connection already exists. Concurrent callers serialize on reconnectMu so
+// at most one dial happens per outage; the connMu check below runs both
+// before and effectively after that serialization point, so a caller that
+// waited behind another reconnect() will see the fresh conn and skip
+// dialing again.
+func (c *Client) reconnect(ctx context.Context) error {
+	c.reconnectMu.Lock()
+	defer c.reconnectMu.Unlock()
+
+	c.connMu.Lock()
+	alreadyConnected := c.conn != nil
+	c.connMu.Unlock()
+	if alreadyConnected {
+		return nil
+	}
+
+	return c.dial(ctx)
 }
 
 func (c *Client) readLoop(conn *websocket.Conn) {

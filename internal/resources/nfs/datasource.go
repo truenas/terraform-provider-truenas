@@ -64,7 +64,7 @@ func (d *NFSShareDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	raw, err := d.client.Call(ctx, "sharing.nfs.get_instance", id)
+	raw, err := d.client.CallRead(ctx, "sharing.nfs.get_instance", id)
 	if err != nil {
 		resp.Diagnostics.AddError("Read NFS share failed", err.Error())
 		return

@@ -76,7 +76,7 @@ func (d *SMBShareDataSource) Read(ctx context.Context, req datasource.ReadReques
 
 	// Query by name: sharing.smb.query([["name", "=", "<sharename>"]])
 	queryFilters := []any{[]any{"name", "=", state.Name.ValueString()}}
-	raw, err := d.client.Call(ctx, "sharing.smb.query", queryFilters)
+	raw, err := d.client.CallRead(ctx, "sharing.smb.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query SMB shares failed", err.Error())
 		return

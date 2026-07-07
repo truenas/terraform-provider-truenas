@@ -56,7 +56,7 @@ func (d *PortSubsysDataSource) Read(ctx context.Context, req datasource.ReadRequ
 		return
 	}
 
-	raw, err := d.client.Call(ctx, "nvmet.port_subsys.get_instance", state.ID.ValueInt64())
+	raw, err := d.client.CallRead(ctx, "nvmet.port_subsys.get_instance", state.ID.ValueInt64())
 	if err != nil {
 		resp.Diagnostics.AddError("Read NVMe-oF port/subsystem association failed", err.Error())
 		return

@@ -41,7 +41,7 @@ func (r *AppResource) Configure(_ context.Context, req resource.ConfigureRequest
 
 // getInstance fetches a single app by name via app.get_instance (sync call).
 func (r *AppResource) getInstance(ctx context.Context, name string) (*appAPI, error) {
-	raw, err := r.client.Call(ctx, "app.get_instance", name)
+	raw, err := r.client.CallRead(ctx, "app.get_instance", name)
 	if err != nil {
 		return nil, err
 	}

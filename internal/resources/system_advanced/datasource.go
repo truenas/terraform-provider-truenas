@@ -164,7 +164,7 @@ func (d *SystemAdvancedDataSource) Configure(_ context.Context, req datasource.C
 func (d *SystemAdvancedDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var state SystemAdvancedDataSourceModel
 
-	raw, err := d.client.Call(ctx, "system.advanced.config")
+	raw, err := d.client.CallRead(ctx, "system.advanced.config")
 	if err != nil {
 		resp.Diagnostics.AddError("Read system advanced configuration failed", err.Error())
 		return

@@ -62,7 +62,7 @@ func (d *CredentialsDataSource) Read(ctx context.Context, req datasource.ReadReq
 
 	// Query by name: cloudsync.credentials.query([["name", "=", "<name>"]])
 	queryFilters := []any{[]any{"name", "=", state.Name.ValueString()}}
-	raw, err := d.client.Call(ctx, "cloudsync.credentials.query", queryFilters)
+	raw, err := d.client.CallRead(ctx, "cloudsync.credentials.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query cloudsync credentials failed", err.Error())
 		return

@@ -76,7 +76,7 @@ func (d *NetworkInterfaceDataSource) Read(ctx context.Context, req datasource.Re
 		return
 	}
 
-	raw, err := d.client.Call(ctx, "interface.query", [][]any{{"name", "=", state.Name.ValueString()}})
+	raw, err := d.client.CallRead(ctx, "interface.query", [][]any{{"name", "=", state.Name.ValueString()}})
 	if err != nil {
 		resp.Diagnostics.AddError("Query network interfaces failed", err.Error())
 		return

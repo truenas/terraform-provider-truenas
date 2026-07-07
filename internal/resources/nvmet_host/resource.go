@@ -79,7 +79,7 @@ func (r *NVMetHostResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	raw, err = r.client.Call(ctx, "nvmet.host.get_instance", created.ID)
+	raw, err = r.client.CallRead(ctx, "nvmet.host.get_instance", created.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after create failed", err.Error())
 		return
@@ -105,7 +105,7 @@ func (r *NVMetHostResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "nvmet.host.get_instance", state.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "nvmet.host.get_instance", state.ID.ValueInt64())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -164,7 +164,7 @@ func (r *NVMetHostResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "nvmet.host.get_instance", plan.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "nvmet.host.get_instance", plan.ID.ValueInt64())
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after update failed", err.Error())
 		return
@@ -203,7 +203,7 @@ func (r *NVMetHostResource) ImportState(ctx context.Context, req resource.Import
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "nvmet.host.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "nvmet.host.get_instance", id)
 	if err != nil {
 		resp.Diagnostics.AddError("Import NVMe-oF host failed", err.Error())
 		return

@@ -68,7 +68,7 @@ func (r *PortSubsysResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
-	raw, err = r.client.Call(ctx, "nvmet.port_subsys.get_instance", created.ID)
+	raw, err = r.client.CallRead(ctx, "nvmet.port_subsys.get_instance", created.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after create failed", err.Error())
 		return
@@ -94,7 +94,7 @@ func (r *PortSubsysResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "nvmet.port_subsys.get_instance", state.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "nvmet.port_subsys.get_instance", state.ID.ValueInt64())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -139,7 +139,7 @@ func (r *PortSubsysResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 	plan.ID = state.ID
 
-	raw, err := r.client.Call(ctx, "nvmet.port_subsys.get_instance", plan.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "nvmet.port_subsys.get_instance", plan.ID.ValueInt64())
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back during update failed", err.Error())
 		return
@@ -178,7 +178,7 @@ func (r *PortSubsysResource) ImportState(ctx context.Context, req resource.Impor
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "nvmet.port_subsys.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "nvmet.port_subsys.get_instance", id)
 	if err != nil {
 		resp.Diagnostics.AddError("Import NVMe-oF port/subsystem association failed", err.Error())
 		return

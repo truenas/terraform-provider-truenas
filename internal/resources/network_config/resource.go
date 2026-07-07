@@ -46,7 +46,7 @@ func (r *NetworkConfigResource) Configure(_ context.Context, req resource.Config
 // fetchConfig calls network.configuration.config and unmarshals the
 // response.
 func (r *NetworkConfigResource) fetchConfig(ctx context.Context) (*networkConfigAPI, error) {
-	raw, err := r.client.Call(ctx, "network.configuration.config")
+	raw, err := r.client.CallRead(ctx, "network.configuration.config")
 	if err != nil {
 		return nil, err
 	}

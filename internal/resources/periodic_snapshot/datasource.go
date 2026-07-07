@@ -69,7 +69,7 @@ func (d *PeriodicSnapshotDataSource) Read(ctx context.Context, req datasource.Re
 		return
 	}
 
-	raw, err := d.client.Call(ctx, "pool.snapshottask.query",
+	raw, err := d.client.CallRead(ctx, "pool.snapshottask.query",
 		[]any{[]any{"dataset", "=", state.Dataset.ValueString()}})
 	if err != nil {
 		resp.Diagnostics.AddError("Query periodic snapshot tasks failed", err.Error())

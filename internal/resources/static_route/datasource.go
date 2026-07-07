@@ -57,7 +57,7 @@ func (d *StaticRouteDataSource) Read(ctx context.Context, req datasource.ReadReq
 	}
 
 	queryFilters := []any{[]any{"destination", "=", state.Destination.ValueString()}}
-	raw, err := d.client.Call(ctx, "staticroute.query", queryFilters)
+	raw, err := d.client.CallRead(ctx, "staticroute.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query static routes failed", err.Error())
 		return

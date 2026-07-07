@@ -68,7 +68,7 @@ func (r *ISCSIExtentResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	raw, err = r.client.Call(ctx, "iscsi.extent.get_instance", created.ID)
+	raw, err = r.client.CallRead(ctx, "iscsi.extent.get_instance", created.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after create failed", err.Error())
 		return
@@ -94,7 +94,7 @@ func (r *ISCSIExtentResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "iscsi.extent.get_instance", state.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "iscsi.extent.get_instance", state.ID.ValueInt64())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -145,7 +145,7 @@ func (r *ISCSIExtentResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "iscsi.extent.get_instance", plan.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "iscsi.extent.get_instance", plan.ID.ValueInt64())
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after update failed", err.Error())
 		return
@@ -186,7 +186,7 @@ func (r *ISCSIExtentResource) ImportState(ctx context.Context, req resource.Impo
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "iscsi.extent.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "iscsi.extent.get_instance", id)
 	if err != nil {
 		resp.Diagnostics.AddError("Import iSCSI extent failed", err.Error())
 		return

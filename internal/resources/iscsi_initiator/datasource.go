@@ -58,7 +58,7 @@ func (d *ISCSIInitiatorDataSource) Read(ctx context.Context, req datasource.Read
 
 	// Query by ID: iscsi.initiator.query([["id","=",id]])
 	queryFilters := []any{[]any{"id", "=", state.ID.ValueInt64()}}
-	raw, err := d.client.Call(ctx, "iscsi.initiator.query", queryFilters)
+	raw, err := d.client.CallRead(ctx, "iscsi.initiator.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query iSCSI initiators failed", err.Error())
 		return

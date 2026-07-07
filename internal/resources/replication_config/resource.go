@@ -45,7 +45,7 @@ func (r *ReplicationConfigResource) Configure(_ context.Context, req resource.Co
 
 // fetchConfig calls replication.config.config and unmarshals the response.
 func (r *ReplicationConfigResource) fetchConfig(ctx context.Context) (*replicationConfigAPI, error) {
-	raw, err := r.client.Call(ctx, "replication.config.config")
+	raw, err := r.client.CallRead(ctx, "replication.config.config")
 	if err != nil {
 		return nil, err
 	}

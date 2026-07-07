@@ -44,7 +44,7 @@ func (r *SSHConfigResource) Configure(_ context.Context, req resource.ConfigureR
 
 // fetchConfig calls ssh.config and unmarshals the response.
 func (r *SSHConfigResource) fetchConfig(ctx context.Context) (*sshConfigAPI, error) {
-	raw, err := r.client.Call(ctx, "ssh.config")
+	raw, err := r.client.CallRead(ctx, "ssh.config")
 	if err != nil {
 		return nil, err
 	}

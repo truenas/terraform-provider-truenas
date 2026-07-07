@@ -70,7 +70,7 @@ func (r *TunableResource) Create(ctx context.Context, req resource.CreateRequest
 
 	if apiResp == nil {
 		// Bare-int shape: read back full state via get_instance.
-		raw2, err := r.client.Call(ctx, "tunable.get_instance", id)
+		raw2, err := r.client.CallRead(ctx, "tunable.get_instance", id)
 		if err != nil {
 			resp.Diagnostics.AddError("Read-back after create failed", err.Error())
 			return
@@ -98,7 +98,7 @@ func (r *TunableResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "tunable.get_instance", state.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "tunable.get_instance", state.ID.ValueInt64())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -148,7 +148,7 @@ func (r *TunableResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "tunable.get_instance", plan.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "tunable.get_instance", plan.ID.ValueInt64())
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after update failed", err.Error())
 		return
@@ -187,7 +187,7 @@ func (r *TunableResource) ImportState(ctx context.Context, req resource.ImportSt
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "tunable.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "tunable.get_instance", id)
 	if err != nil {
 		resp.Diagnostics.AddError("Import tunable failed", err.Error())
 		return

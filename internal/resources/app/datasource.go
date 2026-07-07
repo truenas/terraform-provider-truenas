@@ -57,7 +57,7 @@ func (d *AppDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 		return
 	}
 
-	raw, err := d.client.Call(ctx, "app.query", [][]any{{"name", "=", state.Name.ValueString()}})
+	raw, err := d.client.CallRead(ctx, "app.query", [][]any{{"name", "=", state.Name.ValueString()}})
 	if err != nil {
 		resp.Diagnostics.AddError("Read app failed", err.Error())
 		return

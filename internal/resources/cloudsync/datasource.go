@@ -76,7 +76,7 @@ func (d *CloudSyncDataSource) Read(ctx context.Context, req datasource.ReadReque
 		return
 	}
 
-	raw, err := d.client.Call(ctx, "cloudsync.query",
+	raw, err := d.client.CallRead(ctx, "cloudsync.query",
 		[]any{[]any{"description", "=", state.Description.ValueString()}})
 	if err != nil {
 		resp.Diagnostics.AddError("Query cloud sync tasks failed", err.Error())

@@ -44,7 +44,7 @@ func (r *UPSConfigResource) Configure(_ context.Context, req resource.ConfigureR
 
 // fetchConfig calls ups.config and unmarshals the response.
 func (r *UPSConfigResource) fetchConfig(ctx context.Context) (*upsConfigAPI, error) {
-	raw, err := r.client.Call(ctx, "ups.config")
+	raw, err := r.client.CallRead(ctx, "ups.config")
 	if err != nil {
 		return nil, err
 	}

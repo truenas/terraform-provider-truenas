@@ -64,7 +64,7 @@ func (r *SnapshotResource) Create(ctx context.Context, req resource.CreateReques
 	// pool.snapshot.create returns the snapshot name string, not a full object.
 	// Read back via get_instance for canonical state.
 	snapID := plan.Dataset.ValueString() + "@" + plan.Name.ValueString()
-	raw, err := r.client.Call(ctx, "pool.snapshot.get_instance", snapID)
+	raw, err := r.client.CallRead(ctx, "pool.snapshot.get_instance", snapID)
 	if err != nil {
 		resp.Diagnostics.AddError("Read after create failed", err.Error())
 		return
@@ -88,7 +88,7 @@ func (r *SnapshotResource) Read(ctx context.Context, req resource.ReadRequest, r
 	}
 
 	id := state.ID.ValueString()
-	raw, err := r.client.Call(ctx, "pool.snapshot.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "pool.snapshot.get_instance", id)
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -139,7 +139,7 @@ func (r *SnapshotResource) ImportState(ctx context.Context, req resource.ImportS
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "pool.snapshot.get_instance", req.ID)
+	raw, err := r.client.CallRead(ctx, "pool.snapshot.get_instance", req.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Import snapshot failed", err.Error())
 		return

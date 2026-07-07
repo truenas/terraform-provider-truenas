@@ -44,7 +44,7 @@ func (r *FTPConfigResource) Configure(_ context.Context, req resource.ConfigureR
 
 // fetchConfig calls ftp.config and unmarshals the response.
 func (r *FTPConfigResource) fetchConfig(ctx context.Context) (*ftpConfigAPI, error) {
-	raw, err := r.client.Call(ctx, "ftp.config")
+	raw, err := r.client.CallRead(ctx, "ftp.config")
 	if err != nil {
 		return nil, err
 	}

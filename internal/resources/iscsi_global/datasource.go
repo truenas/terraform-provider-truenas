@@ -79,7 +79,7 @@ func (d *ISCSIGlobalDataSource) Configure(_ context.Context, req datasource.Conf
 func (d *ISCSIGlobalDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var state ISCSIGlobalDataSourceModel
 
-	raw, err := d.client.Call(ctx, "iscsi.global.config")
+	raw, err := d.client.CallRead(ctx, "iscsi.global.config")
 	if err != nil {
 		resp.Diagnostics.AddError("Read iSCSI global configuration failed", err.Error())
 		return

@@ -102,7 +102,7 @@ func (d *SSHConfigDataSource) Configure(_ context.Context, req datasource.Config
 func (d *SSHConfigDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var state SSHConfigDataSourceModel
 
-	raw, err := d.client.Call(ctx, "ssh.config")
+	raw, err := d.client.CallRead(ctx, "ssh.config")
 	if err != nil {
 		resp.Diagnostics.AddError("Read SSH configuration failed", err.Error())
 		return

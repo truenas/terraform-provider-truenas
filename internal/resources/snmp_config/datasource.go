@@ -98,7 +98,7 @@ func (d *SNMPConfigDataSource) Configure(_ context.Context, req datasource.Confi
 func (d *SNMPConfigDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var state SNMPConfigDataSourceModel
 
-	raw, err := d.client.Call(ctx, "snmp.config")
+	raw, err := d.client.CallRead(ctx, "snmp.config")
 	if err != nil {
 		resp.Diagnostics.AddError("Read SNMP configuration failed", err.Error())
 		return

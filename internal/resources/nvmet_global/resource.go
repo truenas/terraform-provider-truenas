@@ -44,7 +44,7 @@ func (r *NVMeTGlobalResource) Configure(_ context.Context, req resource.Configur
 
 // fetchConfig calls nvmet.global.config and unmarshals the response.
 func (r *NVMeTGlobalResource) fetchConfig(ctx context.Context) (*nvmetGlobalAPI, error) {
-	raw, err := r.client.Call(ctx, "nvmet.global.config")
+	raw, err := r.client.CallRead(ctx, "nvmet.global.config")
 	if err != nil {
 		return nil, err
 	}

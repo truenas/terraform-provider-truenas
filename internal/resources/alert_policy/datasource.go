@@ -56,7 +56,7 @@ func (d *AlertPolicyDataSource) Configure(_ context.Context, req datasource.Conf
 func (d *AlertPolicyDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var state AlertPolicyDataSourceModel
 
-	raw, err := d.client.Call(ctx, "alertclasses.config")
+	raw, err := d.client.CallRead(ctx, "alertclasses.config")
 	if err != nil {
 		resp.Diagnostics.AddError("Read alert policy failed", err.Error())
 		return

@@ -104,7 +104,7 @@ func (d *ISCSIPortalDataSource) Read(ctx context.Context, req datasource.ReadReq
 	}
 
 	queryFilters := []any{[]any{"comment", "=", state.Comment.ValueString()}}
-	raw, err := d.client.Call(ctx, "iscsi.portal.query", queryFilters)
+	raw, err := d.client.CallRead(ctx, "iscsi.portal.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query iSCSI portals failed", err.Error())
 		return

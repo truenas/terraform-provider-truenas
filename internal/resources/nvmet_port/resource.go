@@ -68,7 +68,7 @@ func (r *NVMetPortResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	raw, err = r.client.Call(ctx, "nvmet.port.get_instance", created.ID)
+	raw, err = r.client.CallRead(ctx, "nvmet.port.get_instance", created.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after create failed", err.Error())
 		return
@@ -94,7 +94,7 @@ func (r *NVMetPortResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "nvmet.port.get_instance", state.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "nvmet.port.get_instance", state.ID.ValueInt64())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -144,7 +144,7 @@ func (r *NVMetPortResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "nvmet.port.get_instance", plan.ID.ValueInt64())
+	raw, err := r.client.CallRead(ctx, "nvmet.port.get_instance", plan.ID.ValueInt64())
 	if err != nil {
 		resp.Diagnostics.AddError("Read-back after update failed", err.Error())
 		return
@@ -183,7 +183,7 @@ func (r *NVMetPortResource) ImportState(ctx context.Context, req resource.Import
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "nvmet.port.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "nvmet.port.get_instance", id)
 	if err != nil {
 		resp.Diagnostics.AddError("Import NVMe-oF port failed", err.Error())
 		return

@@ -42,7 +42,7 @@ func (r *ServiceResource) Configure(_ context.Context, req resource.ConfigureReq
 
 // lookupByName queries the service by service name string.
 func (r *ServiceResource) lookupByName(ctx context.Context, name string) (*serviceAPI, error) {
-	raw, err := r.client.Call(ctx, "service.query", [][]any{{"service", "=", name}})
+	raw, err := r.client.CallRead(ctx, "service.query", [][]any{{"service", "=", name}})
 	if err != nil {
 		return nil, err
 	}

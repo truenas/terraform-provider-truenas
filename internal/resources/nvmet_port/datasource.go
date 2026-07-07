@@ -62,7 +62,7 @@ func (d *NVMetPortDataSource) Read(ctx context.Context, req datasource.ReadReque
 		return
 	}
 
-	raw, err := d.client.Call(ctx, "nvmet.port.get_instance", state.ID.ValueInt64())
+	raw, err := d.client.CallRead(ctx, "nvmet.port.get_instance", state.ID.ValueInt64())
 	if err != nil {
 		resp.Diagnostics.AddError("Read NVMe-oF port failed", err.Error())
 		return

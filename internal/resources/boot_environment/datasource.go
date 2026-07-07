@@ -57,7 +57,7 @@ func (d *BootEnvironmentDataSource) Read(ctx context.Context, req datasource.Rea
 	}
 
 	name := config.Name.ValueString()
-	raw, err := d.client.Call(ctx, "boot.environment.query", [][]any{{"id", "=", name}})
+	raw, err := d.client.CallRead(ctx, "boot.environment.query", [][]any{{"id", "=", name}})
 	if err != nil {
 		resp.Diagnostics.AddError("Read boot environment failed", err.Error())
 		return

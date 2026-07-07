@@ -78,7 +78,7 @@ func (r *NFSShareResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "sharing.nfs.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "sharing.nfs.get_instance", id)
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -119,7 +119,7 @@ func (r *NFSShareResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "sharing.nfs.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "sharing.nfs.get_instance", id)
 	if err != nil {
 		resp.Diagnostics.AddError("Read after update failed", err.Error())
 		return
@@ -163,7 +163,7 @@ func (r *NFSShareResource) ImportState(ctx context.Context, req resource.ImportS
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "sharing.nfs.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "sharing.nfs.get_instance", id)
 	if err != nil {
 		resp.Diagnostics.AddError("Import NFS share failed", err.Error())
 		return

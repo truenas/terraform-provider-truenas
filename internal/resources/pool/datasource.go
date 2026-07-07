@@ -47,7 +47,7 @@ func (d *PoolDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 		return
 	}
 
-	raw, err := d.client.Call(ctx, "pool.query", [][]any{{"name", "=", state.Name.ValueString()}})
+	raw, err := d.client.CallRead(ctx, "pool.query", [][]any{{"name", "=", state.Name.ValueString()}})
 	if err != nil {
 		resp.Diagnostics.AddError("Read pool failed", err.Error())
 		return

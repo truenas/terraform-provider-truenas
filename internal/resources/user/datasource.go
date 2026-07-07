@@ -74,7 +74,7 @@ func (d *UserDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 
 	// Query by username: user.query([["username", "=", "<name>"]])
 	queryFilters := []any{[]any{"username", "=", state.Username.ValueString()}}
-	raw, err := d.client.Call(ctx, "user.query", queryFilters)
+	raw, err := d.client.CallRead(ctx, "user.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query users failed", err.Error())
 		return

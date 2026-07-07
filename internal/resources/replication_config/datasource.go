@@ -59,7 +59,7 @@ func (d *ReplicationConfigDataSource) Configure(_ context.Context, req datasourc
 func (d *ReplicationConfigDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var state ReplicationConfigDataSourceModel
 
-	raw, err := d.client.Call(ctx, "replication.config.config")
+	raw, err := d.client.CallRead(ctx, "replication.config.config")
 	if err != nil {
 		resp.Diagnostics.AddError("Read replication configuration failed", err.Error())
 		return

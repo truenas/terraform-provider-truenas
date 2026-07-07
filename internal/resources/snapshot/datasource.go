@@ -59,7 +59,7 @@ func (d *SnapshotDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	raw, err := d.client.Call(ctx, "pool.snapshot.get_instance", config.ID.ValueString())
+	raw, err := d.client.CallRead(ctx, "pool.snapshot.get_instance", config.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Read snapshot failed", err.Error())
 		return

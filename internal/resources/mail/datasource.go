@@ -82,7 +82,7 @@ func (d *MailDataSource) Configure(_ context.Context, req datasource.ConfigureRe
 func (d *MailDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var state MailDataSourceModel
 
-	raw, err := d.client.Call(ctx, "mail.config")
+	raw, err := d.client.CallRead(ctx, "mail.config")
 	if err != nil {
 		resp.Diagnostics.AddError("Read mail configuration failed", err.Error())
 		return

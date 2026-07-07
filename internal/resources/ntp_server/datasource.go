@@ -60,7 +60,7 @@ func (d *NTPServerDataSource) Read(ctx context.Context, req datasource.ReadReque
 	}
 
 	queryFilters := []any{[]any{"address", "=", state.Address.ValueString()}}
-	raw, err := d.client.Call(ctx, "system.ntpserver.query", queryFilters)
+	raw, err := d.client.CallRead(ctx, "system.ntpserver.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query NTP servers failed", err.Error())
 		return

@@ -54,7 +54,7 @@ func (r *ZvolResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	// Read back via get_instance for canonical state (create response omits some properties).
-	raw, err := r.client.Call(ctx, "pool.dataset.get_instance", plan.Name.ValueString())
+	raw, err := r.client.CallRead(ctx, "pool.dataset.get_instance", plan.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Read after create failed", err.Error())
 		return
@@ -77,7 +77,7 @@ func (r *ZvolResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "pool.dataset.get_instance", state.Name.ValueString())
+	raw, err := r.client.CallRead(ctx, "pool.dataset.get_instance", state.Name.ValueString())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -118,7 +118,7 @@ func (r *ZvolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	// Re-read to get computed fields
-	raw, err := r.client.Call(ctx, "pool.dataset.get_instance", plan.Name.ValueString())
+	raw, err := r.client.CallRead(ctx, "pool.dataset.get_instance", plan.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Read after update failed", err.Error())
 		return
@@ -153,7 +153,7 @@ func (r *ZvolResource) ImportState(ctx context.Context, req resource.ImportState
 	state.Name = types.StringValue(req.ID)
 	state.ID = types.StringValue(req.ID)
 
-	raw, err := r.client.Call(ctx, "pool.dataset.get_instance", req.ID)
+	raw, err := r.client.CallRead(ctx, "pool.dataset.get_instance", req.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Import zvol failed", err.Error())
 		return

@@ -44,7 +44,7 @@ func (r *SMBConfigResource) Configure(_ context.Context, req resource.ConfigureR
 
 // fetchConfig calls smb.config and unmarshals the response.
 func (r *SMBConfigResource) fetchConfig(ctx context.Context) (*smbConfigAPI, error) {
-	raw, err := r.client.Call(ctx, "smb.config")
+	raw, err := r.client.CallRead(ctx, "smb.config")
 	if err != nil {
 		return nil, err
 	}
