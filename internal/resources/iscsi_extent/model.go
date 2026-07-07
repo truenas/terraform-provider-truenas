@@ -91,10 +91,19 @@ func responseToModel(_ context.Context, api *extentAPI, m *ISCSIExtentModel) dia
 	return diags
 }
 
-// apiPayload builds the map[string]any payload for iscsi.extent.create / update.
+// apiPayload builds the map[string]any payload for iscsi.extent.create /
+// update. name/type/disk/path are required (or type-dependent) and are
+// always sent. Every other field is Optional+Computed in the schema, so it
+// is only included when set (neither null nor unknown) in the model — the
+// zero Go value for these types (0, "", false) is not a valid TrueNAS
+// value for several of them (e.g. blocksize must be 512/1024/2048/4096,
+// rpm must be one of a fixed enum), so sending it unconditionally on
+// create/update sends an invalid value whenever the field is left unset.
 func (m *ISCSIExtentModel) apiPayload(_ context.Context) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
+	// avail_threshold already three-way (nil pointer omits it semantically
+	// via `0 = unset`): 0 sends nil, non-zero sends the value.
 	var avail *int64
 	if v := m.AvailThreshold.ValueInt64(); v != 0 {
 		avail = &v
@@ -103,15 +112,32 @@ func (m *ISCSIExtentModel) apiPayload(_ context.Context) (map[string]any, diag.D
 	payload := map[string]any{
 		"name":            m.Name.ValueString(),
 		"type":            m.Type.ValueString(),
-		"comment":         m.Comment.ValueString(),
-		"blocksize":       m.Blocksize.ValueInt64(),
-		"pblocksize":      m.PBlocksize.ValueBool(),
 		"avail_threshold": avail,
-		"insecure_tpc":    m.InsecureTPC.ValueBool(),
-		"xen":             m.Xen.ValueBool(),
-		"ro":              m.ReadOnly.ValueBool(),
-		"rpm":             m.RPM.ValueString(),
-		"enabled":         m.Enabled.ValueBool(),
+	}
+
+	if !m.Comment.IsNull() && !m.Comment.IsUnknown() {
+		payload["comment"] = m.Comment.ValueString()
+	}
+	if !m.Blocksize.IsNull() && !m.Blocksize.IsUnknown() {
+		payload["blocksize"] = m.Blocksize.ValueInt64()
+	}
+	if !m.PBlocksize.IsNull() && !m.PBlocksize.IsUnknown() {
+		payload["pblocksize"] = m.PBlocksize.ValueBool()
+	}
+	if !m.InsecureTPC.IsNull() && !m.InsecureTPC.IsUnknown() {
+		payload["insecure_tpc"] = m.InsecureTPC.ValueBool()
+	}
+	if !m.Xen.IsNull() && !m.Xen.IsUnknown() {
+		payload["xen"] = m.Xen.ValueBool()
+	}
+	if !m.ReadOnly.IsNull() && !m.ReadOnly.IsUnknown() {
+		payload["ro"] = m.ReadOnly.ValueBool()
+	}
+	if !m.RPM.IsNull() && !m.RPM.IsUnknown() {
+		payload["rpm"] = m.RPM.ValueString()
+	}
+	if !m.Enabled.IsNull() && !m.Enabled.IsUnknown() {
+		payload["enabled"] = m.Enabled.ValueBool()
 	}
 
 	if m.Type.ValueString() == "DISK" {

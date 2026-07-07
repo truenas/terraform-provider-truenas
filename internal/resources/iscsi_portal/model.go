@@ -78,15 +78,17 @@ func (m *ISCSIPortalModel) apiPayload(ctx context.Context) (map[string]any, diag
 		diags.Append(m.Listen.ElementsAs(ctx, &listenItems, false)...)
 	}
 
+	// SCALE 26.0 removed per-listen port from iscsi.portal.create/update: the
+	// global iSCSI service listen_port governs all portals now. Only "ip" is
+	// sent per listen entry; "port" is never included in the payload, even
+	// when set in config (see the "port" schema attribute description). The
+	// response still reports port per listen, and responseToModel keeps
+	// mapping it back so it remains visible as a computed value.
 	var listenPayload []map[string]any
 	for _, l := range listenItems {
-		item := map[string]any{
+		listenPayload = append(listenPayload, map[string]any{
 			"ip": l.IP.ValueString(),
-		}
-		if !l.Port.IsNull() && !l.Port.IsUnknown() {
-			item["port"] = l.Port.ValueInt64()
-		}
-		listenPayload = append(listenPayload, item)
+		})
 	}
 	if listenPayload == nil {
 		listenPayload = []map[string]any{}

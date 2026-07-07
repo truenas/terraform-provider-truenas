@@ -20,8 +20,8 @@ import (
 //
 // Safety: this test never references the box's live iSCSI configuration
 // (portal id=1, target id=1 "proxmox", extent id=2, targetextent id=2). The
-// test portal listens on 0.0.0.0:13260 (distinct from the live portal's
-// port) and the auth group uses tag 999 (distinct from any live tag).
+// test portal listens on 0.0.0.0 (port is not settable per-listen on SCALE
+// 26.0+) and the auth group uses tag 999 (distinct from any live tag).
 func TestAccISCSIEndToEnd(t *testing.T) {
 	portalComment := acctest.RandName("tf-acc-portal")
 	initiatorComment := acctest.RandName("tf-acc-initiator")
@@ -52,7 +52,6 @@ func TestAccISCSIEndToEnd(t *testing.T) {
 					resource.TestCheckResourceAttr("truenas_iscsi_portal.test", "comment", portalComment),
 					resource.TestCheckResourceAttrSet("truenas_iscsi_portal.test", "tag"),
 					resource.TestCheckResourceAttr("truenas_iscsi_portal.test", "listen.0.ip", "0.0.0.0"),
-					resource.TestCheckResourceAttr("truenas_iscsi_portal.test", "listen.0.port", "13260"),
 
 					// Initiator
 					resource.TestCheckResourceAttrSet("truenas_iscsi_initiator.test", "id"),
@@ -133,8 +132,7 @@ resource "truenas_iscsi_portal" "test" {
   comment = %q
   listen = [
     {
-      ip   = "0.0.0.0"
-      port = 13260
+      ip = "0.0.0.0"
     }
   ]
 }

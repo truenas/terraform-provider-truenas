@@ -2,6 +2,7 @@ package smb
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -442,5 +443,92 @@ func TestResponseToModel_NonLegacyShare(t *testing.T) {
 	}
 	if len(ha) != 0 {
 		t.Errorf("HostsAllow = %v, want [] (not modeled by TIMEMACHINE_SHARE options)", ha)
+	}
+}
+
+// TestResponseToModel_LegacyShare_RawJSONFixture decodes a raw JSON payload
+// shaped exactly like the sharing.smb.create / get_instance response on
+// SCALE 26.0 (per the middleware schema dump: top-level readonly/
+// access_based_share_enumeration/purpose, and legacy flags nested under
+// options for the LEGACY_SHARE variant). Unlike TestResponseToModel_LegacyShare
+// (which builds the smbAPI struct directly in Go and so can't catch a wrong
+// or missing `json` struct tag), this test goes through json.Unmarshal so a
+// tag typo or a field TrueNAS nests differently than expected would make the
+// decoded hostsallow/hostsdeny come back empty here, reproducing the
+// "element 0 has vanished" inconsistent-apply-result failure directly.
+func TestResponseToModel_LegacyShare_RawJSONFixture(t *testing.T) {
+	ctx := context.Background()
+
+	raw := []byte(`{
+		"id": 55,
+		"purpose": "LEGACY_SHARE",
+		"name": "myshare",
+		"path": "/mnt/tank/share",
+		"dataset": "tank/share",
+		"relative_path": "",
+		"enabled": true,
+		"comment": "test",
+		"readonly": false,
+		"browsable": true,
+		"access_based_share_enumeration": false,
+		"locked": false,
+		"audit": {"enable": false, "watch_list": [], "ignore_list": []},
+		"options": {
+			"purpose": "LEGACY_SHARE",
+			"recyclebin": false,
+			"path_suffix": null,
+			"hostsallow": ["192.168.1.0/24", "10.0.0.5"],
+			"hostsdeny": ["ALL"],
+			"guestok": false,
+			"streams": true,
+			"durablehandle": true,
+			"shadowcopy": true,
+			"fsrvp": false,
+			"home": false,
+			"acl": true,
+			"afp": false,
+			"timemachine": false,
+			"timemachine_quota": 0,
+			"aapl_name_mangling": false,
+			"vuid": null,
+			"auxsmbconf": ""
+		}
+	}`)
+
+	var api smbAPI
+	if err := json.Unmarshal(raw, &api); err != nil {
+		t.Fatalf("json.Unmarshal into smbAPI failed: %v", err)
+	}
+
+	var m SMBModel
+	diags := responseToModel(ctx, &api, &m)
+	if diags.HasError() {
+		t.Fatalf("responseToModel returned diagnostic errors: %v", diags)
+	}
+
+	var ha []string
+	if diags := m.HostsAllow.ElementsAs(ctx, &ha, false); diags.HasError() {
+		t.Fatalf("HostsAllow.ElementsAs failed: %v", diags)
+	}
+	if len(ha) != 2 || ha[0] != "192.168.1.0/24" || ha[1] != "10.0.0.5" {
+		t.Errorf("HostsAllow = %v, want [192.168.1.0/24 10.0.0.5] (must survive raw-JSON decode of nested options)", ha)
+	}
+
+	var hd []string
+	if diags := m.HostsDeny.ElementsAs(ctx, &hd, false); diags.HasError() {
+		t.Fatalf("HostsDeny.ElementsAs failed: %v", diags)
+	}
+	if len(hd) != 1 || hd[0] != "ALL" {
+		t.Errorf("HostsDeny = %v, want [ALL]", hd)
+	}
+
+	if !m.Streams.ValueBool() {
+		t.Error("Streams = false, want true (from raw JSON options.streams)")
+	}
+	if !m.DurableHandle.ValueBool() {
+		t.Error("DurableHandle = false, want true (from raw JSON options.durablehandle)")
+	}
+	if m.ID.ValueInt64() != 55 {
+		t.Errorf("ID = %v, want 55", m.ID.ValueInt64())
 	}
 }

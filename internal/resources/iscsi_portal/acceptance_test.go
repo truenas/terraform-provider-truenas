@@ -11,10 +11,10 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/acctest"
 )
 
-// TestAccISCSIPortal_basic creates an iSCSI portal listening on
-// 0.0.0.0:13261 (distinct from the box's live portal, id=1), checks its
-// attributes, updates its comment, imports it by id, and verifies
-// destruction.
+// TestAccISCSIPortal_basic creates an iSCSI portal listening on 0.0.0.0
+// (port is not settable per-listen on SCALE 26.0+; the global iSCSI
+// listen_port applies), checks its attributes, updates its comment, imports
+// it by id, and verifies destruction.
 func TestAccISCSIPortal_basic(t *testing.T) {
 	comment := acctest.RandName("tf-acc-portal")
 	updatedComment := comment + "-updated"
@@ -33,7 +33,6 @@ func TestAccISCSIPortal_basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("truenas_iscsi_portal.test", "id"),
 					resource.TestCheckResourceAttr("truenas_iscsi_portal.test", "comment", comment),
 					resource.TestCheckResourceAttr("truenas_iscsi_portal.test", "listen.0.ip", "0.0.0.0"),
-					resource.TestCheckResourceAttr("truenas_iscsi_portal.test", "listen.0.port", "13261"),
 					resource.TestCheckResourceAttrSet("truenas_iscsi_portal.test", "tag"),
 				),
 			},
@@ -59,8 +58,7 @@ resource "truenas_iscsi_portal" "test" {
   comment = %q
   listen = [
     {
-      ip   = "0.0.0.0"
-      port = 13261
+      ip = "0.0.0.0"
     }
   ]
 }

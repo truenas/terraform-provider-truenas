@@ -215,6 +215,56 @@ func TestISCSIExtentApiPayload_AvailThreshold(t *testing.T) {
 	}
 }
 
+// TestISCSIExtentApiPayload_OmitsUnsetOptionalFields verifies that when the
+// Optional+Computed fields are null/unknown (the state a Create call sees
+// for attributes the caller never set in config), apiPayload omits them
+// entirely rather than sending Go zero values (0, "", false) that TrueNAS
+// SCALE rejects for enum-constrained fields like blocksize and rpm.
+func TestISCSIExtentApiPayload_OmitsUnsetOptionalFields(t *testing.T) {
+	ctx := context.Background()
+
+	m := ISCSIExtentModel{
+		Name:           types.StringValue("test-extent"),
+		Type:           types.StringValue("DISK"),
+		Disk:           types.StringValue("zvol/tank/myvol"),
+		Path:           types.StringUnknown(),
+		Comment:        types.StringUnknown(),
+		Blocksize:      types.Int64Unknown(),
+		PBlocksize:     types.BoolUnknown(),
+		AvailThreshold: types.Int64Unknown(),
+		InsecureTPC:    types.BoolNull(),
+		Xen:            types.BoolNull(),
+		ReadOnly:       types.BoolNull(),
+		RPM:            types.StringNull(),
+		Enabled:        types.BoolNull(),
+	}
+
+	payload, diags := m.apiPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("apiPayload returned diagnostic errors: %v", diags)
+	}
+
+	for _, k := range []string{"blocksize", "rpm", "comment", "pblocksize", "insecure_tpc", "xen", "ro", "enabled"} {
+		if v, ok := payload[k]; ok {
+			t.Errorf("payload should omit key %q when null/unknown in model, got %v", k, v)
+		}
+	}
+
+	// Required/type-dependent fields must still be present.
+	if payload["name"] != "test-extent" {
+		t.Errorf("payload[name] = %v, want test-extent", payload["name"])
+	}
+	if payload["type"] != "DISK" {
+		t.Errorf("payload[type] = %v, want DISK", payload["type"])
+	}
+	if payload["disk"] != "zvol/tank/myvol" {
+		t.Errorf("payload[disk] = %v, want zvol/tank/myvol", payload["disk"])
+	}
+	if payload["avail_threshold"] != (*int64)(nil) {
+		t.Errorf("payload[avail_threshold] = %v, want nil (unknown AvailThreshold treated as unset)", payload["avail_threshold"])
+	}
+}
+
 // TestISCSIExtentResponseToModel_NilDisk verifies that a nil Disk pointer maps
 // to an empty string in the model.
 func TestISCSIExtentResponseToModel_NilDisk(t *testing.T) {

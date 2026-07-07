@@ -12,9 +12,10 @@ import (
 )
 
 // TestAccISCSITarget_basic creates an own portal fixture (listening on
-// 0.0.0.0:13262, distinct from the box's live portal/target, id=1
-// "proxmox"), creates an iSCSI target referencing it, checks attributes,
-// updates the alias in place, imports by id, and verifies destruction.
+// 0.0.0.0, distinct from the box's live portal/target, id=1 "proxmox";
+// port is not settable per-listen on SCALE 26.0+), creates an iSCSI target
+// referencing it, checks attributes, updates the alias in place, imports by
+// id, and verifies destruction.
 func TestAccISCSITarget_basic(t *testing.T) {
 	name := acctest.RandName("tf-acc-target")
 	portalComment := acctest.RandName("tf-acc-target-portal")
@@ -58,8 +59,7 @@ resource "truenas_iscsi_portal" "fixture" {
   comment = %q
   listen = [
     {
-      ip   = "0.0.0.0"
-      port = 13262
+      ip = "0.0.0.0"
     }
   ]
 }

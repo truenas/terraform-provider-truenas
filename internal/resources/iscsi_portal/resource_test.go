@@ -134,8 +134,10 @@ func buildListenList(t *testing.T, entries []struct {
 }
 
 // TestISCSIPortalApiPayload_ListenShape verifies that apiPayload produces the
-// expected listen payload shape: ip always present, port present only when
-// known.
+// expected listen payload shape: ip always present, port NEVER present
+// (SCALE 26.0 removed per-listen port from create/update; the global iSCSI
+// listen_port governs), regardless of whether port is known or unknown in
+// the model.
 func TestISCSIPortalApiPayload_ListenShape(t *testing.T) {
 	ctx := context.Background()
 
@@ -168,20 +170,20 @@ func TestISCSIPortalApiPayload_ListenShape(t *testing.T) {
 		t.Fatalf("payload[listen] has %d items, want 2", len(listen))
 	}
 
-	// First item: ip + port both present.
+	// First item: ip present, port never sent even though it was known/set.
 	if listen[0]["ip"] != "0.0.0.0" {
 		t.Errorf("listen[0][ip] = %v, want 0.0.0.0", listen[0]["ip"])
 	}
-	if listen[0]["port"] != int64(3260) {
-		t.Errorf("listen[0][port] = %v, want 3260", listen[0]["port"])
+	if _, ok := listen[0]["port"]; ok {
+		t.Errorf("listen[0] should not contain key 'port' (SCALE 26.0 rejects it), got %v", listen[0]["port"])
 	}
 
-	// Second item: ip present, port omitted because unknown.
+	// Second item: ip present, port omitted (unknown, and never sent anyway).
 	if listen[1]["ip"] != "192.168.1.1" {
 		t.Errorf("listen[1][ip] = %v, want 192.168.1.1", listen[1]["ip"])
 	}
 	if _, ok := listen[1]["port"]; ok {
-		t.Errorf("listen[1] should not contain key 'port' when port is unknown, got %v", listen[1]["port"])
+		t.Errorf("listen[1] should not contain key 'port', got %v", listen[1]["port"])
 	}
 }
 

@@ -38,7 +38,7 @@ func resourceSchema() schema.Schema {
 						"port": schema.Int64Attribute{
 							Optional:    true,
 							Computed:    true,
-							Description: "Port to listen on (server default 3260).",
+							Description: "Port is reported by TrueNAS but cannot be set per-listen on SCALE 26.0+; the global iSCSI listen_port applies.",
 							PlanModifiers: []planmodifier.Int64{
 								int64planmodifier.UseStateForUnknown(),
 							},
