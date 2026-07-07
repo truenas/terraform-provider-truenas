@@ -1,44 +1,49 @@
 package user_test
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/truenas/terraform-provider-truenas/internal/acctest"
 )
 
-// TestAccUser_basic tests create, update, and import of a local user.
-// It requires:
-//   - TRUENAS_API_KEY set in the environment (checked by acctest.PreCheck)
-//   - TF_ACC=1
+// TestAccUser_basic creates a local user with a password set, checks its
+// attributes, updates full_name and shell in place, imports it by its
+// numeric id (ignoring the write-only password), and verifies destruction.
 func TestAccUser_basic(t *testing.T) {
-	if os.Getenv("TF_ACC") == "" {
-		t.Skip("Acceptance tests skipped: set TF_ACC=1")
-	}
+	username := acctest.RandName("tf-acc-user")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckUserDestroyed(username),
 		Steps: []resource.TestStep{
 			{
-				Config: acctest.ProviderConfig() + testAccUserConfig("tf-acc-testuser", "Test User", false),
+				Config: acctest.ProviderConfig() + testAccUserConfig(username, "Test User", "/bin/sh"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("truenas_user.test", "username", "tf-acc-testuser"),
+					resource.TestCheckResourceAttr("truenas_user.test", "username", username),
 					resource.TestCheckResourceAttr("truenas_user.test", "full_name", "Test User"),
+					resource.TestCheckResourceAttr("truenas_user.test", "shell", "/bin/sh"),
+					resource.TestCheckResourceAttr("truenas_user.test", "home", "/var/empty"),
 					resource.TestCheckResourceAttr("truenas_user.test", "locked", "false"),
 					resource.TestCheckResourceAttrSet("truenas_user.test", "id"),
 					resource.TestCheckResourceAttrSet("truenas_user.test", "uid"),
 				),
 			},
+			// Update in place: change full_name and shell.
 			{
-				Config: acctest.ProviderConfig() + testAccUserConfig("tf-acc-testuser", "Updated Name", true),
+				Config: acctest.ProviderConfig() + testAccUserConfig(username, "Updated Name", "/usr/bin/bash"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_user.test", "full_name", "Updated Name"),
-					resource.TestCheckResourceAttr("truenas_user.test", "locked", "true"),
+					resource.TestCheckResourceAttr("truenas_user.test", "shell", "/usr/bin/bash"),
 				),
 			},
+			// Import by the user's numeric id. Password is write-only and
+			// never returned by the API, so it can't be verified.
 			{
 				ResourceName:            "truenas_user.test",
 				ImportState:             true,
@@ -49,14 +54,36 @@ func TestAccUser_basic(t *testing.T) {
 	})
 }
 
-func testAccUserConfig(username, fullName string, locked bool) string {
+func testAccUserConfig(username, fullName, shell string) string {
 	return fmt.Sprintf(`
 resource "truenas_user" "test" {
   username          = %q
   full_name         = %q
-  locked            = %v
-  password_disabled = true
+  password          = "Tf-Acc-Test-Passw0rd!"
+  password_disabled = false
+  home              = "/var/empty"
+  shell             = %q
   smb               = false
 }
-`, username, fullName, locked)
+`, username, fullName, shell)
+}
+
+func testAccCheckUserDestroyed(username string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		c := acctest.Client()
+		raw, err := c.Call(context.Background(), "user.query", [][]any{{"username", "=", username}})
+		if err != nil {
+			return fmt.Errorf("error checking user %s: %v", username, err)
+		}
+		var results []struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &results); err != nil {
+			return fmt.Errorf("error parsing user.query response: %v", err)
+		}
+		if len(results) > 0 {
+			return fmt.Errorf("user %s still exists", username)
+		}
+		return nil
+	}
 }

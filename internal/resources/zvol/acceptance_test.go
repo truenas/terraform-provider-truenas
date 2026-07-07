@@ -2,37 +2,46 @@ package zvol_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
-	tfresource "github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/truenas/terraform-provider-truenas/internal/acctest"
-	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
 
+// TestAccZvol_basic creates a 64M zvol, checks its attributes, resizes it up
+// to 128M in place, imports it by name, and verifies destruction.
 func TestAccZvol_basic(t *testing.T) {
-	name := "tank/tf-test-zvol"
-	tfresource.Test(t, tfresource.TestCase{
+	name := fmt.Sprintf("%s/%s", acctest.TestPool(), acctest.RandName("tf-acc-zv"))
+
+	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckZvolDestroyed(name),
-		Steps: []tfresource.TestStep{
+		Steps: []resource.TestStep{
 			{
-				Config: testAccZvolConfig(name, 1073741824, "lz4"),
-				Check: tfresource.ComposeTestCheckFunc(
-					tfresource.TestCheckResourceAttr("truenas_zvol.test", "name", name),
-					tfresource.TestCheckResourceAttr("truenas_zvol.test", "volsize", "1073741824"),
-					tfresource.TestCheckResourceAttr("truenas_zvol.test", "compression", "lz4"),
-					tfresource.TestCheckResourceAttrSet("truenas_zvol.test", "pool"),
+				Config: acctest.ProviderConfig() + testAccZvolConfig(name, 67108864, "lz4", "initial comment"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_zvol.test", "name", name),
+					resource.TestCheckResourceAttr("truenas_zvol.test", "volsize", "67108864"),
+					resource.TestCheckResourceAttr("truenas_zvol.test", "compression", "lz4"),
+					resource.TestCheckResourceAttr("truenas_zvol.test", "comments", "initial comment"),
+					resource.TestCheckResourceAttrSet("truenas_zvol.test", "pool"),
+					resource.TestCheckResourceAttrSet("truenas_zvol.test", "id"),
 				),
 			},
+			// Update in place: resize up 64M -> 128M and change the comment.
 			{
-				Config: testAccZvolConfig(name, 1073741824, "zstd"),
-				Check: tfresource.ComposeTestCheckFunc(
-					tfresource.TestCheckResourceAttr("truenas_zvol.test", "compression", "zstd"),
+				Config: acctest.ProviderConfig() + testAccZvolConfig(name, 134217728, "lz4", "updated comment"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_zvol.test", "volsize", "134217728"),
+					resource.TestCheckResourceAttr("truenas_zvol.test", "comments", "updated comment"),
 				),
 			},
+			// Import by zvol name. "sparse" is write-only and never returned
+			// by the API, so it can't be verified after import.
 			{
 				ResourceName:            "truenas_zvol.test",
 				ImportState:             true,
@@ -43,26 +52,40 @@ func TestAccZvol_basic(t *testing.T) {
 	})
 }
 
-func testAccZvolConfig(name string, volsize int64, compression string) string {
+func testAccZvolConfig(name string, volsize int64, compression, comments string) string {
 	return fmt.Sprintf(`
 resource "truenas_zvol" "test" {
   name        = %q
   volsize     = %d
   compression = %q
+  comments    = %q
 }
-`, name, volsize, compression)
+`, name, volsize, compression, comments)
 }
 
-func testAccCheckZvolDestroyed(name string) tfresource.TestCheckFunc {
+// zvolQueryResult is the subset of pool.dataset.query fields this test
+// package needs to distinguish a VOLUME-type dataset (zvol) from others.
+type zvolQueryResult struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
+}
+
+func testAccCheckZvolDestroyed(name string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		c := acctest.Client()
-		_, err := c.Call(context.Background(), "pool.dataset.get_instance", name)
+		raw, err := c.Call(context.Background(), "pool.dataset.query", [][]any{{"id", "=", name}})
 		if err != nil {
-			if client.IsNotFound(err) {
-				return nil
-			}
 			return fmt.Errorf("error checking zvol %s: %v", name, err)
 		}
-		return fmt.Errorf("zvol %s still exists", name)
+		var results []zvolQueryResult
+		if err := json.Unmarshal(raw, &results); err != nil {
+			return fmt.Errorf("error parsing pool.dataset.query response: %v", err)
+		}
+		for _, r := range results {
+			if r.Type == "VOLUME" {
+				return fmt.Errorf("zvol %s still exists", name)
+			}
+		}
+		return nil
 	}
 }
