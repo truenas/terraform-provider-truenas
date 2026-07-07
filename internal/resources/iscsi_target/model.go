@@ -148,10 +148,17 @@ func (m *ISCSITargetModel) apiPayload(ctx context.Context) (map[string]any, diag
 
 	payload := map[string]any{
 		"name":          m.Name.ValueString(),
-		"alias":         m.Alias.ValueString(),
-		"mode":          m.Mode.ValueString(),
 		"groups":        groupsPayload,
 		"auth_networks": authNetworks,
+	}
+	// alias and mode are Optional+Computed: sending zero values ("") is
+	// rejected by SCALE 26.0 (mode must be ISCSI/FC/BOTH), so include them
+	// only when known and non-empty.
+	if !m.Alias.IsNull() && !m.Alias.IsUnknown() && m.Alias.ValueString() != "" {
+		payload["alias"] = m.Alias.ValueString()
+	}
+	if !m.Mode.IsNull() && !m.Mode.IsUnknown() && m.Mode.ValueString() != "" {
+		payload["mode"] = m.Mode.ValueString()
 	}
 
 	return payload, diags
