@@ -144,6 +144,44 @@ func (m *MailModel) updatePayload() map[string]any {
 	return p
 }
 
+// basePayloadFromConfig builds a mail.update payload containing every
+// writable, non-secret field taken from a live mail.config response. It is
+// the base onto which plan-known values are overlaid (see mergedPayload):
+// mail.update requires several fields (at minimum fromemail) on every call,
+// even when the Terraform config only sets one cosmetic field such as
+// fromname, so the fields the plan doesn't know about still need to be sent
+// with their current live value.
+func basePayloadFromConfig(api *mailAPI) map[string]any {
+	p := map[string]any{
+		"fromemail":      api.FromEmail,
+		"fromname":       api.FromName,
+		"outgoingserver": api.OutgoingServer,
+		"port":           api.Port,
+		"security":       api.Security,
+		"smtp":           api.SMTP,
+	}
+	if api.User != nil {
+		p["user"] = *api.User
+	} else {
+		p["user"] = nil
+	}
+	return p
+}
+
+// mergedPayload builds the full mail.update argument for Create/Update: it
+// starts from the live config's writable fields (basePayloadFromConfig) and
+// overlays the plan's known values on top (updatePayload), so a plan value
+// always wins over the live value it's replacing. pass is never part of the
+// base (it's a write-only secret, absent from mailAPI) and is included only
+// when updatePayload includes it, i.e. only when the plan sets it.
+func mergedPayload(live *mailAPI, m *MailModel) map[string]any {
+	p := basePayloadFromConfig(live)
+	for k, v := range m.updatePayload() {
+		p[k] = v
+	}
+	return p
+}
+
 // deleteWarningDiagnostics builds the warning diagnostic emitted by Delete.
 // Delete makes NO client calls: mail settings are system-critical, so
 // removing this resource from Terraform state must never blank out the

@@ -62,7 +62,17 @@ func (r *UPSConfigResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	if _, err := r.client.Call(ctx, "ups.update", plan.updatePayload()); err != nil {
+	// ups.update requires several fields (at minimum port and driver) on
+	// every call, so the live config is fetched first and merged with the
+	// plan's known values: this lets a config that sets only one field
+	// (e.g. description) still send a complete, valid payload.
+	live, err := r.fetchConfig(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Read current UPS configuration failed", err.Error())
+		return
+	}
+
+	if _, err := r.client.Call(ctx, "ups.update", mergedPayload(live, &plan)); err != nil {
 		resp.Diagnostics.AddError("Create UPS configuration failed", err.Error())
 		return
 	}
@@ -114,7 +124,15 @@ func (r *UPSConfigResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	if _, err := r.client.Call(ctx, "ups.update", plan.updatePayload()); err != nil {
+	// See Create: ups.update requires several fields on every call, so the
+	// live config is fetched first and merged with the plan's known values.
+	live, err := r.fetchConfig(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Read current UPS configuration failed", err.Error())
+		return
+	}
+
+	if _, err := r.client.Call(ctx, "ups.update", mergedPayload(live, &plan)); err != nil {
 		resp.Diagnostics.AddError("Update UPS configuration failed", err.Error())
 		return
 	}

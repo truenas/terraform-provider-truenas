@@ -269,6 +269,61 @@ func (m *UPSConfigModel) updatePayload() map[string]any {
 	return p
 }
 
+// basePayloadFromConfig builds a ups.update payload containing every
+// writable, non-secret field taken from a live ups.config response. It is
+// the base onto which plan-known values are overlaid (see mergedPayload):
+// ups.update requires several fields (at minimum port and driver) on every
+// call, even when the Terraform config only sets one cosmetic field such as
+// description, so the fields the plan doesn't know about still need to be
+// sent with their current live value. complete_identifier is server-derived
+// and is intentionally excluded (never accepted by ups.update).
+func basePayloadFromConfig(api *upsConfigAPI) map[string]any {
+	p := map[string]any{
+		"identifier":    api.Identifier,
+		"mode":          api.Mode,
+		"remotehost":    api.RemoteHost,
+		"remoteport":    api.RemotePort,
+		"driver":        api.Driver,
+		"port":          api.Port,
+		"options":       api.Options,
+		"optionsupsd":   api.OptionsUPSD,
+		"description":   api.Description,
+		"shutdown":      api.Shutdown,
+		"shutdowntimer": api.ShutdownTimer,
+		"monuser":       api.MonUser,
+		"extrausers":    api.ExtraUsers,
+		"rmonitor":      api.RMonitor,
+		"powerdown":     api.PowerDown,
+		"hostsync":      api.HostSync,
+	}
+	if api.ShutdownCmd != nil {
+		p["shutdowncmd"] = *api.ShutdownCmd
+	} else {
+		p["shutdowncmd"] = nil
+	}
+	if api.NoCommWarnTime != nil {
+		p["nocommwarntime"] = *api.NoCommWarnTime
+	} else {
+		p["nocommwarntime"] = nil
+	}
+	return p
+}
+
+// mergedPayload builds the full ups.update argument for Create/Update: it
+// starts from the live config's writable fields (basePayloadFromConfig) and
+// overlays the plan's known values on top (updatePayload), so a plan value
+// always wins over the live value it's replacing. monpwd is never part of
+// the base (it's a write-only secret, absent from upsConfigAPI) and is
+// included only when updatePayload includes it, i.e. only when the plan
+// sets it.
+func mergedPayload(live *upsConfigAPI, m *UPSConfigModel) map[string]any {
+	p := basePayloadFromConfig(live)
+	for k, v := range m.updatePayload() {
+		p[k] = v
+	}
+	return p
+}
+
 // deleteWarningDiagnostics builds the warning diagnostic emitted by Delete.
 // Delete makes NO client calls: UPS settings are system-critical power
 // management configuration, so removing this resource from Terraform state

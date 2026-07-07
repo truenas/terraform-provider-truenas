@@ -44,14 +44,35 @@ data "truenas_ups_config" "test" {}
 	})
 }
 
-// upsConfigOriginal captures the one field TestAccUPSConfig_setAndRestore
-// touches.
+// upsConfigOriginal captures every writable, non-secret field returned by
+// ups.config, not just the cosmetic "description" field the test drives:
+// ups.update requires several of these (at minimum port and driver) on
+// every call, so the restore call needs the full set to succeed.
+// complete_identifier is server-derived and excluded (never accepted by
+// ups.update); monpwd is a secret and is never read back by ups.config.
 type upsConfigOriginal struct {
-	Description string `json:"description"`
+	Identifier     string  `json:"identifier"`
+	Mode           string  `json:"mode"`
+	RemoteHost     string  `json:"remotehost"`
+	RemotePort     int64   `json:"remoteport"`
+	Driver         string  `json:"driver"`
+	Port           string  `json:"port"`
+	Options        string  `json:"options"`
+	OptionsUPSD    string  `json:"optionsupsd"`
+	Description    string  `json:"description"`
+	Shutdown       string  `json:"shutdown"`
+	ShutdownTimer  int64   `json:"shutdowntimer"`
+	ShutdownCmd    *string `json:"shutdowncmd"`
+	MonUser        string  `json:"monuser"`
+	ExtraUsers     string  `json:"extrausers"`
+	RMonitor       bool    `json:"rmonitor"`
+	PowerDown      bool    `json:"powerdown"`
+	HostSync       int64   `json:"hostsync"`
+	NoCommWarnTime *int64  `json:"nocommwarntime"`
 }
 
-// readUPSConfigOriginal reads the box's current description via ups.config,
-// so the test can restore it exactly afterward.
+// readUPSConfigOriginal reads the box's current UPS configuration via
+// ups.config, so the test can restore it exactly afterward.
 func readUPSConfigOriginal(t *testing.T) upsConfigOriginal {
 	t.Helper()
 	raw, err := acctest.Client().Call(context.Background(), "ups.config")
@@ -65,15 +86,43 @@ func readUPSConfigOriginal(t *testing.T) upsConfigOriginal {
 	return orig
 }
 
-// restoreUPSConfig sends only description back to its original value via
-// ups.update. It runs from t.Cleanup, so it restores the box even if the
+// restoreUPSConfig sends the full original configuration back via
+// ups.update (ups.update requires fields such as port and driver on every
+// call, so sending only "description" back would fail the same way the
+// live bug did). It runs from t.Cleanup, so it restores the box even if the
 // Terraform steps themselves fail partway through.
 func restoreUPSConfig(t *testing.T, orig upsConfigOriginal) {
 	t.Helper()
-	if _, err := acctest.Client().Call(context.Background(), "ups.update", map[string]any{
-		"description": orig.Description,
-	}); err != nil {
-		t.Fatalf("error restoring ups description: %v", err)
+	payload := map[string]any{
+		"identifier":    orig.Identifier,
+		"mode":          orig.Mode,
+		"remotehost":    orig.RemoteHost,
+		"remoteport":    orig.RemotePort,
+		"driver":        orig.Driver,
+		"port":          orig.Port,
+		"options":       orig.Options,
+		"optionsupsd":   orig.OptionsUPSD,
+		"description":   orig.Description,
+		"shutdown":      orig.Shutdown,
+		"shutdowntimer": orig.ShutdownTimer,
+		"monuser":       orig.MonUser,
+		"extrausers":    orig.ExtraUsers,
+		"rmonitor":      orig.RMonitor,
+		"powerdown":     orig.PowerDown,
+		"hostsync":      orig.HostSync,
+	}
+	if orig.ShutdownCmd != nil {
+		payload["shutdowncmd"] = *orig.ShutdownCmd
+	} else {
+		payload["shutdowncmd"] = nil
+	}
+	if orig.NoCommWarnTime != nil {
+		payload["nocommwarntime"] = *orig.NoCommWarnTime
+	} else {
+		payload["nocommwarntime"] = nil
+	}
+	if _, err := acctest.Client().Call(context.Background(), "ups.update", payload); err != nil {
+		t.Fatalf("error restoring ups configuration: %v", err)
 	}
 }
 

@@ -515,6 +515,183 @@ func TestUpdatePayload_CompleteIdentifierNeverSent(t *testing.T) {
 	}
 }
 
+// TestBasePayloadFromConfig_IncludesAllWritableFields verifies that
+// basePayloadFromConfig carries every writable, non-secret field from a live
+// upsConfigAPI response into the base payload, including nil ShutdownCmd/
+// NoCommWarnTime mapping to nil (not omitted) entries, and that
+// complete_identifier/monpwd are never included.
+func TestBasePayloadFromConfig_IncludesAllWritableFields(t *testing.T) {
+	api := &upsConfigAPI{
+		ID:                 1,
+		Identifier:         "ups",
+		Mode:               "MASTER",
+		RemoteHost:         "",
+		RemotePort:         3493,
+		Driver:             "usbhid-ups",
+		Port:               "auto",
+		Options:            "",
+		OptionsUPSD:        "",
+		Description:        "old-description",
+		Shutdown:           "LOWBATT",
+		ShutdownTimer:      30,
+		ShutdownCmd:        nil,
+		MonUser:            "monuser",
+		ExtraUsers:         "",
+		RMonitor:           false,
+		PowerDown:          true,
+		HostSync:           15,
+		NoCommWarnTime:     nil,
+		CompleteIdentifier: "ups@localhost",
+	}
+
+	p := basePayloadFromConfig(api)
+
+	want := map[string]any{
+		"identifier":    "ups",
+		"mode":          "MASTER",
+		"remotehost":    "",
+		"remoteport":    int64(3493),
+		"driver":        "usbhid-ups",
+		"port":          "auto",
+		"options":       "",
+		"optionsupsd":   "",
+		"description":   "old-description",
+		"shutdown":      "LOWBATT",
+		"shutdowntimer": int64(30),
+		"monuser":       "monuser",
+		"extrausers":    "",
+		"rmonitor":      false,
+		"powerdown":     true,
+		"hostsync":      int64(15),
+	}
+	for k, v := range want {
+		if p[k] != v {
+			t.Errorf("payload[%q] = %v, want %v", k, p[k], v)
+		}
+	}
+	if v, ok := p["shutdowncmd"]; !ok || v != nil {
+		t.Errorf(`payload["shutdowncmd"] = %v (present=%v), want nil (present)`, v, ok)
+	}
+	if v, ok := p["nocommwarntime"]; !ok || v != nil {
+		t.Errorf(`payload["nocommwarntime"] = %v (present=%v), want nil (present)`, v, ok)
+	}
+	if _, ok := p["complete_identifier"]; ok {
+		t.Error(`payload["complete_identifier"] should never be present (server-derived)`)
+	}
+	if _, ok := p["monpwd"]; ok {
+		t.Error(`payload["monpwd"] should never be present (secret, absent from upsConfigAPI)`)
+	}
+	if len(p) != len(want)+2 {
+		t.Errorf("payload has %d keys (%v), want %d", len(p), p, len(want)+2)
+	}
+
+	cmd := "/sbin/shutdown -h now"
+	warn := int64(300)
+	api.ShutdownCmd = &cmd
+	api.NoCommWarnTime = &warn
+	p2 := basePayloadFromConfig(api)
+	if v, ok := p2["shutdowncmd"]; !ok || v != cmd {
+		t.Errorf(`payload["shutdowncmd"] = %v (present=%v), want %q`, v, ok, cmd)
+	}
+	if v, ok := p2["nocommwarntime"]; !ok || v != warn {
+		t.Errorf(`payload["nocommwarntime"] = %v (present=%v), want %d`, v, ok, warn)
+	}
+}
+
+// TestMergedPayload_PlanOverlaysLive verifies that mergedPayload starts from
+// the live config's fields and that any field the plan knows about
+// overrides the live value, while fields the plan doesn't know about keep
+// their live value — this is the fix for "ups_update.port: This field is
+// required" / "ups_update.driver: This field is required" when a config
+// sets only description.
+func TestMergedPayload_PlanOverlaysLive(t *testing.T) {
+	live := &upsConfigAPI{
+		ID:          1,
+		Identifier:  "ups",
+		Mode:        "MASTER",
+		Driver:      "usbhid-ups",
+		Port:        "auto",
+		Description: "old-description",
+		Shutdown:    "LOWBATT",
+		HostSync:    15,
+	}
+
+	// Plan only sets description; everything else is null/unknown, as
+	// Optional+Computed fields the user's config didn't set.
+	m := &UPSConfigModel{
+		Identifier:     types.StringNull(),
+		Mode:           types.StringNull(),
+		RemoteHost:     types.StringNull(),
+		RemotePort:     types.Int64Null(),
+		Driver:         types.StringNull(),
+		Port:           types.StringNull(),
+		Options:        types.StringNull(),
+		OptionsUPSD:    types.StringNull(),
+		Description:    types.StringValue("new-description"),
+		Shutdown:       types.StringNull(),
+		ShutdownTimer:  types.Int64Null(),
+		MonUser:        types.StringNull(),
+		MonPwd:         types.StringNull(),
+		ExtraUsers:     types.StringNull(),
+		RMonitor:       types.BoolNull(),
+		PowerDown:      types.BoolNull(),
+		HostSync:       types.Int64Null(),
+		ShutdownCmd:    types.StringNull(),
+		NoCommWarnTime: types.Int64Null(),
+	}
+
+	p := mergedPayload(live, m)
+
+	// port/driver are required by ups.update but not set in the plan: they
+	// must still be present, carried from the live config.
+	if v, ok := p["port"]; !ok || v != "auto" {
+		t.Errorf(`payload["port"] = %v (present=%v), want "auto" from live config`, v, ok)
+	}
+	if v, ok := p["driver"]; !ok || v != "usbhid-ups" {
+		t.Errorf(`payload["driver"] = %v (present=%v), want "usbhid-ups" from live config`, v, ok)
+	}
+	// description is set in the plan: it must override the live value.
+	if v, ok := p["description"]; !ok || v != "new-description" {
+		t.Errorf(`payload["description"] = %v (present=%v), want "new-description" (plan wins over live)`, v, ok)
+	}
+	// Another live field not touched by the plan is still carried through.
+	if v, ok := p["hostsync"]; !ok || v != int64(15) {
+		t.Errorf(`payload["hostsync"] = %v (present=%v), want live value`, v, ok)
+	}
+}
+
+// TestMergedPayload_SecretAbsentUnlessSet verifies that mergedPayload never
+// includes "monpwd" unless the plan explicitly sets it: the base built from
+// the live config has no secret fields, and updatePayload only contributes
+// monpwd when it's known and non-null.
+func TestMergedPayload_SecretAbsentUnlessSet(t *testing.T) {
+	live := &upsConfigAPI{ID: 1, Driver: "usbhid-ups", Port: "auto"}
+
+	m := &UPSConfigModel{
+		Driver:         types.StringNull(),
+		Port:           types.StringNull(),
+		ShutdownCmd:    types.StringNull(),
+		NoCommWarnTime: types.Int64Null(),
+		MonPwd:         types.StringNull(),
+	}
+	p := mergedPayload(live, m)
+	if _, ok := p["monpwd"]; ok {
+		t.Error(`payload["monpwd"] should be absent when the plan doesn't set it`)
+	}
+
+	m2 := &UPSConfigModel{
+		Driver:         types.StringNull(),
+		Port:           types.StringNull(),
+		ShutdownCmd:    types.StringNull(),
+		NoCommWarnTime: types.Int64Null(),
+		MonPwd:         types.StringValue("hunter2"),
+	}
+	p2 := mergedPayload(live, m2)
+	if v, ok := p2["monpwd"]; !ok || v != "hunter2" {
+		t.Errorf(`payload["monpwd"] = %v (present=%v), want "hunter2" when the plan sets it`, v, ok)
+	}
+}
+
 // TestDeleteWarningDiagnostics verifies that Delete's diagnostic builder
 // returns exactly one warning (no errors) and does not require or touch a
 // client — this is what makes "Delete makes no client calls" verifiable:

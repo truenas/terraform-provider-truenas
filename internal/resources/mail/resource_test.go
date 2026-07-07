@@ -387,6 +387,129 @@ func TestUpdatePayload_UserOnlyWhenNonEmpty(t *testing.T) {
 	}
 }
 
+// TestBasePayloadFromConfig_IncludesAllWritableFields verifies that
+// basePayloadFromConfig carries every writable, non-secret field from a live
+// mailAPI response into the base payload, including a nil User mapping to a
+// nil (not omitted) "user" entry.
+func TestBasePayloadFromConfig_IncludesAllWritableFields(t *testing.T) {
+	api := &mailAPI{
+		ID:             1,
+		FromEmail:      "root@example.com",
+		FromName:       "TrueNAS",
+		OutgoingServer: "smtp.example.com",
+		Port:           25,
+		Security:       "PLAIN",
+		SMTP:           false,
+		User:           nil,
+	}
+
+	p := basePayloadFromConfig(api)
+
+	want := map[string]any{
+		"fromemail":      "root@example.com",
+		"fromname":       "TrueNAS",
+		"outgoingserver": "smtp.example.com",
+		"port":           int64(25),
+		"security":       "PLAIN",
+		"smtp":           false,
+	}
+	for k, v := range want {
+		if p[k] != v {
+			t.Errorf("payload[%q] = %v, want %v", k, p[k], v)
+		}
+	}
+	if v, ok := p["user"]; !ok || v != nil {
+		t.Errorf(`payload["user"] = %v (present=%v), want nil (present)`, v, ok)
+	}
+	if len(p) != len(want)+1 {
+		t.Errorf("payload has %d keys (%v), want %d", len(p), p, len(want)+1)
+	}
+
+	user := "smtp-user"
+	api.User = &user
+	p2 := basePayloadFromConfig(api)
+	if v, ok := p2["user"]; !ok || v != user {
+		t.Errorf(`payload["user"] = %v (present=%v), want %q`, v, ok, user)
+	}
+}
+
+// TestMergedPayload_PlanOverlaysLive verifies that mergedPayload starts from
+// the live config's fields and that any field the plan knows about
+// overrides the live value, while fields the plan doesn't know about keep
+// their live value — this is the fix for "mail_update.fromemail: This field
+// is required" when a config sets only fromname.
+func TestMergedPayload_PlanOverlaysLive(t *testing.T) {
+	live := &mailAPI{
+		ID:             1,
+		FromEmail:      "root@example.com",
+		FromName:       "old-name",
+		OutgoingServer: "smtp.example.com",
+		Port:           25,
+		Security:       "PLAIN",
+		SMTP:           false,
+		User:           nil,
+	}
+
+	// Plan only sets fromname; everything else is null/unknown, as
+	// Optional+Computed fields the user's config didn't set.
+	m := &MailModel{
+		FromEmail:      types.StringNull(),
+		FromName:       types.StringValue("new-name"),
+		OutgoingServer: types.StringNull(),
+		Port:           types.Int64Null(),
+		Security:       types.StringNull(),
+		SMTP:           types.BoolNull(),
+		User:           types.StringNull(),
+		Pass:           types.StringNull(),
+	}
+
+	p := mergedPayload(live, m)
+
+	// fromemail is required by mail.update but not set in the plan: it must
+	// still be present, carried from the live config.
+	if v, ok := p["fromemail"]; !ok || v != "root@example.com" {
+		t.Errorf(`payload["fromemail"] = %v (present=%v), want "root@example.com" from live config`, v, ok)
+	}
+	// fromname is set in the plan: it must override the live value.
+	if v, ok := p["fromname"]; !ok || v != "new-name" {
+		t.Errorf(`payload["fromname"] = %v (present=%v), want "new-name" (plan wins over live)`, v, ok)
+	}
+	// Every other live field not touched by the plan is still carried
+	// through.
+	if v, ok := p["outgoingserver"]; !ok || v != "smtp.example.com" {
+		t.Errorf(`payload["outgoingserver"] = %v (present=%v), want live value`, v, ok)
+	}
+	if v, ok := p["port"]; !ok || v != int64(25) {
+		t.Errorf(`payload["port"] = %v (present=%v), want live value`, v, ok)
+	}
+}
+
+// TestMergedPayload_SecretAbsentUnlessSet verifies that mergedPayload never
+// includes "pass" unless the plan explicitly sets it: the base built from
+// the live config has no secret fields, and updatePayload only contributes
+// pass when it's known and non-null.
+func TestMergedPayload_SecretAbsentUnlessSet(t *testing.T) {
+	live := &mailAPI{ID: 1, FromEmail: "root@example.com"}
+
+	m := &MailModel{
+		FromEmail: types.StringNull(),
+		Pass:      types.StringNull(),
+	}
+	p := mergedPayload(live, m)
+	if _, ok := p["pass"]; ok {
+		t.Error(`payload["pass"] should be absent when the plan doesn't set it`)
+	}
+
+	m2 := &MailModel{
+		FromEmail: types.StringNull(),
+		Pass:      types.StringValue("hunter2"),
+	}
+	p2 := mergedPayload(live, m2)
+	if v, ok := p2["pass"]; !ok || v != "hunter2" {
+		t.Errorf(`payload["pass"] = %v (present=%v), want "hunter2" when the plan sets it`, v, ok)
+	}
+}
+
 // TestDeleteWarningDiagnostics verifies that Delete's diagnostic builder
 // returns exactly one warning (no errors) and does not require or touch a
 // client — this is what makes "Delete makes no client calls" verifiable:

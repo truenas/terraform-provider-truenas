@@ -7,11 +7,13 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
 
 var _ resource.Resource = &NFSConfigResource{}
 var _ resource.ResourceWithImportState = &NFSConfigResource{}
+var _ resource.ResourceWithModifyPlan = &NFSConfigResource{}
 
 // NFSConfigResource implements the truenas_nfs_config singleton resource.
 type NFSConfigResource struct{ client *client.Client }
@@ -146,6 +148,30 @@ func (r *NFSConfigResource) Update(ctx context.Context, req resource.UpdateReque
 // drops the resource from state once Delete returns.
 func (r *NFSConfigResource) Delete(_ context.Context, _ resource.DeleteRequest, resp *resource.DeleteResponse) {
 	resp.Diagnostics.Append(deleteWarningDiagnostics()...)
+}
+
+// ModifyPlan marks the three server-mutable computed attributes
+// (managed_nfsd, v4_krb_enabled, keytab_has_nfs_spn) unknown whenever this
+// is an update (both the prior state and the new plan are non-null).
+// TrueNAS may flip these as a side effect of unrelated field changes — e.g.
+// changing v4_domain can flip managed_nfsd — and since they're
+// Computed-only with UseStateForUnknown, the plan would otherwise carry the
+// prior state's value forward as "known", causing Terraform to error with
+// an inconsistent-result-after-apply if the server's actual post-update
+// value differs. Marking them unknown here lets the post-update Read fill
+// in whatever value the server actually produced.
+//
+// Create (state is null) and destroy (plan is null) are left untouched:
+// there is no prior state to carry forward on create, and no plan to modify
+// on destroy.
+func (r *NFSConfigResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() || req.State.Raw.IsNull() {
+		return
+	}
+
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("managed_nfsd"), types.BoolUnknown())...)
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("v4_krb_enabled"), types.BoolUnknown())...)
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("keytab_has_nfs_spn"), types.BoolUnknown())...)
 }
 
 func (r *NFSConfigResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

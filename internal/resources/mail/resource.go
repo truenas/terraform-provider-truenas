@@ -62,7 +62,17 @@ func (r *MailResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	if _, err := r.client.Call(ctx, "mail.update", plan.updatePayload()); err != nil {
+	// mail.update requires several fields (at minimum fromemail) on every
+	// call, so the live config is fetched first and merged with the plan's
+	// known values: this lets a config that sets only one field (e.g.
+	// fromname) still send a complete, valid payload.
+	live, err := r.fetchConfig(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Read current mail configuration failed", err.Error())
+		return
+	}
+
+	if _, err := r.client.Call(ctx, "mail.update", mergedPayload(live, &plan)); err != nil {
 		resp.Diagnostics.AddError("Create mail configuration failed", err.Error())
 		return
 	}
@@ -114,7 +124,15 @@ func (r *MailResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	if _, err := r.client.Call(ctx, "mail.update", plan.updatePayload()); err != nil {
+	// See Create: mail.update requires several fields on every call, so the
+	// live config is fetched first and merged with the plan's known values.
+	live, err := r.fetchConfig(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Read current mail configuration failed", err.Error())
+		return
+	}
+
+	if _, err := r.client.Call(ctx, "mail.update", mergedPayload(live, &plan)); err != nil {
 		resp.Diagnostics.AddError("Update mail configuration failed", err.Error())
 		return
 	}

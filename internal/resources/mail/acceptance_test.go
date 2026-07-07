@@ -45,13 +45,22 @@ data "truenas_mail" "test" {}
 	})
 }
 
-// mailOriginal captures the one field TestAccMail_setAndRestore touches.
+// mailOriginal captures every writable, non-secret field returned by
+// mail.config, not just the cosmetic "fromname" field the test drives:
+// mail.update requires several of these (at minimum fromemail) on every
+// call, so the restore call needs the full set to succeed.
 type mailOriginal struct {
-	FromName string `json:"fromname"`
+	FromEmail      string  `json:"fromemail"`
+	FromName       string  `json:"fromname"`
+	OutgoingServer string  `json:"outgoingserver"`
+	Port           int64   `json:"port"`
+	Security       string  `json:"security"`
+	SMTP           bool    `json:"smtp"`
+	User           *string `json:"user"`
 }
 
-// readMailOriginal reads the box's current fromname via mail.config, so the
-// test can restore it exactly afterward.
+// readMailOriginal reads the box's current mail configuration via
+// mail.config, so the test can restore it exactly afterward.
 func readMailOriginal(t *testing.T) mailOriginal {
 	t.Helper()
 	raw, err := acctest.Client().Call(context.Background(), "mail.config")
@@ -65,15 +74,28 @@ func readMailOriginal(t *testing.T) mailOriginal {
 	return orig
 }
 
-// restoreMail sends only fromname back to its original value via
-// mail.update. It runs from t.Cleanup, so it restores the box even if the
-// Terraform steps themselves fail partway through.
+// restoreMail sends the full original configuration back via mail.update
+// (mail.update requires fields such as fromemail on every call, so sending
+// only "fromname" back would fail the same way the live bug did). It runs
+// from t.Cleanup, so it restores the box even if the Terraform steps
+// themselves fail partway through.
 func restoreMail(t *testing.T, orig mailOriginal) {
 	t.Helper()
-	if _, err := acctest.Client().Call(context.Background(), "mail.update", map[string]any{
-		"fromname": orig.FromName,
-	}); err != nil {
-		t.Fatalf("error restoring mail fromname: %v", err)
+	payload := map[string]any{
+		"fromemail":      orig.FromEmail,
+		"fromname":       orig.FromName,
+		"outgoingserver": orig.OutgoingServer,
+		"port":           orig.Port,
+		"security":       orig.Security,
+		"smtp":           orig.SMTP,
+	}
+	if orig.User != nil {
+		payload["user"] = *orig.User
+	} else {
+		payload["user"] = nil
+	}
+	if _, err := acctest.Client().Call(context.Background(), "mail.update", payload); err != nil {
+		t.Fatalf("error restoring mail configuration: %v", err)
 	}
 }
 

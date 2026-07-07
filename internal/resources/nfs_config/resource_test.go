@@ -7,8 +7,11 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
 // int64Ptr is a small test helper for building *int64 API values.
@@ -571,6 +574,140 @@ func TestUpdatePayload_NullableIntThreeWay(t *testing.T) {
 				t.Errorf("expected %q = 42, got %v (present=%v)", f.name, v, ok)
 			}
 		})
+	}
+}
+
+// planStateFromModel builds a tfsdk.Plan/tfsdk.State pair from a model using
+// the resource schema, for ModifyPlan tests that need real (non-nil) plan
+// and state data rather than the zero-value tftypes.Value.
+func planStateFromModel(ctx context.Context, t *testing.T, s schema.Schema, m *NFSConfigModel) tftypes.Value {
+	t.Helper()
+	var p tfsdk.Plan
+	p.Schema = s
+	diags := p.Set(ctx, m)
+	if diags.HasError() {
+		t.Fatalf("unexpected error building plan/state: %v", diags)
+	}
+	return p.Raw
+}
+
+// nullValue builds a null tftypes.Value for the given schema, mirroring
+// what Terraform sends for Plan on destroy (or, hypothetically, State on
+// create).
+func nullValue(ctx context.Context, s schema.Schema) tftypes.Value {
+	return tftypes.NewValue(s.Type().TerraformType(ctx), nil)
+}
+
+// TestModifyPlan_UpdateMarksServerMutableFieldsUnknown verifies the fix for
+// "managed_nfsd: was cty.True, but now cty.False": on an update (both plan
+// and state non-null), ModifyPlan must mark managed_nfsd, v4_krb_enabled,
+// and keytab_has_nfs_spn unknown, so a server-side flip of one of these
+// booleans (e.g. triggered by a v4_domain change) doesn't produce an
+// inconsistent-result-after-apply error against the prior state's value.
+func TestModifyPlan_UpdateMarksServerMutableFieldsUnknown(t *testing.T) {
+	ctx := context.Background()
+	s := resourceSchema()
+
+	state := baseModel(ctx, t)
+	state.ID = types.StringValue(nfsConfigResourceID)
+	state.ManagedNFSD = types.BoolValue(true)
+
+	plan := baseModel(ctx, t)
+	plan.ID = types.StringValue(nfsConfigResourceID)
+	plan.V4Domain = types.StringValue("new.example") // the field actually being changed
+	// UseStateForUnknown carries the prior state's value into the plan for
+	// the computed-only trio, which is exactly the value ModifyPlan must
+	// override.
+	plan.ManagedNFSD = types.BoolValue(true)
+
+	req := resource.ModifyPlanRequest{
+		Plan:  tfsdk.Plan{Schema: s, Raw: planStateFromModel(ctx, t, s, plan)},
+		State: tfsdk.State{Schema: s, Raw: planStateFromModel(ctx, t, s, state)},
+	}
+	resp := &resource.ModifyPlanResponse{Plan: req.Plan}
+
+	r := &NFSConfigResource{}
+	r.ModifyPlan(ctx, req, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected error: %v", resp.Diagnostics)
+	}
+
+	var got NFSConfigModel
+	diags := resp.Plan.Get(ctx, &got)
+	if diags.HasError() {
+		t.Fatalf("unexpected error reading back plan: %v", diags)
+	}
+
+	if !got.ManagedNFSD.IsUnknown() {
+		t.Errorf("managed_nfsd = %v, want unknown", got.ManagedNFSD)
+	}
+	if !got.V4KrbEnabled.IsUnknown() {
+		t.Errorf("v4_krb_enabled = %v, want unknown", got.V4KrbEnabled)
+	}
+	if !got.KeytabHasNFSSPN.IsUnknown() {
+		t.Errorf("keytab_has_nfs_spn = %v, want unknown", got.KeytabHasNFSSPN)
+	}
+	// The field actually being changed must be untouched by ModifyPlan.
+	if got.V4Domain.ValueString() != "new.example" {
+		t.Errorf("v4_domain = %q, want %q (untouched by ModifyPlan)", got.V4Domain.ValueString(), "new.example")
+	}
+}
+
+// TestModifyPlan_DestroyNoOp verifies that ModifyPlan does nothing (no
+// error, no attribute changes attempted) when the plan is null, i.e. on
+// destroy — there is no plan to modify.
+func TestModifyPlan_DestroyNoOp(t *testing.T) {
+	ctx := context.Background()
+	s := resourceSchema()
+
+	state := baseModel(ctx, t)
+	state.ID = types.StringValue(nfsConfigResourceID)
+
+	nullPlan := tfsdk.Plan{Schema: s, Raw: nullValue(ctx, s)}
+	req := resource.ModifyPlanRequest{
+		Plan:  nullPlan,
+		State: tfsdk.State{Schema: s, Raw: planStateFromModel(ctx, t, s, state)},
+	}
+	resp := &resource.ModifyPlanResponse{Plan: nullPlan}
+
+	r := &NFSConfigResource{}
+	r.ModifyPlan(ctx, req, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected error: %v", resp.Diagnostics)
+	}
+	if !resp.Plan.Raw.IsNull() {
+		t.Error("Plan should remain null on destroy")
+	}
+}
+
+// TestModifyPlan_CreateNoOp verifies that ModifyPlan does nothing when the
+// state is null, i.e. on create — there is no prior state to carry forward,
+// so nothing needs correcting.
+func TestModifyPlan_CreateNoOp(t *testing.T) {
+	ctx := context.Background()
+	s := resourceSchema()
+
+	plan := baseModel(ctx, t)
+	plan.ID = types.StringUnknown()
+	plan.ManagedNFSD = types.BoolUnknown()
+	plan.V4KrbEnabled = types.BoolUnknown()
+	plan.KeytabHasNFSSPN = types.BoolUnknown()
+
+	planRaw := planStateFromModel(ctx, t, s, plan)
+	nullState := tfsdk.State{Schema: s, Raw: nullValue(ctx, s)}
+	req := resource.ModifyPlanRequest{
+		Plan:  tfsdk.Plan{Schema: s, Raw: planRaw},
+		State: nullState,
+	}
+	resp := &resource.ModifyPlanResponse{Plan: req.Plan}
+
+	r := &NFSConfigResource{}
+	r.ModifyPlan(ctx, req, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected error: %v", resp.Diagnostics)
+	}
+	if !resp.Plan.Raw.Equal(planRaw) {
+		t.Error("Plan should be untouched on create")
 	}
 }
 
