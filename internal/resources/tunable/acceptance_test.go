@@ -14,9 +14,12 @@ import (
 // TestAccTunable_basic tests create, update, and import of a sysctl
 // tunable.
 //
-// It uses fs.suid_dumpable=0, which is an inert sysctl already at its
-// kernel default value on TrueNAS SCALE: applying it is a no-op for the
-// running system, so this test cannot change any live behavior.
+// It uses fs.suid_dumpable=0. This is not guaranteed to be a no-op: the
+// kernel default for this sysctl varies by system, so the applied value may
+// differ from whatever the box already had. Safety here comes from
+// truenas_tunable's delete behavior, which captures the pre-apply value as
+// orig_value and restores it on destroy, not from the test value happening
+// to match a default.
 func TestAccTunable_basic(t *testing.T) {
 	const varName = "fs.suid_dumpable"
 	const value = "0"

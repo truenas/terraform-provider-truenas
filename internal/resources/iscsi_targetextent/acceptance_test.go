@@ -80,9 +80,10 @@ func TestAccISCSIEndToEnd(t *testing.T) {
 					resource.TestCheckResourceAttrSet("truenas_iscsi_target.test", "id"),
 					resource.TestCheckResourceAttr("truenas_iscsi_target.test", "name", targetName),
 					resource.TestCheckResourceAttr("truenas_iscsi_target.test", "alias", "initial-alias"),
-					resource.TestCheckResourceAttr("truenas_iscsi_target.test", "groups.0.authmethod", "NONE"),
+					resource.TestCheckResourceAttr("truenas_iscsi_target.test", "groups.0.authmethod", "CHAP"),
 					resource.TestCheckResourceAttrPair("truenas_iscsi_target.test", "groups.0.portal", "truenas_iscsi_portal.test", "id"),
 					resource.TestCheckResourceAttrPair("truenas_iscsi_target.test", "groups.0.initiator", "truenas_iscsi_initiator.test", "id"),
+					resource.TestCheckResourceAttrPair("truenas_iscsi_target.test", "groups.0.auth", "truenas_iscsi_auth.test", "tag"),
 
 					// TargetExtent
 					resource.TestCheckResourceAttrSet("truenas_iscsi_targetextent.test", "id"),
@@ -169,7 +170,8 @@ resource "truenas_iscsi_target" "test" {
     {
       portal     = truenas_iscsi_portal.test.id
       initiator  = truenas_iscsi_initiator.test.id
-      authmethod = "NONE"
+      auth       = truenas_iscsi_auth.test.tag
+      authmethod = "CHAP"
     }
   ]
 }
