@@ -36,9 +36,11 @@ data "truenas_mail" "test" {}
 `,
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.truenas_mail.test", "id", "mail"),
-					resource.TestCheckResourceAttrSet("data.truenas_mail.test", "fromemail"),
-					resource.TestCheckResourceAttrSet("data.truenas_mail.test", "outgoingserver"),
+					// fromemail/outgoingserver are "" on an unconfigured box —
+					// TestCheckResourceAttrSet fails on empty strings, so only
+					// assert fields that always carry a value.
 					resource.TestCheckResourceAttrSet("data.truenas_mail.test", "security"),
+					resource.TestCheckResourceAttrSet("data.truenas_mail.test", "port"),
 				),
 			},
 		},
@@ -110,6 +112,12 @@ func TestAccMail_setAndRestore(t *testing.T) {
 	acctest.DisruptiveCheck(t)
 
 	orig := readMailOriginal(t)
+	// mail.update requires fromemail on every call. On a box where mail was
+	// never configured (fromemail == ""), any update we make could not be
+	// restored to the unconfigured state — skip rather than leave residue.
+	if orig.FromEmail == "" {
+		t.Skip("mail is unconfigured on the target box (empty fromemail); set-and-restore cannot restore the unconfigured state")
+	}
 	t.Cleanup(func() { restoreMail(t, orig) })
 
 	testValue := acctest.RandName("tf-acc")

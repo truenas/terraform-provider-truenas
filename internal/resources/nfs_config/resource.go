@@ -169,6 +169,32 @@ func (r *NFSConfigResource) ModifyPlan(ctx context.Context, req resource.ModifyP
 		return
 	}
 
+	// Only mark the trio unknown when a writable field is actually changing.
+	// Marking them unconditionally would make every plan non-empty
+	// ("known after apply" on a no-op plan).
+	var plan, state NFSConfigModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	changed := !plan.Servers.Equal(state.Servers) ||
+		!plan.AllowNonroot.Equal(state.AllowNonroot) ||
+		!plan.Protocols.Equal(state.Protocols) ||
+		!plan.V4Domain.Equal(state.V4Domain) ||
+		!plan.V4Krb.Equal(state.V4Krb) ||
+		!plan.BindIP.Equal(state.BindIP) ||
+		!plan.MountdPort.Equal(state.MountdPort) ||
+		!plan.RPCStatdPort.Equal(state.RPCStatdPort) ||
+		!plan.RPCLockdPort.Equal(state.RPCLockdPort) ||
+		!plan.MountdLog.Equal(state.MountdLog) ||
+		!plan.StatdLockdLog.Equal(state.StatdLockdLog) ||
+		!plan.UserdManageGids.Equal(state.UserdManageGids) ||
+		!plan.RDMA.Equal(state.RDMA)
+	if !changed {
+		return
+	}
+
 	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("managed_nfsd"), types.BoolUnknown())...)
 	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("v4_krb_enabled"), types.BoolUnknown())...)
 	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("keytab_has_nfs_spn"), types.BoolUnknown())...)

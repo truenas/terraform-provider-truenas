@@ -137,6 +137,12 @@ func TestAccUPSConfig_setAndRestore(t *testing.T) {
 	acctest.DisruptiveCheck(t)
 
 	orig := readUPSConfigOriginal(t)
+	// ups.update requires driver and port on every call. On a box where UPS
+	// was never configured (empty driver/port), any update we make could not
+	// be restored to the unconfigured state — skip rather than leave residue.
+	if orig.Driver == "" || orig.Port == "" {
+		t.Skip("UPS is unconfigured on the target box (empty driver/port); set-and-restore cannot restore the unconfigured state")
+	}
 	t.Cleanup(func() { restoreUPSConfig(t, orig) })
 
 	testValue := acctest.RandName("tf-acc-description")
