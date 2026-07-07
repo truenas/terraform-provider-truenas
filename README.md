@@ -192,6 +192,10 @@ examples/               HCL example per resource
 
 ### Testing
 
+Full documentation of the test suite — tiers, environment variables, safety
+rules, per-package coverage, and how to add tests — lives in
+[TESTING.md](TESTING.md).
+
 Unit tests run against payload builders, schema shapes, and response mappers —
 no TrueNAS required:
 
