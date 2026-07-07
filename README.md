@@ -199,17 +199,28 @@ no TrueNAS required:
 go test ./...
 ```
 
-Acceptance tests exercise a **live TrueNAS box** and are gated by `TF_ACC`:
+Acceptance tests exercise a **live TrueNAS box** in three tiers:
 
 ```sh
-export TRUENAS_ENDPOINT="wss://<host>/websocket"
+export TRUENAS_ENDPOINT="wss://<host>/websocket"   # default: wss://192.168.1.68/websocket
 export TRUENAS_API_KEY="..."
-TF_ACC=1 go test ./internal/resources/<name>/... -v
+export TRUENAS_TEST_POOL="tank"                     # pool for test fixtures
+
+make testacc-safe        # Tier 1: TF_ACC=1 — full CRUD lifecycles on own
+                         # tf-acc-* objects; never touches existing config
+make testacc-disruptive  # Tier 2: adds TRUENAS_DISRUPTIVE=1 — singleton
+                         # configs mutated with set-and-restore (original
+                         # values re-applied and API-restored on failure)
+TRUENAS_APPS=1 ...       # opt-in: app tests (pull container images)
 ```
 
-Use a disposable system. Tests that would disrupt a production box (network
-config, service configs, the system dataset, live storage targets) are
-skipped by default with instructions in each test file for safe enablement.
+Never-run tier: tests that could cut management access or migrate system
+state (network gateways/hostname, management UI, SSH config, system dataset)
+stay unconditionally skipped, each with in-file instructions for manual runs
+against a disposable box. Set-and-restore tests also self-skip when the
+target singleton is unconfigured (nothing to restore to). Run packages
+sequentially — TrueNAS rate-limits authentication, and the provider retries
+with backoff but parallel suites will still trip it.
 
 ### Adding a resource
 
