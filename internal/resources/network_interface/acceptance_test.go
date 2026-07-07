@@ -3,7 +3,6 @@ package network_interface_test
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -65,9 +64,9 @@ resource "truenas_network_interface" "test" {
 // It skips itself if enp7s0 is not present on the target host, so it is
 // safe to run against any TF_ACC target.
 func TestAccNetworkInterface_datasourceEnp7s0(t *testing.T) {
-	if os.Getenv("TF_ACC") == "" {
-		t.Skip("Acceptance tests skipped: set TF_ACC=1")
-	}
+	// PreCheck validates credentials too — acctest.Client() panics without
+	// them, so gate on the full precheck rather than TF_ACC alone.
+	acctest.PreCheck(t)
 
 	const ifaceName = "enp7s0"
 

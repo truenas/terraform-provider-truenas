@@ -65,7 +65,7 @@ resource "truenas_vm_device" "test" {
   vm = truenas_vm.test.id
   attributes = jsonencode({
     dtype      = "DISPLAY"
-    type       = "VNC"
+    type       = "SPICE"
     bind       = "0.0.0.0"
     resolution = "1024x768"
     wait       = false
