@@ -112,8 +112,7 @@ func (r *DatasetResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	payload := plan.apiPayload()
-	delete(payload, "name") // name is not updatable via update endpoint
+	payload := plan.updateAPIPayload()
 
 	_, err := r.client.Call(ctx, "pool.dataset.update", plan.Name.ValueString(), payload)
 	if err != nil {

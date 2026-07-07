@@ -63,6 +63,20 @@ func (m *DatasetModel) apiPayload() map[string]any {
 	return p
 }
 
+// updateAPIPayload converts the model to the pool.dataset.update JSON
+// payload. It starts from apiPayload (the create payload) and strips keys
+// that pool.dataset.update rejects as create-only: "name" (the dataset's
+// id is passed as the update method's first positional arg, not a payload
+// key) and "type" (changing a dataset's type after creation isn't
+// supported; TrueNAS returns "[EINVAL] data.type: Extra inputs are not
+// permitted" if it's included).
+func (m *DatasetModel) updateAPIPayload() map[string]any {
+	p := m.apiPayload()
+	delete(p, "name")
+	delete(p, "type")
+	return p
+}
+
 // apiResponse matches the flat JSON structure returned by pool.dataset.get_instance.
 // Fields are at the root level (no "properties" wrapper). Quota fields use *int64
 // because TrueNAS returns JSON null when no limit is set.

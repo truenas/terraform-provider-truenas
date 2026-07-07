@@ -33,7 +33,7 @@ func TestAccPeriodicSnapshot_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "enabled", "true"),
 					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "lifetime_value", "2"),
 					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "lifetime_unit", "WEEK"),
-					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "naming_schema", "tf-acc-%Y%m%d"),
+					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "naming_schema", "tf-acc-%Y%m%d-%H%M"),
 					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "schedule.minute", "0"),
 					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "schedule.hour", "0"),
 					resource.TestCheckResourceAttrSet("truenas_periodic_snapshot_task.test", "id"),
@@ -68,7 +68,7 @@ resource "truenas_periodic_snapshot_task" "test" {
   recursive      = false
   lifetime_value = %d
   lifetime_unit  = "WEEK"
-  naming_schema  = "tf-acc-%%Y%%m%%d"
+  naming_schema  = "tf-acc-%%Y%%m%%d-%%H%%M"
   enabled        = %v
   schedule = {
     minute = %q

@@ -3,6 +3,7 @@ package pool
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -13,6 +14,25 @@ type VdevModel struct {
 	Disks types.List   `tfsdk:"disks"` // List[String]
 }
 
+// vdevAttrTypes describes the attribute types of a single vdev object, used
+// to build types.Object/types.List values for the datasource model (see
+// topologyAttrTypes and PoolDataSourceModel).
+var vdevAttrTypes = map[string]attr.Type{
+	"type":  types.StringType,
+	"disks": types.ListType{ElemType: types.StringType},
+}
+
+// topologyAttrTypes describes the attribute types of the nested "topology"
+// object. It is used to marshal a TopologyModel into a types.Object for the
+// datasource model, which must be able to represent topology as null (the
+// datasource's config never sets it - it's Computed-only).
+var topologyAttrTypes = map[string]attr.Type{
+	"data":  types.ListType{ElemType: types.ObjectType{AttrTypes: vdevAttrTypes}},
+	"log":   types.ListType{ElemType: types.ObjectType{AttrTypes: vdevAttrTypes}},
+	"cache": types.ListType{ElemType: types.StringType},
+	"spare": types.ListType{ElemType: types.StringType},
+}
+
 // TopologyModel represents the pool topology in Terraform state.
 type TopologyModel struct {
 	Data  []VdevModel `tfsdk:"data"`
@@ -21,7 +41,9 @@ type TopologyModel struct {
 	Spare types.List  `tfsdk:"spare"` // List[String] - flat disk names
 }
 
-// PoolModel is the Terraform state model for a ZFS pool.
+// PoolModel is the Terraform state model for a ZFS pool resource. Topology
+// is Required in the resource schema, so it is never null in practice and
+// can be modeled as a bare struct.
 type PoolModel struct {
 	ID        types.Int64   `tfsdk:"id"`
 	Name      types.String  `tfsdk:"name"`
@@ -34,6 +56,25 @@ type PoolModel struct {
 	Size      types.Int64   `tfsdk:"size"`
 	Free      types.Int64   `tfsdk:"free"`
 	Allocated types.Int64   `tfsdk:"allocated"`
+}
+
+// PoolDataSourceModel is the Terraform state model for the truenas_pool
+// datasource. Topology is Computed-only in the datasource schema (never set
+// by the user in config), so req.Config.Get sees it as null; unlike the
+// resource, this model must represent that with a nullable types.Object
+// rather than a bare struct.
+type PoolDataSourceModel struct {
+	ID        types.Int64  `tfsdk:"id"`
+	Name      types.String `tfsdk:"name"`
+	Topology  types.Object `tfsdk:"topology"`
+	AutoTrim  types.Bool   `tfsdk:"autotrim"`
+	GUID      types.String `tfsdk:"guid"`
+	Status    types.String `tfsdk:"status"`
+	Healthy   types.Bool   `tfsdk:"healthy"`
+	Path      types.String `tfsdk:"path"`
+	Size      types.Int64  `tfsdk:"size"`
+	Free      types.Int64  `tfsdk:"free"`
+	Allocated types.Int64  `tfsdk:"allocated"`
 }
 
 // poolAPI is the wire-format response from TrueNAS pool methods.
@@ -67,6 +108,60 @@ type poolDisk struct {
 	Disk string `json:"disk"`
 }
 
+// buildTopology converts the wire-format topology in a poolAPI response into
+// a TopologyModel. Shared by responseToModel (resource) and
+// responseToDataSourceModel (datasource) so both stay in sync.
+func buildTopology(ctx context.Context, api *poolAPI) (TopologyModel, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	var topo TopologyModel
+
+	// Convert data vdevs
+	data := make([]VdevModel, len(api.Topology.Data))
+	for i, v := range api.Topology.Data {
+		disks := vdevDisks(v)
+		diskList, d := types.ListValueFrom(ctx, types.StringType, disks)
+		diags.Append(d...)
+		data[i] = VdevModel{Type: types.StringValue(v.Type), Disks: diskList}
+	}
+	topo.Data = data
+
+	// Convert log vdevs
+	logVdevs := make([]VdevModel, len(api.Topology.Log))
+	for i, v := range api.Topology.Log {
+		disks := vdevDisks(v)
+		diskList, d := types.ListValueFrom(ctx, types.StringType, disks)
+		diags.Append(d...)
+		logVdevs[i] = VdevModel{Type: types.StringValue(v.Type), Disks: diskList}
+	}
+	topo.Log = logVdevs
+
+	// Cache: each cache vdev is a single-disk DISK vdev; flatten to disk names
+	cacheDisks := make([]string, len(api.Topology.Cache))
+	for i, v := range api.Topology.Cache {
+		disks := vdevDisks(v)
+		if len(disks) > 0 {
+			cacheDisks[i] = disks[0]
+		}
+	}
+	cacheList, d := types.ListValueFrom(ctx, types.StringType, cacheDisks)
+	diags.Append(d...)
+	topo.Cache = cacheList
+
+	// Spare: each spare vdev is a single-disk vdev; flatten to disk names
+	spareDisks := make([]string, len(api.Topology.Spare))
+	for i, v := range api.Topology.Spare {
+		disks := vdevDisks(v)
+		if len(disks) > 0 {
+			spareDisks[i] = disks[0]
+		}
+	}
+	spareList, d := types.ListValueFrom(ctx, types.StringType, spareDisks)
+	diags.Append(d...)
+	topo.Spare = spareList
+
+	return topo, diags
+}
+
 // responseToModel maps a TrueNAS API pool response into the Terraform state model.
 func responseToModel(ctx context.Context, api *poolAPI, m *PoolModel) diag.Diagnostics {
 	var diags diag.Diagnostics
@@ -81,49 +176,36 @@ func responseToModel(ctx context.Context, api *poolAPI, m *PoolModel) diag.Diagn
 	m.Allocated = types.Int64Value(api.Allocated)
 	m.AutoTrim = types.BoolValue(api.AutoTrim.Parsed)
 
-	// Convert data vdevs
-	data := make([]VdevModel, len(api.Topology.Data))
-	for i, v := range api.Topology.Data {
-		disks := vdevDisks(v)
-		diskList, d := types.ListValueFrom(ctx, types.StringType, disks)
-		diags.Append(d...)
-		data[i] = VdevModel{Type: types.StringValue(v.Type), Disks: diskList}
-	}
-	m.Topology.Data = data
-
-	// Convert log vdevs
-	logVdevs := make([]VdevModel, len(api.Topology.Log))
-	for i, v := range api.Topology.Log {
-		disks := vdevDisks(v)
-		diskList, d := types.ListValueFrom(ctx, types.StringType, disks)
-		diags.Append(d...)
-		logVdevs[i] = VdevModel{Type: types.StringValue(v.Type), Disks: diskList}
-	}
-	m.Topology.Log = logVdevs
-
-	// Cache: each cache vdev is a single-disk DISK vdev; flatten to disk names
-	cacheDisks := make([]string, len(api.Topology.Cache))
-	for i, v := range api.Topology.Cache {
-		disks := vdevDisks(v)
-		if len(disks) > 0 {
-			cacheDisks[i] = disks[0]
-		}
-	}
-	cacheList, d := types.ListValueFrom(ctx, types.StringType, cacheDisks)
+	topo, d := buildTopology(ctx, api)
 	diags.Append(d...)
-	m.Topology.Cache = cacheList
+	m.Topology = topo
 
-	// Spare: each spare vdev is a single-disk vdev; flatten to disk names
-	spareDisks := make([]string, len(api.Topology.Spare))
-	for i, v := range api.Topology.Spare {
-		disks := vdevDisks(v)
-		if len(disks) > 0 {
-			spareDisks[i] = disks[0]
-		}
-	}
-	spareList, d := types.ListValueFrom(ctx, types.StringType, spareDisks)
+	return diags
+}
+
+// responseToDataSourceModel maps a TrueNAS API pool response into the
+// truenas_pool datasource's Terraform state model. It reuses buildTopology
+// (the same conversion the resource uses) and then wraps the result as a
+// types.Object, since the datasource model must be able to represent
+// topology as null.
+func responseToDataSourceModel(ctx context.Context, api *poolAPI, m *PoolDataSourceModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+	m.ID = types.Int64Value(api.ID)
+	m.Name = types.StringValue(api.Name)
+	m.GUID = types.StringValue(api.GUID)
+	m.Status = types.StringValue(api.Status)
+	m.Healthy = types.BoolValue(api.Healthy)
+	m.Path = types.StringValue(api.Path)
+	m.Size = types.Int64Value(api.Size)
+	m.Free = types.Int64Value(api.Free)
+	m.Allocated = types.Int64Value(api.Allocated)
+	m.AutoTrim = types.BoolValue(api.AutoTrim.Parsed)
+
+	topo, d := buildTopology(ctx, api)
 	diags.Append(d...)
-	m.Topology.Spare = spareList
+	topoObj, d2 := types.ObjectValueFrom(ctx, topologyAttrTypes, topo)
+	diags.Append(d2...)
+	m.Topology = topoObj
 
 	return diags
 }

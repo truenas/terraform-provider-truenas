@@ -41,7 +41,7 @@ func (d *PoolDataSource) Configure(_ context.Context, req datasource.ConfigureRe
 }
 
 func (d *PoolDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var state PoolModel
+	var state PoolDataSourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -65,7 +65,7 @@ func (d *PoolDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 		return
 	}
 
-	resp.Diagnostics.Append(responseToModel(ctx, &pools[0], &state)...)
+	resp.Diagnostics.Append(responseToDataSourceModel(ctx, &pools[0], &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}

@@ -180,7 +180,9 @@ func (p *TrueNASProvider) Configure(ctx context.Context, req provider.ConfigureR
 		authFn = func(ctx context.Context) error { return client.AuthPassword(ctx, c, u, pw) }
 	}
 
-	if err := c.Connect(ctx, authFn); err != nil {
+	retryingAuthFn := func(ctx context.Context) error { return client.WithRetry(ctx, authFn) }
+
+	if err := c.Connect(ctx, retryingAuthFn); err != nil {
 		resp.Diagnostics.AddError("Connection failed", fmt.Sprintf("Cannot connect to TrueNAS at %s: %s", endpoint, err))
 		return
 	}

@@ -3,7 +3,10 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
+	"time"
 )
 
 // AuthAPIKey authenticates using a TrueNAS API key.
@@ -37,4 +40,49 @@ func AuthPassword(ctx context.Context, c *Client, username, password string) err
 		return fmt.Errorf("authentication rejected: invalid username or password")
 	}
 	return nil
+}
+
+// authRetryBackoff is the sequence of sleep durations between retry
+// attempts made by WithRetry after a rate-limited auth failure. Terraform
+// opens a fresh provider connection (and re-authenticates) for every
+// plan/apply/destroy step, and rapid acceptance test runs can exhaust
+// TrueNAS's auth rate limit; these delays give the rate limit window time
+// to clear.
+var authRetryBackoff = []time.Duration{5 * time.Second, 10 * time.Second, 20 * time.Second, 30 * time.Second}
+
+// IsRateLimited reports whether err represents a TrueNAS auth rate-limit
+// rejection, e.g. "auth.login_with_api_key: truenas API error (code 16):
+// [EBUSY] Rate Limit Exceeded". It checks the wrapped *APIError's code
+// (16) first, then falls back to a case-insensitive substring match on the
+// error text so it still catches a rate-limit rejection that reaches this
+// code some other way (e.g. wrapped without preserving *APIError).
+func IsRateLimited(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr *APIError
+	if errors.As(err, &apiErr) && apiErr.Code == 16 {
+		return true
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "rate limit")
+}
+
+// WithRetry calls authFn and, if it fails with a rate-limit error (see
+// IsRateLimited), retries up to len(authRetryBackoff) more times with
+// increasing backoff between attempts. Any non-rate-limit error, or
+// context cancellation/deadline while waiting between attempts, returns
+// immediately.
+func WithRetry(ctx context.Context, authFn func(ctx context.Context) error) error {
+	var err error
+	for attempt := 0; ; attempt++ {
+		err = authFn(ctx)
+		if err == nil || !IsRateLimited(err) || attempt >= len(authRetryBackoff) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(authRetryBackoff[attempt]):
+		}
+	}
 }
