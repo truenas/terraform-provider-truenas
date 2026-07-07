@@ -27,7 +27,7 @@ func TestAccNVMeTEndToEnd(t *testing.T) {
 	subsysName := acctest.RandName("tf-acc-nvmet-subsys")
 	zvolName := fmt.Sprintf("%s/%s", acctest.TestPool(), acctest.RandName("tf-acc-nvmet-zvol"))
 	devicePath := fmt.Sprintf("zvol/%s", zvolName)
-	hostNQN := fmt.Sprintf("nqn.2014-08.org.nvmexpress:uuid:%s", acctest.RandName("tf-acc"))
+	hostNQN := acctest.RandNQN()
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },

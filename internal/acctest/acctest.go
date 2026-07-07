@@ -59,6 +59,20 @@ func RandName(prefix string) string {
 	return fmt.Sprintf("%s-%s", prefix, hex.EncodeToString(buf))
 }
 
+// RandNQN returns a unique NVMe host NQN in the uuid form TrueNAS validates:
+// the uuid segment must be a full RFC-4122 UUID, so a short random suffix is
+// rejected ("uuid is incorrect length").
+func RandNQN() string {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		panic("acctest: rand.Read failed: " + err.Error())
+	}
+	buf[6] = (buf[6] & 0x0f) | 0x40 // version 4
+	buf[8] = (buf[8] & 0x3f) | 0x80 // variant 10
+	return fmt.Sprintf("nqn.2014-08.org.nvmexpress:uuid:%x-%x-%x-%x-%x",
+		buf[0:4], buf[4:6], buf[6:8], buf[8:10], buf[10:16])
+}
+
 // Client returns a singleton *client.Client connected to the acceptance test TrueNAS.
 func Client() *client.Client {
 	clientOnce.Do(func() {

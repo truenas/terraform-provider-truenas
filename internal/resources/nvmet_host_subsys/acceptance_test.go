@@ -18,7 +18,7 @@ import (
 // association (id=1), which serves live storage. Both host_id and subsys_id
 // are RequiresReplace, so there is no in-place update to exercise here.
 func TestAccNVMetHostSubsys_basic(t *testing.T) {
-	hostNQN := fmt.Sprintf("nqn.2014-08.org.nvmexpress:uuid:%s", acctest.RandName("tf-acc-host-subsys"))
+	hostNQN := acctest.RandNQN()
 	subsysName := acctest.RandName("tf-acc-host-subsys")
 
 	resource.Test(t, resource.TestCase{

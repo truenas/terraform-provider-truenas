@@ -16,8 +16,8 @@ import (
 // host and never touches the box's existing LIVE host configuration, which
 // serves live storage.
 func TestAccNVMetHost_basic(t *testing.T) {
-	hostNQN := fmt.Sprintf("nqn.2014-08.org.nvmexpress:uuid:%s", acctest.RandName("tf-acc"))
-	hostNQNRenamed := fmt.Sprintf("nqn.2014-08.org.nvmexpress:uuid:%s", acctest.RandName("tf-acc-renamed"))
+	hostNQN := acctest.RandNQN()
+	hostNQNRenamed := acctest.RandNQN()
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
