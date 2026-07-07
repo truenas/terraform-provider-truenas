@@ -150,6 +150,11 @@ management access or migrate system state:
   provider retries rate-limited auth with backoff (5/10/20/30s), but
   parallel suites will still trip it. The make targets and the batch
   scripts sleep between packages.
+  Token caching was prototyped and rejected: on SCALE 26.0,
+  `auth.login_with_token` draws from the same rate bucket as key login,
+  and a generated token authenticates exactly one new session (see
+  `cmd/token_probe` for the experiment and results). Fewer, larger applies
+  and paced test runs are the only real levers.
 - **Runtimes**: most packages 20–40s; the full safe tier ~25 minutes with
   pauses.
 - **Leftovers**: a failed run can strand `tf-acc-*` objects. Find them with
