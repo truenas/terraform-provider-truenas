@@ -7,7 +7,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// SMBModel is the Terraform state model for truenas_smb_share.
+// SMBModel is the Terraform state model for truenas_smb_share. The schema
+// stays flat for backward compatibility with existing configs; the wire
+// payload/response mapping to SCALE 26.0's nested purpose/options shape
+// happens in apiPayload and responseToModel below.
 type SMBModel struct {
 	ID               types.Int64  `tfsdk:"id"`
 	Path             types.String `tfsdk:"path"`
@@ -33,30 +36,48 @@ type SMBModel struct {
 	Locked types.Bool   `tfsdk:"locked"`
 }
 
-// smbAPI is the JSON wire format for a TrueNAS SMB share object.
-type smbAPI struct {
-	ID               int64    `json:"id"`
-	Path             string   `json:"path"`
-	Name             string   `json:"name"`
-	Comment          string   `json:"comment"`
-	ReadOnly         bool     `json:"ro"`
-	Browsable        bool     `json:"browsable"`
+// smbOptionsAPI is the JSON wire format for the discriminated-union `options`
+// object returned/accepted by sharing.smb.create/update/query on SCALE 26.0.
+// Only the LEGACY_SHARE variant fields that this provider models are
+// represented here; other purpose variants (DefaultOpt, TimeMachineOpt, etc.)
+// carry fields this resource does not track and are read via Purpose alone.
+type smbOptionsAPI struct {
+	Purpose          string   `json:"purpose"`
 	Recyclebin       bool     `json:"recyclebin"`
-	GuestOK          bool     `json:"guestok"`
 	HostsAllow       []string `json:"hostsallow"`
 	HostsDeny        []string `json:"hostsdeny"`
-	ABE              bool     `json:"abe"`
-	ACL              bool     `json:"acl"`
-	DurableHandle    bool     `json:"durablehandle"`
+	GuestOK          bool     `json:"guestok"`
 	Streams          bool     `json:"streams"`
+	DurableHandle    bool     `json:"durablehandle"`
+	Home             bool     `json:"home"`
+	ACL              bool     `json:"acl"`
 	TimeMachine      bool     `json:"timemachine"`
 	TimeMachineQuota int64    `json:"timemachine_quota"`
-	Enabled          bool     `json:"enabled"`
-	Home             bool     `json:"home"`
-	Purpose          string   `json:"purpose"`
-	VUID             string   `json:"vuid"`
-	Locked           bool     `json:"locked"`
+	VUID             *string  `json:"vuid"`
 }
+
+// smbAPI is the JSON wire format for a TrueNAS SMB share object on SCALE
+// 26.0: legacy flags that used to live at the top level now live nested
+// under `options` when the share's purpose is LEGACY_SHARE.
+type smbAPI struct {
+	ID        int64          `json:"id"`
+	Path      string         `json:"path"`
+	Name      string         `json:"name"`
+	Comment   string         `json:"comment"`
+	ReadOnly  bool           `json:"readonly"`
+	Browsable bool           `json:"browsable"`
+	ABE       bool           `json:"access_based_share_enumeration"`
+	Enabled   bool           `json:"enabled"`
+	Purpose   string         `json:"purpose"`
+	Locked    *bool          `json:"locked"`
+	Options   *smbOptionsAPI `json:"options"`
+}
+
+// legacySharePurpose is the purpose value used to preserve the old flat
+// (24.x-style) share behavior. It is the default applied when the caller
+// has not set (or has set an unrecognized) purpose, and is the only purpose
+// variant for which this resource's legacy boolean/list flags are sent.
+const legacySharePurpose = "LEGACY_SHARE"
 
 // responseToModel maps an API response onto a Terraform model. It does NOT set
 // write-only fields (e.g. passwords). hostsallow/hostsdeny are handled here
@@ -70,88 +91,155 @@ func responseToModel(ctx context.Context, api *smbAPI, m *SMBModel) diag.Diagnos
 	m.Comment = types.StringValue(api.Comment)
 	m.ReadOnly = types.BoolValue(api.ReadOnly)
 	m.Browsable = types.BoolValue(api.Browsable)
-	m.Recyclebin = types.BoolValue(api.Recyclebin)
-	m.GuestOK = types.BoolValue(api.GuestOK)
 	m.ABE = types.BoolValue(api.ABE)
-	m.ACL = types.BoolValue(api.ACL)
-	m.DurableHandle = types.BoolValue(api.DurableHandle)
-	m.Streams = types.BoolValue(api.Streams)
-	m.TimeMachine = types.BoolValue(api.TimeMachine)
-	m.TimeMachineQuota = types.Int64Value(api.TimeMachineQuota)
 	m.Enabled = types.BoolValue(api.Enabled)
-	m.Home = types.BoolValue(api.Home)
 	m.Purpose = types.StringValue(api.Purpose)
-	m.VUID = types.StringValue(api.VUID)
-	m.Locked = types.BoolValue(api.Locked)
 
-	hostsAllow := api.HostsAllow
-	if hostsAllow == nil {
-		hostsAllow = []string{}
+	// locked is required (bool|null) in the 26.0 schema; null just means lock
+	// status wasn't requested/available, so fall back to the zero value.
+	if api.Locked != nil {
+		m.Locked = types.BoolValue(*api.Locked)
+	} else {
+		m.Locked = types.BoolValue(false)
 	}
-	haList, d := types.ListValueFrom(ctx, types.StringType, hostsAllow)
-	diags.Append(d...)
-	m.HostsAllow = haList
 
-	hostsDeny := api.HostsDeny
-	if hostsDeny == nil {
-		hostsDeny = []string{}
+	// Legacy flags now live nested under options, and only when the share's
+	// purpose is LEGACY_SHARE. For any other purpose, the legacy fields this
+	// resource models don't apply server-side; leave them at their zero
+	// values (this mirrors the flat schema's prior behavior for shares that
+	// never set these attributes).
+	opts := api.Options
+	if opts != nil && opts.Purpose == legacySharePurpose {
+		m.Recyclebin = types.BoolValue(opts.Recyclebin)
+		m.GuestOK = types.BoolValue(opts.GuestOK)
+		m.ACL = types.BoolValue(opts.ACL)
+		m.DurableHandle = types.BoolValue(opts.DurableHandle)
+		m.Streams = types.BoolValue(opts.Streams)
+		m.TimeMachine = types.BoolValue(opts.TimeMachine)
+		m.TimeMachineQuota = types.Int64Value(opts.TimeMachineQuota)
+		m.Home = types.BoolValue(opts.Home)
+		if opts.VUID != nil {
+			m.VUID = types.StringValue(*opts.VUID)
+		} else {
+			m.VUID = types.StringValue("")
+		}
+
+		hostsAllow := opts.HostsAllow
+		if hostsAllow == nil {
+			hostsAllow = []string{}
+		}
+		haList, d := types.ListValueFrom(ctx, types.StringType, hostsAllow)
+		diags.Append(d...)
+		m.HostsAllow = haList
+
+		hostsDeny := opts.HostsDeny
+		if hostsDeny == nil {
+			hostsDeny = []string{}
+		}
+		hdList, d := types.ListValueFrom(ctx, types.StringType, hostsDeny)
+		diags.Append(d...)
+		m.HostsDeny = hdList
+	} else {
+		m.Recyclebin = types.BoolValue(false)
+		m.GuestOK = types.BoolValue(false)
+		m.ACL = types.BoolValue(false)
+		m.DurableHandle = types.BoolValue(false)
+		m.Streams = types.BoolValue(false)
+		m.TimeMachine = types.BoolValue(false)
+		m.TimeMachineQuota = types.Int64Value(0)
+		m.Home = types.BoolValue(false)
+		m.VUID = types.StringValue("")
+
+		emptyList, d := types.ListValueFrom(ctx, types.StringType, []string{})
+		diags.Append(d...)
+		m.HostsAllow = emptyList
+		m.HostsDeny = emptyList
 	}
-	hdList, d := types.ListValueFrom(ctx, types.StringType, hostsDeny)
-	diags.Append(d...)
-	m.HostsDeny = hdList
 
 	return diags
 }
 
 // apiPayload builds the map[string]any payload for sharing.smb.create /
-// sharing.smb.update. It includes 18 keys plus purpose when set to a known
-// value (19 total); vuid and locked are omitted because they are
-// server-generated.
+// sharing.smb.update, targeting SCALE 26.0's wire format: top-level
+// path/name/comment/enabled/browsable/readonly/access_based_share_enumeration
+// /purpose, plus a nested `options` object. `options` always carries
+// `purpose`; when purpose is (or defaults to) LEGACY_SHARE it also carries
+// this resource's legacy flags (each included only when set in config, to
+// avoid clobbering server defaults with zero values). For any other purpose,
+// options contains purpose only — the legacy flags are not sent anywhere,
+// since they don't apply to that variant.
 func (m *SMBModel) apiPayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
-	var hostsAllow []string
-	if !m.HostsAllow.IsNull() && !m.HostsAllow.IsUnknown() {
-		diags.Append(m.HostsAllow.ElementsAs(ctx, &hostsAllow, false)...)
-	}
-	if hostsAllow == nil {
-		hostsAllow = []string{}
-	}
-
-	var hostsDeny []string
-	if !m.HostsDeny.IsNull() && !m.HostsDeny.IsUnknown() {
-		diags.Append(m.HostsDeny.ElementsAs(ctx, &hostsDeny, false)...)
-	}
-	if hostsDeny == nil {
-		hostsDeny = []string{}
+	// purpose: SCALE 26.0 requires purpose to be one of validSMBPurposes (or
+	// omitted, which defaults server-side to DEFAULT_SHARE). This resource
+	// preserves its historical flat/legacy behavior by defaulting to
+	// LEGACY_SHARE whenever the caller hasn't set a recognized 26.0 purpose.
+	purpose := legacySharePurpose
+	if v := m.Purpose.ValueString(); !m.Purpose.IsNull() && !m.Purpose.IsUnknown() && validSMBPurposes[v] {
+		purpose = v
 	}
 
 	p := map[string]any{
-		"path":              m.Path.ValueString(),
-		"name":              m.Name.ValueString(),
-		"comment":           m.Comment.ValueString(),
-		"ro":                m.ReadOnly.ValueBool(),
-		"browsable":         m.Browsable.ValueBool(),
-		"recyclebin":        m.Recyclebin.ValueBool(),
-		"guestok":           m.GuestOK.ValueBool(),
-		"hostsallow":        hostsAllow,
-		"hostsdeny":         hostsDeny,
-		"abe":               m.ABE.ValueBool(),
-		"acl":               m.ACL.ValueBool(),
-		"durablehandle":     m.DurableHandle.ValueBool(),
-		"streams":           m.Streams.ValueBool(),
-		"timemachine":       m.TimeMachine.ValueBool(),
-		"timemachine_quota": m.TimeMachineQuota.ValueInt64(),
-		"enabled":           m.Enabled.ValueBool(),
-		"home":              m.Home.ValueBool(),
+		"path":                           m.Path.ValueString(),
+		"name":                           m.Name.ValueString(),
+		"comment":                        m.Comment.ValueString(),
+		"enabled":                        m.Enabled.ValueBool(),
+		"browsable":                      m.Browsable.ValueBool(),
+		"readonly":                       m.ReadOnly.ValueBool(),
+		"access_based_share_enumeration": m.ABE.ValueBool(),
+		"purpose":                        purpose,
 	}
 
-	// purpose: SCALE 26.0 requires purpose to be one of validSMBPurposes
-	// (or omitted entirely) — sending "" unconditionally triggers EINVAL.
-	// Only include it when it's set to a known, non-empty value.
-	if v := m.Purpose.ValueString(); !m.Purpose.IsNull() && !m.Purpose.IsUnknown() && validSMBPurposes[v] {
-		p["purpose"] = v
+	options := map[string]any{
+		"purpose": purpose,
 	}
+
+	if purpose == legacySharePurpose {
+		if !m.Recyclebin.IsNull() && !m.Recyclebin.IsUnknown() {
+			options["recyclebin"] = m.Recyclebin.ValueBool()
+		}
+		if !m.GuestOK.IsNull() && !m.GuestOK.IsUnknown() {
+			options["guestok"] = m.GuestOK.ValueBool()
+		}
+		if !m.Streams.IsNull() && !m.Streams.IsUnknown() {
+			options["streams"] = m.Streams.ValueBool()
+		}
+		if !m.DurableHandle.IsNull() && !m.DurableHandle.IsUnknown() {
+			options["durablehandle"] = m.DurableHandle.ValueBool()
+		}
+		if !m.Home.IsNull() && !m.Home.IsUnknown() {
+			options["home"] = m.Home.ValueBool()
+		}
+		if !m.ACL.IsNull() && !m.ACL.IsUnknown() {
+			options["acl"] = m.ACL.ValueBool()
+		}
+		if !m.TimeMachine.IsNull() && !m.TimeMachine.IsUnknown() {
+			options["timemachine"] = m.TimeMachine.ValueBool()
+		}
+		if !m.TimeMachineQuota.IsNull() && !m.TimeMachineQuota.IsUnknown() {
+			options["timemachine_quota"] = m.TimeMachineQuota.ValueInt64()
+		}
+
+		if !m.HostsAllow.IsNull() && !m.HostsAllow.IsUnknown() {
+			var hostsAllow []string
+			diags.Append(m.HostsAllow.ElementsAs(ctx, &hostsAllow, false)...)
+			if hostsAllow == nil {
+				hostsAllow = []string{}
+			}
+			options["hostsallow"] = hostsAllow
+		}
+		if !m.HostsDeny.IsNull() && !m.HostsDeny.IsUnknown() {
+			var hostsDeny []string
+			diags.Append(m.HostsDeny.ElementsAs(ctx, &hostsDeny, false)...)
+			if hostsDeny == nil {
+				hostsDeny = []string{}
+			}
+			options["hostsdeny"] = hostsDeny
+		}
+	}
+
+	p["options"] = options
 
 	return p, diags
 }

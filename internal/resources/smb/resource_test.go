@@ -51,6 +51,15 @@ func TestSMBSchema(t *testing.T) {
 		}
 	}
 
+	// The Terraform attribute names stay flat/unchanged (ro, abe, etc.) even
+	// though the wire format renames/nests them — this is what keeps
+	// existing configs backward compatible.
+	for _, field := range []string{"ro", "abe", "recyclebin", "hostsallow", "hostsdeny", "guestok", "acl", "durablehandle", "streams", "timemachine", "timemachine_quota", "home", "purpose"} {
+		if _, ok := s.Attributes[field]; !ok {
+			t.Errorf("schema missing %q attribute (flat schema must stay backward compatible)", field)
+		}
+	}
+
 	// vuid and locked must be Computed-only.
 	for _, field := range []string{"vuid", "locked"} {
 		a, ok := s.Attributes[field]
@@ -78,12 +87,11 @@ func TestSMBSchema(t *testing.T) {
 	}
 }
 
-// TestSMBApiPayload verifies that apiPayload produces a map with the expected
-// 19 keys and correct values.
-func TestSMBApiPayload(t *testing.T) {
-	ctx := context.Background()
-
-	m := SMBModel{
+// baseLegacyModel returns an SMBModel with every field set to a
+// non-null/non-unknown value and Purpose unset, matching the common case of
+// a share that relies on the LEGACY_SHARE default.
+func baseLegacyModel() SMBModel {
+	return SMBModel{
 		Path:             types.StringValue("/mnt/tank/share"),
 		Name:             types.StringValue("myshare"),
 		Comment:          types.StringValue("test comment"),
@@ -101,10 +109,22 @@ func TestSMBApiPayload(t *testing.T) {
 		TimeMachineQuota: types.Int64Value(0),
 		Enabled:          types.BoolValue(true),
 		Home:             types.BoolValue(false),
-		Purpose:          types.StringValue("DEFAULT_SHARE"),
+		Purpose:          types.StringNull(),
 		VUID:             types.StringValue(""),
 		Locked:           types.BoolValue(false),
 	}
+}
+
+// TestSMBApiPayload_TopLevel verifies apiPayload produces the SCALE 26.0
+// top-level keys: path/name/comment/enabled/browsable/readonly/
+// access_based_share_enumeration/purpose/options, and that the legacy 24.x
+// top-level keys (ro, abe, hostsallow, etc.) are gone from the top level.
+func TestSMBApiPayload_TopLevel(t *testing.T) {
+	ctx := context.Background()
+
+	m := baseLegacyModel()
+	m.ReadOnly = types.BoolValue(true)
+	m.ABE = types.BoolValue(true)
 
 	payload, diags := m.apiPayload(ctx)
 	if diags.HasError() {
@@ -112,254 +132,214 @@ func TestSMBApiPayload(t *testing.T) {
 	}
 
 	expectedKeys := []string{
-		"path", "name", "comment", "ro", "browsable", "recyclebin",
-		"guestok", "hostsallow", "hostsdeny", "abe", "acl", "durablehandle",
-		"streams", "timemachine", "timemachine_quota", "enabled", "home", "purpose",
+		"path", "name", "comment", "enabled", "browsable",
+		"readonly", "access_based_share_enumeration", "purpose", "options",
 	}
 	if len(payload) != len(expectedKeys) {
-		t.Errorf("payload has %d keys, want %d", len(payload), len(expectedKeys))
+		t.Errorf("payload has %d keys, want %d: %v", len(payload), len(expectedKeys), payload)
 	}
 	for _, k := range expectedKeys {
 		if _, ok := payload[k]; !ok {
-			t.Errorf("payload missing key %q", k)
+			t.Errorf("payload missing top-level key %q", k)
 		}
 	}
 
-	// vuid and locked must NOT be in the payload.
-	for _, forbidden := range []string{"vuid", "locked", "id"} {
-		if _, ok := payload[forbidden]; ok {
-			t.Errorf("payload should not contain key %q", forbidden)
+	// The pre-26.0 top-level keys must not be present at the top level
+	// anymore — they've either moved into options (legacy flags) or been
+	// renamed (ro -> readonly, abe -> access_based_share_enumeration).
+	forbidden := []string{"ro", "abe", "hostsallow", "hostsdeny", "recyclebin", "guestok", "acl", "durablehandle", "streams", "timemachine", "timemachine_quota", "home", "vuid", "locked", "id"}
+	for _, k := range forbidden {
+		if _, ok := payload[k]; ok {
+			t.Errorf("payload should not contain top-level key %q (SCALE 26.0 nests/renames it)", k)
 		}
 	}
 
 	if payload["path"] != "/mnt/tank/share" {
 		t.Errorf("payload[path] = %v, want /mnt/tank/share", payload["path"])
 	}
-	if payload["name"] != "myshare" {
-		t.Errorf("payload[name] = %v, want myshare", payload["name"])
+	if payload["readonly"] != true {
+		t.Errorf("payload[readonly] = %v, want true", payload["readonly"])
 	}
-	if payload["purpose"] != "DEFAULT_SHARE" {
-		t.Errorf("payload[purpose] = %v, want DEFAULT_SHARE", payload["purpose"])
+	if payload["access_based_share_enumeration"] != true {
+		t.Errorf("payload[access_based_share_enumeration] = %v, want true", payload["access_based_share_enumeration"])
 	}
-	if payload["timemachine_quota"] != int64(0) {
-		t.Errorf("payload[timemachine_quota] = %v, want 0", payload["timemachine_quota"])
+	if payload["purpose"] != legacySharePurpose {
+		t.Errorf("payload[purpose] = %v, want %v", payload["purpose"], legacySharePurpose)
+	}
+}
+
+// TestSMBApiPayload_PurposeDefaultsToLegacy verifies that apiPayload defaults
+// purpose to LEGACY_SHARE (both top-level and options.purpose) when the
+// caller hasn't set a purpose, and that the legacy flags are nested under
+// options with the discriminator.
+func TestSMBApiPayload_PurposeDefaultsToLegacy(t *testing.T) {
+	ctx := context.Background()
+
+	m := baseLegacyModel()
+	m.Purpose = types.StringNull()
+
+	payload, diags := m.apiPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("apiPayload returned diagnostic errors: %v", diags)
 	}
 
-	hostsAllow, ok := payload["hostsallow"].([]string)
+	if payload["purpose"] != legacySharePurpose {
+		t.Errorf("payload[purpose] = %v, want %v", payload["purpose"], legacySharePurpose)
+	}
+
+	options, ok := payload["options"].(map[string]any)
 	if !ok {
-		t.Fatalf("payload[hostsallow] is %T, want []string", payload["hostsallow"])
+		t.Fatalf("payload[options] is %T, want map[string]any", payload["options"])
+	}
+	if options["purpose"] != legacySharePurpose {
+		t.Errorf("payload[options][purpose] = %v, want %v", options["purpose"], legacySharePurpose)
+	}
+
+	for _, k := range []string{"recyclebin", "guestok", "streams", "durablehandle", "home", "acl", "timemachine", "timemachine_quota", "hostsallow", "hostsdeny"} {
+		if _, ok := options[k]; !ok {
+			t.Errorf("options missing legacy key %q for LEGACY_SHARE purpose", k)
+		}
+	}
+
+	hostsAllow, ok := options["hostsallow"].([]string)
+	if !ok {
+		t.Fatalf("options[hostsallow] is %T, want []string", options["hostsallow"])
 	}
 	if len(hostsAllow) != 1 || hostsAllow[0] != "192.168.1.0/24" {
-		t.Errorf("payload[hostsallow] = %v, want [192.168.1.0/24]", hostsAllow)
+		t.Errorf("options[hostsallow] = %v, want [192.168.1.0/24]", hostsAllow)
+	}
+}
+
+// TestSMBApiPayload_PurposeDefaultsToLegacyWhenUnrecognized verifies that an
+// unrecognized (e.g. stale 24.x) purpose value also falls back to the
+// LEGACY_SHARE default, rather than being passed through verbatim.
+func TestSMBApiPayload_PurposeDefaultsToLegacyWhenUnrecognized(t *testing.T) {
+	ctx := context.Background()
+
+	m := baseLegacyModel()
+	m.Purpose = types.StringValue("NO_PRESET")
+
+	payload, diags := m.apiPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("apiPayload returned diagnostic errors: %v", diags)
 	}
 
-	hostsDeny, ok := payload["hostsdeny"].([]string)
+	if payload["purpose"] != legacySharePurpose {
+		t.Errorf("payload[purpose] = %v, want %v (fallback for unrecognized value)", payload["purpose"], legacySharePurpose)
+	}
+}
+
+// TestSMBApiPayload_NonLegacyPurposeOmitsLegacyFlags verifies that when the
+// caller sets purpose to a known non-LEGACY_SHARE value, options only
+// contains purpose (variant defaults apply server-side) and none of the
+// legacy flags are sent, either at the top level or in options.
+func TestSMBApiPayload_NonLegacyPurposeOmitsLegacyFlags(t *testing.T) {
+	ctx := context.Background()
+
+	m := baseLegacyModel()
+	m.Purpose = types.StringValue("TIMEMACHINE_SHARE")
+
+	payload, diags := m.apiPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("apiPayload returned diagnostic errors: %v", diags)
+	}
+
+	if payload["purpose"] != "TIMEMACHINE_SHARE" {
+		t.Errorf("payload[purpose] = %v, want TIMEMACHINE_SHARE", payload["purpose"])
+	}
+
+	options, ok := payload["options"].(map[string]any)
 	if !ok {
-		t.Fatalf("payload[hostsdeny] is %T, want []string", payload["hostsdeny"])
+		t.Fatalf("payload[options] is %T, want map[string]any", payload["options"])
 	}
-	if len(hostsDeny) != 0 {
-		t.Errorf("payload[hostsdeny] = %v, want []", hostsDeny)
+	if len(options) != 1 {
+		t.Errorf("options has %d keys, want 1 (purpose only): %v", len(options), options)
+	}
+	if options["purpose"] != "TIMEMACHINE_SHARE" {
+		t.Errorf("options[purpose] = %v, want TIMEMACHINE_SHARE", options["purpose"])
+	}
+
+	for _, k := range []string{"recyclebin", "guestok", "streams", "durablehandle", "home", "acl", "timemachine", "timemachine_quota", "hostsallow", "hostsdeny"} {
+		if _, ok := options[k]; ok {
+			t.Errorf("options should not contain legacy key %q for non-LEGACY_SHARE purpose", k)
+		}
+		if _, ok := payload[k]; ok {
+			t.Errorf("payload should not contain top-level legacy key %q", k)
+		}
 	}
 }
 
-// TestSMBApiPayload_NullLists verifies that nil hostsallow/hostsdeny default to
-// empty slices (not nil) in the payload.
-func TestSMBApiPayload_NullLists(t *testing.T) {
+// TestSMBApiPayload_LegacyFlagsGuardedByNullUnknown verifies that legacy
+// flags are only added to options when they are neither null nor unknown in
+// the model (guards against clobbering unrelated server-side defaults), and
+// that null hostsallow/hostsdeny are simply omitted (not sent as nil).
+func TestSMBApiPayload_LegacyFlagsGuardedByNullUnknown(t *testing.T) {
 	ctx := context.Background()
 
-	m := SMBModel{
-		Path:             types.StringValue("/mnt/tank/share"),
-		Name:             types.StringValue("share"),
-		Comment:          types.StringValue(""),
-		ReadOnly:         types.BoolValue(false),
-		Browsable:        types.BoolValue(true),
-		Recyclebin:       types.BoolValue(false),
-		GuestOK:          types.BoolValue(false),
-		HostsAllow:       types.ListNull(types.StringType),
-		HostsDeny:        types.ListNull(types.StringType),
-		ABE:              types.BoolValue(false),
-		ACL:              types.BoolValue(true),
-		DurableHandle:    types.BoolValue(true),
-		Streams:          types.BoolValue(true),
-		TimeMachine:      types.BoolValue(false),
-		TimeMachineQuota: types.Int64Value(0),
-		Enabled:          types.BoolValue(true),
-		Home:             types.BoolValue(false),
-		Purpose:          types.StringValue("NO_PRESET"),
-		VUID:             types.StringValue(""),
-		Locked:           types.BoolValue(false),
-	}
+	m := baseLegacyModel()
+	m.Recyclebin = types.BoolNull()
+	m.GuestOK = types.BoolUnknown()
+	m.HostsAllow = types.ListNull(types.StringType)
+	m.HostsDeny = types.ListUnknown(types.StringType)
 
 	payload, diags := m.apiPayload(ctx)
 	if diags.HasError() {
 		t.Fatalf("apiPayload returned diagnostic errors: %v", diags)
 	}
 
-	ha, ok := payload["hostsallow"].([]string)
+	options, ok := payload["options"].(map[string]any)
 	if !ok {
-		t.Fatalf("payload[hostsallow] is %T, want []string", payload["hostsallow"])
-	}
-	if ha == nil {
-		t.Error("payload[hostsallow] must not be nil, want empty slice")
+		t.Fatalf("payload[options] is %T, want map[string]any", payload["options"])
 	}
 
-	hd, ok := payload["hostsdeny"].([]string)
-	if !ok {
-		t.Fatalf("payload[hostsdeny] is %T, want []string", payload["hostsdeny"])
-	}
-	if hd == nil {
-		t.Error("payload[hostsdeny] must not be nil, want empty slice")
-	}
-}
-
-// TestSMBApiPayload_PurposeOmittedWhenNull verifies that apiPayload omits the
-// "purpose" key entirely when Purpose is null (unset in config), rather than
-// sending an empty string. This is a regression test for a live failure on
-// SCALE 26.0: sharing.smb.create/update returns EINVAL when purpose is "",
-// since 26.0 requires purpose to be one of a known, non-empty enum.
-func TestSMBApiPayload_PurposeOmittedWhenNull(t *testing.T) {
-	ctx := context.Background()
-
-	m := SMBModel{
-		Path:             types.StringValue("/mnt/tank/share"),
-		Name:             types.StringValue("share"),
-		Comment:          types.StringValue(""),
-		ReadOnly:         types.BoolValue(false),
-		Browsable:        types.BoolValue(true),
-		Recyclebin:       types.BoolValue(false),
-		GuestOK:          types.BoolValue(false),
-		HostsAllow:       types.ListValueMust(types.StringType, []attr.Value{}),
-		HostsDeny:        types.ListValueMust(types.StringType, []attr.Value{}),
-		ABE:              types.BoolValue(false),
-		ACL:              types.BoolValue(true),
-		DurableHandle:    types.BoolValue(true),
-		Streams:          types.BoolValue(true),
-		TimeMachine:      types.BoolValue(false),
-		TimeMachineQuota: types.Int64Value(0),
-		Enabled:          types.BoolValue(true),
-		Home:             types.BoolValue(false),
-		Purpose:          types.StringNull(),
-		VUID:             types.StringValue(""),
-		Locked:           types.BoolValue(false),
+	for _, k := range []string{"recyclebin", "guestok", "hostsallow", "hostsdeny"} {
+		if _, ok := options[k]; ok {
+			t.Errorf("options should omit key %q when null/unknown in model", k)
+		}
 	}
 
-	payload, diags := m.apiPayload(ctx)
-	if diags.HasError() {
-		t.Fatalf("apiPayload returned diagnostic errors: %v", diags)
-	}
-
-	if v, ok := payload["purpose"]; ok {
-		t.Errorf("payload should omit 'purpose' when unset, got %v", v)
+	// Fields that are still set concretely must still appear.
+	for _, k := range []string{"streams", "durablehandle", "home", "acl", "timemachine", "timemachine_quota"} {
+		if _, ok := options[k]; !ok {
+			t.Errorf("options missing key %q that was set in model", k)
+		}
 	}
 }
 
-// TestSMBApiPayload_PurposeOmittedWhenUnrecognized verifies that apiPayload
-// omits "purpose" when set to a value outside the current (26.0) enum, e.g.
-// a stale 24.x preset like NO_PRESET, rather than sending it unconditionally
-// and tripping EINVAL server-side.
-func TestSMBApiPayload_PurposeOmittedWhenUnrecognized(t *testing.T) {
+// TestResponseToModel_LegacyShare verifies that responseToModel decodes the
+// nested SCALE 26.0 response shape (top-level readonly/
+// access_based_share_enumeration, options.* for legacy flags) into the flat
+// SMBModel fields.
+func TestResponseToModel_LegacyShare(t *testing.T) {
 	ctx := context.Background()
 
-	m := SMBModel{
-		Path:             types.StringValue("/mnt/tank/share"),
-		Name:             types.StringValue("share"),
-		Comment:          types.StringValue(""),
-		ReadOnly:         types.BoolValue(false),
-		Browsable:        types.BoolValue(true),
-		Recyclebin:       types.BoolValue(false),
-		GuestOK:          types.BoolValue(false),
-		HostsAllow:       types.ListValueMust(types.StringType, []attr.Value{}),
-		HostsDeny:        types.ListValueMust(types.StringType, []attr.Value{}),
-		ABE:              types.BoolValue(false),
-		ACL:              types.BoolValue(true),
-		DurableHandle:    types.BoolValue(true),
-		Streams:          types.BoolValue(true),
-		TimeMachine:      types.BoolValue(false),
-		TimeMachineQuota: types.Int64Value(0),
-		Enabled:          types.BoolValue(true),
-		Home:             types.BoolValue(false),
-		Purpose:          types.StringValue("NO_PRESET"),
-		VUID:             types.StringValue(""),
-		Locked:           types.BoolValue(false),
-	}
-
-	payload, diags := m.apiPayload(ctx)
-	if diags.HasError() {
-		t.Fatalf("apiPayload returned diagnostic errors: %v", diags)
-	}
-
-	if v, ok := payload["purpose"]; ok {
-		t.Errorf("payload should omit 'purpose' for unrecognized value NO_PRESET, got %v", v)
-	}
-}
-
-// TestSMBApiPayload_PurposeIncludedWhenKnown verifies apiPayload includes a
-// valid 26.0 purpose value, e.g. TIMEMACHINE_SHARE.
-func TestSMBApiPayload_PurposeIncludedWhenKnown(t *testing.T) {
-	ctx := context.Background()
-
-	m := SMBModel{
-		Path:             types.StringValue("/mnt/tank/share"),
-		Name:             types.StringValue("share"),
-		Comment:          types.StringValue(""),
-		ReadOnly:         types.BoolValue(false),
-		Browsable:        types.BoolValue(true),
-		Recyclebin:       types.BoolValue(false),
-		GuestOK:          types.BoolValue(false),
-		HostsAllow:       types.ListValueMust(types.StringType, []attr.Value{}),
-		HostsDeny:        types.ListValueMust(types.StringType, []attr.Value{}),
-		ABE:              types.BoolValue(false),
-		ACL:              types.BoolValue(true),
-		DurableHandle:    types.BoolValue(true),
-		Streams:          types.BoolValue(true),
-		TimeMachine:      types.BoolValue(false),
-		TimeMachineQuota: types.Int64Value(0),
-		Enabled:          types.BoolValue(true),
-		Home:             types.BoolValue(false),
-		Purpose:          types.StringValue("TIMEMACHINE_SHARE"),
-		VUID:             types.StringValue(""),
-		Locked:           types.BoolValue(false),
-	}
-
-	payload, diags := m.apiPayload(ctx)
-	if diags.HasError() {
-		t.Fatalf("apiPayload returned diagnostic errors: %v", diags)
-	}
-
-	if v, ok := payload["purpose"]; !ok {
-		t.Error("payload missing 'purpose' for known value TIMEMACHINE_SHARE")
-	} else if v != "TIMEMACHINE_SHARE" {
-		t.Errorf("payload[purpose] = %v, want TIMEMACHINE_SHARE", v)
-	}
-}
-
-// TestResponseToModel verifies that responseToModel populates all fields from
-// the smbAPI struct correctly.
-func TestResponseToModel(t *testing.T) {
-	ctx := context.Background()
-
+	locked := false
+	vuid := "abc-123"
 	api := &smbAPI{
-		ID:               42,
-		Path:             "/mnt/tank/share",
-		Name:             "myshare",
-		Comment:          "test",
-		ReadOnly:         true,
-		Browsable:        true,
-		Recyclebin:       false,
-		GuestOK:          false,
-		HostsAllow:       []string{"10.0.0.1"},
-		HostsDeny:        []string{},
-		ABE:              false,
-		ACL:              true,
-		DurableHandle:    true,
-		Streams:          true,
-		TimeMachine:      false,
-		TimeMachineQuota: 100,
-		Enabled:          true,
-		Home:             false,
-		Purpose:          "DEFAULT_SHARE",
-		VUID:             "abc-123",
-		Locked:           false,
+		ID:        42,
+		Path:      "/mnt/tank/share",
+		Name:      "myshare",
+		Comment:   "test",
+		ReadOnly:  true,
+		Browsable: true,
+		ABE:       false,
+		Enabled:   true,
+		Purpose:   legacySharePurpose,
+		Locked:    &locked,
+		Options: &smbOptionsAPI{
+			Purpose:          legacySharePurpose,
+			Recyclebin:       false,
+			HostsAllow:       []string{"10.0.0.1"},
+			HostsDeny:        []string{},
+			GuestOK:          false,
+			Streams:          true,
+			DurableHandle:    true,
+			Home:             false,
+			ACL:              true,
+			TimeMachine:      false,
+			TimeMachineQuota: 100,
+			VUID:             &vuid,
+		},
 	}
 
 	var m SMBModel
@@ -374,11 +354,26 @@ func TestResponseToModel(t *testing.T) {
 	if m.Path.ValueString() != "/mnt/tank/share" {
 		t.Errorf("Path = %v, want /mnt/tank/share", m.Path.ValueString())
 	}
+	if !m.ReadOnly.ValueBool() {
+		t.Error("ReadOnly = false, want true (from top-level readonly)")
+	}
+	if m.ABE.ValueBool() {
+		t.Error("ABE = true, want false (from top-level access_based_share_enumeration)")
+	}
 	if m.VUID.ValueString() != "abc-123" {
-		t.Errorf("VUID = %v, want abc-123", m.VUID.ValueString())
+		t.Errorf("VUID = %v, want abc-123 (from options.vuid)", m.VUID.ValueString())
 	}
 	if m.TimeMachineQuota.ValueInt64() != 100 {
-		t.Errorf("TimeMachineQuota = %v, want 100", m.TimeMachineQuota.ValueInt64())
+		t.Errorf("TimeMachineQuota = %v, want 100 (from options.timemachine_quota)", m.TimeMachineQuota.ValueInt64())
+	}
+	if !m.Streams.ValueBool() {
+		t.Error("Streams = false, want true (from options.streams)")
+	}
+	if m.Locked.ValueBool() {
+		t.Error("Locked = true, want false")
+	}
+	if m.Purpose.ValueString() != legacySharePurpose {
+		t.Errorf("Purpose = %v, want %v", m.Purpose.ValueString(), legacySharePurpose)
 	}
 
 	var ha []string
@@ -395,5 +390,57 @@ func TestResponseToModel(t *testing.T) {
 	}
 	if len(hd) != 0 {
 		t.Errorf("HostsDeny = %v, want []", hd)
+	}
+}
+
+// TestResponseToModel_NonLegacyShare verifies that for a non-LEGACY_SHARE
+// purpose, responseToModel zeroes out the legacy fields (since they are not
+// present/meaningful in the options variant for e.g. TIMEMACHINE_SHARE) and
+// still correctly maps the top-level fields, locked (including the null
+// case), and purpose.
+func TestResponseToModel_NonLegacyShare(t *testing.T) {
+	ctx := context.Background()
+
+	api := &smbAPI{
+		ID:        7,
+		Path:      "/mnt/tank/tm",
+		Name:      "tmshare",
+		Comment:   "",
+		ReadOnly:  false,
+		Browsable: true,
+		ABE:       true,
+		Enabled:   true,
+		Purpose:   "TIMEMACHINE_SHARE",
+		Locked:    nil, // lock status not requested/available
+		Options: &smbOptionsAPI{
+			Purpose: "TIMEMACHINE_SHARE",
+		},
+	}
+
+	var m SMBModel
+	diags := responseToModel(ctx, api, &m)
+	if diags.HasError() {
+		t.Fatalf("responseToModel returned diagnostic errors: %v", diags)
+	}
+
+	if m.Purpose.ValueString() != "TIMEMACHINE_SHARE" {
+		t.Errorf("Purpose = %v, want TIMEMACHINE_SHARE", m.Purpose.ValueString())
+	}
+	if m.Locked.ValueBool() {
+		t.Error("Locked = true, want false (zero value when API returns null)")
+	}
+	if m.VUID.ValueString() != "" {
+		t.Errorf("VUID = %v, want \"\" (not present outside LEGACY_SHARE options)", m.VUID.ValueString())
+	}
+	if m.Recyclebin.ValueBool() {
+		t.Error("Recyclebin = true, want false (zero value, not modeled by TIMEMACHINE_SHARE options)")
+	}
+
+	var ha []string
+	if diags := m.HostsAllow.ElementsAs(ctx, &ha, false); diags.HasError() {
+		t.Fatalf("HostsAllow.ElementsAs failed: %v", diags)
+	}
+	if len(ha) != 0 {
+		t.Errorf("HostsAllow = %v, want [] (not modeled by TIMEMACHINE_SHARE options)", ha)
 	}
 }
