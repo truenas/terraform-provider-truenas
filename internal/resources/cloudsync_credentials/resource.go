@@ -131,7 +131,7 @@ func (r *CredentialsResource) Read(ctx context.Context, req resource.ReadRequest
 			resp.Diagnostics.AddError("Parse state provider_config JSON", err.Error())
 			return
 		}
-		if providerDrifted(stateProvider, apiResp.Provider) {
+		if providerDrifted(stateProvider, combinedProviderMap(&apiResp)) {
 			providerJSON, diags := apiProviderJSON(&apiResp)
 			resp.Diagnostics.Append(diags...)
 			if resp.Diagnostics.HasError() {

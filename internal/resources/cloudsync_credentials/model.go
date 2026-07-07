@@ -28,11 +28,14 @@ type CredentialsDataSourceModel struct {
 }
 
 // credentialsAPI is the JSON wire format for a TrueNAS cloudsync credentials
-// object.
+// object on SCALE 26.0. "provider" is a bare string type code (e.g. "S3",
+// "STORJ_IX"); the provider-specific settings live in a separate
+// "attributes" object.
 type credentialsAPI struct {
-	ID       int64          `json:"id"`
-	Name     string         `json:"name"`
-	Provider map[string]any `json:"provider"`
+	ID         int64          `json:"id"`
+	Name       string         `json:"name"`
+	Provider   string         `json:"provider"`
+	Attributes map[string]any `json:"attributes"`
 }
 
 // providerMap parses the provider_config JSON string and validates that it
@@ -49,6 +52,37 @@ func (m *CredentialsModel) providerMap() (map[string]any, diag.Diagnostics) {
 		return nil, diags
 	}
 	return p, diags
+}
+
+// splitProviderMap separates a provider_config map (as returned by
+// providerMap) into the wire-format "provider" type string and the
+// remaining "attributes" map.
+func splitProviderMap(p map[string]any) (string, map[string]any, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	typeVal, ok := p["type"].(string)
+	if !ok {
+		diags.AddError("Invalid provider_config", "provider_config JSON key \"type\" must be a string")
+		return "", nil, diags
+	}
+	attributes := make(map[string]any, len(p)-1)
+	for k, v := range p {
+		if k == "type" {
+			continue
+		}
+		attributes[k] = v
+	}
+	return typeVal, attributes, diags
+}
+
+// combinedProviderMap reconstructs a provider_config-shaped map from a
+// credentialsAPI response: {"type": <provider>, ...attributes}.
+func combinedProviderMap(api *credentialsAPI) map[string]any {
+	combined := make(map[string]any, len(api.Attributes)+1)
+	combined["type"] = api.Provider
+	for k, v := range api.Attributes {
+		combined[k] = v
+	}
+	return combined
 }
 
 // providerDrifted reports whether any key present in stateProvider has a
@@ -80,10 +114,11 @@ func responseToModel(api *credentialsAPI, m *CredentialsModel) {
 	m.Name = types.StringValue(api.Name)
 }
 
-// apiProviderJSON marshals api.Provider to a canonical JSON string.
+// apiProviderJSON reconstructs the provider_config-shaped JSON string
+// ({"type": <provider>, ...attributes}) from a credentialsAPI response.
 func apiProviderJSON(api *credentialsAPI) (string, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	b, err := json.Marshal(api.Provider)
+	b, err := json.Marshal(combinedProviderMap(api))
 	if err != nil {
 		diags.AddError("Failed to marshal provider config", err.Error())
 		return "", diags
@@ -97,9 +132,15 @@ func (m *CredentialsModel) createPayload() (map[string]any, diag.Diagnostics) {
 	if diags.HasError() {
 		return nil, diags
 	}
+	providerType, attributes, splitDiags := splitProviderMap(p)
+	diags.Append(splitDiags...)
+	if diags.HasError() {
+		return nil, diags
+	}
 	return map[string]any{
-		"name":     m.Name.ValueString(),
-		"provider": p,
+		"name":       m.Name.ValueString(),
+		"provider":   providerType,
+		"attributes": attributes,
 	}, diags
 }
 
@@ -109,23 +150,30 @@ func (m *CredentialsModel) updatePayload() (map[string]any, diag.Diagnostics) {
 	if diags.HasError() {
 		return nil, diags
 	}
+	providerType, attributes, splitDiags := splitProviderMap(p)
+	diags.Append(splitDiags...)
+	if diags.HasError() {
+		return nil, diags
+	}
 	return map[string]any{
-		"name":     m.Name.ValueString(),
-		"provider": p,
+		"name":       m.Name.ValueString(),
+		"provider":   providerType,
+		"attributes": attributes,
 	}, diags
 }
 
 // responseToDataSourceModel maps credentialsAPI into
-// CredentialsDataSourceModel, marshaling Provider to a JSON string.
+// CredentialsDataSourceModel, reconstructing the provider_config JSON
+// string from the split provider/attributes wire fields.
 func responseToDataSourceModel(api *credentialsAPI, m *CredentialsDataSourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 	m.ID = types.Int64Value(api.ID)
 	m.Name = types.StringValue(api.Name)
-	b, err := json.Marshal(api.Provider)
-	if err != nil {
-		diags.AddError("Failed to marshal provider config", err.Error())
+	providerJSON, jsonDiags := apiProviderJSON(api)
+	diags.Append(jsonDiags...)
+	if diags.HasError() {
 		return diags
 	}
-	m.Provider = types.StringValue(string(b))
+	m.Provider = types.StringValue(providerJSON)
 	return diags
 }

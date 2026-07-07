@@ -223,6 +223,36 @@ func main() {
 		}
 		fmt.Println("=== deleted ok ===")
 	}
+	if section == "csprobe" {
+		// Create a throwaway cloudsync credential, dump create +
+		// get_instance responses, delete it.
+		payload := map[string]any{
+			"name":     "tf-probe-cscreds",
+			"provider": "STORJ_IX",
+			"attributes": map[string]any{
+				"access_key_id":     "x",
+				"secret_access_key": "y",
+			},
+		}
+		raw, err := c.Call(context.Background(), "cloudsync.credentials.create", payload)
+		if err != nil {
+			log.Fatal("create:", err)
+		}
+		fmt.Printf("=== create response ===\n%s\n", raw)
+		var created struct {
+			ID int64 `json:"id"`
+		}
+		json.Unmarshal(raw, &created)
+		raw2, err := c.Call(context.Background(), "cloudsync.credentials.get_instance", created.ID)
+		if err != nil {
+			log.Fatal("get_instance:", err)
+		}
+		fmt.Printf("=== get_instance response ===\n%s\n", raw2)
+		if _, err := c.Call(context.Background(), "cloudsync.credentials.delete", created.ID); err != nil {
+			log.Fatal("delete:", err)
+		}
+		fmt.Println("=== deleted ok ===")
+	}
 	if section == "namespaces" {
 		raw, err := c.Call(context.Background(), "core.get_methods")
 		if err != nil {
