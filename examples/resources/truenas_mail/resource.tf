@@ -27,6 +27,3 @@ data "truenas_mail" "current" {}
 output "mail_server" {
   value = "${data.truenas_mail.current.outgoingserver}:${data.truenas_mail.current.port}"
 }
-
-# Import (any ID works; it is normalized):
-#   terraform import truenas_mail.config mail

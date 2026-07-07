@@ -39,5 +39,4 @@ output "swappiness_original" {
   value = data.truenas_tunable.swappiness.orig_value
 }
 
-# var and type force replacement when changed. Import by numeric ID:
-#   terraform import truenas_tunable.swappiness 1
+# var and type force replacement when changed.

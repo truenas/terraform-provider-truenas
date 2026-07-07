@@ -30,6 +30,3 @@ output "current_be" {
 
 # Deleting the resource destroys the BE — refused if it is the active or
 # activated one.
-#
-# Import by BE name:
-#   terraform import truenas_boot_environment.pre_upgrade pre-upgrade-backup

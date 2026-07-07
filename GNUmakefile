@@ -28,7 +28,7 @@ testacc-disruptive:
 
 generate:
 	go generate ./...
-	go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-name truenas
+	go tool tfplugindocs generate --provider-name truenas
 
 fmt:
 	gofmt -s -w .

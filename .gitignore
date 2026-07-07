@@ -4,4 +4,5 @@ terraform-provider-truenas_*
 *.tfstate.backup
 .terraform/
 .terraform.lock.hcl
-docs/
+docs/superpowers/
+docs/PROJECT-STATUS.md

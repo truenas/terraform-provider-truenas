@@ -30,6 +30,3 @@ output "current_alert_classes" {
 
 # Destroying this resource resets all class overrides to TrueNAS defaults
 # (classes = {}).
-#
-# Import (any ID works; it is normalized):
-#   terraform import truenas_alert_policy.default alert_policy

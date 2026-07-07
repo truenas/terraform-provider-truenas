@@ -28,6 +28,3 @@ data "truenas_ntp_server" "debian_pool" {
 output "debian_pool_id" {
   value = data.truenas_ntp_server.debian_pool.id
 }
-
-# Import by numeric ID:
-#   terraform import truenas_ntp_server.primary 1

@@ -40,6 +40,3 @@ data "truenas_alert_service" "existing" {
 output "existing_alert_level" {
   value = data.truenas_alert_service.existing.level
 }
-
-# Import an alert service created in the UI (numeric ID):
-#   terraform import truenas_alert_service.ops_mail 1
