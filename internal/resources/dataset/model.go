@@ -57,7 +57,13 @@ func (m *DatasetModel) apiPayload() map[string]any {
 	if !m.Reservation.IsNull() && !m.Reservation.IsUnknown() {
 		p["reservation"] = m.Reservation.ValueInt64()
 	}
-	if !m.VolSize.IsNull() && !m.VolSize.IsUnknown() {
+	// volsize only applies to VOLUME datasets; pool.dataset.update rejects
+	// "volsize" outright for FILESYSTEM datasets (TrueNAS API error code
+	// 22: 'volsize'). VolSize is Computed in the schema and reads back as 0
+	// for FILESYSTEM datasets, so a plain null/unknown guard isn't enough -
+	// state carries a known-but-zero value into every later plan. Only
+	// include it when it's a real, known, non-zero size.
+	if !m.VolSize.IsNull() && !m.VolSize.IsUnknown() && m.VolSize.ValueInt64() != 0 {
 		p["volsize"] = m.VolSize.ValueInt64()
 	}
 	return p

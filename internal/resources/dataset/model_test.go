@@ -58,3 +58,45 @@ func TestDatasetCreateAPIPayloadStillIncludesType(t *testing.T) {
 		t.Errorf("expected type=FILESYSTEM in create payload, got %v", payload["type"])
 	}
 }
+
+// TestDatasetUpdateAPIPayloadOmitsVolsizeForFilesystem is a regression test
+// for a live acceptance failure: "truenas API error (code 22): 'volsize'".
+// After a FILESYSTEM dataset is created and read back, VolSize is a known
+// (but zero) value in state - responseToModel sets it from
+// api.VolSize.Parsed, which is 0 for FILESYSTEM datasets. Because VolSize
+// is Computed with UseStateForUnknown, that known-zero value flows into
+// every later plan, so a plain null/unknown guard on apiPayload wasn't
+// enough to keep "volsize" out of pool.dataset.update payloads for
+// FILESYSTEM datasets. Only a real, known, non-zero size (as set for
+// type=VOLUME) should be sent.
+func TestDatasetUpdateAPIPayloadOmitsVolsizeForFilesystem(t *testing.T) {
+	m := &DatasetModel{
+		Name:        types.StringValue("tank/mydata"),
+		Type:        types.StringValue("filesystem"),
+		Compression: types.StringValue("lz4"),
+		VolSize:     types.Int64Value(0), // as read back for FILESYSTEM datasets
+	}
+
+	payload := m.updateAPIPayload()
+
+	if _, ok := payload["volsize"]; ok {
+		t.Errorf("update payload for FILESYSTEM dataset must not include \"volsize\", got: %v", payload)
+	}
+}
+
+// TestDatasetAPIPayloadIncludesVolsizeForVolume verifies that a real,
+// non-zero volsize (as used by type=VOLUME datasets) still makes it into
+// the payload - the fix must not suppress legitimate volsize values.
+func TestDatasetAPIPayloadIncludesVolsizeForVolume(t *testing.T) {
+	m := &DatasetModel{
+		Name:    types.StringValue("tank/myzvol"),
+		Type:    types.StringValue("volume"),
+		VolSize: types.Int64Value(1073741824),
+	}
+
+	payload := m.apiPayload()
+
+	if payload["volsize"] != int64(1073741824) {
+		t.Errorf("expected volsize=1073741824 for VOLUME dataset, got %v", payload["volsize"])
+	}
+}

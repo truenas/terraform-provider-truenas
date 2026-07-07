@@ -2,6 +2,9 @@ package pool
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -89,7 +92,7 @@ type poolAPI struct {
 	Free      int64  `json:"free"`
 	Allocated int64  `json:"allocated"`
 	AutoTrim  struct {
-		Parsed bool `json:"parsed"`
+		Parsed autotrimParsed `json:"parsed"`
 	} `json:"autotrim"`
 	Topology struct {
 		Data  []poolVdev `json:"data"`
@@ -106,6 +109,37 @@ type poolVdev struct {
 
 type poolDisk struct {
 	Disk string `json:"disk"`
+}
+
+// autotrimParsed decodes the "parsed" field of the autotrim ZFS property
+// object returned by pool.query / pool.get_instance. TrueNAS sends this as
+// the string "ON"/"OFF" (case varies), not a JSON bool - a naive `bool`
+// field fails with "json: cannot unmarshal string into Go struct field
+// .autotrim.parsed of type bool". Accept a native JSON bool too, in case
+// the API shape ever changes.
+type autotrimParsed bool
+
+func (a *autotrimParsed) UnmarshalJSON(data []byte) error {
+	var raw any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	switch v := raw.(type) {
+	case bool:
+		*a = autotrimParsed(v)
+	case string:
+		switch strings.ToLower(v) {
+		case "on", "true":
+			*a = true
+		case "off", "false":
+			*a = false
+		default:
+			return fmt.Errorf("autotrim.parsed: unrecognized value %q", v)
+		}
+	default:
+		return fmt.Errorf("autotrim.parsed: unsupported JSON type %T", raw)
+	}
+	return nil
 }
 
 // buildTopology converts the wire-format topology in a poolAPI response into
@@ -174,7 +208,7 @@ func responseToModel(ctx context.Context, api *poolAPI, m *PoolModel) diag.Diagn
 	m.Size = types.Int64Value(api.Size)
 	m.Free = types.Int64Value(api.Free)
 	m.Allocated = types.Int64Value(api.Allocated)
-	m.AutoTrim = types.BoolValue(api.AutoTrim.Parsed)
+	m.AutoTrim = types.BoolValue(bool(api.AutoTrim.Parsed))
 
 	topo, d := buildTopology(ctx, api)
 	diags.Append(d...)
@@ -199,7 +233,7 @@ func responseToDataSourceModel(ctx context.Context, api *poolAPI, m *PoolDataSou
 	m.Size = types.Int64Value(api.Size)
 	m.Free = types.Int64Value(api.Free)
 	m.Allocated = types.Int64Value(api.Allocated)
-	m.AutoTrim = types.BoolValue(api.AutoTrim.Parsed)
+	m.AutoTrim = types.BoolValue(bool(api.AutoTrim.Parsed))
 
 	topo, d := buildTopology(ctx, api)
 	diags.Append(d...)
