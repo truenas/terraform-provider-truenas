@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"os"
 	"sync"
 	"testing"
@@ -16,11 +17,6 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/provider"
 )
 
-// TestTrueNASEndpoint is the default TrueNAS WebSocket endpoint used for
-// acceptance tests when TRUENAS_ENDPOINT is not set. Prefer Endpoint() over
-// referencing this constant directly.
-const TestTrueNASEndpoint = "wss://192.168.1.68/websocket"
-
 var ProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 	"truenas": providerserver.NewProtocol6WithError(provider.New("test")()),
 }
@@ -31,12 +27,26 @@ var (
 )
 
 // Endpoint returns the TrueNAS WebSocket endpoint to use for acceptance
-// tests, from TRUENAS_ENDPOINT, defaulting to TestTrueNASEndpoint.
+// tests, from the TRUENAS_ENDPOINT environment variable. When unset it
+// returns a syntactically valid RFC 6761 .invalid placeholder: test config
+// strings are built before PreCheck gets a chance to skip, so this must not
+// fail — PreCheck enforces the real requirement before anything dials out.
 func Endpoint() string {
 	if v := os.Getenv("TRUENAS_ENDPOINT"); v != "" {
 		return v
 	}
-	return TestTrueNASEndpoint
+	return "wss://truenas.invalid/websocket"
+}
+
+// EndpointHost returns the bare host (IP or name) portion of Endpoint(),
+// for tests that must bind or reference an address on the target box
+// (e.g. iSCSI portal listen IPs, NVMe-oF port addresses).
+func EndpointHost() string {
+	u, err := url.Parse(Endpoint())
+	if err != nil || u.Host == "" {
+		panic("acctest: cannot parse host from TRUENAS_ENDPOINT")
+	}
+	return u.Hostname()
 }
 
 // TestPool returns the ZFS pool to use for acceptance tests, from
@@ -99,6 +109,9 @@ func PreCheck(t *testing.T) {
 	t.Helper()
 	if os.Getenv("TF_ACC") == "" {
 		t.Skip("Set TF_ACC=1 to run acceptance tests")
+	}
+	if os.Getenv("TRUENAS_ENDPOINT") == "" {
+		t.Fatal("Set TRUENAS_ENDPOINT (e.g. wss://truenas.example.com/websocket) for acceptance tests")
 	}
 	if os.Getenv("TRUENAS_API_KEY") == "" && (os.Getenv("TRUENAS_USERNAME") == "" || os.Getenv("TRUENAS_PASSWORD") == "") {
 		t.Fatal("Set TRUENAS_API_KEY or TRUENAS_USERNAME+TRUENAS_PASSWORD for acceptance tests")

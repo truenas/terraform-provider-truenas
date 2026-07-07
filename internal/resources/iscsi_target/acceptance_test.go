@@ -59,7 +59,7 @@ resource "truenas_iscsi_portal" "fixture" {
   comment = %q
   listen = [
     {
-      ip = "192.168.1.68"
+      ip = %q
     }
   ]
 }
@@ -75,7 +75,7 @@ resource "truenas_iscsi_target" "test" {
     }
   ]
 }
-`, portalComment, name, alias)
+`, portalComment, acctest.EndpointHost(), name, alias)
 }
 
 func testAccCheckISCSITargetDestroyed(name string) resource.TestCheckFunc {

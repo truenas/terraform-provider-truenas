@@ -92,7 +92,7 @@ terraform {
 }
 
 provider "truenas" {
-  endpoint = "wss://192.168.1.68/websocket"
+  endpoint = "wss://truenas.example.com/websocket"
   api_key  = var.truenas_api_key
 
   # TLS: pick one (or neither, for a system-trusted certificate)
@@ -206,7 +206,7 @@ go test ./...
 Acceptance tests exercise a **live TrueNAS box** in three tiers:
 
 ```sh
-export TRUENAS_ENDPOINT="wss://<host>/websocket"   # default: wss://192.168.1.68/websocket
+export TRUENAS_ENDPOINT="wss://truenas.example.com/websocket"  # required
 export TRUENAS_API_KEY="..."
 export TRUENAS_TEST_POOL="tank"                     # pool for test fixtures
 

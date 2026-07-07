@@ -29,7 +29,7 @@ func TestAccNVMetPort_basic(t *testing.T) {
 				Config: acctest.ProviderConfig() + testAccNVMetPortConfig(trsvcid, false, 0),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_nvmet_port.test", "addr_trtype", "TCP"),
-					resource.TestCheckResourceAttr("truenas_nvmet_port.test", "addr_traddr", "192.168.1.68"),
+					resource.TestCheckResourceAttr("truenas_nvmet_port.test", "addr_traddr", acctest.EndpointHost()),
 					resource.TestCheckResourceAttr("truenas_nvmet_port.test", "addr_trsvcid", fmt.Sprintf("%d", trsvcid)),
 					resource.TestCheckResourceAttr("truenas_nvmet_port.test", "enabled", "false"),
 					resource.TestCheckResourceAttrSet("truenas_nvmet_port.test", "id"),
@@ -57,21 +57,21 @@ func testAccNVMetPortConfig(trsvcid int, enabled bool, maxQueueSize int) string 
 		return fmt.Sprintf(`
 resource "truenas_nvmet_port" "test" {
   addr_trtype  = "TCP"
-  addr_traddr  = "192.168.1.68"
+  addr_traddr  = %q
   addr_trsvcid = %d
   enabled      = %v
 }
-`, trsvcid, enabled)
+`, acctest.EndpointHost(), trsvcid, enabled)
 	}
 	return fmt.Sprintf(`
 resource "truenas_nvmet_port" "test" {
   addr_trtype    = "TCP"
-  addr_traddr    = "192.168.1.68"
+  addr_traddr    = %q
   addr_trsvcid   = %d
   enabled        = %v
   max_queue_size = %d
 }
-`, trsvcid, enabled, maxQueueSize)
+`, acctest.EndpointHost(), trsvcid, enabled, maxQueueSize)
 }
 
 func testAccCheckNVMetPortDestroyed(s *terraform.State) error {

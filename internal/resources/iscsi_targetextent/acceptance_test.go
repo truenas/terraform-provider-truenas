@@ -51,7 +51,7 @@ func TestAccISCSIEndToEnd(t *testing.T) {
 					resource.TestCheckResourceAttrSet("truenas_iscsi_portal.test", "id"),
 					resource.TestCheckResourceAttr("truenas_iscsi_portal.test", "comment", portalComment),
 					resource.TestCheckResourceAttrSet("truenas_iscsi_portal.test", "tag"),
-					resource.TestCheckResourceAttr("truenas_iscsi_portal.test", "listen.0.ip", "192.168.1.68"),
+					resource.TestCheckResourceAttr("truenas_iscsi_portal.test", "listen.0.ip", acctest.EndpointHost()),
 
 					// Initiator
 					resource.TestCheckResourceAttrSet("truenas_iscsi_initiator.test", "id"),
@@ -132,7 +132,7 @@ resource "truenas_iscsi_portal" "test" {
   comment = %q
   listen = [
     {
-      ip = "192.168.1.68"
+      ip = %q
     }
   ]
 }
@@ -179,7 +179,7 @@ resource "truenas_iscsi_targetextent" "test" {
   extent = truenas_iscsi_extent.test.id
   lunid  = 0
 }
-`, portalComment, initiatorComment, authTag, authUser, authSecret,
+`, portalComment, acctest.EndpointHost(), initiatorComment, authTag, authUser, authSecret,
 		zvolName, extentName, extentComment, targetName, targetAlias)
 }
 

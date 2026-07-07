@@ -20,7 +20,7 @@ import (
 //
 // Safety: this test never references the box's LIVE NVMe-oF configuration
 // (subsys id=1 "proxmox-test", port id=1 TCP 4420, namespace id=1,
-// port_subsys id=1). The test port listens on 192.168.1.68:14420 (distinct
+// port_subsys id=1). The test port listens on the box IP at :14420 (distinct
 // from the live port's service ID) and is created with enabled=false so it
 // never opens a live listener.
 func TestAccNVMeTEndToEnd(t *testing.T) {
@@ -48,7 +48,7 @@ func TestAccNVMeTEndToEnd(t *testing.T) {
 					// Port
 					resource.TestCheckResourceAttrSet("truenas_nvmet_port.test", "id"),
 					resource.TestCheckResourceAttr("truenas_nvmet_port.test", "addr_trtype", "TCP"),
-					resource.TestCheckResourceAttr("truenas_nvmet_port.test", "addr_traddr", "192.168.1.68"),
+					resource.TestCheckResourceAttr("truenas_nvmet_port.test", "addr_traddr", acctest.EndpointHost()),
 					resource.TestCheckResourceAttr("truenas_nvmet_port.test", "addr_trsvcid", "14420"),
 					resource.TestCheckResourceAttr("truenas_nvmet_port.test", "enabled", "false"),
 
@@ -121,7 +121,7 @@ resource "truenas_nvmet_subsys" "test" {
 
 resource "truenas_nvmet_port" "test" {
   addr_trtype  = "TCP"
-  addr_traddr  = "192.168.1.68"
+  addr_traddr  = %q
   addr_trsvcid = 14420
   enabled      = false
 }
@@ -152,7 +152,7 @@ resource "truenas_nvmet_port_subsys" "test" {
   port_id   = truenas_nvmet_port.test.id
   subsys_id = truenas_nvmet_subsys.test.id
 }
-`, subsysName, zvolName, namespaceEnabled, hostNQN, hostDescription)
+`, subsysName, acctest.EndpointHost(), zvolName, namespaceEnabled, hostNQN, hostDescription)
 }
 
 // idResults is the shape returned by every TrueNAS <namespace>.query method
@@ -201,8 +201,8 @@ func testAccCheckNVMeTEndToEndDestroyed(subsysName, devicePath, hostNQN, zvolNam
 			return err
 		}
 		if err := checkQueryEmpty(ctx, c, "nvmet.port.query",
-			[][]any{{"addr_traddr", "=", "192.168.1.68"}, {"addr_trsvcid", "=", 14420}},
-			"nvmet port 192.168.1.68:14420",
+			[][]any{{"addr_traddr", "=", acctest.EndpointHost()}, {"addr_trsvcid", "=", 14420}},
+			"nvmet port <endpoint-host>:14420",
 		); err != nil {
 			return err
 		}

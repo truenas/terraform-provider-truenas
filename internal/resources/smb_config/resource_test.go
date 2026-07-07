@@ -24,7 +24,7 @@ func baseModel(ctx context.Context, t *testing.T) *SMBConfigModel {
 	if diags.HasError() {
 		t.Fatalf("unexpected error building list: %v", diags)
 	}
-	bindip, diags := types.ListValueFrom(ctx, types.StringType, []string{"192.168.1.68"})
+	bindip, diags := types.ListValueFrom(ctx, types.StringType, []string{"192.0.2.10"})
 	if diags.HasError() {
 		t.Fatalf("unexpected error building list: %v", diags)
 	}
@@ -230,7 +230,7 @@ func TestResponseToModel_ListsSet(t *testing.T) {
 	api := &smbConfigAPI{
 		ID:              1,
 		NetBIOSAlias:    []string{"ALIAS1", "ALIAS2"},
-		BindIP:          []string{"192.168.1.68"},
+		BindIP:          []string{"192.0.2.10"},
 		SearchProtocols: []string{"WSD", "NSD"},
 	}
 
@@ -252,8 +252,8 @@ func TestResponseToModel_ListsSet(t *testing.T) {
 	if d := m.BindIP.ElementsAs(context.Background(), &bindip, false); d.HasError() {
 		t.Fatalf("unexpected error: %v", d)
 	}
-	if len(bindip) != 1 || bindip[0] != "192.168.1.68" {
-		t.Errorf("BindIP = %v, want [192.168.1.68]", bindip)
+	if len(bindip) != 1 || bindip[0] != "192.0.2.10" {
+		t.Errorf("BindIP = %v, want [192.0.2.10]", bindip)
 	}
 
 	var search []string
@@ -434,7 +434,7 @@ func TestUpdatePayload_AllKnownFieldsSent(t *testing.T) {
 
 	for name, wantVal := range map[string][]string{
 		"netbiosalias":     {"ALIAS1"},
-		"bindip":           {"192.168.1.68"},
+		"bindip":           {"192.0.2.10"},
 		"search_protocols": {"WSD"},
 	} {
 		got, ok := p[name].([]string)

@@ -16,7 +16,7 @@
 - Module path: `github.com/truenas/terraform-provider-truenas`
 - Provider registry address: `registry.terraform.io/truenas/truenas`
 - TrueNAS SCALE target only (not TrueNAS CORE)
-- Acceptance tests run against live TrueNAS at `192.168.1.68`; gate with `TF_ACC=1`
+- Acceptance tests run against live TrueNAS at `the target box`; gate with `TF_ACC=1`
 - No mocking of the TrueNAS WebSocket API in acceptance tests
 - `password` and `api_key` provider fields must be `Sensitive: true`
 - All provider config fields must support env var fallback
@@ -1169,7 +1169,7 @@ func (p *TrueNASProvider) Schema(_ context.Context, _ provider.SchemaRequest, re
 		Description: "Manages TrueNAS SCALE resources via the WebSocket API.",
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
-				Description: "TrueNAS WebSocket endpoint, e.g. wss://192.168.1.68/websocket. Env: TRUENAS_ENDPOINT",
+				Description: "TrueNAS WebSocket endpoint, e.g. wss://truenas.example.com/websocket. Env: TRUENAS_ENDPOINT",
 				Required:    true,
 			},
 			"api_key": schema.StringAttribute{
@@ -1874,7 +1874,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/provider"
 )
 
-const TestTrueNASEndpoint = "wss://192.168.1.68/websocket"
+const TestTrueNASEndpoint = "wss://truenas.example.com/websocket"
 
 var ProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 	"truenas": providerserver.NewProtocol6WithError(provider.New("test")()),
@@ -1915,7 +1915,7 @@ func PreCheck(t *testing.T) {
 func ProviderConfig() string {
 	return `
 provider "truenas" {
-  endpoint = "wss://192.168.1.68/websocket"
+  endpoint = "wss://truenas.example.com/websocket"
   insecure = true
 }
 `
@@ -2509,7 +2509,7 @@ terraform {
 }
 
 provider "truenas" {
-  endpoint = "wss://192.168.1.68/websocket"
+  endpoint = "wss://truenas.example.com/websocket"
   api_key  = var.truenas_api_key
   insecure = true
 }

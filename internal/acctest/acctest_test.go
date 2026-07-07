@@ -22,13 +22,17 @@ func TestRandName(t *testing.T) {
 }
 
 func TestEndpoint(t *testing.T) {
-	if got := Endpoint(); got != TestTrueNASEndpoint {
-		t.Fatalf("Endpoint() = %q, want default %q", got, TestTrueNASEndpoint)
+	t.Setenv("TRUENAS_ENDPOINT", "")
+	if got := Endpoint(); got != "wss://truenas.invalid/websocket" {
+		t.Fatalf("Endpoint() = %q, want .invalid placeholder when env unset", got)
 	}
 
 	t.Setenv("TRUENAS_ENDPOINT", "wss://example.invalid/websocket")
 	if got := Endpoint(); got != "wss://example.invalid/websocket" {
-		t.Fatalf("Endpoint() = %q, want env override %q", got, "wss://example.invalid/websocket")
+		t.Fatalf("Endpoint() = %q, want env value %q", got, "wss://example.invalid/websocket")
+	}
+	if got := EndpointHost(); got != "example.invalid" {
+		t.Fatalf("EndpointHost() = %q, want %q", got, "example.invalid")
 	}
 }
 

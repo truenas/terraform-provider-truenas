@@ -122,7 +122,7 @@ func TestCreatePayload_TrtypeAndTraddrAlwaysPresent(t *testing.T) {
 
 	m := NVMetPortModel{
 		AddrTrtype:     types.StringValue("TCP"),
-		AddrTraddr:     types.StringValue("192.168.1.68"),
+		AddrTraddr:     types.StringValue("192.0.2.10"),
 		AddrTrsvcid:    types.Int64Null(),
 		Enabled:        types.BoolNull(),
 		InlineDataSize: types.Int64Null(),
@@ -138,8 +138,8 @@ func TestCreatePayload_TrtypeAndTraddrAlwaysPresent(t *testing.T) {
 	if payload["addr_trtype"] != "TCP" {
 		t.Errorf("payload[addr_trtype] = %v, want TCP", payload["addr_trtype"])
 	}
-	if payload["addr_traddr"] != "192.168.1.68" {
-		t.Errorf("payload[addr_traddr] = %v, want 192.168.1.68", payload["addr_traddr"])
+	if payload["addr_traddr"] != "192.0.2.10" {
+		t.Errorf("payload[addr_traddr] = %v, want 192.0.2.10", payload["addr_traddr"])
 	}
 	for _, key := range []string{"addr_trsvcid", "enabled", "inline_data_size", "max_queue_size", "pi_enable"} {
 		if _, ok := payload[key]; ok {
@@ -158,7 +158,7 @@ func TestCreatePayload_AllFieldsKnown(t *testing.T) {
 
 	m := NVMetPortModel{
 		AddrTrtype:     types.StringValue("TCP"),
-		AddrTraddr:     types.StringValue("192.168.1.68"),
+		AddrTraddr:     types.StringValue("192.0.2.10"),
 		AddrTrsvcid:    types.Int64Value(14420),
 		Enabled:        types.BoolValue(true),
 		InlineDataSize: types.Int64Value(8192),
@@ -173,7 +173,7 @@ func TestCreatePayload_AllFieldsKnown(t *testing.T) {
 
 	want := map[string]any{
 		"addr_trtype":      "TCP",
-		"addr_traddr":      "192.168.1.68",
+		"addr_traddr":      "192.0.2.10",
 		"addr_trsvcid":     int64(14420),
 		"enabled":          true,
 		"inline_data_size": int64(8192),
@@ -198,7 +198,7 @@ func TestUpdatePayload_NoAddrTrtypeKey(t *testing.T) {
 
 	m := NVMetPortModel{
 		AddrTrtype:     types.StringValue("TCP"),
-		AddrTraddr:     types.StringValue("192.168.1.68"),
+		AddrTraddr:     types.StringValue("192.0.2.10"),
 		AddrTrsvcid:    types.Int64Value(14420),
 		Enabled:        types.BoolValue(true),
 		InlineDataSize: types.Int64Null(),
@@ -214,8 +214,8 @@ func TestUpdatePayload_NoAddrTrtypeKey(t *testing.T) {
 	if _, ok := payload["addr_trtype"]; ok {
 		t.Error("update payload must never contain 'addr_trtype' key")
 	}
-	if payload["addr_traddr"] != "192.168.1.68" {
-		t.Errorf("payload[addr_traddr] = %v, want 192.168.1.68", payload["addr_traddr"])
+	if payload["addr_traddr"] != "192.0.2.10" {
+		t.Errorf("payload[addr_traddr] = %v, want 192.0.2.10", payload["addr_traddr"])
 	}
 	if payload["addr_trsvcid"] != int64(14420) {
 		t.Errorf("payload[addr_trsvcid] = %v, want 14420", payload["addr_trsvcid"])
@@ -241,7 +241,7 @@ func TestResponseToModel_NilPointers(t *testing.T) {
 	api := &nvmetPortAPI{
 		ID:             1,
 		AddrTrtype:     "TCP",
-		AddrTraddr:     "192.168.1.68",
+		AddrTraddr:     "192.0.2.10",
 		AddrTrsvcid:    4420,
 		Enabled:        true,
 		InlineDataSize: nil,
@@ -280,7 +280,7 @@ func TestResponseToModel_AllFields(t *testing.T) {
 	api := &nvmetPortAPI{
 		ID:             1,
 		AddrTrtype:     "TCP",
-		AddrTraddr:     "192.168.1.68",
+		AddrTraddr:     "192.0.2.10",
 		AddrTrsvcid:    4420,
 		Enabled:        true,
 		InlineDataSize: &inlineDataSize,
@@ -302,8 +302,8 @@ func TestResponseToModel_AllFields(t *testing.T) {
 	if m.AddrTrtype.ValueString() != "TCP" {
 		t.Errorf("AddrTrtype = %v, want TCP", m.AddrTrtype.ValueString())
 	}
-	if m.AddrTraddr.ValueString() != "192.168.1.68" {
-		t.Errorf("AddrTraddr = %v, want 192.168.1.68", m.AddrTraddr.ValueString())
+	if m.AddrTraddr.ValueString() != "192.0.2.10" {
+		t.Errorf("AddrTraddr = %v, want 192.0.2.10", m.AddrTraddr.ValueString())
 	}
 	if m.AddrTrsvcid.ValueInt64() != 4420 {
 		t.Errorf("AddrTrsvcid = %v, want 4420", m.AddrTrsvcid.ValueInt64())

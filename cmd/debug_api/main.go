@@ -48,7 +48,10 @@ func firstItem(v any) any {
 }
 
 func main() {
-	endpoint := "wss://192.168.1.68/websocket"
+	endpoint := os.Getenv("TRUENAS_ENDPOINT")
+	if endpoint == "" {
+		log.Fatal("set TRUENAS_ENDPOINT (e.g. wss://truenas.example.com/websocket)")
+	}
 	apiKey := os.Getenv("TRUENAS_API_KEY")
 	if apiKey == "" {
 		log.Fatal("set TRUENAS_API_KEY")

@@ -32,7 +32,7 @@ func TestAccISCSIPortal_basic(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet("truenas_iscsi_portal.test", "id"),
 					resource.TestCheckResourceAttr("truenas_iscsi_portal.test", "comment", comment),
-					resource.TestCheckResourceAttr("truenas_iscsi_portal.test", "listen.0.ip", "192.168.1.68"),
+					resource.TestCheckResourceAttr("truenas_iscsi_portal.test", "listen.0.ip", acctest.EndpointHost()),
 					resource.TestCheckResourceAttrSet("truenas_iscsi_portal.test", "tag"),
 				),
 			},
@@ -58,11 +58,11 @@ resource "truenas_iscsi_portal" "test" {
   comment = %q
   listen = [
     {
-      ip = "192.168.1.68"
+      ip = %q
     }
   ]
 }
-`, comment)
+`, comment, acctest.EndpointHost())
 }
 
 func testAccCheckISCSIPortalDestroyed(comment string) resource.TestCheckFunc {

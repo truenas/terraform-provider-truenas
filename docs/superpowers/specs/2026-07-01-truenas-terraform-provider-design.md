@@ -89,7 +89,7 @@ func (c *Client) CallJob(ctx context.Context, method string, params ...any) (jso
 
 ```hcl
 provider "truenas" {
-  endpoint = "wss://192.168.1.68/websocket"   # required; env: TRUENAS_ENDPOINT
+  endpoint = "wss://truenas.example.com/websocket"   # required; env: TRUENAS_ENDPOINT
 
   # Exactly one auth method required:
   api_key  = "..."    # env: TRUENAS_API_KEY
@@ -167,7 +167,7 @@ Resources where the API returns a job ID (replication, cloud sync, pool wipe, et
 - Verify SCRAM exchange, job polling, reconnect, TLS config building.
 
 ### Acceptance tests (`make testacc`)
-- Require `TF_ACC=1` and live TrueNAS at `192.168.1.68`.
+- Require `TF_ACC=1` and live TrueNAS at `the target box`.
 - Each resource: Create / Read / Update / Delete / Import test cases.
 - No mocking of the TrueNAS API — real calls only.
 - Shared helpers in `internal/acctest/`: test provider config, client setup.

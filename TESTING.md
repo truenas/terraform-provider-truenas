@@ -24,7 +24,7 @@ make testacc-disruptive
 | Variable | Default | Meaning |
 |---|---|---|
 | `TF_ACC` | unset | Master gate: acceptance tests skip without `TF_ACC=1` |
-| `TRUENAS_ENDPOINT` | `wss://192.168.1.68/websocket` | Target box |
+| `TRUENAS_ENDPOINT` | — (required) | Target box, e.g. `wss://truenas.example.com/websocket` |
 | `TRUENAS_API_KEY` | — | Auth (or `TRUENAS_USERNAME` + `TRUENAS_PASSWORD`) |
 | `TRUENAS_TEST_POOL` | `tank` | Pool under which test datasets/zvols are created |
 | `TRUENAS_DISRUPTIVE` | unset | Enables Tier 2 (singleton set-and-restore) |
