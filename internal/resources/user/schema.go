@@ -99,6 +99,18 @@ func resourceSchema() schema.Schema {
 				ElementType: types.Int64Type,
 				Description: "List of additional group IDs the user belongs to.",
 			},
+			"group": schema.Int64Attribute{
+				Optional:    true,
+				Computed:    true,
+				Description: "Primary group ID for the user. Either 'group' or 'group_create' must be set when creating a user.",
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"group_create": schema.BoolAttribute{
+				Optional:    true,
+				Description: "When true, creates a new primary group matching the username instead of using an existing group id from 'group'. Write-only: only sent on create, never read back into state.",
+			},
 			"password": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,

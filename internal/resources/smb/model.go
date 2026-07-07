@@ -104,8 +104,9 @@ func responseToModel(ctx context.Context, api *smbAPI, m *SMBModel) diag.Diagnos
 }
 
 // apiPayload builds the map[string]any payload for sharing.smb.create /
-// sharing.smb.update. It includes 19 keys; vuid and locked are omitted because
-// they are server-generated.
+// sharing.smb.update. It includes 18 keys plus purpose when set to a known
+// value (19 total); vuid and locked are omitted because they are
+// server-generated.
 func (m *SMBModel) apiPayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
@@ -125,7 +126,7 @@ func (m *SMBModel) apiPayload(ctx context.Context) (map[string]any, diag.Diagnos
 		hostsDeny = []string{}
 	}
 
-	return map[string]any{
+	p := map[string]any{
 		"path":              m.Path.ValueString(),
 		"name":              m.Name.ValueString(),
 		"comment":           m.Comment.ValueString(),
@@ -143,6 +144,30 @@ func (m *SMBModel) apiPayload(ctx context.Context) (map[string]any, diag.Diagnos
 		"timemachine_quota": m.TimeMachineQuota.ValueInt64(),
 		"enabled":           m.Enabled.ValueBool(),
 		"home":              m.Home.ValueBool(),
-		"purpose":           m.Purpose.ValueString(),
-	}, diags
+	}
+
+	// purpose: SCALE 26.0 requires purpose to be one of validSMBPurposes
+	// (or omitted entirely) — sending "" unconditionally triggers EINVAL.
+	// Only include it when it's set to a known, non-empty value.
+	if v := m.Purpose.ValueString(); !m.Purpose.IsNull() && !m.Purpose.IsUnknown() && validSMBPurposes[v] {
+		p["purpose"] = v
+	}
+
+	return p, diags
+}
+
+// validSMBPurposes is the set of purpose values accepted by TrueNAS SCALE
+// 26.0's sharing.smb.create/update. Older 24.x values (NO_PRESET,
+// ENHANCED_TIMEMACHINE, MULTI_PROTOCOL_AFP, MULTI_PROTOCOL_NFS,
+// PRIVATE_DATASETS, WORM_DROPBOX, etc.) no longer exist on 26.0.
+var validSMBPurposes = map[string]bool{
+	"DEFAULT_SHARE":          true,
+	"LEGACY_SHARE":           true,
+	"TIMEMACHINE_SHARE":      true,
+	"MULTIPROTOCOL_SHARE":    true,
+	"TIME_LOCKED_SHARE":      true,
+	"PRIVATE_DATASETS_SHARE": true,
+	"EXTERNAL_SHARE":         true,
+	"VEEAM_REPOSITORY_SHARE": true,
+	"FCP_SHARE":              true,
 }

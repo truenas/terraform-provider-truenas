@@ -55,33 +55,34 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	raw, err := r.client.CallJob(ctx, "user.create", payload)
+	// user.create is job:false (sync); it returns either the created user
+	// object or a bare integer id, depending on middleware version.
+	raw, err := r.client.Call(ctx, "user.create", payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Create user failed", err.Error())
 		return
 	}
 
-	// CallJob returns the new user ID as int64 for async jobs.
-	var userID int64
-	if err := json.Unmarshal(raw, &userID); err != nil {
+	apiResp, userID, err := decodeCreateResult(raw)
+	if err != nil {
 		resp.Diagnostics.AddError("Parse create response", err.Error())
 		return
 	}
-
-	// Read back full state via get_instance.
-	raw2, err := r.client.Call(ctx, "user.get_instance", userID)
-	if err != nil {
-		resp.Diagnostics.AddError("Read-back after create failed", err.Error())
-		return
+	if apiResp == nil {
+		// Bare-int shape — read back full state via get_instance.
+		raw2, err := r.client.Call(ctx, "user.get_instance", userID)
+		if err != nil {
+			resp.Diagnostics.AddError("Read-back after create failed", err.Error())
+			return
+		}
+		apiResp = &userAPI{}
+		if err := json.Unmarshal(raw2, apiResp); err != nil {
+			resp.Diagnostics.AddError("Parse get_instance response", err.Error())
+			return
+		}
 	}
 
-	var apiResp userAPI
-	if err := json.Unmarshal(raw2, &apiResp); err != nil {
-		resp.Diagnostics.AddError("Parse get_instance response", err.Error())
-		return
-	}
-
-	resp.Diagnostics.Append(responseToModel(ctx, &apiResp, &plan)...)
+	resp.Diagnostics.Append(responseToModel(ctx, apiResp, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -139,7 +140,7 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	_, err := r.client.CallJob(ctx, "user.update", plan.ID.ValueInt64(), payload)
+	_, err := r.client.Call(ctx, "user.update", plan.ID.ValueInt64(), payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Update user failed", err.Error())
 		return
@@ -171,7 +172,7 @@ func (r *UserResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		return
 	}
 
-	_, err := r.client.CallJob(ctx, "user.delete", state.ID.ValueInt64())
+	_, err := r.client.Call(ctx, "user.delete", state.ID.ValueInt64())
 	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Delete user failed", err.Error())
 	}

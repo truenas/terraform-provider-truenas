@@ -2,6 +2,8 @@ package user
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -24,6 +26,8 @@ type UserModel struct {
 	SudoCommands         types.List   `tfsdk:"sudo_commands"`
 	SudoCommandsNoPasswd types.List   `tfsdk:"sudo_commands_nopasswd"`
 	Groups               types.List   `tfsdk:"groups"`
+	Group                types.Int64  `tfsdk:"group"`
+	GroupCreate          types.Bool   `tfsdk:"group_create"`
 	Password             types.String `tfsdk:"password"`
 	// Computed only
 	Builtin   types.Bool `tfsdk:"builtin"`
@@ -48,6 +52,7 @@ type UserDatasourceModel struct {
 	SudoCommands         types.List   `tfsdk:"sudo_commands"`
 	SudoCommandsNoPasswd types.List   `tfsdk:"sudo_commands_nopasswd"`
 	Groups               types.List   `tfsdk:"groups"`
+	Group                types.Int64  `tfsdk:"group"`
 	Builtin              types.Bool   `tfsdk:"builtin"`
 	Immutable            types.Bool   `tfsdk:"immutable"`
 	Local                types.Bool   `tfsdk:"local"`
@@ -105,6 +110,15 @@ func responseToDataSourceModel(ctx context.Context, api *userAPI, m *UserDatasou
 	diags.Append(d3...)
 	m.Groups = gl
 
+	groupID, groupOK, gErr := decodeGroupField(api.Group)
+	if gErr != nil {
+		diags.AddError("Parse group field", gErr.Error())
+	} else if groupOK {
+		m.Group = types.Int64Value(groupID)
+	} else {
+		m.Group = types.Int64Null()
+	}
+
 	m.Builtin = types.BoolValue(api.Builtin)
 	m.Immutable = types.BoolValue(api.Immutable)
 	m.Local = types.BoolValue(api.Local)
@@ -113,25 +127,61 @@ func responseToDataSourceModel(ctx context.Context, api *userAPI, m *UserDatasou
 }
 
 // userAPI is the JSON wire format for a TrueNAS user object.
+//
+// Group is decoded as json.RawMessage because user.query/get_instance
+// responses embed the primary group as an object ({"id": N,
+// "bsdgrp_gid": ...}), while it may also come back as a bare integer id or
+// null depending on the calling method / API version. decodeGroupField
+// handles all three shapes.
 type userAPI struct {
-	ID                   int64    `json:"id"`
-	UID                  int64    `json:"uid"`
-	Username             string   `json:"username"`
-	FullName             string   `json:"full_name"`
-	Email                *string  `json:"email"`
-	Home                 string   `json:"home"`
-	Shell                string   `json:"shell"`
-	Locked               bool     `json:"locked"`
-	PasswordDisabled     bool     `json:"password_disabled"`
-	SMB                  bool     `json:"smb"`
-	SSHPasswordEnabled   bool     `json:"ssh_password_enabled"`
-	SSHPubKey            *string  `json:"sshpubkey"`
-	SudoCommands         []string `json:"sudo_commands"`
-	SudoCommandsNoPasswd []string `json:"sudo_commands_nopasswd"`
-	Groups               []int64  `json:"groups"`
-	Builtin              bool     `json:"builtin"`
-	Immutable            bool     `json:"immutable"`
-	Local                bool     `json:"local"`
+	ID                   int64           `json:"id"`
+	UID                  int64           `json:"uid"`
+	Username             string          `json:"username"`
+	FullName             string          `json:"full_name"`
+	Email                *string         `json:"email"`
+	Home                 string          `json:"home"`
+	Shell                string          `json:"shell"`
+	Locked               bool            `json:"locked"`
+	PasswordDisabled     bool            `json:"password_disabled"`
+	SMB                  bool            `json:"smb"`
+	SSHPasswordEnabled   bool            `json:"ssh_password_enabled"`
+	SSHPubKey            *string         `json:"sshpubkey"`
+	SudoCommands         []string        `json:"sudo_commands"`
+	SudoCommandsNoPasswd []string        `json:"sudo_commands_nopasswd"`
+	Groups               []int64         `json:"groups"`
+	Group                json.RawMessage `json:"group"`
+	Builtin              bool            `json:"builtin"`
+	Immutable            bool            `json:"immutable"`
+	Local                bool            `json:"local"`
+}
+
+// decodeGroupField decodes the "group" field embedded in a
+// user.query/get_instance response. It may be an object ({"id": N, ...}),
+// a bare integer id, or null (e.g. absent/not yet set). ok is false when
+// the field is null, absent, or has no usable id — callers should map that
+// to types.Int64Null() rather than treating it as an error.
+func decodeGroupField(raw json.RawMessage) (id int64, ok bool, err error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0, false, nil
+	}
+
+	var obj map[string]json.RawMessage
+	if uErr := json.Unmarshal(raw, &obj); uErr == nil {
+		idRaw, present := obj["id"]
+		if !present || len(idRaw) == 0 || string(idRaw) == "null" {
+			return 0, false, nil
+		}
+		if uErr := json.Unmarshal(idRaw, &id); uErr != nil {
+			return 0, false, fmt.Errorf("cannot decode group.id field %q as integer: %w", string(idRaw), uErr)
+		}
+		return id, true, nil
+	}
+
+	if uErr := json.Unmarshal(raw, &id); uErr == nil {
+		return id, true, nil
+	}
+
+	return 0, false, fmt.Errorf("cannot decode group field %q as object with id, bare integer, or null", string(raw))
 }
 
 // responseToModel maps an API response onto a Terraform model.
@@ -187,6 +237,15 @@ func responseToModel(ctx context.Context, api *userAPI, m *UserModel) diag.Diagn
 	diags.Append(d3...)
 	m.Groups = gl
 
+	groupID, groupOK, gErr := decodeGroupField(api.Group)
+	if gErr != nil {
+		diags.AddError("Parse group field", gErr.Error())
+	} else if groupOK {
+		m.Group = types.Int64Value(groupID)
+	} else {
+		m.Group = types.Int64Null()
+	}
+
 	// Computed
 	m.Builtin = types.BoolValue(api.Builtin)
 	m.Immutable = types.BoolValue(api.Immutable)
@@ -197,13 +256,39 @@ func responseToModel(ctx context.Context, api *userAPI, m *UserModel) diag.Diagn
 	return diags
 }
 
-// createPayload includes uid and username (only for initial creation).
+// decodeCreateResult decodes the result of user.create, which (being a
+// sync, job:false method) may be returned by the middleware either as the
+// full created user object or as a bare integer id, depending on
+// middleware version. It returns either a populated *userAPI (object
+// shape) or a non-zero id (bare-int shape), never both.
+func decodeCreateResult(raw json.RawMessage) (*userAPI, int64, error) {
+	var api userAPI
+	if err := json.Unmarshal(raw, &api); err == nil && api.ID != 0 {
+		return &api, 0, nil
+	}
+
+	var id int64
+	if err := json.Unmarshal(raw, &id); err == nil {
+		return nil, id, nil
+	}
+
+	return nil, 0, fmt.Errorf("unable to decode user.create result: %s", string(raw))
+}
+
+// createPayload includes uid and username (only for initial creation), plus
+// group_create — a write-only, create-only flag never read back into state.
+// Callers must set either "group" (an existing group id, handled in
+// basePayload) or "group_create" (create a new group matching the
+// username); the API rejects a create with neither.
 func (m *UserModel) createPayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
 	p, diags := m.basePayload(ctx)
 	if !m.UID.IsNull() && !m.UID.IsUnknown() {
 		p["uid"] = m.UID.ValueInt64()
 	}
 	p["username"] = m.Username.ValueString()
+	if !m.GroupCreate.IsNull() && !m.GroupCreate.IsUnknown() {
+		p["group_create"] = m.GroupCreate.ValueBool()
+	}
 	return p, diags
 }
 
@@ -266,6 +351,12 @@ func (m *UserModel) basePayload(ctx context.Context) (map[string]any, diag.Diagn
 		"sudo_commands":          sudoCmds,
 		"sudo_commands_nopasswd": sudoCmdsNP,
 		"groups":                 groups,
+	}
+
+	// group: primary group id. Only include when known — on create it may
+	// be omitted in favor of group_create (see createPayload).
+	if !m.Group.IsNull() && !m.Group.IsUnknown() {
+		p["group"] = m.Group.ValueInt64()
 	}
 
 	// password: only include if set (write-only, not stored in state)

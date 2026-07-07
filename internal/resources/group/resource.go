@@ -55,33 +55,34 @@ func (r *GroupResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	raw, err := r.client.CallJob(ctx, "group.create", payload)
+	// group.create is job:false (sync); it returns either the created group
+	// object or a bare integer id, depending on middleware version.
+	raw, err := r.client.Call(ctx, "group.create", payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Create group failed", err.Error())
 		return
 	}
 
-	// CallJob returns the new group ID as int64 for async jobs.
-	var groupID int64
-	if err := json.Unmarshal(raw, &groupID); err != nil {
+	apiResp, groupID, err := decodeCreateResult(raw)
+	if err != nil {
 		resp.Diagnostics.AddError("Parse create response", err.Error())
 		return
 	}
-
-	// Read back full state via get_instance.
-	raw2, err := r.client.Call(ctx, "group.get_instance", groupID)
-	if err != nil {
-		resp.Diagnostics.AddError("Read-back after create failed", err.Error())
-		return
+	if apiResp == nil {
+		// Bare-int shape — read back full state via get_instance.
+		raw2, err := r.client.Call(ctx, "group.get_instance", groupID)
+		if err != nil {
+			resp.Diagnostics.AddError("Read-back after create failed", err.Error())
+			return
+		}
+		apiResp = &groupAPI{}
+		if err := json.Unmarshal(raw2, apiResp); err != nil {
+			resp.Diagnostics.AddError("Parse get_instance response", err.Error())
+			return
+		}
 	}
 
-	var apiResp groupAPI
-	if err := json.Unmarshal(raw2, &apiResp); err != nil {
-		resp.Diagnostics.AddError("Parse get_instance response", err.Error())
-		return
-	}
-
-	resp.Diagnostics.Append(responseToModel(ctx, &apiResp, &plan)...)
+	resp.Diagnostics.Append(responseToModel(ctx, apiResp, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -139,7 +140,7 @@ func (r *GroupResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	_, err := r.client.CallJob(ctx, "group.update", plan.ID.ValueInt64(), payload)
+	_, err := r.client.Call(ctx, "group.update", plan.ID.ValueInt64(), payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Update group failed", err.Error())
 		return
@@ -171,7 +172,7 @@ func (r *GroupResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		return
 	}
 
-	_, err := r.client.CallJob(ctx, "group.delete", state.ID.ValueInt64())
+	_, err := r.client.Call(ctx, "group.delete", state.ID.ValueInt64())
 	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Delete group failed", err.Error())
 	}

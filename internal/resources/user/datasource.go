@@ -42,6 +42,7 @@ func (d *UserDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 			"sudo_commands":          dschema.ListAttribute{Computed: true, ElementType: types.StringType},
 			"sudo_commands_nopasswd": dschema.ListAttribute{Computed: true, ElementType: types.StringType},
 			"groups":                 dschema.ListAttribute{Computed: true, ElementType: types.Int64Type},
+			"group":                  dschema.Int64Attribute{Computed: true, Description: "Primary group ID for the user."},
 			"builtin":                dschema.BoolAttribute{Computed: true},
 			"immutable":              dschema.BoolAttribute{Computed: true},
 			"local":                  dschema.BoolAttribute{Computed: true},

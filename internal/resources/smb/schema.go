@@ -104,7 +104,7 @@ func resourceSchema() schema.Schema {
 			"purpose": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Purpose preset: NO_PRESET, DEFAULT_SHARE, ENHANCED_TIMEMACHINE, MULTI_PROTOCOL_AFP, MULTI_PROTOCOL_NFS, PRIVATE_DATASETS, WORM_DROPBOX.",
+				Description: "Purpose preset. One of: DEFAULT_SHARE, LEGACY_SHARE, TIMEMACHINE_SHARE, MULTIPROTOCOL_SHARE, TIME_LOCKED_SHARE, PRIVATE_DATASETS_SHARE, EXTERNAL_SHARE, VEEAM_REPOSITORY_SHARE, FCP_SHARE.",
 			},
 			// Computed-only (server-generated)
 			"vuid": schema.StringAttribute{

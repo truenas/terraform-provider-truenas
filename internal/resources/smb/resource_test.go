@@ -212,6 +212,127 @@ func TestSMBApiPayload_NullLists(t *testing.T) {
 	}
 }
 
+// TestSMBApiPayload_PurposeOmittedWhenNull verifies that apiPayload omits the
+// "purpose" key entirely when Purpose is null (unset in config), rather than
+// sending an empty string. This is a regression test for a live failure on
+// SCALE 26.0: sharing.smb.create/update returns EINVAL when purpose is "",
+// since 26.0 requires purpose to be one of a known, non-empty enum.
+func TestSMBApiPayload_PurposeOmittedWhenNull(t *testing.T) {
+	ctx := context.Background()
+
+	m := SMBModel{
+		Path:             types.StringValue("/mnt/tank/share"),
+		Name:             types.StringValue("share"),
+		Comment:          types.StringValue(""),
+		ReadOnly:         types.BoolValue(false),
+		Browsable:        types.BoolValue(true),
+		Recyclebin:       types.BoolValue(false),
+		GuestOK:          types.BoolValue(false),
+		HostsAllow:       types.ListValueMust(types.StringType, []attr.Value{}),
+		HostsDeny:        types.ListValueMust(types.StringType, []attr.Value{}),
+		ABE:              types.BoolValue(false),
+		ACL:              types.BoolValue(true),
+		DurableHandle:    types.BoolValue(true),
+		Streams:          types.BoolValue(true),
+		TimeMachine:      types.BoolValue(false),
+		TimeMachineQuota: types.Int64Value(0),
+		Enabled:          types.BoolValue(true),
+		Home:             types.BoolValue(false),
+		Purpose:          types.StringNull(),
+		VUID:             types.StringValue(""),
+		Locked:           types.BoolValue(false),
+	}
+
+	payload, diags := m.apiPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("apiPayload returned diagnostic errors: %v", diags)
+	}
+
+	if v, ok := payload["purpose"]; ok {
+		t.Errorf("payload should omit 'purpose' when unset, got %v", v)
+	}
+}
+
+// TestSMBApiPayload_PurposeOmittedWhenUnrecognized verifies that apiPayload
+// omits "purpose" when set to a value outside the current (26.0) enum, e.g.
+// a stale 24.x preset like NO_PRESET, rather than sending it unconditionally
+// and tripping EINVAL server-side.
+func TestSMBApiPayload_PurposeOmittedWhenUnrecognized(t *testing.T) {
+	ctx := context.Background()
+
+	m := SMBModel{
+		Path:             types.StringValue("/mnt/tank/share"),
+		Name:             types.StringValue("share"),
+		Comment:          types.StringValue(""),
+		ReadOnly:         types.BoolValue(false),
+		Browsable:        types.BoolValue(true),
+		Recyclebin:       types.BoolValue(false),
+		GuestOK:          types.BoolValue(false),
+		HostsAllow:       types.ListValueMust(types.StringType, []attr.Value{}),
+		HostsDeny:        types.ListValueMust(types.StringType, []attr.Value{}),
+		ABE:              types.BoolValue(false),
+		ACL:              types.BoolValue(true),
+		DurableHandle:    types.BoolValue(true),
+		Streams:          types.BoolValue(true),
+		TimeMachine:      types.BoolValue(false),
+		TimeMachineQuota: types.Int64Value(0),
+		Enabled:          types.BoolValue(true),
+		Home:             types.BoolValue(false),
+		Purpose:          types.StringValue("NO_PRESET"),
+		VUID:             types.StringValue(""),
+		Locked:           types.BoolValue(false),
+	}
+
+	payload, diags := m.apiPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("apiPayload returned diagnostic errors: %v", diags)
+	}
+
+	if v, ok := payload["purpose"]; ok {
+		t.Errorf("payload should omit 'purpose' for unrecognized value NO_PRESET, got %v", v)
+	}
+}
+
+// TestSMBApiPayload_PurposeIncludedWhenKnown verifies apiPayload includes a
+// valid 26.0 purpose value, e.g. TIMEMACHINE_SHARE.
+func TestSMBApiPayload_PurposeIncludedWhenKnown(t *testing.T) {
+	ctx := context.Background()
+
+	m := SMBModel{
+		Path:             types.StringValue("/mnt/tank/share"),
+		Name:             types.StringValue("share"),
+		Comment:          types.StringValue(""),
+		ReadOnly:         types.BoolValue(false),
+		Browsable:        types.BoolValue(true),
+		Recyclebin:       types.BoolValue(false),
+		GuestOK:          types.BoolValue(false),
+		HostsAllow:       types.ListValueMust(types.StringType, []attr.Value{}),
+		HostsDeny:        types.ListValueMust(types.StringType, []attr.Value{}),
+		ABE:              types.BoolValue(false),
+		ACL:              types.BoolValue(true),
+		DurableHandle:    types.BoolValue(true),
+		Streams:          types.BoolValue(true),
+		TimeMachine:      types.BoolValue(false),
+		TimeMachineQuota: types.Int64Value(0),
+		Enabled:          types.BoolValue(true),
+		Home:             types.BoolValue(false),
+		Purpose:          types.StringValue("TIMEMACHINE_SHARE"),
+		VUID:             types.StringValue(""),
+		Locked:           types.BoolValue(false),
+	}
+
+	payload, diags := m.apiPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("apiPayload returned diagnostic errors: %v", diags)
+	}
+
+	if v, ok := payload["purpose"]; !ok {
+		t.Error("payload missing 'purpose' for known value TIMEMACHINE_SHARE")
+	} else if v != "TIMEMACHINE_SHARE" {
+		t.Errorf("payload[purpose] = %v, want TIMEMACHINE_SHARE", v)
+	}
+}
+
 // TestResponseToModel verifies that responseToModel populates all fields from
 // the smbAPI struct correctly.
 func TestResponseToModel(t *testing.T) {

@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -233,6 +234,200 @@ func TestUserUpdatePayload(t *testing.T) {
 	}
 	if groups == nil {
 		t.Error("payload[groups] must not be nil")
+	}
+}
+
+// TestUserCreatePayload_GroupCreate verifies that createPayload includes
+// group_create when set, and omits it (and 'group') when neither is set.
+func TestUserCreatePayload_GroupCreate(t *testing.T) {
+	ctx := context.Background()
+
+	m := UserModel{
+		Username:             types.StringValue("newuser"),
+		FullName:             types.StringValue("New User"),
+		Email:                types.StringValue(""),
+		Home:                 types.StringValue("/home/newuser"),
+		Shell:                types.StringValue("/bin/bash"),
+		Locked:               types.BoolValue(false),
+		PasswordDisabled:     types.BoolValue(false),
+		SMB:                  types.BoolValue(false),
+		SSHPasswordEnabled:   types.BoolValue(false),
+		SSHPubKey:            types.StringValue(""),
+		SudoCommands:         types.ListValueMust(types.StringType, []attr.Value{}),
+		SudoCommandsNoPasswd: types.ListValueMust(types.StringType, []attr.Value{}),
+		Groups:               types.ListValueMust(types.Int64Type, []attr.Value{}),
+		Group:                types.Int64Null(),
+		GroupCreate:          types.BoolValue(true),
+	}
+
+	payload, diags := m.createPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("createPayload returned errors: %v", diags)
+	}
+
+	if v, ok := payload["group_create"]; !ok {
+		t.Error("createPayload missing 'group_create' when it is set")
+	} else if v != true {
+		t.Errorf("payload[group_create] = %v, want true", v)
+	}
+	if _, ok := payload["group"]; ok {
+		t.Error("createPayload should not contain 'group' when Group is null")
+	}
+}
+
+// TestUserCreatePayload_GroupID verifies that createPayload includes 'group'
+// when a primary group id is set, and omits 'group_create' when it is unset.
+func TestUserCreatePayload_GroupID(t *testing.T) {
+	ctx := context.Background()
+
+	m := UserModel{
+		Username:             types.StringValue("newuser"),
+		FullName:             types.StringValue("New User"),
+		Email:                types.StringValue(""),
+		Home:                 types.StringValue("/home/newuser"),
+		Shell:                types.StringValue("/bin/bash"),
+		Locked:               types.BoolValue(false),
+		PasswordDisabled:     types.BoolValue(false),
+		SMB:                  types.BoolValue(false),
+		SSHPasswordEnabled:   types.BoolValue(false),
+		SSHPubKey:            types.StringValue(""),
+		SudoCommands:         types.ListValueMust(types.StringType, []attr.Value{}),
+		SudoCommandsNoPasswd: types.ListValueMust(types.StringType, []attr.Value{}),
+		Groups:               types.ListValueMust(types.Int64Type, []attr.Value{}),
+		Group:                types.Int64Value(3000),
+		GroupCreate:          types.BoolNull(),
+	}
+
+	payload, diags := m.createPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("createPayload returned errors: %v", diags)
+	}
+
+	if v, ok := payload["group"]; !ok {
+		t.Error("createPayload missing 'group' when Group is set")
+	} else if v != int64(3000) {
+		t.Errorf("payload[group] = %v, want 3000", v)
+	}
+	if _, ok := payload["group_create"]; ok {
+		t.Error("createPayload should not contain 'group_create' when GroupCreate is null")
+	}
+}
+
+// TestUserUpdatePayload_GroupIncluded verifies that updatePayload includes
+// 'group' when set (primary group is updatable, unlike uid/username), and
+// never includes 'group_create' (create-only, write-only).
+func TestUserUpdatePayload_GroupIncluded(t *testing.T) {
+	ctx := context.Background()
+
+	m := UserModel{
+		Username:             types.StringValue("existinguser"),
+		FullName:             types.StringValue("Existing User"),
+		Email:                types.StringValue(""),
+		Home:                 types.StringValue("/home/existinguser"),
+		Shell:                types.StringValue("/bin/bash"),
+		Locked:               types.BoolValue(false),
+		PasswordDisabled:     types.BoolValue(false),
+		SMB:                  types.BoolValue(false),
+		SSHPasswordEnabled:   types.BoolValue(false),
+		SSHPubKey:            types.StringValue(""),
+		SudoCommands:         types.ListNull(types.StringType),
+		SudoCommandsNoPasswd: types.ListNull(types.StringType),
+		Groups:               types.ListNull(types.Int64Type),
+		Group:                types.Int64Value(4000),
+		GroupCreate:          types.BoolValue(true), // must never leak into update
+	}
+
+	payload, diags := m.updatePayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("updatePayload returned errors: %v", diags)
+	}
+
+	if v, ok := payload["group"]; !ok {
+		t.Error("updatePayload missing 'group' when Group is set")
+	} else if v != int64(4000) {
+		t.Errorf("payload[group] = %v, want 4000", v)
+	}
+	if _, ok := payload["group_create"]; ok {
+		t.Error("updatePayload must never contain 'group_create' (create-only, write-only)")
+	}
+}
+
+// TestResponseToModel_GroupObjectDecode verifies responseToModel decodes a
+// "group" field embedded as an object ({"id": N, ...}), matching the live
+// user.query/get_instance wire shape.
+func TestResponseToModel_GroupObjectDecode(t *testing.T) {
+	ctx := context.Background()
+
+	api := &userAPI{
+		ID:       1,
+		UID:      1000,
+		Username: "grouped",
+		FullName: "Grouped User",
+		Home:     "/home/grouped",
+		Shell:    "/bin/sh",
+		Group:    json.RawMessage(`{"id": 5, "bsdgrp_gid": 5}`),
+	}
+
+	var m UserModel
+	diags := responseToModel(ctx, api, &m)
+	if diags.HasError() {
+		t.Fatalf("responseToModel returned errors: %v", diags)
+	}
+	if m.Group.IsNull() {
+		t.Fatal("Group should not be null when API returns a group object")
+	}
+	if m.Group.ValueInt64() != 5 {
+		t.Errorf("Group = %v, want 5", m.Group.ValueInt64())
+	}
+}
+
+// TestResponseToModel_GroupBareInt verifies responseToModel decodes a
+// "group" field returned as a bare integer id.
+func TestResponseToModel_GroupBareInt(t *testing.T) {
+	ctx := context.Background()
+
+	api := &userAPI{
+		ID:       1,
+		UID:      1000,
+		Username: "grouped",
+		FullName: "Grouped User",
+		Home:     "/home/grouped",
+		Shell:    "/bin/sh",
+		Group:    json.RawMessage(`7`),
+	}
+
+	var m UserModel
+	diags := responseToModel(ctx, api, &m)
+	if diags.HasError() {
+		t.Fatalf("responseToModel returned errors: %v", diags)
+	}
+	if m.Group.ValueInt64() != 7 {
+		t.Errorf("Group = %v, want 7", m.Group.ValueInt64())
+	}
+}
+
+// TestResponseToModel_GroupNull verifies responseToModel maps a null/absent
+// "group" field to Int64Null rather than erroring or defaulting to 0.
+func TestResponseToModel_GroupNull(t *testing.T) {
+	ctx := context.Background()
+
+	api := &userAPI{
+		ID:       1,
+		UID:      1000,
+		Username: "nogroupuser",
+		FullName: "No Group User",
+		Home:     "/home/nogroupuser",
+		Shell:    "/bin/sh",
+		Group:    json.RawMessage(`null`),
+	}
+
+	var m UserModel
+	diags := responseToModel(ctx, api, &m)
+	if diags.HasError() {
+		t.Fatalf("responseToModel returned errors: %v", diags)
+	}
+	if !m.Group.IsNull() {
+		t.Errorf("Group = %v, want null", m.Group)
 	}
 }
 

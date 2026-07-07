@@ -2,6 +2,8 @@ package group
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -65,6 +67,25 @@ func responseToModel(ctx context.Context, api *groupAPI, m *GroupModel) diag.Dia
 	m.Local = types.BoolValue(api.Local)
 
 	return diags
+}
+
+// decodeCreateResult decodes the result of group.create, which (being a
+// sync, job:false method) may be returned by the middleware either as the
+// full created group object or as a bare integer id, depending on
+// middleware version. It returns either a populated *groupAPI (object
+// shape) or a non-zero id (bare-int shape), never both.
+func decodeCreateResult(raw json.RawMessage) (*groupAPI, int64, error) {
+	var api groupAPI
+	if err := json.Unmarshal(raw, &api); err == nil && api.ID != 0 {
+		return &api, 0, nil
+	}
+
+	var id int64
+	if err := json.Unmarshal(raw, &id); err == nil {
+		return nil, id, nil
+	}
+
+	return nil, 0, fmt.Errorf("unable to decode group.create result: %s", string(raw))
 }
 
 // createPayload includes gid and name (only for initial creation).

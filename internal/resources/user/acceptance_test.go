@@ -23,18 +23,18 @@ func TestAccUser_basic(t *testing.T) {
 		CheckDestroy:             testAccCheckUserDestroyed(username),
 		Steps: []resource.TestStep{
 			{
-				Config: acctest.ProviderConfig() + testAccUserConfig(username, "Test User", "/bin/sh"),
+				Config: acctest.ProviderConfig() + testAccUserConfig(username, "Test User", "/usr/bin/bash"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_user.test", "username", username),
 					resource.TestCheckResourceAttr("truenas_user.test", "full_name", "Test User"),
-					resource.TestCheckResourceAttr("truenas_user.test", "shell", "/bin/sh"),
+					resource.TestCheckResourceAttr("truenas_user.test", "shell", "/usr/bin/bash"),
 					resource.TestCheckResourceAttr("truenas_user.test", "home", "/var/empty"),
 					resource.TestCheckResourceAttr("truenas_user.test", "locked", "false"),
 					resource.TestCheckResourceAttrSet("truenas_user.test", "id"),
 					resource.TestCheckResourceAttrSet("truenas_user.test", "uid"),
 				),
 			},
-			// Update in place: change full_name and shell.
+			// Update in place: change full_name.
 			{
 				Config: acctest.ProviderConfig() + testAccUserConfig(username, "Updated Name", "/usr/bin/bash"),
 				Check: resource.ComposeTestCheckFunc(
@@ -44,11 +44,13 @@ func TestAccUser_basic(t *testing.T) {
 			},
 			// Import by the user's numeric id. Password is write-only and
 			// never returned by the API, so it can't be verified.
+			// group_create is also write-only (only sent on create) and is
+			// never read back into state.
 			{
 				ResourceName:            "truenas_user.test",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"password"},
+				ImportStateVerifyIgnore: []string{"password", "group_create"},
 			},
 		},
 	})
@@ -64,6 +66,7 @@ resource "truenas_user" "test" {
   home              = "/var/empty"
   shell             = %q
   smb               = false
+  group_create      = true
 }
 `, username, fullName, shell)
 }
