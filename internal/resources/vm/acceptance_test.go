@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -16,7 +17,7 @@ import (
 // running left false throughout, so it never starts a guest on the target
 // host.
 func TestAccVM_basic(t *testing.T) {
-	name := acctest.RandName("tf-acc-vm")
+	name := "tfaccvm" + strings.ReplaceAll(acctest.RandName(""), "-", "") // vm_create.name: alphanumeric only
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },

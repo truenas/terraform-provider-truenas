@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -16,7 +17,7 @@ import (
 // DISPLAY device attached to its own RandName-suffixed, non-running,
 // non-autostart VM fixture). It never touches any pre-existing VM.
 func TestAccVMDevice_basic(t *testing.T) {
-	vmName := acctest.RandName("tf-acc-vm-device")
+	vmName := "tfaccvmdev" + strings.ReplaceAll(acctest.RandName(""), "-", "") // vm_create.name: alphanumeric only
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
