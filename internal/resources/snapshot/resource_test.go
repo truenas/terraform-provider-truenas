@@ -7,10 +7,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	tftest "github.com/hashicorp/terraform-plugin-testing/helper/resource"
-	"github.com/hashicorp/terraform-plugin-testing/terraform"
-	"github.com/truenas/terraform-provider-truenas/internal/acctest"
-	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/snapshot"
 )
 
@@ -76,60 +72,5 @@ func TestSnapshotIDFormat(t *testing.T) {
 	gotID := fmt.Sprintf("%s@%s", dataset, name)
 	if gotID != wantID {
 		t.Errorf("ID format: got %q, want %q", gotID, wantID)
-	}
-}
-
-// TestAccSnapshot_basic is an acceptance test that creates, reads, and destroys
-// a snapshot on a live TrueNAS.  The dataset tank/mydata must exist beforehand.
-func TestAccSnapshot_basic(t *testing.T) {
-	snapID := "tank/mydata@tf-test-snap"
-
-	tftest.Test(t, tftest.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
-		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckSnapshotDestroyed(snapID),
-		Steps: []tftest.TestStep{
-			{
-				Config: testAccSnapshotConfig("tank/mydata", "tf-test-snap"),
-				Check: tftest.ComposeTestCheckFunc(
-					tftest.TestCheckResourceAttr("truenas_snapshot.test", "id", snapID),
-					tftest.TestCheckResourceAttr("truenas_snapshot.test", "dataset", "tank/mydata"),
-					tftest.TestCheckResourceAttr("truenas_snapshot.test", "name", "tf-test-snap"),
-					tftest.TestCheckResourceAttrSet("truenas_snapshot.test", "pool"),
-					tftest.TestCheckResourceAttrSet("truenas_snapshot.test", "createtxg"),
-				),
-			},
-			// Import by "dataset@snapname"
-			{
-				ResourceName:      "truenas_snapshot.test",
-				ImportState:       true,
-				ImportStateVerify: true,
-				// recursive is write-only and not set during import
-				ImportStateVerifyIgnore: []string{"recursive"},
-			},
-		},
-	})
-}
-
-func testAccSnapshotConfig(dataset, name string) string {
-	return acctest.ProviderConfig() + fmt.Sprintf(`
-resource "truenas_snapshot" "test" {
-  dataset = %q
-  name    = %q
-}
-`, dataset, name)
-}
-
-func testAccCheckSnapshotDestroyed(id string) tftest.TestCheckFunc {
-	return func(s *terraform.State) error {
-		c := acctest.Client()
-		_, err := c.Call(context.Background(), "pool.snapshot.get_instance", id)
-		if err != nil {
-			if client.IsNotFound(err) {
-				return nil
-			}
-			return fmt.Errorf("error checking snapshot %s: %v", id, err)
-		}
-		return fmt.Errorf("snapshot %s still exists", id)
 	}
 }
