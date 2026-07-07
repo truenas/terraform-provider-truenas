@@ -33,7 +33,7 @@ func TestAccNVMetHost_basic(t *testing.T) {
 				),
 			},
 			{
-				Config: acctest.ProviderConfig() + testAccNVMetHostConfig(hostNQN, "tf-acc host updated", "tf-acc-dhchap-key-1"),
+				Config: acctest.ProviderConfig() + testAccNVMetHostConfig(hostNQN, "tf-acc host updated", ""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_nvmet_host.test", "description", "tf-acc host updated"),
 				),
@@ -42,7 +42,7 @@ func TestAccNVMetHost_basic(t *testing.T) {
 				// hostnqn is mutable in place (no RequiresReplace): verify that
 				// changing it updates the new value on the existing resource
 				// rather than forcing a create/destroy.
-				Config: acctest.ProviderConfig() + testAccNVMetHostConfig(hostNQNRenamed, "tf-acc host updated", "tf-acc-dhchap-key-1"),
+				Config: acctest.ProviderConfig() + testAccNVMetHostConfig(hostNQNRenamed, "tf-acc host updated", ""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_nvmet_host.test", "hostnqn", hostNQNRenamed),
 				),
