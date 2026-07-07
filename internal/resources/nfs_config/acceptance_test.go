@@ -1,6 +1,9 @@
 package nfs_config_test
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 
@@ -42,25 +45,87 @@ data "truenas_nfs_config" "test" {}
 	})
 }
 
-// TestAccNFSConfig_basic is intentionally skipped by default.
-// truenas_nfs_config is a SINGLETON resource that manages a system-critical
-// service: bringing it under Terraform management mutates the box's actual
-// NFS configuration (nfs.update), and a naive create/update/destroy
-// acceptance test risks disrupting existing NFS exports or clients on
-// whatever system runs it (e.g. by rewriting protocols, bindip, or the
-// mountd/statd/lockd ports).
-//
-// If this test is ever enabled against a disposable/non-production TrueNAS
-// instance, it should:
-//  1. Read the current config via the datasource first.
-//  2. Only touch a low-risk, additive field (e.g. mountd_log) in the
-//     resource config, driving it through a value and back to the value the
-//     datasource observed in step 1, so the net effect on the box is a
-//     no-op. Never touch protocols, bindip, servers, or the mountd/statd/
-//     lockd ports in an automated test: changing those on a live system can
-//     disrupt NFS clients.
-//  3. Use ImportState with ImportStateId "nfs_config" to verify import
-//     normalizes any ID to the fixed singleton ID.
-func TestAccNFSConfig_basic(t *testing.T) {
-	t.Skip("truenas_nfs_config manages a system-critical service; skipped to avoid mutating the target box's NFS configuration and risking disruption of existing exports or clients. See comment on TestAccNFSConfig_basic for how to safely enable this against a disposable instance.")
+// nfsConfigOriginal captures the one field TestAccNFSConfig_setAndRestore
+// touches.
+type nfsConfigOriginal struct {
+	V4Domain string `json:"v4_domain"`
+}
+
+// readNFSConfigOriginal reads the box's current v4_domain via nfs.config, so
+// the test can restore it exactly afterward.
+func readNFSConfigOriginal(t *testing.T) nfsConfigOriginal {
+	t.Helper()
+	raw, err := acctest.Client().Call(context.Background(), "nfs.config")
+	if err != nil {
+		t.Fatalf("error reading current nfs config: %v", err)
+	}
+	var orig nfsConfigOriginal
+	if err := json.Unmarshal(raw, &orig); err != nil {
+		t.Fatalf("error parsing nfs.config response: %v", err)
+	}
+	return orig
+}
+
+// restoreNFSConfig sends only v4_domain back to its original value via
+// nfs.update. It runs from t.Cleanup, so it restores the box even if the
+// Terraform steps themselves fail partway through. protocols, bindip,
+// servers, and the mountd/statd/lockd ports are never touched by this test.
+func restoreNFSConfig(t *testing.T, orig nfsConfigOriginal) {
+	t.Helper()
+	if _, err := acctest.Client().Call(context.Background(), "nfs.update", map[string]any{
+		"v4_domain": orig.V4Domain,
+	}); err != nil {
+		t.Fatalf("error restoring nfs v4_domain: %v", err)
+	}
+}
+
+// TestAccNFSConfig_setAndRestore drives the singleton truenas_nfs_config
+// resource's "v4_domain" field (a plain string, not part of the
+// nullable-three-way group) through a test value and back to the value read
+// from the box before the test ran, then imports it. It requires TF_ACC=1
+// and TRUENAS_DISRUPTIVE=1 (acctest.DisruptiveCheck), since it mutates the
+// box's live NFS configuration; a t.Cleanup-registered API restore is the
+// safety net if the Terraform steps fail. protocols, bindip, servers, and
+// the mountd/statd/lockd ports are never touched: changing those on a live
+// system can disrupt NFS clients.
+func TestAccNFSConfig_setAndRestore(t *testing.T) {
+	acctest.DisruptiveCheck(t)
+
+	orig := readNFSConfigOriginal(t)
+	t.Cleanup(func() { restoreNFSConfig(t, orig) })
+
+	testValue := "tf-acc.example"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccNFSConfigConfig(testValue),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_nfs_config.test", "id", "nfs_config"),
+					resource.TestCheckResourceAttr("truenas_nfs_config.test", "v4_domain", testValue),
+				),
+			},
+			{
+				Config: acctest.ProviderConfig() + testAccNFSConfigConfig(orig.V4Domain),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_nfs_config.test", "v4_domain", orig.V4Domain),
+				),
+			},
+			{
+				ResourceName:      "truenas_nfs_config.test",
+				ImportState:       true,
+				ImportStateId:     "nfs_config",
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func testAccNFSConfigConfig(v4Domain string) string {
+	return fmt.Sprintf(`
+resource "truenas_nfs_config" "test" {
+  v4_domain = %q
+}
+`, v4Domain)
 }

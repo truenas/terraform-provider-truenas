@@ -1,6 +1,9 @@
 package snmp_config_test
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 
@@ -40,23 +43,85 @@ data "truenas_snmp_config" "test" {}
 	})
 }
 
-// TestAccSNMPConfig_basic is intentionally skipped by default.
-// truenas_snmp_config is a SINGLETON resource that manages system-critical
-// monitoring configuration: bringing it under Terraform management mutates
-// the box's actual SNMP configuration (snmp.update), and a naive
-// create/update/destroy acceptance test risks disrupting monitoring on
-// whatever system runs it.
-//
-// If this test is ever enabled against a disposable/non-production TrueNAS
-// instance, it should:
-//  1. Read the current config via the datasource first.
-//  2. Only touch "location" or "contact" (low-risk, additive string fields)
-//     in the resource config, driving them through a value and back to the
-//     value the datasource observed in step 1, so the net effect on the box
-//     is a no-op.
-//  3. Use ImportStateVerifyIgnore: []string{"v3_password", "v3_privpassphrase"}
-//     on the import step, since snmp.config never returns usable values for
-//     either.
-func TestAccSNMPConfig_basic(t *testing.T) {
-	t.Skip("truenas_snmp_config manages system-critical monitoring configuration; skipped to avoid mutating the target box's SNMP configuration. See comment on TestAccSNMPConfig_basic for how to safely enable this against a disposable instance.")
+// snmpConfigOriginal captures the one field TestAccSNMPConfig_setAndRestore
+// touches.
+type snmpConfigOriginal struct {
+	Location string `json:"location"`
+}
+
+// readSNMPConfigOriginal reads the box's current location via snmp.config,
+// so the test can restore it exactly afterward.
+func readSNMPConfigOriginal(t *testing.T) snmpConfigOriginal {
+	t.Helper()
+	raw, err := acctest.Client().Call(context.Background(), "snmp.config")
+	if err != nil {
+		t.Fatalf("error reading current snmp config: %v", err)
+	}
+	var orig snmpConfigOriginal
+	if err := json.Unmarshal(raw, &orig); err != nil {
+		t.Fatalf("error parsing snmp.config response: %v", err)
+	}
+	return orig
+}
+
+// restoreSNMPConfig sends only location back to its original value via
+// snmp.update. It runs from t.Cleanup, so it restores the box even if the
+// Terraform steps themselves fail partway through.
+func restoreSNMPConfig(t *testing.T, orig snmpConfigOriginal) {
+	t.Helper()
+	if _, err := acctest.Client().Call(context.Background(), "snmp.update", map[string]any{
+		"location": orig.Location,
+	}); err != nil {
+		t.Fatalf("error restoring snmp location: %v", err)
+	}
+}
+
+// TestAccSNMPConfig_setAndRestore drives the singleton truenas_snmp_config
+// resource's "location" field (a cosmetic, low-risk descriptive string)
+// through a test value and back to the value read from the box before the
+// test ran, then imports it. It requires TF_ACC=1 and TRUENAS_DISRUPTIVE=1
+// (acctest.DisruptiveCheck), since it mutates the box's live SNMP
+// configuration; a t.Cleanup-registered API restore is the safety net if the
+// Terraform steps fail.
+func TestAccSNMPConfig_setAndRestore(t *testing.T) {
+	acctest.DisruptiveCheck(t)
+
+	orig := readSNMPConfigOriginal(t)
+	t.Cleanup(func() { restoreSNMPConfig(t, orig) })
+
+	testValue := acctest.RandName("tf-acc-location")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccSNMPConfigConfig(testValue),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_snmp_config.test", "id", "snmp_config"),
+					resource.TestCheckResourceAttr("truenas_snmp_config.test", "location", testValue),
+				),
+			},
+			{
+				Config: acctest.ProviderConfig() + testAccSNMPConfigConfig(orig.Location),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_snmp_config.test", "location", orig.Location),
+				),
+			},
+			{
+				ResourceName:            "truenas_snmp_config.test",
+				ImportState:             true,
+				ImportStateId:           "snmp_config",
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"v3_password", "v3_privpassphrase"},
+			},
+		},
+	})
+}
+
+func testAccSNMPConfigConfig(location string) string {
+	return fmt.Sprintf(`
+resource "truenas_snmp_config" "test" {
+  location = %q
+}
+`, location)
 }

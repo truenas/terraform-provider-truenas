@@ -1,6 +1,9 @@
 package smb_config_test
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 
@@ -42,25 +45,87 @@ data "truenas_smb_config" "test" {}
 	})
 }
 
-// TestAccSMBConfig_basic is intentionally skipped by default.
-// truenas_smb_config is a SINGLETON resource that manages a system-critical
-// service: bringing it under Terraform management mutates the box's actual
-// SMB configuration (smb.update), and a naive create/update/destroy
-// acceptance test risks disrupting existing SMB shares or domain membership
-// on whatever system runs it (e.g. by rewriting workgroup, netbiosname, or
-// minimum_protocol).
-//
-// If this test is ever enabled against a disposable/non-production TrueNAS
-// instance, it should:
-//  1. Read the current config via the datasource first.
-//  2. Only touch "description" (a low-risk, additive string field) in the
-//     resource config, driving it through a value and back to the value the
-//     datasource observed in step 1, so the net effect on the box is a
-//     no-op. Never touch workgroup, netbiosname, minimum_protocol, bindip,
-//     or admin_group in an automated test: changing those on a live system
-//     can disrupt SMB clients or domain membership.
-//  3. Use ImportState with ImportStateId "smb_config" to verify import
-//     normalizes any ID to the fixed singleton ID.
-func TestAccSMBConfig_basic(t *testing.T) {
-	t.Skip("truenas_smb_config manages a system-critical service; skipped to avoid mutating the target box's SMB configuration and risking disruption of existing shares or domain membership. See comment on TestAccSMBConfig_basic for how to safely enable this against a disposable instance.")
+// smbConfigOriginal captures the one field TestAccSMBConfig_setAndRestore
+// touches.
+type smbConfigOriginal struct {
+	Description string `json:"description"`
+}
+
+// readSMBConfigOriginal reads the box's current description via smb.config,
+// so the test can restore it exactly afterward.
+func readSMBConfigOriginal(t *testing.T) smbConfigOriginal {
+	t.Helper()
+	raw, err := acctest.Client().Call(context.Background(), "smb.config")
+	if err != nil {
+		t.Fatalf("error reading current smb config: %v", err)
+	}
+	var orig smbConfigOriginal
+	if err := json.Unmarshal(raw, &orig); err != nil {
+		t.Fatalf("error parsing smb.config response: %v", err)
+	}
+	return orig
+}
+
+// restoreSMBConfig sends only description back to its original value via
+// smb.update. It runs from t.Cleanup, so it restores the box even if the
+// Terraform steps themselves fail partway through. workgroup, netbiosname,
+// minimum_protocol, bindip, and admin_group are never touched by this test.
+func restoreSMBConfig(t *testing.T, orig smbConfigOriginal) {
+	t.Helper()
+	if _, err := acctest.Client().Call(context.Background(), "smb.update", map[string]any{
+		"description": orig.Description,
+	}); err != nil {
+		t.Fatalf("error restoring smb description: %v", err)
+	}
+}
+
+// TestAccSMBConfig_setAndRestore drives the singleton truenas_smb_config
+// resource's "description" field (an inert, cosmetic label) through a test
+// value and back to the value read from the box before the test ran, then
+// imports it. It requires TF_ACC=1 and TRUENAS_DISRUPTIVE=1
+// (acctest.DisruptiveCheck), since it mutates the box's live SMB
+// configuration; a t.Cleanup-registered API restore is the safety net if the
+// Terraform steps fail. workgroup, netbiosname, minimum_protocol, bindip,
+// and admin_group are never touched: changing those on a live system can
+// disrupt SMB clients or domain membership.
+func TestAccSMBConfig_setAndRestore(t *testing.T) {
+	acctest.DisruptiveCheck(t)
+
+	orig := readSMBConfigOriginal(t)
+	t.Cleanup(func() { restoreSMBConfig(t, orig) })
+
+	testValue := acctest.RandName("tf-acc-description")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccSMBConfigConfig(testValue),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_smb_config.test", "id", "smb_config"),
+					resource.TestCheckResourceAttr("truenas_smb_config.test", "description", testValue),
+				),
+			},
+			{
+				Config: acctest.ProviderConfig() + testAccSMBConfigConfig(orig.Description),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_smb_config.test", "description", orig.Description),
+				),
+			},
+			{
+				ResourceName:      "truenas_smb_config.test",
+				ImportState:       true,
+				ImportStateId:     "smb_config",
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func testAccSMBConfigConfig(description string) string {
+	return fmt.Sprintf(`
+resource "truenas_smb_config" "test" {
+  description = %q
+}
+`, description)
 }

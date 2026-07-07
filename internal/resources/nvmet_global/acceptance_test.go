@@ -1,6 +1,9 @@
 package nvmet_global_test
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 
@@ -41,25 +44,92 @@ data "truenas_nvmet_global" "test" {}
 	})
 }
 
-// TestAccNVMeTGlobal_basic is intentionally skipped by default.
-// truenas_nvmet_global is a SINGLETON resource that serves live storage: the
-// box this suite runs against serves LIVE NVMe-oF storage, and bringing this
-// configuration under Terraform management mutates the box's actual
-// NVMe-oF global configuration (nvmet.global.update). A naive
-// create/update/destroy acceptance test risks disrupting active NVMe-oF
-// connections or discovery on that system.
+// nvmetGlobalOriginal captures the one field
+// TestAccNVMeTGlobal_setAndRestore touches.
+type nvmetGlobalOriginal struct {
+	XportReferral bool `json:"xport_referral"`
+}
+
+// readNVMeTGlobalOriginal reads the box's current xport_referral via
+// nvmet.global.config, so the test can restore it exactly afterward.
+func readNVMeTGlobalOriginal(t *testing.T) nvmetGlobalOriginal {
+	t.Helper()
+	raw, err := acctest.Client().Call(context.Background(), "nvmet.global.config")
+	if err != nil {
+		t.Fatalf("error reading current nvmet global config: %v", err)
+	}
+	var orig nvmetGlobalOriginal
+	if err := json.Unmarshal(raw, &orig); err != nil {
+		t.Fatalf("error parsing nvmet.global.config response: %v", err)
+	}
+	return orig
+}
+
+// restoreNVMeTGlobal sends only xport_referral back to its original value
+// via nvmet.global.update. It runs from t.Cleanup, so it restores the box
+// even if the Terraform steps themselves fail partway through. basenqn,
+// ana, kernel, and rdma are never touched by this test.
+func restoreNVMeTGlobal(t *testing.T, orig nvmetGlobalOriginal) {
+	t.Helper()
+	if _, err := acctest.Client().Call(context.Background(), "nvmet.global.update", map[string]any{
+		"xport_referral": orig.XportReferral,
+	}); err != nil {
+		t.Fatalf("error restoring nvmet global xport_referral: %v", err)
+	}
+}
+
+// TestAccNVMeTGlobal_setAndRestore drives the singleton
+// truenas_nvmet_global resource's "xport_referral" field through its
+// opposite value and back to the value read from the box before the test
+// ran, then imports it. It requires TF_ACC=1 and TRUENAS_DISRUPTIVE=1
+// (acctest.DisruptiveCheck), since it mutates the box's live NVMe-oF global
+// configuration; a t.Cleanup-registered API restore is the safety net if
+// the Terraform steps fail.
 //
-// If this test is ever enabled against a disposable/non-production TrueNAS
-// instance, it should:
-//  1. Read the current config via the datasource first.
-//  2. Only touch a low-risk boolean toggle (e.g. "xport_referral") in the
-//     resource config, driving it through a value and back to the value the
-//     datasource observed in step 1, so the net effect on the box is a
-//     no-op. Never touch basenqn, ana, kernel, or rdma in an automated test:
-//     changing those on a live system can disrupt active NVMe-oF connections
-//     or discovery.
-//  3. Use ImportState with ImportStateId "nvmet_global" to verify import
-//     normalizes any ID to the fixed singleton ID.
-func TestAccNVMeTGlobal_basic(t *testing.T) {
-	t.Skip("truenas_nvmet_global serves LIVE NVMe-oF storage; skipped to avoid mutating the target box's NVMe-oF configuration. See comment on TestAccNVMeTGlobal_basic for how to safely enable this against a disposable instance.")
+// Safety: xport_referral only controls whether NVMe-oF discovery responses
+// advertise port referrals (an advisory discovery-log hint), and does not
+// gate or restart any port or subsystem; the box's NVMe-oF ports and
+// subsystems used by other acceptance tests in this suite are unaffected by
+// toggling it. basenqn, ana, kernel, and rdma (which can disrupt active
+// NVMe-oF connections or discovery) are never touched.
+func TestAccNVMeTGlobal_setAndRestore(t *testing.T) {
+	acctest.DisruptiveCheck(t)
+
+	orig := readNVMeTGlobalOriginal(t)
+	t.Cleanup(func() { restoreNVMeTGlobal(t, orig) })
+
+	testValue := !orig.XportReferral
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccNVMeTGlobalConfig(testValue),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_nvmet_global.test", "id", "nvmet_global"),
+					resource.TestCheckResourceAttr("truenas_nvmet_global.test", "xport_referral", fmt.Sprintf("%t", testValue)),
+				),
+			},
+			{
+				Config: acctest.ProviderConfig() + testAccNVMeTGlobalConfig(orig.XportReferral),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_nvmet_global.test", "xport_referral", fmt.Sprintf("%t", orig.XportReferral)),
+				),
+			},
+			{
+				ResourceName:      "truenas_nvmet_global.test",
+				ImportState:       true,
+				ImportStateId:     "nvmet_global",
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func testAccNVMeTGlobalConfig(xportReferral bool) string {
+	return fmt.Sprintf(`
+resource "truenas_nvmet_global" "test" {
+  xport_referral = %t
+}
+`, xportReferral)
 }

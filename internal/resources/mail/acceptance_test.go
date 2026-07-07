@@ -1,6 +1,9 @@
 package mail_test
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 
@@ -42,23 +45,84 @@ data "truenas_mail" "test" {}
 	})
 }
 
-// TestAccMail_basic is intentionally skipped by default. truenas_mail is a
-// SINGLETON resource: bringing it under Terraform management mutates the
-// box's actual mail configuration (mail.update), and a naive
-// create/update/destroy acceptance test would leave the target system's
-// mail settings altered by whatever the test's Destroy step does (or, per
-// this resource's Delete semantics, simply abandoned in whatever state the
-// last Update left them in).
-//
-// If this test is ever enabled against a disposable/throwaway TrueNAS
-// instance, it should:
-//  1. Read the current config via the datasource first.
-//  2. Only touch "fromname" (a cosmetic, low-risk field) in the resource
-//     config, driving it through a value and back to the value the
-//     datasource observed in step 1, so the net effect on the box is a
-//     no-op.
-//  3. Use ImportStateVerifyIgnore: []string{"pass"} on the import step,
-//     since mail.config never returns the password.
-func TestAccMail_basic(t *testing.T) {
-	t.Skip("truenas_mail is a system-critical singleton; skipped to avoid mutating the target box's mail configuration. See comment on TestAccMail_basic for how to safely enable this against a disposable instance.")
+// mailOriginal captures the one field TestAccMail_setAndRestore touches.
+type mailOriginal struct {
+	FromName string `json:"fromname"`
+}
+
+// readMailOriginal reads the box's current fromname via mail.config, so the
+// test can restore it exactly afterward.
+func readMailOriginal(t *testing.T) mailOriginal {
+	t.Helper()
+	raw, err := acctest.Client().Call(context.Background(), "mail.config")
+	if err != nil {
+		t.Fatalf("error reading current mail config: %v", err)
+	}
+	var orig mailOriginal
+	if err := json.Unmarshal(raw, &orig); err != nil {
+		t.Fatalf("error parsing mail.config response: %v", err)
+	}
+	return orig
+}
+
+// restoreMail sends only fromname back to its original value via
+// mail.update. It runs from t.Cleanup, so it restores the box even if the
+// Terraform steps themselves fail partway through.
+func restoreMail(t *testing.T, orig mailOriginal) {
+	t.Helper()
+	if _, err := acctest.Client().Call(context.Background(), "mail.update", map[string]any{
+		"fromname": orig.FromName,
+	}); err != nil {
+		t.Fatalf("error restoring mail fromname: %v", err)
+	}
+}
+
+// TestAccMail_setAndRestore drives the singleton truenas_mail resource's
+// "fromname" field (a cosmetic, low-risk display name) through a test value
+// and back to the value read from the box before the test ran, then imports
+// it. It requires TF_ACC=1 and TRUENAS_DISRUPTIVE=1
+// (acctest.DisruptiveCheck), since it mutates the box's live mail
+// configuration; a t.Cleanup-registered API restore is the safety net if the
+// Terraform steps fail.
+func TestAccMail_setAndRestore(t *testing.T) {
+	acctest.DisruptiveCheck(t)
+
+	orig := readMailOriginal(t)
+	t.Cleanup(func() { restoreMail(t, orig) })
+
+	testValue := acctest.RandName("tf-acc")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccMailConfig(testValue),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_mail.test", "id", "mail"),
+					resource.TestCheckResourceAttr("truenas_mail.test", "fromname", testValue),
+				),
+			},
+			{
+				Config: acctest.ProviderConfig() + testAccMailConfig(orig.FromName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_mail.test", "fromname", orig.FromName),
+				),
+			},
+			{
+				ResourceName:            "truenas_mail.test",
+				ImportState:             true,
+				ImportStateId:           "mail",
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"pass"},
+			},
+		},
+	})
+}
+
+func testAccMailConfig(fromname string) string {
+	return fmt.Sprintf(`
+resource "truenas_mail" "test" {
+  fromname = %q
+}
+`, fromname)
 }

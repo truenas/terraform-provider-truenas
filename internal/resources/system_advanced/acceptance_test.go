@@ -1,6 +1,9 @@
 package system_advanced_test
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 
@@ -41,26 +44,90 @@ data "truenas_system_advanced" "test" {}
 	})
 }
 
-// TestAccSystemAdvanced_basic is intentionally skipped by default.
-// truenas_system_advanced is a SINGLETON resource that controls live syslog
-// and console configuration: the box this suite runs against is managed
-// live, and bringing this configuration under Terraform management mutates
-// the box's actual system advanced configuration (system.advanced.update).
-// A naive create/update/destroy acceptance test risks changing
-// syslogservers, serialconsole, consolemenu, or sed_user on a live system.
-//
-// If this test is ever enabled against a disposable/non-production TrueNAS
-// instance, it should:
-//  1. Read the current config via the datasource first.
-//  2. Only touch a low-risk field (e.g. "motd") in the resource config,
-//     driving it through a value and back to the value the datasource
-//     observed in step 1, so the net effect on the box is a no-op. Never
-//     touch syslogservers, serialconsole, serialport, serialspeed,
-//     consolemenu, sed_user, or sed_passwd in an automated test: changing
-//     those on a live system can disrupt console/serial access or SED
-//     unlock behavior.
-//  3. Use ImportState with ImportStateId "system_advanced" to verify
-//     import normalizes any ID to the fixed singleton ID.
-func TestAccSystemAdvanced_basic(t *testing.T) {
-	t.Skip("truenas_system_advanced controls LIVE syslog/console configuration; skipped to avoid disrupting the target box. See comment on TestAccSystemAdvanced_basic for how to safely enable this against a disposable instance.")
+// systemAdvancedOriginal captures the one field
+// TestAccSystemAdvanced_setAndRestore touches.
+type systemAdvancedOriginal struct {
+	Motd string `json:"motd"`
+}
+
+// readSystemAdvancedOriginal reads the box's current motd via
+// system.advanced.config, so the test can restore it exactly afterward.
+func readSystemAdvancedOriginal(t *testing.T) systemAdvancedOriginal {
+	t.Helper()
+	raw, err := acctest.Client().Call(context.Background(), "system.advanced.config")
+	if err != nil {
+		t.Fatalf("error reading current system advanced config: %v", err)
+	}
+	var orig systemAdvancedOriginal
+	if err := json.Unmarshal(raw, &orig); err != nil {
+		t.Fatalf("error parsing system.advanced.config response: %v", err)
+	}
+	return orig
+}
+
+// restoreSystemAdvanced sends only motd back to its original value via
+// system.advanced.update. It runs from t.Cleanup, so it restores the box
+// even if the Terraform steps themselves fail partway through.
+// syslogservers, serialconsole, serialport, serialspeed, consolemenu,
+// sed_user, and sed_passwd are never touched by this test.
+func restoreSystemAdvanced(t *testing.T, orig systemAdvancedOriginal) {
+	t.Helper()
+	if _, err := acctest.Client().Call(context.Background(), "system.advanced.update", map[string]any{
+		"motd": orig.Motd,
+	}); err != nil {
+		t.Fatalf("error restoring system advanced motd: %v", err)
+	}
+}
+
+// TestAccSystemAdvanced_setAndRestore drives the singleton
+// truenas_system_advanced resource's "motd" field (a cosmetic
+// message-of-the-day string) through a test value and back to the value
+// read from the box before the test ran, then imports it. It requires
+// TF_ACC=1 and TRUENAS_DISRUPTIVE=1 (acctest.DisruptiveCheck), since it
+// mutates the box's live system advanced configuration; a
+// t.Cleanup-registered API restore is the safety net if the Terraform steps
+// fail. syslogservers, serialconsole, serialport, serialspeed, consolemenu,
+// sed_user, and sed_passwd are never touched: changing those on a live
+// system can disrupt console/serial access or SED unlock behavior.
+func TestAccSystemAdvanced_setAndRestore(t *testing.T) {
+	acctest.DisruptiveCheck(t)
+
+	orig := readSystemAdvancedOriginal(t)
+	t.Cleanup(func() { restoreSystemAdvanced(t, orig) })
+
+	testValue := acctest.RandName("tf-acc-motd")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccSystemAdvancedConfig(testValue),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_system_advanced.test", "id", "system_advanced"),
+					resource.TestCheckResourceAttr("truenas_system_advanced.test", "motd", testValue),
+				),
+			},
+			{
+				Config: acctest.ProviderConfig() + testAccSystemAdvancedConfig(orig.Motd),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_system_advanced.test", "motd", orig.Motd),
+				),
+			},
+			{
+				ResourceName:            "truenas_system_advanced.test",
+				ImportState:             true,
+				ImportStateId:           "system_advanced",
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"sed_passwd"},
+			},
+		},
+	})
+}
+
+func testAccSystemAdvancedConfig(motd string) string {
+	return fmt.Sprintf(`
+resource "truenas_system_advanced" "test" {
+  motd = %q
+}
+`, motd)
 }

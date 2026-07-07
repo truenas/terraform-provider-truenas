@@ -1,6 +1,9 @@
 package iscsi_global_test
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 
@@ -41,24 +44,107 @@ data "truenas_iscsi_global" "test" {}
 	})
 }
 
-// TestAccISCSIGlobal_basic is intentionally skipped by default.
-// truenas_iscsi_global is a SINGLETON resource that serves live storage:
-// bringing it under Terraform management mutates the box's actual iSCSI
-// global configuration (iscsi.global.update), and a naive
-// create/update/destroy acceptance test risks disrupting active iSCSI
-// sessions or discovery on whatever system runs it.
+// iscsiGlobalOriginal captures the one field
+// TestAccISCSIGlobal_setAndRestore touches. PoolAvailThreshold is nullable
+// on the wire (nil means "no threshold configured").
+type iscsiGlobalOriginal struct {
+	PoolAvailThreshold *int64 `json:"pool_avail_threshold"`
+}
+
+// readISCSIGlobalOriginal reads the box's current pool_avail_threshold via
+// iscsi.global.config, so the test can restore it exactly afterward.
+func readISCSIGlobalOriginal(t *testing.T) iscsiGlobalOriginal {
+	t.Helper()
+	raw, err := acctest.Client().Call(context.Background(), "iscsi.global.config")
+	if err != nil {
+		t.Fatalf("error reading current iscsi global config: %v", err)
+	}
+	var orig iscsiGlobalOriginal
+	if err := json.Unmarshal(raw, &orig); err != nil {
+		t.Fatalf("error parsing iscsi.global.config response: %v", err)
+	}
+	return orig
+}
+
+// restoreISCSIGlobal sends only pool_avail_threshold back to its original
+// value (nil if it was originally unset) via iscsi.global.update. It runs
+// from t.Cleanup, so it restores the box even if the Terraform steps
+// themselves fail partway through. basename, listen_port, isns_servers, and
+// alua are never touched by this test.
+func restoreISCSIGlobal(t *testing.T, orig iscsiGlobalOriginal) {
+	t.Helper()
+	var v any
+	if orig.PoolAvailThreshold != nil {
+		v = *orig.PoolAvailThreshold
+	}
+	if _, err := acctest.Client().Call(context.Background(), "iscsi.global.update", map[string]any{
+		"pool_avail_threshold": v,
+	}); err != nil {
+		t.Fatalf("error restoring iscsi global pool_avail_threshold: %v", err)
+	}
+}
+
+// TestAccISCSIGlobal_setAndRestore drives the singleton
+// truenas_iscsi_global resource's "pool_avail_threshold" field through a
+// test value and back to the value read from the box before the test ran,
+// then imports it. It requires TF_ACC=1 and TRUENAS_DISRUPTIVE=1
+// (acctest.DisruptiveCheck), since it mutates the box's live iSCSI global
+// configuration; a t.Cleanup-registered API restore is the safety net if
+// the Terraform steps fail.
 //
-// If this test is ever enabled against a disposable/non-production TrueNAS
-// instance, it should:
-//  1. Read the current config via the datasource first.
-//  2. Only touch "alua" (a low-risk boolean toggle) in the resource config,
-//     driving it through a value and back to the value the datasource
-//     observed in step 1, so the net effect on the box is a no-op. Never
-//     touch basename, listen_port, isns_servers, or pool_avail_threshold in
-//     an automated test: changing those on a live system can disrupt active
-//     iSCSI sessions or discovery.
-//  3. Use ImportState with ImportStateId "iscsi_global" to verify import
-//     normalizes any ID to the fixed singleton ID.
-func TestAccISCSIGlobal_basic(t *testing.T) {
-	t.Skip("truenas_iscsi_global serves live storage; skipped to avoid mutating the target box's iSCSI configuration. See comment on TestAccISCSIGlobal_basic for how to safely enable this against a disposable instance.")
+// Safety: pool_avail_threshold is advisory-only — it only controls the
+// pool-capacity ALERT threshold used to warn about low free space backing
+// iSCSI extents, and setting or clearing it does not affect existing
+// targets, extents, or active iSCSI sessions. basename, listen_port,
+// isns_servers, and alua (which can disrupt active iSCSI sessions or
+// discovery) are never touched.
+//
+// The model represents a null pool_avail_threshold as the state value 0
+// (see responseToModel / updatePayload's three-way handling: explicit 0 in
+// config sends JSON nil to the API). So when the original value is nil, the
+// terraform-restore step below sets 0, which round-trips back to nil on the
+// wire exactly like the box's original unset state.
+func TestAccISCSIGlobal_setAndRestore(t *testing.T) {
+	acctest.DisruptiveCheck(t)
+
+	orig := readISCSIGlobalOriginal(t)
+	t.Cleanup(func() { restoreISCSIGlobal(t, orig) })
+
+	var origValue int64
+	if orig.PoolAvailThreshold != nil {
+		origValue = *orig.PoolAvailThreshold
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccISCSIGlobalConfig(80),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_iscsi_global.test", "id", "iscsi_global"),
+					resource.TestCheckResourceAttr("truenas_iscsi_global.test", "pool_avail_threshold", "80"),
+				),
+			},
+			{
+				Config: acctest.ProviderConfig() + testAccISCSIGlobalConfig(origValue),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_iscsi_global.test", "pool_avail_threshold", fmt.Sprintf("%d", origValue)),
+				),
+			},
+			{
+				ResourceName:      "truenas_iscsi_global.test",
+				ImportState:       true,
+				ImportStateId:     "iscsi_global",
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func testAccISCSIGlobalConfig(poolAvailThreshold int64) string {
+	return fmt.Sprintf(`
+resource "truenas_iscsi_global" "test" {
+  pool_avail_threshold = %d
+}
+`, poolAvailThreshold)
 }
