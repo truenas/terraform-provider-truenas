@@ -189,6 +189,40 @@ func main() {
 		pp("systemdataset.config", call(c, "systemdataset.config"))
 		pp("replication.config.config", call(c, "replication.config.config"))
 	}
+	if section == "smbprobe" {
+		// Create a throwaway dataset + share, dump create + get_instance
+		// responses, delete both.
+		if _, err := c.Call(context.Background(), "pool.dataset.create", map[string]any{
+			"name": "tank/tf-probe-smb-ds",
+		}); err != nil {
+			log.Fatal("dataset create:", err)
+		}
+		defer c.Call(context.Background(), "pool.dataset.delete", "tank/tf-probe-smb-ds")
+		payload := map[string]any{
+			"path": "/mnt/tank/tf-probe-smb-ds", "name": "tf-probe-smb", "purpose": "LEGACY_SHARE",
+			"options": map[string]any{
+				"purpose": "LEGACY_SHARE", "hostsallow": []string{"192.168.1.0/24"},
+			},
+		}
+		raw, err := c.Call(context.Background(), "sharing.smb.create", payload)
+		if err != nil {
+			log.Fatal("create:", err)
+		}
+		fmt.Printf("=== create response ===\n%s\n", raw)
+		var created struct {
+			ID int64 `json:"id"`
+		}
+		json.Unmarshal(raw, &created)
+		raw2, err := c.Call(context.Background(), "sharing.smb.get_instance", created.ID)
+		if err != nil {
+			log.Fatal("get_instance:", err)
+		}
+		fmt.Printf("=== get_instance response ===\n%s\n", raw2)
+		if _, err := c.Call(context.Background(), "sharing.smb.delete", created.ID); err != nil {
+			log.Fatal("delete:", err)
+		}
+		fmt.Println("=== deleted ok ===")
+	}
 	if section == "namespaces" {
 		raw, err := c.Call(context.Background(), "core.get_methods")
 		if err != nil {

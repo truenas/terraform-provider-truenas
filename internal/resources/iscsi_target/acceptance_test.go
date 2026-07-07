@@ -59,7 +59,7 @@ resource "truenas_iscsi_portal" "fixture" {
   comment = %q
   listen = [
     {
-      ip = "0.0.0.0"
+      ip = "192.168.1.68"
     }
   ]
 }

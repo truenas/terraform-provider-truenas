@@ -104,12 +104,13 @@ func responseToModel(ctx context.Context, api *smbAPI, m *SMBModel) diag.Diagnos
 	}
 
 	// Legacy flags now live nested under options, and only when the share's
-	// purpose is LEGACY_SHARE. For any other purpose, the legacy fields this
-	// resource models don't apply server-side; leave them at their zero
-	// values (this mirrors the flat schema's prior behavior for shares that
-	// never set these attributes).
+	// purpose is LEGACY_SHARE. NOTE: the discriminator lives at the TOP level
+	// of the response — the options object itself carries no "purpose" key
+	// (verified live on SCALE 26.0) — so branch on api.Purpose, not
+	// opts.Purpose. For any other purpose, the legacy fields this resource
+	// models don't apply server-side; leave them at their zero values.
 	opts := api.Options
-	if opts != nil && opts.Purpose == legacySharePurpose {
+	if opts != nil && api.Purpose == legacySharePurpose {
 		m.Recyclebin = types.BoolValue(opts.Recyclebin)
 		m.GuestOK = types.BoolValue(opts.GuestOK)
 		m.ACL = types.BoolValue(opts.ACL)
