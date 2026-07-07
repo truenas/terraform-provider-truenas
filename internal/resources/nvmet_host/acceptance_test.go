@@ -1,51 +1,50 @@
 package nvmet_host_test
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/truenas/terraform-provider-truenas/internal/acctest"
 )
 
 // TestAccNVMetHost_basic tests create, update, and import of an NVMe-oF
-// host (initiator). It requires:
-//   - TrueNAS_API_KEY set in the environment (checked by acctest.PreCheck)
-//   - A running TrueNAS SCALE instance
+// host (initiator). It creates and destroys its own RandName-uuid-suffixed
+// host and never touches the box's existing LIVE host configuration, which
+// serves live storage.
 func TestAccNVMetHost_basic(t *testing.T) {
-	if os.Getenv("TF_ACC") == "" {
-		t.Skip("Acceptance tests skipped: set TF_ACC=1 and ensure a TrueNAS instance is available")
-	}
+	hostNQN := fmt.Sprintf("nqn.2014-08.org.nvmexpress:uuid:%s", acctest.RandName("tf-acc"))
+	hostNQNRenamed := fmt.Sprintf("nqn.2014-08.org.nvmexpress:uuid:%s", acctest.RandName("tf-acc-renamed"))
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckNVMetHostDestroyed(hostNQNRenamed),
 		Steps: []resource.TestStep{
 			{
-				Config: acctest.ProviderConfig() + testAccNVMetHostConfig(
-					"nqn.2014-08.org.nvmexpress:uuid:tf-acc-host", "tf-acc host", ""),
+				Config: acctest.ProviderConfig() + testAccNVMetHostConfig(hostNQN, "tf-acc host", ""),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("truenas_nvmet_host.test", "hostnqn", "nqn.2014-08.org.nvmexpress:uuid:tf-acc-host"),
+					resource.TestCheckResourceAttr("truenas_nvmet_host.test", "hostnqn", hostNQN),
 					resource.TestCheckResourceAttr("truenas_nvmet_host.test", "description", "tf-acc host"),
 					resource.TestCheckResourceAttrSet("truenas_nvmet_host.test", "id"),
 				),
 			},
 			{
-				Config: acctest.ProviderConfig() + testAccNVMetHostConfig(
-					"nqn.2014-08.org.nvmexpress:uuid:tf-acc-host", "tf-acc host updated", "tf-acc-dhchap-key-1"),
+				Config: acctest.ProviderConfig() + testAccNVMetHostConfig(hostNQN, "tf-acc host updated", "tf-acc-dhchap-key-1"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_nvmet_host.test", "description", "tf-acc host updated"),
 				),
 			},
 			{
-				// hostnqn is mutable in place (no RequiresReplace): verify
-				// that changing it updates the existing resource rather than
-				// forcing a create/destroy.
-				Config: acctest.ProviderConfig() + testAccNVMetHostConfig(
-					"nqn.2014-08.org.nvmexpress:uuid:tf-acc-host-renamed", "tf-acc host updated", "tf-acc-dhchap-key-1"),
+				// hostnqn is mutable in place (no RequiresReplace): verify that
+				// changing it updates the new value on the existing resource
+				// rather than forcing a create/destroy.
+				Config: acctest.ProviderConfig() + testAccNVMetHostConfig(hostNQNRenamed, "tf-acc host updated", "tf-acc-dhchap-key-1"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("truenas_nvmet_host.test", "hostnqn", "nqn.2014-08.org.nvmexpress:uuid:tf-acc-host-renamed"),
+					resource.TestCheckResourceAttr("truenas_nvmet_host.test", "hostnqn", hostNQNRenamed),
 				),
 			},
 			{
@@ -74,4 +73,24 @@ resource "truenas_nvmet_host" "test" {
   dhchap_key  = %q
 }
 `, hostnqn, description, dhchapKey)
+}
+
+func testAccCheckNVMetHostDestroyed(hostnqn string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		c := acctest.Client()
+		raw, err := c.Call(context.Background(), "nvmet.host.query", [][]any{{"hostnqn", "=", hostnqn}})
+		if err != nil {
+			return fmt.Errorf("error checking nvmet host %s: %v", hostnqn, err)
+		}
+		var results []struct {
+			ID any `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &results); err != nil {
+			return fmt.Errorf("error parsing nvmet.host.query response: %v", err)
+		}
+		if len(results) > 0 {
+			return fmt.Errorf("nvmet host %s still exists", hostnqn)
+		}
+		return nil
+	}
 }

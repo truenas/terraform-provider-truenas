@@ -1,62 +1,87 @@
 package vm_test
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/truenas/terraform-provider-truenas/internal/acctest"
 )
 
-// TestAccVM_basic tests create, update (including start/stop), and import of
-// a VM. It requires TF_ACC=1 and credentials set via TRUENAS_API_KEY or
-// TRUENAS_USERNAME+TRUENAS_PASSWORD.
+// TestAccVM_basic tests create, update, and import of a VM. It creates and
+// destroys its own RandName-suffixed VM, with autostart disabled and
+// running left false throughout, so it never starts a guest on the target
+// host.
 func TestAccVM_basic(t *testing.T) {
-	if os.Getenv("TF_ACC") == "" {
-		t.Skip("Acceptance tests skipped: set TF_ACC=1")
-	}
+	name := acctest.RandName("tf-acc-vm")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckVMDestroyed(name),
 		Steps: []resource.TestStep{
 			{
-				Config: acctest.ProviderConfig() + testAccVMConfig("vm-test", false),
+				Config: acctest.ProviderConfig() + testAccVMConfig(name, "initial description", 1),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("truenas_vm.test", "name", "vm-test"),
-					resource.TestCheckResourceAttr("truenas_vm.test", "memory", "1073741824"),
+					resource.TestCheckResourceAttr("truenas_vm.test", "name", name),
+					resource.TestCheckResourceAttr("truenas_vm.test", "description", "initial description"),
+					resource.TestCheckResourceAttr("truenas_vm.test", "memory", "536870912"),
+					resource.TestCheckResourceAttr("truenas_vm.test", "vcpus", "1"),
+					resource.TestCheckResourceAttr("truenas_vm.test", "autostart", "false"),
 					resource.TestCheckResourceAttr("truenas_vm.test", "running", "false"),
 					resource.TestCheckResourceAttrSet("truenas_vm.test", "id"),
 					resource.TestCheckResourceAttrSet("truenas_vm.test", "status"),
 				),
 			},
 			{
-				Config: acctest.ProviderConfig() + testAccVMConfig("vm-test", true),
+				Config: acctest.ProviderConfig() + testAccVMConfig(name, "updated description", 2),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("truenas_vm.test", "running", "true"),
-					resource.TestCheckResourceAttr("truenas_vm.test", "status", "RUNNING"),
+					resource.TestCheckResourceAttr("truenas_vm.test", "description", "updated description"),
+					resource.TestCheckResourceAttr("truenas_vm.test", "vcpus", "2"),
+					resource.TestCheckResourceAttr("truenas_vm.test", "running", "false"),
 				),
 			},
 			{
-				ResourceName:            "truenas_vm.test",
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"running"},
+				ResourceName:      "truenas_vm.test",
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})
 }
 
-func testAccVMConfig(name string, running bool) string {
+func testAccVMConfig(name, description string, vcpus int) string {
 	return fmt.Sprintf(`
 resource "truenas_vm" "test" {
-  name    = %q
-  memory  = 1073741824
-  vcpus   = 1
-  cores   = 1
-  threads = 1
-  running = %v
+  name        = %q
+  description = %q
+  memory      = 536870912
+  vcpus       = %d
+  autostart   = false
+  running     = false
 }
-`, name, running)
+`, name, description, vcpus)
+}
+
+func testAccCheckVMDestroyed(name string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		c := acctest.Client()
+		raw, err := c.Call(context.Background(), "vm.query", [][]any{{"name", "=", name}})
+		if err != nil {
+			return fmt.Errorf("error checking vm %s: %v", name, err)
+		}
+		var results []struct {
+			ID any `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &results); err != nil {
+			return fmt.Errorf("error parsing vm.query response: %v", err)
+		}
+		if len(results) > 0 {
+			return fmt.Errorf("vm %s still exists", name)
+		}
+		return nil
+	}
 }

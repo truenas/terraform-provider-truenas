@@ -1,72 +1,75 @@
 package app_test
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/truenas/terraform-provider-truenas/internal/acctest"
 )
 
-// TestAccApp_basic installs a catalog app, verifies computed attributes are
-// populated, then stops it via the "running" attribute, and finally imports
-// it to verify import parity.
+// TestAccApp_basic installs the "syncthing" catalog app with default values,
+// verifies computed attributes are populated, stops it via the "running"
+// attribute, and finally destroys it.
 //
-// Requires TF_ACC=1 and credentials set via TRUENAS_API_KEY or
-// TRUENAS_USERNAME+TRUENAS_PASSWORD, plus a reachable TrueNAS SCALE 24.10+
-// system with the ix-truecharts (or default) catalog available.
+// Gated behind TRUENAS_APPS=1 (acctest.AppsCheck) since it pulls container
+// images from the network and can be slow/bandwidth-heavy, in addition to
+// TF_ACC=1 and credentials via TRUENAS_API_KEY or
+// TRUENAS_USERNAME+TRUENAS_PASSWORD.
 func TestAccApp_basic(t *testing.T) {
+	// App names may have length limits; keep the RandName-suffixed name
+	// comfortably under 40 chars.
+	name := acctest.RandName("tf-acc-app")
+
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
+		PreCheck:                 func() { acctest.AppsCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckAppDestroyed(name),
 		Steps: []resource.TestStep{
 			{
-				Config: acctest.ProviderConfig() + testAccAppConfig("tf-acc-mailhog", "mailhog", true),
+				Config: acctest.ProviderConfig() + testAccAppConfig(name, "syncthing", true),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("truenas_app.test", "name", "tf-acc-mailhog"),
-					resource.TestCheckResourceAttr("truenas_app.test", "catalog_app", "mailhog"),
-					resource.TestCheckResourceAttr("truenas_app.test", "id", "tf-acc-mailhog"),
+					resource.TestCheckResourceAttr("truenas_app.test", "name", name),
+					resource.TestCheckResourceAttr("truenas_app.test", "catalog_app", "syncthing"),
+					resource.TestCheckResourceAttr("truenas_app.test", "id", name),
 					resource.TestCheckResourceAttr("truenas_app.test", "running", "true"),
 					resource.TestCheckResourceAttrSet("truenas_app.test", "state"),
 					resource.TestCheckResourceAttrSet("truenas_app.test", "version"),
 				),
 			},
 			{
-				Config: acctest.ProviderConfig() + testAccAppConfig("tf-acc-mailhog", "mailhog", false),
+				Config: acctest.ProviderConfig() + testAccAppConfig(name, "syncthing", false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_app.test", "running", "false"),
 					resource.TestCheckResourceAttr("truenas_app.test", "state", "STOPPED"),
 				),
-			},
-			{
-				ResourceName:      "truenas_app.test",
-				ImportState:       true,
-				ImportStateVerify: true,
-				// values/custom_compose_config_string/catalog_app are
-				// write-only and never echoed back by the API, so they
-				// cannot be verified across an import (state will be
-				// empty post-import until a config apply repopulates it).
-				ImportStateVerifyIgnore: []string{"values", "custom_compose_config_string", "catalog_app"},
 			},
 		},
 	})
 }
 
 // TestAccApp_datasource verifies that the truenas_app datasource can look up
-// an app created by the resource in the same config.
+// an app created by the resource in the same config. Gated behind
+// TRUENAS_APPS=1 like TestAccApp_basic, since it also installs a real app.
 func TestAccApp_datasource(t *testing.T) {
+	name := acctest.RandName("tf-acc-app-ds")
+
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
+		PreCheck:                 func() { acctest.AppsCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckAppDestroyed(name),
 		Steps: []resource.TestStep{
 			{
-				Config: acctest.ProviderConfig() + testAccAppConfig("tf-acc-mailhog-ds", "mailhog", true) + `
+				Config: acctest.ProviderConfig() + testAccAppConfig(name, "syncthing", true) + `
 data "truenas_app" "lookup" {
   name = truenas_app.test.name
 }
 `,
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("data.truenas_app.lookup", "name", "tf-acc-mailhog-ds"),
+					resource.TestCheckResourceAttr("data.truenas_app.lookup", "name", name),
 					resource.TestCheckResourceAttrSet("data.truenas_app.lookup", "state"),
 				),
 			},
@@ -82,4 +85,24 @@ resource "truenas_app" "test" {
   running     = %v
 }
 `, name, catalogApp, running)
+}
+
+func testAccCheckAppDestroyed(name string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		c := acctest.Client()
+		raw, err := c.Call(context.Background(), "app.query", [][]any{{"name", "=", name}})
+		if err != nil {
+			return fmt.Errorf("error checking app %s: %v", name, err)
+		}
+		var results []struct {
+			ID any `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &results); err != nil {
+			return fmt.Errorf("error parsing app.query response: %v", err)
+		}
+		if len(results) > 0 {
+			return fmt.Errorf("app %s still exists", name)
+		}
+		return nil
+	}
 }

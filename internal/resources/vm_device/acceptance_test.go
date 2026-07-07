@@ -1,45 +1,40 @@
 package vm_device_test
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
-	"os"
+	"strconv"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/truenas/terraform-provider-truenas/internal/acctest"
 )
 
-// TestAccVMDevice_basic tests create, update, and import of a VM device
-// (a CDROM device attached to a pre-existing VM).
-// It requires:
-//   - TrueNAS_API_KEY set in the environment (checked by acctest.PreCheck)
-//   - A running TrueNAS SCALE instance
-//   - TF_ACC_VM_ID set to the ID of an existing VM to attach the device to
+// TestAccVMDevice_basic tests create, update, and import of a VM device (a
+// DISPLAY device attached to its own RandName-suffixed, non-running,
+// non-autostart VM fixture). It never touches any pre-existing VM.
 func TestAccVMDevice_basic(t *testing.T) {
-	if os.Getenv("TF_ACC") == "" {
-		t.Skip("Acceptance tests skipped: set TF_ACC=1 and ensure a TrueNAS instance is available")
-	}
-
-	vmID := os.Getenv("TF_ACC_VM_ID")
-	if vmID == "" {
-		t.Skip("TF_ACC_VM_ID not set: skipping truenas_vm_device acceptance test")
-	}
+	vmName := acctest.RandName("tf-acc-vm-device")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckVMDeviceDestroyed,
 		Steps: []resource.TestStep{
 			{
-				Config: acctest.ProviderConfig() + testAccVMDeviceConfig(vmID, `{"dtype": "CDROM", "path": "/mnt/tank/isos/tf-acc.iso"}`),
+				Config: acctest.ProviderConfig() + testAccVMDeviceConfig(vmName, 0),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet("truenas_vm_device.test", "id"),
-					resource.TestCheckResourceAttr("truenas_vm_device.test", "vm", vmID),
+					resource.TestCheckResourceAttrPair("truenas_vm_device.test", "vm", "truenas_vm.test", "id"),
+					resource.TestCheckResourceAttrSet("truenas_vm_device.test", "order"),
 				),
 			},
 			{
-				Config: acctest.ProviderConfig() + testAccVMDeviceConfig(vmID, `{"dtype": "CDROM", "path": "/mnt/tank/isos/tf-acc-updated.iso"}`),
+				Config: acctest.ProviderConfig() + testAccVMDeviceConfig(vmName, 5),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet("truenas_vm_device.test", "id"),
+					resource.TestCheckResourceAttr("truenas_vm_device.test", "order", "5"),
 				),
 			},
 			{
@@ -52,11 +47,61 @@ func TestAccVMDevice_basic(t *testing.T) {
 	})
 }
 
-func testAccVMDeviceConfig(vmID, attributes string) string {
+func testAccVMDeviceConfig(vmName string, order int) string {
+	orderLine := ""
+	if order != 0 {
+		orderLine = fmt.Sprintf("  order = %d\n", order)
+	}
 	return fmt.Sprintf(`
-resource "truenas_vm_device" "test" {
-  vm         = %s
-  attributes = %q
+resource "truenas_vm" "test" {
+  name      = %q
+  memory    = 536870912
+  vcpus     = 1
+  autostart = false
+  running   = false
 }
-`, vmID, attributes)
+
+resource "truenas_vm_device" "test" {
+  vm = truenas_vm.test.id
+  attributes = jsonencode({
+    dtype      = "DISPLAY"
+    type       = "VNC"
+    bind       = "0.0.0.0"
+    resolution = "1024x768"
+    wait       = false
+    web        = false
+  })
+%s}
+`, vmName, orderLine)
+}
+
+func testAccCheckVMDeviceDestroyed(s *terraform.State) error {
+	rs, ok := s.RootModule().Resources["truenas_vm_device.test"]
+	if !ok {
+		return fmt.Errorf("resource truenas_vm_device.test not found in pre-destroy state")
+	}
+	idStr, ok := rs.Primary.Attributes["id"]
+	if !ok {
+		return fmt.Errorf("truenas_vm_device.test has no id attribute in pre-destroy state")
+	}
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		return fmt.Errorf("parsing vm device id %q: %v", idStr, err)
+	}
+
+	c := acctest.Client()
+	raw, err := c.Call(context.Background(), "vm.device.query", [][]any{{"id", "=", id}})
+	if err != nil {
+		return fmt.Errorf("error checking vm device id=%d: %v", id, err)
+	}
+	var results []struct {
+		ID any `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &results); err != nil {
+		return fmt.Errorf("error parsing vm.device.query response: %v", err)
+	}
+	if len(results) > 0 {
+		return fmt.Errorf("vm device id=%d still exists", id)
+	}
+	return nil
 }
