@@ -1,7 +1,9 @@
 package system_general
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -60,6 +62,61 @@ type SystemGeneralDataSourceModel struct {
 	Wizardshown          types.Bool   `tfsdk:"wizardshown"`
 }
 
+// uiCertificate accepts both wire shapes of ui_certificate in
+// system.general.config: SCALE 26.0 returns the certificate ID as a bare
+// integer (with the name in a separate top-level ui_certificate_name
+// field), while 25.10 returns the full certificate object (and has no
+// top-level name field). Both shapes decode to the id/name pair; a JSON
+// null leaves both nil.
+type uiCertificate struct {
+	ID   *int64
+	Name *string
+}
+
+func (c *uiCertificate) UnmarshalJSON(b []byte) error {
+	if bytes.Equal(bytes.TrimSpace(b), []byte("null")) {
+		return nil
+	}
+	var id int64
+	if err := json.Unmarshal(b, &id); err == nil {
+		c.ID = &id
+		return nil
+	}
+	var obj struct {
+		ID   int64  `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return err
+	}
+	c.ID = &obj.ID
+	c.Name = &obj.Name
+	return nil
+}
+
+// idValue maps the decoded certificate ID to a Terraform value: null when
+// no certificate is set.
+func (c uiCertificate) idValue() types.Int64 {
+	if c.ID == nil {
+		return types.Int64Null()
+	}
+	return types.Int64Value(*c.ID)
+}
+
+// certificateName resolves the certificate name across wire shapes: 26.0's
+// top-level ui_certificate_name wins, then 25.10's nested object name, then
+// empty (no certificate set — matches the 26.0 wire, which reports "").
+func (api *systemGeneralAPI) certificateName() types.String {
+	switch {
+	case api.UICertificateName != "":
+		return types.StringValue(api.UICertificateName)
+	case api.UICertificate.Name != nil:
+		return types.StringValue(*api.UICertificate.Name)
+	default:
+		return types.StringValue("")
+	}
+}
+
 // systemGeneralAPI mirrors the JSON object returned by
 // system.general.config and accepted (as a subset) by
 // system.general.update. ui_certificate and usage_collection are nullable
@@ -68,24 +125,24 @@ type SystemGeneralDataSourceModel struct {
 // usage_collection_is_set, and wizardshown are server-computed and are
 // never accepted by system.general.update.
 type systemGeneralAPI struct {
-	ID                   int64    `json:"id"`
-	DSAuth               bool     `json:"ds_auth"`
-	Kbdmap               string   `json:"kbdmap"`
-	Timezone             string   `json:"timezone"`
-	UIAddress            []string `json:"ui_address"`
-	UIAllowlist          []string `json:"ui_allowlist"`
-	UICertificate        *int64   `json:"ui_certificate"`
-	UICertificateName    string   `json:"ui_certificate_name"`
-	UIConsolemsg         bool     `json:"ui_consolemsg"`
-	UIHTTPSPort          int64    `json:"ui_httpsport"`
-	UIHTTPSProtocols     []string `json:"ui_httpsprotocols"`
-	UIHTTPSRedirect      bool     `json:"ui_httpsredirect"`
-	UIPort               int64    `json:"ui_port"`
-	UIV6Address          []string `json:"ui_v6address"`
-	UIXFrameOptions      string   `json:"ui_x_frame_options"`
-	UsageCollection      *bool    `json:"usage_collection"`
-	UsageCollectionIsSet bool     `json:"usage_collection_is_set"`
-	Wizardshown          bool     `json:"wizardshown"`
+	ID                   int64         `json:"id"`
+	DSAuth               bool          `json:"ds_auth"`
+	Kbdmap               string        `json:"kbdmap"`
+	Timezone             string        `json:"timezone"`
+	UIAddress            []string      `json:"ui_address"`
+	UIAllowlist          []string      `json:"ui_allowlist"`
+	UICertificate        uiCertificate `json:"ui_certificate"`
+	UICertificateName    string        `json:"ui_certificate_name"`
+	UIConsolemsg         bool          `json:"ui_consolemsg"`
+	UIHTTPSPort          int64         `json:"ui_httpsport"`
+	UIHTTPSProtocols     []string      `json:"ui_httpsprotocols"`
+	UIHTTPSRedirect      bool          `json:"ui_httpsredirect"`
+	UIPort               int64         `json:"ui_port"`
+	UIV6Address          []string      `json:"ui_v6address"`
+	UIXFrameOptions      string        `json:"ui_x_frame_options"`
+	UsageCollection      *bool         `json:"usage_collection"`
+	UsageCollectionIsSet bool          `json:"usage_collection_is_set"`
+	Wizardshown          bool          `json:"wizardshown"`
 }
 
 // responseToModel maps an API response onto a Terraform model. Nil pointer
@@ -105,15 +162,11 @@ func responseToModel(ctx context.Context, api *systemGeneralAPI, m *SystemGenera
 	m.UIHTTPSRedirect = types.BoolValue(api.UIHTTPSRedirect)
 	m.UIPort = types.Int64Value(api.UIPort)
 	m.UIXFrameOptions = types.StringValue(api.UIXFrameOptions)
-	m.UICertificateName = types.StringValue(api.UICertificateName)
+	m.UICertificateName = api.certificateName()
 	m.UsageCollectionIsSet = types.BoolValue(api.UsageCollectionIsSet)
 	m.Wizardshown = types.BoolValue(api.Wizardshown)
 
-	if api.UICertificate != nil {
-		m.UICertificate = types.Int64Value(*api.UICertificate)
-	} else {
-		m.UICertificate = types.Int64Null()
-	}
+	m.UICertificate = api.UICertificate.idValue()
 
 	if api.UsageCollection != nil {
 		m.UsageCollection = types.BoolValue(*api.UsageCollection)
@@ -171,15 +224,11 @@ func responseToDataSourceModel(ctx context.Context, api *systemGeneralAPI, m *Sy
 	m.UIHTTPSRedirect = types.BoolValue(api.UIHTTPSRedirect)
 	m.UIPort = types.Int64Value(api.UIPort)
 	m.UIXFrameOptions = types.StringValue(api.UIXFrameOptions)
-	m.UICertificateName = types.StringValue(api.UICertificateName)
+	m.UICertificateName = api.certificateName()
 	m.UsageCollectionIsSet = types.BoolValue(api.UsageCollectionIsSet)
 	m.Wizardshown = types.BoolValue(api.Wizardshown)
 
-	if api.UICertificate != nil {
-		m.UICertificate = types.Int64Value(*api.UICertificate)
-	} else {
-		m.UICertificate = types.Int64Null()
-	}
+	m.UICertificate = api.UICertificate.idValue()
 
 	if api.UsageCollection != nil {
 		m.UsageCollection = types.BoolValue(*api.UsageCollection)

@@ -29,6 +29,28 @@ func TestAccNVMeTEndToEnd(t *testing.T) {
 	devicePath := fmt.Sprintf("zvol/%s", zvolName)
 	hostNQN := acctest.RandNQN()
 
+	// The host description field exists on the wire only from SCALE 26.0;
+	// on older releases the test omits it.
+	desc, descUpdated := "", ""
+	if acctest.ServerVersionAtLeast(t, 26, 0) {
+		desc, descUpdated = "initial host description", "updated host description"
+	}
+
+	step1Checks := []resource.TestCheckFunc{
+		// Host
+		resource.TestCheckResourceAttrSet("truenas_nvmet_host.test", "id"),
+		resource.TestCheckResourceAttr("truenas_nvmet_host.test", "hostnqn", hostNQN),
+	}
+	step2Checks := []resource.TestCheckFunc{
+		resource.TestCheckResourceAttr("truenas_nvmet_namespace.test", "enabled", "false"),
+	}
+	if desc != "" {
+		step1Checks = append(step1Checks,
+			resource.TestCheckResourceAttr("truenas_nvmet_host.test", "description", desc))
+		step2Checks = append(step2Checks,
+			resource.TestCheckResourceAttr("truenas_nvmet_host.test", "description", descUpdated))
+	}
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
@@ -36,7 +58,7 @@ func TestAccNVMeTEndToEnd(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: acctest.ProviderConfig() + testAccNVMeTEndToEndConfig(
-					subsysName, zvolName, hostNQN, true, "initial host description",
+					subsysName, zvolName, hostNQN, true, desc,
 				),
 				Check: resource.ComposeTestCheckFunc(
 					// Subsys
@@ -64,10 +86,9 @@ func TestAccNVMeTEndToEnd(t *testing.T) {
 					resource.TestCheckResourceAttr("truenas_nvmet_namespace.test", "enabled", "true"),
 					resource.TestCheckResourceAttrPair("truenas_nvmet_namespace.test", "subsys_id", "truenas_nvmet_subsys.test", "id"),
 
-					// Host
-					resource.TestCheckResourceAttrSet("truenas_nvmet_host.test", "id"),
-					resource.TestCheckResourceAttr("truenas_nvmet_host.test", "hostnqn", hostNQN),
-					resource.TestCheckResourceAttr("truenas_nvmet_host.test", "description", "initial host description"),
+					// Host (description checks are in step1Checks: the field
+					// is 26.0+ only)
+					resource.ComposeTestCheckFunc(step1Checks...),
 
 					// Host/subsys association
 					resource.TestCheckResourceAttrSet("truenas_nvmet_host_subsys.test", "id"),
@@ -86,12 +107,9 @@ func TestAccNVMeTEndToEnd(t *testing.T) {
 			// grant created above.
 			{
 				Config: acctest.ProviderConfig() + testAccNVMeTEndToEndConfig(
-					subsysName, zvolName, hostNQN, false, "updated host description",
+					subsysName, zvolName, hostNQN, false, descUpdated,
 				),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("truenas_nvmet_host.test", "description", "updated host description"),
-					resource.TestCheckResourceAttr("truenas_nvmet_namespace.test", "enabled", "false"),
-				),
+				Check: resource.ComposeTestCheckFunc(step2Checks...),
 			},
 			{
 				ResourceName:      "truenas_nvmet_port_subsys.test",
@@ -113,6 +131,10 @@ func TestAccNVMeTEndToEnd(t *testing.T) {
 }
 
 func testAccNVMeTEndToEndConfig(subsysName, zvolName, hostNQN string, namespaceEnabled bool, hostDescription string) string {
+	descLine := ""
+	if hostDescription != "" {
+		descLine = fmt.Sprintf("  description = %q\n", hostDescription)
+	}
 	return fmt.Sprintf(`
 resource "truenas_nvmet_subsys" "test" {
   name           = %q
@@ -139,9 +161,8 @@ resource "truenas_nvmet_namespace" "test" {
 }
 
 resource "truenas_nvmet_host" "test" {
-  hostnqn     = %q
-  description = %q
-}
+  hostnqn = %q
+%s}
 
 resource "truenas_nvmet_host_subsys" "test" {
   host_id   = truenas_nvmet_host.test.id
@@ -152,7 +173,7 @@ resource "truenas_nvmet_port_subsys" "test" {
   port_id   = truenas_nvmet_port.test.id
   subsys_id = truenas_nvmet_subsys.test.id
 }
-`, subsysName, acctest.EndpointHost(), zvolName, namespaceEnabled, hostNQN, hostDescription)
+`, subsysName, acctest.EndpointHost(), zvolName, namespaceEnabled, hostNQN, descLine)
 }
 
 // idResults is the shape returned by every TrueNAS <namespace>.query method

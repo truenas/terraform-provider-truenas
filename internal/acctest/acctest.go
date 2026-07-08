@@ -104,6 +104,27 @@ func Client() *client.Client {
 	return testClient
 }
 
+// ServerVersionAtLeast reports whether the acceptance-test server is at or
+// above major.minor, for gating attributes that exist only on newer SCALE
+// releases (e.g. nvmet_host description, 26.0+). Unlike most helpers it
+// dials the box, so it enforces the PreCheck env requirements itself:
+// tests call it while building config strings, before resource.Test runs
+// PreCheck. Fatals if the version cannot be determined.
+func ServerVersionAtLeast(t *testing.T, major, minor int) bool {
+	t.Helper()
+	if os.Getenv("TF_ACC") == "" {
+		t.Skip("Set TF_ACC=1 to run acceptance tests")
+	}
+	if os.Getenv("TRUENAS_ENDPOINT") == "" {
+		t.Fatal("Set TRUENAS_ENDPOINT (e.g. wss://truenas.example.com/websocket) for acceptance tests")
+	}
+	ok, err := Client().VersionAtLeast(context.Background(), major, minor)
+	if err != nil {
+		t.Fatalf("acctest: cannot determine server version: %v", err)
+	}
+	return ok
+}
+
 // PreCheck verifies required env vars are set before running acceptance tests.
 func PreCheck(t *testing.T) {
 	t.Helper()

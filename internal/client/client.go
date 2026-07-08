@@ -72,6 +72,10 @@ type Client struct {
 	pending   map[string]*pendingCall
 
 	seq atomic.Uint64
+
+	// versionMu guards version, fetched lazily by ServerVersion.
+	versionMu sync.Mutex
+	version   string
 }
 
 // New creates a Client. Call Connect() before use.

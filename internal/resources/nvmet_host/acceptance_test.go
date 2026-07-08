@@ -19,30 +19,46 @@ func TestAccNVMetHost_basic(t *testing.T) {
 	hostNQN := acctest.RandNQN()
 	hostNQNRenamed := acctest.RandNQN()
 
+	// The description field exists on the wire only from SCALE 26.0; on
+	// older releases the test omits it and the update step exercises the
+	// hostnqn rename alone.
+	desc, descUpdated := "", ""
+	if acctest.ServerVersionAtLeast(t, 26, 0) {
+		desc, descUpdated = "tf-acc host", "tf-acc host updated"
+	}
+
+	step1Checks := []resource.TestCheckFunc{
+		resource.TestCheckResourceAttr("truenas_nvmet_host.test", "hostnqn", hostNQN),
+		resource.TestCheckResourceAttrSet("truenas_nvmet_host.test", "id"),
+	}
+	step2Checks := []resource.TestCheckFunc{
+		resource.TestCheckResourceAttr("truenas_nvmet_host.test", "hostnqn", hostNQN),
+	}
+	if desc != "" {
+		step1Checks = append(step1Checks,
+			resource.TestCheckResourceAttr("truenas_nvmet_host.test", "description", desc))
+		step2Checks = append(step2Checks,
+			resource.TestCheckResourceAttr("truenas_nvmet_host.test", "description", descUpdated))
+	}
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckNVMetHostDestroyed(hostNQNRenamed),
 		Steps: []resource.TestStep{
 			{
-				Config: acctest.ProviderConfig() + testAccNVMetHostConfig(hostNQN, "tf-acc host", ""),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("truenas_nvmet_host.test", "hostnqn", hostNQN),
-					resource.TestCheckResourceAttr("truenas_nvmet_host.test", "description", "tf-acc host"),
-					resource.TestCheckResourceAttrSet("truenas_nvmet_host.test", "id"),
-				),
+				Config: acctest.ProviderConfig() + testAccNVMetHostConfig(hostNQN, desc, ""),
+				Check:  resource.ComposeTestCheckFunc(step1Checks...),
 			},
 			{
-				Config: acctest.ProviderConfig() + testAccNVMetHostConfig(hostNQN, "tf-acc host updated", ""),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("truenas_nvmet_host.test", "description", "tf-acc host updated"),
-				),
+				Config: acctest.ProviderConfig() + testAccNVMetHostConfig(hostNQN, descUpdated, ""),
+				Check:  resource.ComposeTestCheckFunc(step2Checks...),
 			},
 			{
 				// hostnqn is mutable in place (no RequiresReplace): verify that
 				// changing it updates the new value on the existing resource
 				// rather than forcing a create/destroy.
-				Config: acctest.ProviderConfig() + testAccNVMetHostConfig(hostNQNRenamed, "tf-acc host updated", ""),
+				Config: acctest.ProviderConfig() + testAccNVMetHostConfig(hostNQNRenamed, descUpdated, ""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_nvmet_host.test", "hostnqn", hostNQNRenamed),
 				),
@@ -57,22 +73,18 @@ func TestAccNVMetHost_basic(t *testing.T) {
 	})
 }
 
+// testAccNVMetHostConfig renders the test resource; description and
+// dhchap_key lines are omitted entirely when empty (description does not
+// exist on the wire before SCALE 26.0).
 func testAccNVMetHostConfig(hostnqn, description, dhchapKey string) string {
-	if dhchapKey == "" {
-		return fmt.Sprintf(`
-resource "truenas_nvmet_host" "test" {
-  hostnqn     = %q
-  description = %q
-}
-`, hostnqn, description)
+	cfg := fmt.Sprintf("resource \"truenas_nvmet_host\" \"test\" {\n  hostnqn = %q\n", hostnqn)
+	if description != "" {
+		cfg += fmt.Sprintf("  description = %q\n", description)
 	}
-	return fmt.Sprintf(`
-resource "truenas_nvmet_host" "test" {
-  hostnqn     = %q
-  description = %q
-  dhchap_key  = %q
-}
-`, hostnqn, description, dhchapKey)
+	if dhchapKey != "" {
+		cfg += fmt.Sprintf("  dhchap_key = %q\n", dhchapKey)
+	}
+	return cfg + "}\n"
 }
 
 func testAccCheckNVMetHostDestroyed(hostnqn string) resource.TestCheckFunc {

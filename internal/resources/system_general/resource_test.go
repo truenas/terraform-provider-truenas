@@ -2,6 +2,7 @@ package system_general
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"sort"
 	"testing"
@@ -168,7 +169,7 @@ func TestResponseToModel_NullableFieldsMapToNull(t *testing.T) {
 		Timezone:         "America/Los_Angeles",
 		UIAddress:        []string{"0.0.0.0"},
 		UIAllowlist:      []string{},
-		UICertificate:    nil,
+		UICertificate:    uiCertificate{},
 		UIConsolemsg:     false,
 		UIHTTPSPort:      443,
 		UIHTTPSProtocols: []string{"TLSv1.2", "TLSv1.3"},
@@ -193,7 +194,7 @@ func TestResponseToModel_NullableFieldsMapToNull(t *testing.T) {
 
 	cert := int64(1)
 	usage := true
-	api.UICertificate = &cert
+	api.UICertificate = uiCertificate{ID: &cert}
 	api.UsageCollection = &usage
 
 	m2 := &SystemGeneralModel{}
@@ -560,5 +561,47 @@ func TestSystemGeneralDataSourceModel_MatchesSchema(t *testing.T) {
 
 	if !reflect.DeepEqual(schemaAttrs, modelFields) {
 		t.Fatalf("SystemGeneralDataSourceModel tfsdk tags %v do not match datasource schema attributes %v", modelFields, schemaAttrs)
+	}
+}
+
+// TestUICertificateDecode_bothShapes verifies uiCertificate decodes both
+// wire shapes of system.general.config's ui_certificate: SCALE 26.0's bare
+// integer ID and 25.10's full certificate object (id + name), plus null.
+func TestUICertificateDecode_bothShapes(t *testing.T) {
+	var api systemGeneralAPI
+
+	// 26.0: bare int, name in top-level ui_certificate_name.
+	if err := json.Unmarshal([]byte(`{"ui_certificate": 7, "ui_certificate_name": "cert26"}`), &api); err != nil {
+		t.Fatalf("26.0 shape: %v", err)
+	}
+	if api.UICertificate.ID == nil || *api.UICertificate.ID != 7 {
+		t.Errorf("26.0 shape ID = %v, want 7", api.UICertificate.ID)
+	}
+	if got := api.certificateName(); got.ValueString() != "cert26" {
+		t.Errorf("26.0 shape name = %v, want cert26", got)
+	}
+
+	// 25.10: full object, no top-level name field.
+	api = systemGeneralAPI{}
+	if err := json.Unmarshal([]byte(`{"ui_certificate": {"id": 3, "name": "truenas_default", "key_length": 2048}}`), &api); err != nil {
+		t.Fatalf("25.10 shape: %v", err)
+	}
+	if api.UICertificate.ID == nil || *api.UICertificate.ID != 3 {
+		t.Errorf("25.10 shape ID = %v, want 3", api.UICertificate.ID)
+	}
+	if got := api.certificateName(); got.ValueString() != "truenas_default" {
+		t.Errorf("25.10 shape name = %v, want truenas_default", got)
+	}
+
+	// null: both nil, maps to null ID and empty name.
+	api = systemGeneralAPI{}
+	if err := json.Unmarshal([]byte(`{"ui_certificate": null}`), &api); err != nil {
+		t.Fatalf("null shape: %v", err)
+	}
+	if !api.UICertificate.idValue().IsNull() {
+		t.Errorf("null shape ID = %v, want null", api.UICertificate.idValue())
+	}
+	if got := api.certificateName(); got.ValueString() != "" {
+		t.Errorf("null shape name = %v, want empty", got)
 	}
 }

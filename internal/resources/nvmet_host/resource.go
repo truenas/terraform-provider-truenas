@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
@@ -42,6 +44,34 @@ func (r *NVMetHostResource) Configure(_ context.Context, req resource.ConfigureR
 	r.client = c
 }
 
+// applyDescriptionSupport handles the description field's version gate:
+// the nvmet_host.create/update schemas gained it in SCALE 26.0, and older
+// releases fail it with a generic "Extra inputs are not permitted". On a
+// pre-26.0 server a non-empty description errors with a clear message; an
+// empty one is silently stripped from the payload — description is
+// Optional+Computed, so the 25.10 read-back's "" flows into later plans as
+// a known (but meaningless) value and must not be resent. If the version
+// probe itself fails, the payload is left alone and the server's own
+// validation decides.
+func (r *NVMetHostResource) applyDescriptionSupport(ctx context.Context, payload map[string]any, plan *NVMetHostModel, diags *diag.Diagnostics) {
+	if _, present := payload["description"]; !present {
+		return
+	}
+	ok, err := r.client.VersionAtLeast(ctx, 26, 0)
+	if err != nil || ok {
+		return
+	}
+	if !plan.Description.IsNull() && !plan.Description.IsUnknown() && plan.Description.ValueString() != "" {
+		diags.AddAttributeError(
+			path.Root("description"),
+			"description requires TrueNAS SCALE 26.0 or later",
+			"The nvmet_host description field does not exist on this TrueNAS release. Remove the attribute or upgrade the server.",
+		)
+		return
+	}
+	delete(payload, "description")
+}
+
 func (r *NVMetHostResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan NVMetHostModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -62,6 +92,10 @@ func (r *NVMetHostResource) Create(ctx context.Context, req resource.CreateReque
 
 	payload, diags := plan.createPayload(ctx)
 	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	r.applyDescriptionSupport(ctx, payload, &plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -154,6 +188,10 @@ func (r *NVMetHostResource) Update(ctx context.Context, req resource.UpdateReque
 
 	payload, diags := plan.updatePayload(ctx)
 	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	r.applyDescriptionSupport(ctx, payload, &plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
