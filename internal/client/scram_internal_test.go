@@ -92,7 +92,7 @@ func TestScramConversation_FullExchange(t *testing.T) {
 	srv := &testScramServer{
 		secret:     "uz8DhKHFhRIUQIvjzabPYtpy5wf1DJ3ZBLlDgNVhRAFT7Y6pJGUlm0n3apwxWEU4",
 		salt:       []byte("0123456789abcdef"),
-		iterations: 5000, // fast for tests; TrueNAS uses 500000
+		iterations: 50000, // client-enforced floor; TrueNAS uses 500000
 		nonceExt:   "SERVERNONCE",
 	}
 
@@ -127,7 +127,7 @@ func TestScramConversation_WrongSecretRejected(t *testing.T) {
 	srv := &testScramServer{
 		secret:     "the-real-secret",
 		salt:       []byte("0123456789abcdef"),
-		iterations: 5000,
+		iterations: 50000,
 		nonceExt:   "SERVERNONCE",
 	}
 
@@ -150,7 +150,7 @@ func TestScramConversation_BadServerSignatureRejected(t *testing.T) {
 	srv := &testScramServer{
 		secret:     "secret",
 		salt:       []byte("0123456789abcdef"),
-		iterations: 5000,
+		iterations: 50000,
 		nonceExt:   "SERVERNONCE",
 	}
 	sc := &scramConversation{}
@@ -170,11 +170,39 @@ func TestScramConversation_BadServerSignatureRejected(t *testing.T) {
 func TestScramConversation_NonceMismatchRejected(t *testing.T) {
 	sc := &scramConversation{}
 	sc.clientFirstMessage("u", 1, []byte("0123456789abcdef0123456789abcdef"))
-	serverFirst := fmt.Sprintf("r=%s,s=%s,i=5000",
+	serverFirst := fmt.Sprintf("r=%s,s=%s,i=50000",
 		base64.StdEncoding.EncodeToString([]byte("DIFFERENT-NONCE-BYTES-0123456789-abcdef")),
 		base64.StdEncoding.EncodeToString([]byte("0123456789abcdef")))
 	if err := sc.processServerFirst(serverFirst, "secret"); err == nil {
 		t.Fatal("accepted server nonce that does not extend client nonce")
+	}
+}
+
+// TestScramConversation_BadServerFirstRejected verifies the client
+// enforces the truenas_scram wire limits on the server-first message.
+func TestScramConversation_BadServerFirstRejected(t *testing.T) {
+	nonce := []byte("0123456789abcdef0123456789abcdef")
+	combined := base64.StdEncoding.EncodeToString(append(append([]byte{}, nonce...), []byte("SERVERNONCE")...))
+	salt16 := base64.StdEncoding.EncodeToString([]byte("0123456789abcdef"))
+
+	cases := []struct {
+		name        string
+		serverFirst string
+	}{
+		{"iterations below floor", fmt.Sprintf("r=%s,s=%s,i=49999", combined, salt16)},
+		{"iterations above ceiling", fmt.Sprintf("r=%s,s=%s,i=5000001", combined, salt16)},
+		{"salt wrong size", fmt.Sprintf("r=%s,s=%s,i=500000", combined, base64.StdEncoding.EncodeToString([]byte("short")))},
+		{"salt not base64", fmt.Sprintf("r=%s,s=!!!,i=500000", combined)},
+		{"server nonce not base64", fmt.Sprintf("r=!!!,s=%s,i=500000", salt16)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sc := &scramConversation{}
+			sc.clientFirstMessage("u", 1, nonce)
+			if err := sc.processServerFirst(tc.serverFirst, "secret"); err == nil {
+				t.Fatalf("accepted bad server-first %q", tc.serverFirst)
+			}
+		})
 	}
 }
 

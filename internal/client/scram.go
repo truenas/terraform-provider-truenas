@@ -108,8 +108,15 @@ func (sc *scramConversation) processServerFirst(serverFirst, secret string) erro
 	if len(combined) <= len(sc.clientNonceRaw) || !bytes.HasPrefix(combined, sc.clientNonceRaw) {
 		return fmt.Errorf("scram: server nonce does not extend client nonce")
 	}
-	if len(salt) == 0 || iterations <= 0 {
-		return fmt.Errorf("scram: server-first message missing salt or iterations")
+	// Mirror the truenas_scram server-side limits (SCRAM_DEFAULT_SALT_SZ,
+	// SCRAM_MIN_ITERS/SCRAM_MAX_ITERS): a 16-byte salt and a sane
+	// iteration range. The floor also stops a tampering middlebox from
+	// handing the client a trivially cheap PBKDF2 target.
+	if len(salt) != 16 {
+		return fmt.Errorf("scram: salt must be 16 bytes, got %d", len(salt))
+	}
+	if iterations < 50000 || iterations > 5000000 {
+		return fmt.Errorf("scram: iteration count %d outside 50000..5000000", iterations)
 	}
 
 	salted, err := pbkdf2.Key(sha512.New, secret, salt, iterations, sha512.Size)
