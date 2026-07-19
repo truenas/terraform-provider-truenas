@@ -137,6 +137,8 @@ Every provider argument can come from the environment instead:
 | `password` | `TRUENAS_PASSWORD` |
 
 Exactly one auth method is required: `api_key` **or** `username`+`password`.
+(`username` alongside `api_key` is not a second method — it names the key
+owner so SCRAM can be used.)
 
 ### 4. First resources
 
