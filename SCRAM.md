@@ -182,42 +182,45 @@ requires channel binding (see below).
 
 ## Testing
 
-### Unit: RFC-faithful conversation tests
+The project's testing policy is **no mocks**: correctness of the exchange
+is judged by the real middleware, never by a simulated server. Test code
+divides accordingly into pure-function input tests (no server involved,
+simulated or otherwise) and live tests against real TrueNAS boxes.
 
-`scram_internal_test.go` implements the *server* half of the exchange
-in-test (`testScramServer`), mirroring the middleware's verification
-procedure rather than trusting the client's own math:
+### Unit: pure-function input validation
 
-- binary nonce extension exactly as `truenas_scram` does it (decode client
-  `r=`, append server bytes, re-encode combined);
-- proof verification the server way: recover `ClientKey = proof XOR
-  ClientSignature`, hash it, compare against `StoredKey` — not by
-  recomputing the client's proof with the client's code.
-
-Tests:
+`scram_internal_test.go` feeds crafted strings and bytes into the client's
+message builders and parsers — no server, real or simulated, participates:
 
 | Test | Asserts |
 |---|---|
-| `TestScramConversation_FullExchange` | Round trip: client proof verifies server-side; server signature verifies client-side; exact client-first wire form |
-| `TestScramConversation_WrongSecretRejected` | Proof from a wrong secret fails server-side verification |
-| `TestScramConversation_BadServerSignatureRejected` | Client rejects a fabricated `v=` (mutual-auth enforcement) |
-| `TestScramConversation_NonceMismatchRejected` | Client rejects a combined nonce that does not extend its own bytes |
+| `TestScramConversation_ClientFirstWireForm` | Exact client-first bytes: GS2 `n,,` header, `username:key_id` identity, base64 nonce; `client-first-bare` retained for `AuthMessage` |
+| `TestScramConversation_BadServerSignatureRejected` | A syntactically valid but wrong `v=`, and a malformed server-final, are both rejected (mutual-auth enforcement) |
+| `TestScramConversation_NonceMismatchRejected` | A combined nonce that does not byte-extend the client's own is rejected |
 | `TestScramConversation_BadServerFirstRejected` | Iterations below 50k / above 5M, non-16-byte salt, non-base64 salt or nonce — each rejected before key derivation |
 | `TestSplitAPIKey` | `<id>-<secret>` parsing, malformed-key rejection |
 
-### Live: real middleware, both mechanisms
+### Live: the real middleware is the referee
 
-`TestLiveSCRAM` (env-gated: `TF_ACC`, `TRUENAS_ENDPOINT`,
-`TRUENAS_API_KEY`, `TRUENAS_USERNAME`) runs the full exchange against a
-real box and then issues an authenticated call. Current results:
+`scram_live_test.go` (env-gated: `TF_ACC`, `TRUENAS_ENDPOINT`,
+`TRUENAS_API_KEY`, `TRUENAS_USERNAME`) runs full exchanges against a real
+box:
 
-- **SCALE 26.0.0-BETA.2** (`auth.mechanism_choices` = `[API_KEY_PLAIN,
-  TOKEN_PLAIN, PASSWORD_PLAIN, SCRAM]`): full SCRAM exchange succeeds,
-  server signature verifies, authenticated `system.version_short`
-  returns.
-- **SCALE 25.10.3.1**: `auth.mechanism_choices` fails pre-auth; the test
-  skips (and the provider's auto-selection falls back to
-  `auth.login_with_api_key`, exercised separately).
+- `TestLiveSCRAM` — the positive path: mechanism discovery, full
+  exchange, server-signature verification, then an authenticated
+  `system.version_short` call. On **SCALE 26.0.0-BETA.2**
+  (`auth.mechanism_choices` = `[API_KEY_PLAIN, TOKEN_PLAIN,
+  PASSWORD_PLAIN, SCRAM]`) this passes; on **25.10.3.1** the mechanism
+  probe fails pre-auth and the test skips.
+- `TestLiveSCRAM_WrongCredentialsRejected` — the negative half, judged by
+  the server itself: a proof built from a corrupted secret (same key ID)
+  is rejected, and the correct key presented under a wrong username is
+  rejected. Both verified against 26.0.0-BETA.2.
+
+The cryptographic pipeline (PBKDF2, ClientKey/StoredKey, proof, server
+signature) therefore has its correctness established end-to-end against
+the production implementation: a genuine exchange succeeds *and* a
+single-character perturbation of the secret fails.
 
 ### Acceptance: provider end-to-end
 
@@ -233,10 +236,9 @@ suite authenticates via the auto-selection path. Verified runs:
 ### What testing does not cover
 
 - Channel-binding exchanges (not implemented).
-- Interop with `truenas_pyscram` message objects directly — conformance is
-  established against the middleware's documented wire format, the
-  `truenas_scram` parser behavior, and live exchanges with a real server,
-  not against the Python library's internals.
+- A live server that *lies* in its final message (wrong `v=`): a real
+  middleware never produces one, so client-side rejection of a bad server
+  signature is covered by the pure input test above rather than live.
 
 ## Empirical findings fed back
 
