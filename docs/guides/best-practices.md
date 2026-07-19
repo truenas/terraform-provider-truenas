@@ -22,8 +22,16 @@ so it can be revoked independently of any user account:
 provider "truenas" {
   endpoint = "wss://truenas.example.com/api/current"
   api_key  = var.truenas_api_key
+  username = "svc_terraform" # key owner; enables SCRAM-SHA-512 on 26.0+
 }
 ```
+
+**Set `username` with your API key.** On SCALE 26.0+ this switches
+authentication to SCRAM-SHA-512: the raw key never crosses the wire (only a
+proof of possession does) and the server proves it knows the key too, so a
+middlebox cannot harvest credentials even if TLS is intercepted. On older
+servers the username is ignored and the plain key login is used. SCRAM adds
+around a second per session (500,000 PBKDF2 iterations by design).
 
 **Mind the login rate limit.** TrueNAS allows roughly 20 authentications per
 minute per source IP, and every `terraform plan` or `apply` opens one

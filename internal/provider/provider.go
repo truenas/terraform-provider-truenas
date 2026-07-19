@@ -98,12 +98,12 @@ func (p *TrueNASProvider) Schema(_ context.Context, _ provider.SchemaRequest, re
 				Optional:    true,
 			},
 			"api_key": schema.StringAttribute{
-				Description: "TrueNAS API key. Mutually exclusive with username/password. Env: TRUENAS_API_KEY",
+				Description: "TrueNAS API key. Mutually exclusive with password auth. On SCALE 26.0+, also set username (the key owner) to authenticate via SCRAM-SHA-512 so the raw key never crosses the wire. Env: TRUENAS_API_KEY",
 				Optional:    true,
 				Sensitive:   true,
 			},
 			"username": schema.StringAttribute{
-				Description: "TrueNAS username. Requires password. Env: TRUENAS_USERNAME",
+				Description: "TrueNAS username. With password: password authentication. With api_key: names the key owner and enables SCRAM-SHA-512 on SCALE 26.0+. Env: TRUENAS_USERNAME",
 				Optional:    true,
 			},
 			"password": schema.StringAttribute{
@@ -148,11 +148,12 @@ func (p *TrueNASProvider) Configure(ctx context.Context, req provider.ConfigureR
 		endpoint = base + "/api/current"
 	}
 
-	// Auth validation: exactly one auth method
+	// Auth validation: exactly one auth method. username may accompany
+	// api_key — it names the key's owner and enables SCRAM (26.0+).
 	hasAPIKey := apiKey != ""
 	hasPassword := username != "" && password != ""
-	if hasAPIKey && hasPassword {
-		resp.Diagnostics.AddError("Conflicting auth", "Provide api_key OR username+password, not both.")
+	if hasAPIKey && password != "" {
+		resp.Diagnostics.AddError("Conflicting auth", "Provide api_key OR username+password, not both. (username alone may accompany api_key to enable SCRAM.)")
 		return
 	}
 	if !hasAPIKey && !hasPassword {
@@ -181,8 +182,11 @@ func (p *TrueNASProvider) Configure(ctx context.Context, req provider.ConfigureR
 
 	var authFn func(ctx context.Context) error
 	if hasAPIKey {
-		key := apiKey
-		authFn = func(ctx context.Context) error { return client.AuthAPIKey(ctx, c, key) }
+		// AuthAPIKeyAuto upgrades to SCRAM-SHA-512 when the server offers
+		// it (SCALE 26.0+) and username identifies the key owner;
+		// otherwise (or when username is unset) it uses the plain login.
+		key, u := apiKey, username
+		authFn = func(ctx context.Context) error { return client.AuthAPIKeyAuto(ctx, c, u, key) }
 	} else {
 		u, pw := username, password
 		authFn = func(ctx context.Context) error { return client.AuthPassword(ctx, c, u, pw) }

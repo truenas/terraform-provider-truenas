@@ -97,7 +97,10 @@ func Client() *client.Client {
 		c := client.New(Endpoint(), tlsCfg)
 		var authFn func(ctx context.Context) error
 		if apiKey := os.Getenv("TRUENAS_API_KEY"); apiKey != "" {
-			authFn = func(ctx context.Context) error { return client.AuthAPIKey(ctx, c, apiKey) }
+			// Upgrades to SCRAM on 26.0+ when TRUENAS_USERNAME names the
+			// key owner; plain login otherwise.
+			username := os.Getenv("TRUENAS_USERNAME")
+			authFn = func(ctx context.Context) error { return client.AuthAPIKeyAuto(ctx, c, username, apiKey) }
 		} else {
 			username := os.Getenv("TRUENAS_USERNAME")
 			password := os.Getenv("TRUENAS_PASSWORD")

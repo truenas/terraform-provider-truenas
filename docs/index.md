@@ -38,9 +38,9 @@ variable "truenas_api_key" {
 
 ### Optional
 
-- `api_key` (String, Sensitive) TrueNAS API key. Mutually exclusive with username/password. Env: TRUENAS_API_KEY
+- `api_key` (String, Sensitive) TrueNAS API key. Mutually exclusive with password auth. On SCALE 26.0+, also set username (the key owner) to authenticate via SCRAM-SHA-512 so the raw key never crosses the wire. Env: TRUENAS_API_KEY
 - `ca_cert` (String) Path to a PEM-encoded CA certificate file. Mutually exclusive with insecure.
 - `endpoint` (String) TrueNAS WebSocket endpoint, e.g. wss://truenas.example.com/api/current (legacy /websocket paths are rewritten to /api/current automatically). Env: TRUENAS_ENDPOINT
 - `insecure` (Boolean) Skip TLS certificate verification. Mutually exclusive with ca_cert.
 - `password` (String, Sensitive) TrueNAS password. Requires username. Env: TRUENAS_PASSWORD
-- `username` (String) TrueNAS username. Requires password. Env: TRUENAS_USERNAME
+- `username` (String) TrueNAS username. With password: password authentication. With api_key: names the key owner and enables SCRAM-SHA-512 on SCALE 26.0+. Env: TRUENAS_USERNAME

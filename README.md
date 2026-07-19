@@ -94,6 +94,11 @@ midclt call api_key.create '{"name": "terraform", "username": "root"}'
 Store the key outside your Terraform files (environment variable or a secrets
 manager). Username/password auth also works but an API key is preferred.
 
+On SCALE 26.0+, set `username` (the key owner) alongside `api_key` and the
+provider authenticates via SCRAM-SHA-512: a challenge-response exchange
+with mutual verification where the raw key never crosses the wire. Older
+servers, or an api_key without username, use the plain key login.
+
 ### 3. Configure the provider
 
 ```hcl
@@ -109,6 +114,7 @@ terraform {
 provider "truenas" {
   endpoint = "wss://truenas.example.com/api/current"
   api_key  = var.truenas_api_key
+  username = "svc_terraform" # key owner; enables SCRAM-SHA-512 on 26.0+
 
   # TLS: pick one (or neither, for a system-trusted certificate)
   insecure = true                # skip verification (self-signed certs)
