@@ -1,9 +1,16 @@
 # Test Suite
 
 This provider is tested at two levels: **unit tests** (no TrueNAS required)
-and a **live acceptance suite** that runs against a real TrueNAS SCALE box.
-There are no mock servers anywhere — every acceptance test exercises the
-actual WebSocket API. The full suite runs green against TrueNAS SCALE 26.0.
+and **live tests** that run against a real TrueNAS SCALE box.
+There are no mock servers anywhere — not in the acceptance suite and not
+in the client package. Unit tests are pure-function tests (payload
+builders, response mappers, parsers, error classification); everything
+that talks to a server talks to a real one. Client-level live tests
+(`internal/client`, `TestLive*`) cover the transport itself — auth
+mechanisms including SCRAM, error mapping, job polling bailout, and
+reconnect-after-drop — and are gated on the same env vars as the
+acceptance suite, skipping cleanly when unset. The full suite runs green
+against TrueNAS SCALE 25.10 and 26.0.
 
 ## Quick start
 
