@@ -34,8 +34,9 @@ Working examples for every resource are under [`examples/resources/`](examples/r
 
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.11 (write-only secret attributes)
 - [Go](https://go.dev/doc/install) >= 1.25 (to build from source)
-- TrueNAS SCALE 24.10+ (`truenas_app` and `truenas_nvmet_*` need 24.10/25.x APIs;
-  the rest works on earlier SCALE releases)
+- TrueNAS SCALE 25.04+ (the provider speaks the versioned JSON-RPC 2.0 API
+  at `/api/current`, introduced in 25.04; older releases only offer the
+  legacy WebSocket endpoint and cannot connect)
 
 ### Tested TrueNAS versions
 
@@ -45,6 +46,7 @@ The full acceptance suite runs against live TrueNAS boxes on these releases:
 |---|---|
 | 26.0 | Fully tested |
 | 25.10 | Fully tested. `truenas_nvmet_host.description` is 26.0+ only; the provider rejects it with a clear error on older releases |
+| 25.04 | Connects (has `/api/current`) but untested — schema drift is possible |
 
 The provider detects the server release at runtime (`system.version_short`)
 and gates version-specific fields, so a single configuration can target
