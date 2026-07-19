@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 
@@ -33,9 +34,15 @@ var (
 // fail — PreCheck enforces the real requirement before anything dials out.
 func Endpoint() string {
 	if v := os.Getenv("TRUENAS_ENDPOINT"); v != "" {
+		// Same legacy-path rewrite the provider applies: the client speaks
+		// JSON-RPC 2.0, so a configured /websocket endpoint must land on
+		// /api/current (acctest.Client() dials this URL directly).
+		if base, ok := strings.CutSuffix(v, "/websocket"); ok {
+			return base + "/api/current"
+		}
 		return v
 	}
-	return "wss://truenas.invalid/websocket"
+	return "wss://truenas.invalid/api/current"
 }
 
 // EndpointHost returns the bare host (IP or name) portion of Endpoint(),
@@ -116,7 +123,7 @@ func ServerVersionAtLeast(t *testing.T, major, minor int) bool {
 		t.Skip("Set TF_ACC=1 to run acceptance tests")
 	}
 	if os.Getenv("TRUENAS_ENDPOINT") == "" {
-		t.Fatal("Set TRUENAS_ENDPOINT (e.g. wss://truenas.example.com/websocket) for acceptance tests")
+		t.Fatal("Set TRUENAS_ENDPOINT (e.g. wss://truenas.example.com/api/current) for acceptance tests")
 	}
 	ok, err := Client().VersionAtLeast(context.Background(), major, minor)
 	if err != nil {
@@ -132,7 +139,7 @@ func PreCheck(t *testing.T) {
 		t.Skip("Set TF_ACC=1 to run acceptance tests")
 	}
 	if os.Getenv("TRUENAS_ENDPOINT") == "" {
-		t.Fatal("Set TRUENAS_ENDPOINT (e.g. wss://truenas.example.com/websocket) for acceptance tests")
+		t.Fatal("Set TRUENAS_ENDPOINT (e.g. wss://truenas.example.com/api/current) for acceptance tests")
 	}
 	if os.Getenv("TRUENAS_API_KEY") == "" && (os.Getenv("TRUENAS_USERNAME") == "" || os.Getenv("TRUENAS_PASSWORD") == "") {
 		t.Fatal("Set TRUENAS_API_KEY or TRUENAS_USERNAME+TRUENAS_PASSWORD for acceptance tests")

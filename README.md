@@ -3,7 +3,7 @@
 A Terraform provider that manages [TrueNAS SCALE](https://www.truenas.com/truenas-scale/)
 through its WebSocket API. Built on the
 [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework);
-no REST calls, no external client dependency — a self-contained DDP/WebSocket
+no REST calls, no external client dependency — a self-contained JSON-RPC 2.0
 client lives inside the provider.
 
 ## What it manages
@@ -105,7 +105,7 @@ terraform {
 }
 
 provider "truenas" {
-  endpoint = "wss://truenas.example.com/websocket"
+  endpoint = "wss://truenas.example.com/api/current"
   api_key  = var.truenas_api_key
 
   # TLS: pick one (or neither, for a system-trusted certificate)
@@ -219,7 +219,7 @@ go test ./...
 Acceptance tests exercise a **live TrueNAS box** in three tiers:
 
 ```sh
-export TRUENAS_ENDPOINT="wss://truenas.example.com/websocket"  # required
+export TRUENAS_ENDPOINT="wss://truenas.example.com/api/current"  # required
 export TRUENAS_API_KEY="..."
 export TRUENAS_TEST_POOL="tank"                     # pool for test fixtures
 

@@ -22,7 +22,7 @@ terraform {
 }
 
 provider "truenas" {
-  endpoint = "wss://truenas.example.com/websocket"
+  endpoint = "wss://truenas.example.com/api/current"
   api_key  = var.truenas_api_key
   insecure = true
 }
@@ -40,7 +40,7 @@ variable "truenas_api_key" {
 
 - `api_key` (String, Sensitive) TrueNAS API key. Mutually exclusive with username/password. Env: TRUENAS_API_KEY
 - `ca_cert` (String) Path to a PEM-encoded CA certificate file. Mutually exclusive with insecure.
-- `endpoint` (String) TrueNAS WebSocket endpoint, e.g. wss://truenas.example.com/websocket. Env: TRUENAS_ENDPOINT
+- `endpoint` (String) TrueNAS WebSocket endpoint, e.g. wss://truenas.example.com/api/current (legacy /websocket paths are rewritten to /api/current automatically). Env: TRUENAS_ENDPOINT
 - `insecure` (Boolean) Skip TLS certificate verification. Mutually exclusive with ca_cert.
 - `password` (String, Sensitive) TrueNAS password. Requires username. Env: TRUENAS_PASSWORD
 - `username` (String) TrueNAS username. Requires password. Env: TRUENAS_USERNAME

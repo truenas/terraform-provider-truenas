@@ -14,10 +14,16 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// APIError is a TrueNAS WebSocket API error.
-// TrueNAS wire format: {"error": <int>, "reason": "<string>", "trace": ...}
+// APIError is a TrueNAS API error. On the JSON-RPC 2.0 wire
+// (/api/current) this object arrives as the `data` member of the JSON-RPC
+// error: {"error": {"code": -32001, "message": "...", "data": {"error":
+// <errno>, "errname": "EINVAL", "reason": "<string>", "trace": ...}}}.
+// Protocol-level errors with no data member (e.g. -32601 "Method does not
+// exist") are mapped onto the same struct with the JSON-RPC code and
+// message.
 type APIError struct {
 	Code    int    `json:"error"`
+	ErrName string `json:"errname,omitempty"`
 	Message string `json:"reason"`
 	Trace   any    `json:"trace,omitempty"`
 }
@@ -27,6 +33,9 @@ func (e *APIError) Error() string {
 }
 
 // IsNotFound returns true when the error means the resource does not exist.
+// Note the middleware's InstanceNotFound errors report errname EINVAL with
+// an "[ENOENT] ..." reason, so the reason text is checked as well as the
+// errno.
 func IsNotFound(err error) bool {
 	e, ok := err.(*APIError)
 	if !ok {
@@ -34,24 +43,60 @@ func IsNotFound(err error) bool {
 	}
 	msg := strings.ToLower(e.Message)
 	return e.Code == 2 ||
+		e.ErrName == "ENOENT" ||
+		strings.Contains(msg, "[enoent]") ||
 		strings.Contains(msg, "not found") ||
 		strings.Contains(msg, "does not exist")
 }
 
-type wsMsg struct {
-	ID     string          `json:"id,omitempty"`
-	Msg    string          `json:"msg"`
-	Method string          `json:"method,omitempty"`
-	Params []any           `json:"params,omitempty"`
-	Result json.RawMessage `json:"result,omitempty"`
-	Error  *APIError       `json:"error,omitempty"`
+// rpcRequest is a JSON-RPC 2.0 request frame.
+type rpcRequest struct {
+	JSONRPC string `json:"jsonrpc"`
+	ID      uint64 `json:"id"`
+	Method  string `json:"method"`
+	Params  []any  `json:"params"`
+}
+
+// rpcError is the JSON-RPC 2.0 error member. Data carries the TrueNAS
+// error object when the failure came from the called method.
+type rpcError struct {
+	Code    int       `json:"code"`
+	Message string    `json:"message"`
+	Data    *APIError `json:"data,omitempty"`
+}
+
+// rpcResponse is a JSON-RPC 2.0 response or server-push notification
+// frame. Responses carry an ID; notifications (e.g. collection_update)
+// carry a method and no ID.
+type rpcResponse struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      *uint64         `json:"id"`
+	Method  string          `json:"method,omitempty"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *rpcError       `json:"error,omitempty"`
+}
+
+// apiError flattens a JSON-RPC error into the *APIError callers match on:
+// the TrueNAS data object when present, else a synthesized APIError from
+// the protocol-level code/message.
+func (e *rpcError) apiError() *APIError {
+	if e.Data != nil {
+		return e.Data
+	}
+	return &APIError{Code: e.Code, Message: e.Message}
+}
+
+type callResult struct {
+	result json.RawMessage
+	err    error
 }
 
 type pendingCall struct {
-	ch chan *wsMsg
+	ch chan callResult
 }
 
-// Client is a TrueNAS WebSocket API client safe for concurrent use.
+// Client is a TrueNAS JSON-RPC 2.0 WebSocket API client (the /api/current
+// endpoint) safe for concurrent use.
 type Client struct {
 	endpoint  string
 	tlsConfig *tls.Config
@@ -69,7 +114,7 @@ type Client struct {
 	writeMu sync.Mutex
 
 	pendingMu sync.Mutex
-	pending   map[string]*pendingCall
+	pending   map[uint64]*pendingCall
 
 	seq atomic.Uint64
 
@@ -83,13 +128,13 @@ func New(endpoint string, tlsCfg *tls.Config) *Client {
 	return &Client{
 		endpoint:  endpoint,
 		tlsConfig: tlsCfg,
-		pending:   make(map[string]*pendingCall),
+		pending:   make(map[uint64]*pendingCall),
 	}
 }
 
-// Connect dials the WebSocket, performs the DDP handshake, then calls authenticateFn (if non-nil).
+// Connect dials the WebSocket, then calls authenticateFn (if non-nil).
 // authenticateFn is retained so a later reconnect (see reconnect) can replay
-// the same handshake+auth path after a transport failure.
+// the same auth path after a transport failure.
 func (c *Client) Connect(ctx context.Context, authenticateFn func(ctx context.Context) error) error {
 	c.connMu.Lock()
 	c.authFn = authenticateFn
@@ -97,9 +142,11 @@ func (c *Client) Connect(ctx context.Context, authenticateFn func(ctx context.Co
 	return c.dial(ctx)
 }
 
-// dial opens the websocket connection, performs the DDP handshake, and (if
-// an authFn was stored by Connect) authenticates. Shared by Connect and
-// reconnect so there is exactly one implementation of the handshake path.
+// dial opens the websocket connection and (if an authFn was stored by
+// Connect) authenticates. Unlike the legacy /websocket endpoint, JSON-RPC
+// needs no protocol handshake — the first frame can be a call. Shared by
+// Connect and reconnect so there is exactly one implementation of the
+// connect path.
 func (c *Client) dial(ctx context.Context) error {
 	dialer := websocket.Dialer{
 		HandshakeTimeout: 10 * time.Second,
@@ -113,17 +160,6 @@ func (c *Client) dial(ctx context.Context) error {
 		return fmt.Errorf("websocket dial %s: %w", c.endpoint, err)
 	}
 	conn.SetReadLimit(10 * 1024 * 1024)
-
-	// DDP handshake
-	if err := conn.WriteJSON(map[string]any{"msg": "connect", "version": "1", "support": []string{"1"}}); err != nil {
-		conn.Close()
-		return fmt.Errorf("DDP connect write: %w", err)
-	}
-	var hello wsMsg
-	if err := conn.ReadJSON(&hello); err != nil || hello.Msg != "connected" {
-		conn.Close()
-		return fmt.Errorf("DDP handshake failed: got msg=%q", hello.Msg)
-	}
 
 	c.connMu.Lock()
 	c.conn = conn
@@ -142,7 +178,7 @@ func (c *Client) dial(ctx context.Context) error {
 	return nil
 }
 
-// reconnect re-dials the connection using the same handshake+auth path as
+// reconnect re-dials the connection using the same connect+auth path as
 // Connect, but only when there is no live connection (conn == nil, e.g.
 // after readLoop observed a transport failure). It is a no-op if a
 // connection already exists. Concurrent callers serialize on reconnectMu so
@@ -166,7 +202,7 @@ func (c *Client) reconnect(ctx context.Context) error {
 
 func (c *Client) readLoop(conn *websocket.Conn) {
 	for {
-		var msg wsMsg
+		var msg rpcResponse
 		if err := conn.ReadJSON(&msg); err != nil {
 			c.failPending(fmt.Errorf("connection closed: %w", err))
 			c.connMu.Lock()
@@ -176,34 +212,43 @@ func (c *Client) readLoop(conn *websocket.Conn) {
 			c.connMu.Unlock()
 			return
 		}
-		if msg.ID == "" {
+		// Server-push notifications (collection_update etc.) carry no ID.
+		if msg.ID == nil {
 			continue
 		}
 		c.pendingMu.Lock()
-		p, ok := c.pending[msg.ID]
+		p, ok := c.pending[*msg.ID]
 		if ok {
-			delete(c.pending, msg.ID)
+			delete(c.pending, *msg.ID)
 		}
 		c.pendingMu.Unlock()
 		if ok {
-			p.ch <- &msg
+			if msg.Error != nil {
+				p.ch <- callResult{err: msg.Error.apiError()}
+			} else {
+				p.ch <- callResult{result: msg.Result}
+			}
 		}
 	}
 }
 
+// failPending fails every in-flight call after a transport loss. The
+// deliberate wrapping as &APIError{Code: 0} (no real TrueNAS error carries
+// code 0) is what CallRead's isTransient uses to recognize a mid-flight
+// transport failure as retryable.
 func (c *Client) failPending(err error) {
 	c.pendingMu.Lock()
 	defer c.pendingMu.Unlock()
 	for _, p := range c.pending {
-		p.ch <- &wsMsg{Error: &APIError{Message: err.Error()}}
+		p.ch <- callResult{err: &APIError{Message: err.Error()}}
 	}
-	c.pending = make(map[string]*pendingCall)
+	c.pending = make(map[uint64]*pendingCall)
 }
 
 // Call invokes a TrueNAS method and returns the raw JSON result.
 func (c *Client) Call(ctx context.Context, method string, params ...any) (json.RawMessage, error) {
-	id := fmt.Sprintf("%d", c.seq.Add(1))
-	p := &pendingCall{ch: make(chan *wsMsg, 1)}
+	id := c.seq.Add(1)
+	p := &pendingCall{ch: make(chan callResult, 1)}
 
 	c.pendingMu.Lock()
 	c.pending[id] = p
@@ -219,12 +264,15 @@ func (c *Client) Call(ctx context.Context, method string, params ...any) (json.R
 		return nil, fmt.Errorf("not connected")
 	}
 
+	if params == nil {
+		params = []any{}
+	}
 	c.writeMu.Lock()
-	err := conn.WriteJSON(map[string]any{
-		"id":     id,
-		"msg":    "method",
-		"method": method,
-		"params": params,
+	err := conn.WriteJSON(rpcRequest{
+		JSONRPC: "2.0",
+		ID:      id,
+		Method:  method,
+		Params:  params,
 	})
 	c.writeMu.Unlock()
 
@@ -241,11 +289,8 @@ func (c *Client) Call(ctx context.Context, method string, params ...any) (json.R
 		delete(c.pending, id)
 		c.pendingMu.Unlock()
 		return nil, ctx.Err()
-	case msg := <-p.ch:
-		if msg.Error != nil {
-			return nil, msg.Error
-		}
-		return msg.Result, nil
+	case res := <-p.ch:
+		return res.result, res.err
 	}
 }
 

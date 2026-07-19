@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -93,7 +94,7 @@ func (p *TrueNASProvider) Schema(_ context.Context, _ provider.SchemaRequest, re
 		Description: "Manages TrueNAS SCALE resources via the WebSocket API.",
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
-				Description: "TrueNAS WebSocket endpoint, e.g. wss://truenas.example.com/websocket. Env: TRUENAS_ENDPOINT",
+				Description: "TrueNAS WebSocket endpoint, e.g. wss://truenas.example.com/api/current (legacy /websocket paths are rewritten to /api/current automatically). Env: TRUENAS_ENDPOINT",
 				Optional:    true,
 			},
 			"api_key": schema.StringAttribute{
@@ -138,6 +139,13 @@ func (p *TrueNASProvider) Configure(ctx context.Context, req provider.ConfigureR
 	if endpoint == "" {
 		resp.Diagnostics.AddError("Missing endpoint", "Set endpoint in provider config or TRUENAS_ENDPOINT env var.")
 		return
+	}
+
+	// The client speaks JSON-RPC 2.0 (/api/current). Endpoints written for
+	// the legacy DDP path are rewritten transparently so existing
+	// configurations keep working.
+	if base, ok := strings.CutSuffix(endpoint, "/websocket"); ok {
+		endpoint = base + "/api/current"
 	}
 
 	// Auth validation: exactly one auth method

@@ -23,16 +23,23 @@ func TestRandName(t *testing.T) {
 
 func TestEndpoint(t *testing.T) {
 	t.Setenv("TRUENAS_ENDPOINT", "")
-	if got := Endpoint(); got != "wss://truenas.invalid/websocket" {
+	if got := Endpoint(); got != "wss://truenas.invalid/api/current" {
 		t.Fatalf("Endpoint() = %q, want .invalid placeholder when env unset", got)
 	}
 
+	// Legacy /websocket endpoints are rewritten to the JSON-RPC path, the
+	// same normalization the provider applies.
 	t.Setenv("TRUENAS_ENDPOINT", "wss://example.invalid/websocket")
-	if got := Endpoint(); got != "wss://example.invalid/websocket" {
-		t.Fatalf("Endpoint() = %q, want env value %q", got, "wss://example.invalid/websocket")
+	if got := Endpoint(); got != "wss://example.invalid/api/current" {
+		t.Fatalf("Endpoint() = %q, want legacy path rewritten to %q", got, "wss://example.invalid/api/current")
 	}
 	if got := EndpointHost(); got != "example.invalid" {
 		t.Fatalf("EndpointHost() = %q, want %q", got, "example.invalid")
+	}
+
+	t.Setenv("TRUENAS_ENDPOINT", "wss://example.invalid/api/current")
+	if got := Endpoint(); got != "wss://example.invalid/api/current" {
+		t.Fatalf("Endpoint() = %q, want env value passed through", got)
 	}
 }
 

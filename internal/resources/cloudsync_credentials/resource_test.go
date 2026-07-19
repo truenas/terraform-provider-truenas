@@ -52,9 +52,9 @@ func TestProviderMap_Valid(t *testing.T) {
 	}
 }
 
-// TestCreatePayload_WireKeyIsProvider verifies createPayload splits
-// provider_config into a bare string "provider" wire key and a separate
-// "attributes" object (SCALE 26.0 wire format), and includes name.
+// TestCreatePayload_WireKeyIsProvider verifies createPayload sends
+// provider_config as the "provider" wire object ({"type": ..., ...settings},
+// the /api/current shape) and includes name.
 func TestCreatePayload_WireKeyIsProvider(t *testing.T) {
 	m := CredentialsModel{
 		Name:     types.StringValue("my-creds"),
@@ -68,35 +68,26 @@ func TestCreatePayload_WireKeyIsProvider(t *testing.T) {
 	if payload["name"] != "my-creds" {
 		t.Errorf("payload[name] = %v, want my-creds", payload["name"])
 	}
-	providerVal, ok := payload["provider"]
+	pm, ok := payload["provider"].(map[string]any)
 	if !ok {
-		t.Fatal("create payload missing key 'provider'")
+		t.Fatalf("payload[provider] is %T, want map[string]any", payload["provider"])
 	}
-	if providerVal != "S3" {
-		t.Errorf("payload[provider] = %v, want string \"S3\"", providerVal)
+	if pm["type"] != "S3" {
+		t.Errorf("payload[provider][type] = %v, want S3", pm["type"])
+	}
+	if pm["access_key_id"] != "AKIA..." {
+		t.Errorf("payload[provider][access_key_id] = %v, want AKIA...", pm["access_key_id"])
 	}
 	if _, ok := payload["provider_config"]; ok {
 		t.Error("create payload should not contain key 'provider_config'")
 	}
-	attrsVal, ok := payload["attributes"]
-	if !ok {
-		t.Fatal("create payload missing key 'attributes'")
-	}
-	am, ok := attrsVal.(map[string]any)
-	if !ok {
-		t.Fatalf("payload[attributes] is %T, want map[string]any", attrsVal)
-	}
-	if am["access_key_id"] != "AKIA..." {
-		t.Errorf("payload[attributes][access_key_id] = %v, want AKIA...", am["access_key_id"])
-	}
-	if _, ok := am["type"]; ok {
-		t.Error("payload[attributes] should not contain key 'type'")
+	if _, ok := payload["attributes"]; ok {
+		t.Error("create payload should not contain key 'attributes' (/api/current rejects it)")
 	}
 }
 
-// TestUpdatePayload_WireKeyIsProvider verifies updatePayload also splits
-// provider_config into "provider" (string) and "attributes" and includes
-// name.
+// TestUpdatePayload_WireKeyIsProvider verifies updatePayload also sends
+// provider_config as the "provider" wire object and includes name.
 func TestUpdatePayload_WireKeyIsProvider(t *testing.T) {
 	m := CredentialsModel{
 		ID:       types.Int64Value(7),
@@ -111,32 +102,21 @@ func TestUpdatePayload_WireKeyIsProvider(t *testing.T) {
 	if payload["name"] != "my-creds" {
 		t.Errorf("payload[name] = %v, want my-creds", payload["name"])
 	}
-	if payload["provider"] != "B2" {
-		t.Errorf("payload[provider] = %v, want string \"B2\"", payload["provider"])
+	pm, ok := payload["provider"].(map[string]any)
+	if !ok {
+		t.Fatalf("payload[provider] is %T, want map[string]any", payload["provider"])
+	}
+	if pm["type"] != "B2" {
+		t.Errorf("payload[provider][type] = %v, want B2", pm["type"])
+	}
+	if pm["account"] != "abc" {
+		t.Errorf("payload[provider][account] = %v, want abc", pm["account"])
 	}
 	if _, ok := payload["provider_config"]; ok {
 		t.Error("update payload should not contain key 'provider_config'")
 	}
-	attrsVal, ok := payload["attributes"].(map[string]any)
-	if !ok {
-		t.Fatal("update payload missing key 'attributes'")
-	}
-	if attrsVal["account"] != "abc" {
-		t.Errorf("payload[attributes][account] = %v, want abc", attrsVal["account"])
-	}
-}
-
-// TestCreatePayload_TypeMustBeString verifies createPayload errors when the
-// provider_config "type" key is not a string.
-func TestCreatePayload_TypeMustBeString(t *testing.T) {
-	m := CredentialsModel{
-		Name:     types.StringValue("my-creds"),
-		Provider: types.StringValue(`{"type": 123}`),
-	}
-
-	_, diags := m.createPayload()
-	if !diags.HasError() {
-		t.Fatal("expected error diagnostics for non-string type, got none")
+	if _, ok := payload["attributes"]; ok {
+		t.Error("update payload should not contain key 'attributes' (/api/current rejects it)")
 	}
 }
 
@@ -185,15 +165,14 @@ func TestProviderDrifted_MissingUserKey(t *testing.T) {
 }
 
 // TestApiProviderJSON_MergesProviderAndAttributes verifies apiProviderJSON
-// reconstructs a provider_config-shaped JSON string ({"type": ...,
-// ...attributes}) from the SCALE 26.0 split wire response
-// (provider: string, attributes: object).
+// serializes the wire provider object back into a provider_config-shaped
+// JSON string.
 func TestApiProviderJSON_MergesProviderAndAttributes(t *testing.T) {
 	api := &credentialsAPI{
-		ID:       1,
-		Name:     "my-creds",
-		Provider: "STORJ_IX",
-		Attributes: map[string]any{
+		ID:   1,
+		Name: "my-creds",
+		Provider: map[string]any{
+			"type":              "STORJ_IX",
 			"access_key_id":     "AKIA...",
 			"secret_access_key": "shh",
 		},
@@ -219,21 +198,21 @@ func TestApiProviderJSON_MergesProviderAndAttributes(t *testing.T) {
 	}
 }
 
-// TestCredentialsAPI_DecodesSplitWireFormat verifies credentialsAPI decodes
-// the SCALE 26.0 response shape where "provider" is a bare string and
-// settings live under "attributes".
-func TestCredentialsAPI_DecodesSplitWireFormat(t *testing.T) {
-	raw := []byte(`{"id": 1, "name": "tf-probe-cscreds", "provider": "STORJ_IX", "attributes": {"access_key_id": "x", "secret_access_key": "y"}}`)
+// TestCredentialsAPI_DecodesWireFormat verifies credentialsAPI decodes the
+// /api/current response shape where "provider" is an object carrying the
+// type discriminator and settings inline.
+func TestCredentialsAPI_DecodesWireFormat(t *testing.T) {
+	raw := []byte(`{"id": 1, "name": "tf-probe-cscreds", "provider": {"type": "STORJ_IX", "access_key_id": "x", "secret_access_key": "y"}}`)
 
 	var api credentialsAPI
 	if err := json.Unmarshal(raw, &api); err != nil {
 		t.Fatalf("unexpected decode error: %v", err)
 	}
-	if api.Provider != "STORJ_IX" {
-		t.Errorf("api.Provider = %v, want STORJ_IX", api.Provider)
+	if api.Provider["type"] != "STORJ_IX" {
+		t.Errorf("api.Provider[type] = %v, want STORJ_IX", api.Provider["type"])
 	}
-	if api.Attributes["access_key_id"] != "x" {
-		t.Errorf("api.Attributes[access_key_id] = %v, want x", api.Attributes["access_key_id"])
+	if api.Provider["access_key_id"] != "x" {
+		t.Errorf("api.Provider[access_key_id] = %v, want x", api.Provider["access_key_id"])
 	}
 }
 

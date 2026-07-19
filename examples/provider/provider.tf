@@ -8,7 +8,7 @@ terraform {
 }
 
 provider "truenas" {
-  endpoint = "wss://truenas.example.com/websocket"
+  endpoint = "wss://truenas.example.com/api/current"
   api_key  = var.truenas_api_key
   insecure = true
 }

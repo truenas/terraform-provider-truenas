@@ -28,13 +28,6 @@ func echoServerInternalRead(t *testing.T, handler func(conn *websocket.Conn, msg
 		}
 		defer conn.Close()
 
-		var hello map[string]any
-		if err := conn.ReadJSON(&hello); err != nil || hello["msg"] != "connect" {
-			t.Logf("expected connect, got: %v", hello)
-			return
-		}
-		conn.WriteJSON(map[string]any{"msg": "connected", "session": "test"})
-
 		for {
 			var msg map[string]any
 			if err := conn.ReadJSON(&msg); err != nil {
@@ -84,20 +77,20 @@ func TestCallRead_RetriesOnRateLimitThenSucceeds(t *testing.T) {
 		n := calls.Add(1)
 		if n <= 2 {
 			conn.WriteJSON(map[string]any{
-				"id":  msg["id"],
-				"msg": "result",
+				"id": msg["id"],
 				"error": map[string]any{
-					"error":  16,
-					"reason": "[EBUSY] Rate Limit Exceeded",
+					"code":    -32001,
+					"message": "Method call error",
+					"data":    map[string]any{"error": 16, "reason": "[EBUSY] Rate Limit Exceeded"},
 				},
 			})
 			return
 		}
-		conn.WriteJSON(map[string]any{"id": msg["id"], "msg": "result", "result": "ok"})
+		conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": msg["id"], "result": "ok"})
 	})
 	defer srv.Close()
 
-	c := New("ws"+srv.URL[len("http"):]+"/websocket", nil)
+	c := New("ws"+srv.URL[len("http"):]+"/api/current", nil)
 	if err := c.Connect(context.Background(), nil); err != nil {
 		t.Fatal(err)
 	}
@@ -131,17 +124,17 @@ func TestCallRead_NonTransientFailsImmediately(t *testing.T) {
 	srv := echoServerInternalRead(t, func(conn *websocket.Conn, msg map[string]any) {
 		calls.Add(1)
 		conn.WriteJSON(map[string]any{
-			"id":  msg["id"],
-			"msg": "result",
+			"id": msg["id"],
 			"error": map[string]any{
-				"error":  22,
-				"reason": "[EINVAL] Invalid value",
+				"code":    -32001,
+				"message": "Method call error",
+				"data":    map[string]any{"error": 22, "reason": "[EINVAL] Invalid value"},
 			},
 		})
 	})
 	defer srv.Close()
 
-	c := New("ws"+srv.URL[len("http"):]+"/websocket", nil)
+	c := New("ws"+srv.URL[len("http"):]+"/api/current", nil)
 	if err := c.Connect(context.Background(), nil); err != nil {
 		t.Fatal(err)
 	}
@@ -167,11 +160,11 @@ func TestCallRead_NonTransientFailsImmediately(t *testing.T) {
 // is exercised in TestCallRead_ReconnectsAfterTransportFailure below.)
 func TestReconnect_RedialsWhenDisconnected(t *testing.T) {
 	srv := echoServerInternalRead(t, func(conn *websocket.Conn, msg map[string]any) {
-		conn.WriteJSON(map[string]any{"id": msg["id"], "msg": "result", "result": "ok"})
+		conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": msg["id"], "result": "ok"})
 	})
 	defer srv.Close()
 
-	c := New("ws"+srv.URL[len("http"):]+"/websocket", nil)
+	c := New("ws"+srv.URL[len("http"):]+"/api/current", nil)
 	if err := c.Connect(context.Background(), nil); err != nil {
 		t.Fatal(err)
 	}
@@ -219,11 +212,11 @@ func TestReconnect_RedialsWhenDisconnected(t *testing.T) {
 // (no re-dial) when a connection is already live.
 func TestReconnect_NoOpWhenAlreadyConnected(t *testing.T) {
 	srv := echoServerInternalRead(t, func(conn *websocket.Conn, msg map[string]any) {
-		conn.WriteJSON(map[string]any{"id": msg["id"], "msg": "result", "result": "ok"})
+		conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": msg["id"], "result": "ok"})
 	})
 	defer srv.Close()
 
-	c := New("ws"+srv.URL[len("http"):]+"/websocket", nil)
+	c := New("ws"+srv.URL[len("http"):]+"/api/current", nil)
 	if err := c.Connect(context.Background(), nil); err != nil {
 		t.Fatal(err)
 	}
@@ -265,12 +258,6 @@ func TestCallRead_ReconnectsAfterTransportFailure(t *testing.T) {
 		defer conn.Close()
 		n := connCount.Add(1)
 
-		var hello map[string]any
-		if err := conn.ReadJSON(&hello); err != nil || hello["msg"] != "connect" {
-			return
-		}
-		conn.WriteJSON(map[string]any{"msg": "connected", "session": "test"})
-
 		if n == 1 {
 			// First connection: read the client's read call, then drop
 			// dead without responding — readLoop will see this as
@@ -286,12 +273,12 @@ func TestCallRead_ReconnectsAfterTransportFailure(t *testing.T) {
 			if err := conn.ReadJSON(&msg); err != nil {
 				return
 			}
-			conn.WriteJSON(map[string]any{"id": msg["id"], "msg": "result", "result": "ok"})
+			conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": msg["id"], "result": "ok"})
 		}
 	}))
 	defer srv.Close()
 
-	c := New("ws"+srv.URL[len("http"):]+"/websocket", nil)
+	c := New("ws"+srv.URL[len("http"):]+"/api/current", nil)
 	if err := c.Connect(context.Background(), nil); err != nil {
 		t.Fatal(err)
 	}

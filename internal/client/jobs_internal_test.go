@@ -26,13 +26,6 @@ func echoServerInternal(t *testing.T, handler func(conn *websocket.Conn, msg map
 		}
 		defer conn.Close()
 
-		var hello map[string]any
-		if err := conn.ReadJSON(&hello); err != nil || hello["msg"] != "connect" {
-			t.Logf("expected connect, got: %v", hello)
-			return
-		}
-		conn.WriteJSON(map[string]any{"msg": "connected", "session": "test"})
-
 		for {
 			var msg map[string]any
 			if err := conn.ReadJSON(&msg); err != nil {
@@ -61,15 +54,15 @@ func TestCallJob_NoJobBailout(t *testing.T) {
 	srv := echoServerInternal(t, func(conn *websocket.Conn, msg map[string]any) {
 		switch msg["method"] {
 		case "group.create":
-			conn.WriteJSON(map[string]any{"id": msg["id"], "msg": "result", "result": float64(7)})
+			conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": msg["id"], "result": float64(7)})
 		case "core.get_jobs":
 			// No job ever matches — group.create wasn't actually a job.
-			conn.WriteJSON(map[string]any{"id": msg["id"], "msg": "result", "result": []any{}})
+			conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": msg["id"], "result": []any{}})
 		}
 	})
 	defer srv.Close()
 
-	c := New("ws"+srv.URL[len("http"):]+"/websocket", nil)
+	c := New("ws"+srv.URL[len("http"):]+"/api/current", nil)
 	if err := c.Connect(context.Background(), nil); err != nil {
 		t.Fatal(err)
 	}

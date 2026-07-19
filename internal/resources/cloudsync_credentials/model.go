@@ -27,15 +27,16 @@ type CredentialsDataSourceModel struct {
 	Provider types.String `tfsdk:"provider_config"`
 }
 
-// credentialsAPI is the JSON wire format for a TrueNAS cloudsync credentials
-// object on SCALE 26.0. "provider" is a bare string type code (e.g. "S3",
-// "STORJ_IX"); the provider-specific settings live in a separate
-// "attributes" object.
+// credentialsAPI is the JSON wire format for a TrueNAS cloudsync
+// credentials object on /api/current (25.10 and 26.0): "provider" is an
+// object holding the "type" discriminator with the provider-specific
+// settings inline — the same shape as this resource's provider_config
+// attribute. (The legacy /websocket endpoint translated this into a split
+// provider-string + attributes form; that endpoint is no longer used.)
 type credentialsAPI struct {
-	ID         int64          `json:"id"`
-	Name       string         `json:"name"`
-	Provider   string         `json:"provider"`
-	Attributes map[string]any `json:"attributes"`
+	ID       int64          `json:"id"`
+	Name     string         `json:"name"`
+	Provider map[string]any `json:"provider"`
 }
 
 // providerMap parses the provider_config JSON string and validates that it
@@ -54,35 +55,11 @@ func (m *CredentialsModel) providerMap() (map[string]any, diag.Diagnostics) {
 	return p, diags
 }
 
-// splitProviderMap separates a provider_config map (as returned by
-// providerMap) into the wire-format "provider" type string and the
-// remaining "attributes" map.
-func splitProviderMap(p map[string]any) (string, map[string]any, diag.Diagnostics) {
-	var diags diag.Diagnostics
-	typeVal, ok := p["type"].(string)
-	if !ok {
-		diags.AddError("Invalid provider_config", "provider_config JSON key \"type\" must be a string")
-		return "", nil, diags
-	}
-	attributes := make(map[string]any, len(p)-1)
-	for k, v := range p {
-		if k == "type" {
-			continue
-		}
-		attributes[k] = v
-	}
-	return typeVal, attributes, diags
-}
-
-// combinedProviderMap reconstructs a provider_config-shaped map from a
-// credentialsAPI response: {"type": <provider>, ...attributes}.
+// combinedProviderMap returns the provider object from a credentialsAPI
+// response — already provider_config-shaped ({"type": ..., ...settings})
+// on the /api/current wire.
 func combinedProviderMap(api *credentialsAPI) map[string]any {
-	combined := make(map[string]any, len(api.Attributes)+1)
-	combined["type"] = api.Provider
-	for k, v := range api.Attributes {
-		combined[k] = v
-	}
-	return combined
+	return api.Provider
 }
 
 // providerDrifted reports whether any key present in stateProvider has a
@@ -132,15 +109,9 @@ func (m *CredentialsModel) createPayload() (map[string]any, diag.Diagnostics) {
 	if diags.HasError() {
 		return nil, diags
 	}
-	providerType, attributes, splitDiags := splitProviderMap(p)
-	diags.Append(splitDiags...)
-	if diags.HasError() {
-		return nil, diags
-	}
 	return map[string]any{
-		"name":       m.Name.ValueString(),
-		"provider":   providerType,
-		"attributes": attributes,
+		"name":     m.Name.ValueString(),
+		"provider": p,
 	}, diags
 }
 
@@ -150,21 +121,15 @@ func (m *CredentialsModel) updatePayload() (map[string]any, diag.Diagnostics) {
 	if diags.HasError() {
 		return nil, diags
 	}
-	providerType, attributes, splitDiags := splitProviderMap(p)
-	diags.Append(splitDiags...)
-	if diags.HasError() {
-		return nil, diags
-	}
 	return map[string]any{
-		"name":       m.Name.ValueString(),
-		"provider":   providerType,
-		"attributes": attributes,
+		"name":     m.Name.ValueString(),
+		"provider": p,
 	}, diags
 }
 
 // responseToDataSourceModel maps credentialsAPI into
-// CredentialsDataSourceModel, reconstructing the provider_config JSON
-// string from the split provider/attributes wire fields.
+// CredentialsDataSourceModel, serializing the wire provider object back
+// into the provider_config JSON string.
 func responseToDataSourceModel(api *credentialsAPI, m *CredentialsDataSourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 	m.ID = types.Int64Value(api.ID)

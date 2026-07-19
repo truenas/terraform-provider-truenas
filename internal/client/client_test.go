@@ -25,14 +25,6 @@ func echoServer(t *testing.T, handler func(conn *websocket.Conn, msg map[string]
 		}
 		defer conn.Close()
 
-		// DDP handshake
-		var hello map[string]any
-		if err := conn.ReadJSON(&hello); err != nil || hello["msg"] != "connect" {
-			t.Logf("expected connect, got: %v", hello)
-			return
-		}
-		conn.WriteJSON(map[string]any{"msg": "connected", "session": "test"})
-
 		for {
 			var msg map[string]any
 			if err := conn.ReadJSON(&msg); err != nil {
@@ -52,13 +44,12 @@ func TestCall_Success(t *testing.T) {
 	srv := echoServer(t, func(conn *websocket.Conn, msg map[string]any) {
 		conn.WriteJSON(map[string]any{
 			"id":     msg["id"],
-			"msg":    "result",
 			"result": "hello",
 		})
 	})
 	defer srv.Close()
 
-	c := client.New(wsURL(srv)+"/websocket", nil)
+	c := client.New(wsURL(srv)+"/api/current", nil)
 	if err := c.Connect(context.Background(), nil); err != nil {
 		t.Fatal(err)
 	}
@@ -77,17 +68,17 @@ func TestCall_Success(t *testing.T) {
 func TestCall_APIError(t *testing.T) {
 	srv := echoServer(t, func(conn *websocket.Conn, msg map[string]any) {
 		conn.WriteJSON(map[string]any{
-			"id":  msg["id"],
-			"msg": "result",
+			"id": msg["id"],
 			"error": map[string]any{
-				"error":  2,
-				"reason": "Dataset tank/missing not found",
+				"code":    -32001,
+				"message": "Method call error",
+				"data":    map[string]any{"error": 2, "reason": "Dataset tank/missing not found"},
 			},
 		})
 	})
 	defer srv.Close()
 
-	c := client.New(wsURL(srv)+"/websocket", nil)
+	c := client.New(wsURL(srv)+"/api/current", nil)
 	c.Connect(context.Background(), nil)
 
 	_, err := c.Call(context.Background(), "pool.dataset.get_instance", "tank/missing")
@@ -105,7 +96,7 @@ func TestCall_ContextCancel(t *testing.T) {
 	})
 	defer srv.Close()
 
-	c := client.New(wsURL(srv)+"/websocket", nil)
+	c := client.New(wsURL(srv)+"/api/current", nil)
 	c.Connect(context.Background(), nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -161,7 +152,7 @@ func TestIsRateLimited(t *testing.T) {
 // Ensure Client works with ws:// (not wss://) in tests
 func TestNew_WSS_Rejection(t *testing.T) {
 	// ws:// should be allowed in non-production (tests don't enforce wss)
-	c := client.New("ws://localhost/websocket", nil)
+	c := client.New("ws://localhost/api/current", nil)
 	if c == nil {
 		t.Error("New returned nil")
 	}
@@ -170,12 +161,12 @@ func TestNew_WSS_Rejection(t *testing.T) {
 func TestAuthAPIKey_Success(t *testing.T) {
 	srv := echoServer(t, func(conn *websocket.Conn, msg map[string]any) {
 		if msg["method"] == "auth.login_with_api_key" {
-			conn.WriteJSON(map[string]any{"id": msg["id"], "msg": "result", "result": true})
+			conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": msg["id"], "result": true})
 		}
 	})
 	defer srv.Close()
 
-	c := client.New(wsURL(srv)+"/websocket", nil)
+	c := client.New(wsURL(srv)+"/api/current", nil)
 	c.Connect(context.Background(), nil)
 	if err := client.AuthAPIKey(context.Background(), c, "1-testkey"); err != nil {
 		t.Fatal(err)
@@ -185,12 +176,12 @@ func TestAuthAPIKey_Success(t *testing.T) {
 func TestAuthAPIKey_Failure(t *testing.T) {
 	srv := echoServer(t, func(conn *websocket.Conn, msg map[string]any) {
 		if msg["method"] == "auth.login_with_api_key" {
-			conn.WriteJSON(map[string]any{"id": msg["id"], "msg": "result", "result": false})
+			conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": msg["id"], "result": false})
 		}
 	})
 	defer srv.Close()
 
-	c := client.New(wsURL(srv)+"/websocket", nil)
+	c := client.New(wsURL(srv)+"/api/current", nil)
 	c.Connect(context.Background(), nil)
 	if err := client.AuthAPIKey(context.Background(), c, "bad"); err == nil {
 		t.Fatal("expected error")
@@ -200,12 +191,12 @@ func TestAuthAPIKey_Failure(t *testing.T) {
 func TestAuthPassword_Success(t *testing.T) {
 	srv := echoServer(t, func(conn *websocket.Conn, msg map[string]any) {
 		if msg["method"] == "auth.login" {
-			conn.WriteJSON(map[string]any{"id": msg["id"], "msg": "result", "result": true})
+			conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": msg["id"], "result": true})
 		}
 	})
 	defer srv.Close()
 
-	c := client.New(wsURL(srv)+"/websocket", nil)
+	c := client.New(wsURL(srv)+"/api/current", nil)
 	c.Connect(context.Background(), nil)
 	if err := client.AuthPassword(context.Background(), c, "root", "pass"); err != nil {
 		t.Fatal(err)
@@ -218,13 +209,12 @@ func TestCallJob_Success(t *testing.T) {
 		switch msg["method"] {
 		case "pool.scrub":
 			// Return a job ID
-			conn.WriteJSON(map[string]any{"id": msg["id"], "msg": "result", "result": float64(42)})
+			conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": msg["id"], "result": float64(42)})
 		case "core.get_jobs":
 			select {
 			case <-jobDone:
 				conn.WriteJSON(map[string]any{
-					"id":  msg["id"],
-					"msg": "result",
+					"id": msg["id"],
 					"result": []any{map[string]any{
 						"id":     float64(42),
 						"state":  "SUCCESS",
@@ -233,8 +223,7 @@ func TestCallJob_Success(t *testing.T) {
 				})
 			default:
 				conn.WriteJSON(map[string]any{
-					"id":  msg["id"],
-					"msg": "result",
+					"id": msg["id"],
 					"result": []any{map[string]any{
 						"id":    float64(42),
 						"state": "RUNNING",
@@ -246,7 +235,7 @@ func TestCallJob_Success(t *testing.T) {
 	})
 	defer srv.Close()
 
-	c := client.New(wsURL(srv)+"/websocket", nil)
+	c := client.New(wsURL(srv)+"/api/current", nil)
 	c.Connect(context.Background(), nil)
 
 	raw, err := c.CallJob(context.Background(), "pool.scrub", "tank")
@@ -264,11 +253,10 @@ func TestCallJob_Failure(t *testing.T) {
 	srv := echoServer(t, func(conn *websocket.Conn, msg map[string]any) {
 		switch msg["method"] {
 		case "pool.scrub":
-			conn.WriteJSON(map[string]any{"id": msg["id"], "msg": "result", "result": float64(99)})
+			conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": msg["id"], "result": float64(99)})
 		case "core.get_jobs":
 			conn.WriteJSON(map[string]any{
-				"id":  msg["id"],
-				"msg": "result",
+				"id": msg["id"],
 				"result": []any{map[string]any{
 					"id":    float64(99),
 					"state": "FAILED",
@@ -279,7 +267,7 @@ func TestCallJob_Failure(t *testing.T) {
 	})
 	defer srv.Close()
 
-	c := client.New(wsURL(srv)+"/websocket", nil)
+	c := client.New(wsURL(srv)+"/api/current", nil)
 	c.Connect(context.Background(), nil)
 
 	_, err := c.CallJob(context.Background(), "pool.scrub", "tank")
