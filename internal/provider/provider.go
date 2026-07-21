@@ -29,6 +29,8 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_portal"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_target"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_targetextent"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/kerberos_config"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/kerberos_realm"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/mail"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/network_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/network_interface"
@@ -227,6 +229,8 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		iscsi_portal.NewResource,
 		iscsi_target.NewResource,
 		iscsi_targetextent.NewResource,
+		kerberos_config.NewResource,
+		kerberos_realm.NewResource,
 		mail.NewResource,
 		nfs.NewResource,
 		nfs_config.NewResource,
@@ -286,6 +290,8 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		iscsi_portal.NewDataSource,
 		iscsi_target.NewDataSource,
 		iscsi_targetextent.NewDataSource,
+		kerberos_config.NewDataSource,
+		kerberos_realm.NewDataSource,
 		mail.NewDataSource,
 		nfs.NewDataSource,
 		nfs_config.NewDataSource,
