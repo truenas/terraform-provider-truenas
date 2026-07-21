@@ -46,7 +46,7 @@ func TestAccKerberosKeytab_basic(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckKerberosKeytabDestroyed(),
+		CheckDestroy:             testAccCheckKerberosKeytabDestroyed,
 		Steps: []resource.TestStep{
 			{
 				Config: acctest.ProviderConfig() + testAccKerberosKeytabConfig(name, fileB64),
@@ -54,7 +54,6 @@ func TestAccKerberosKeytab_basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("truenas_kerberos_keytab.test", "id"),
 					resource.TestCheckResourceAttr("truenas_kerberos_keytab.test", "name", name),
 					resource.TestCheckResourceAttr("truenas_kerberos_keytab.test", "file", fileB64),
-					testAccStashKeytabID("truenas_kerberos_keytab.test"),
 				),
 			},
 			// Rename in place — must not require replacement.
@@ -87,50 +86,38 @@ resource "truenas_kerberos_keytab" "test" {
 `, name, fileB64)
 }
 
-// stashedKeytabID carries the numeric id captured before the resource is
-// renamed/destroyed forward to CheckDestroy, since the resource's own name
-// changes mid-test and TrueNAS assigns no other stable external handle
-// (mirrors the pattern used by truenas_api_key's acceptance test).
-var stashedKeytabID string
-
-func testAccStashKeytabID(resourceName string) resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		rs, ok := s.RootModule().Resources[resourceName]
-		if !ok {
-			return fmt.Errorf("resource %s not found in state", resourceName)
-		}
-		id, ok := rs.Primary.Attributes["id"]
-		if !ok || id == "" {
-			return fmt.Errorf("resource %s has no id attribute", resourceName)
-		}
-		stashedKeytabID = id
-		return nil
+// testAccCheckKerberosKeytabDestroyed queries kerberos.keytab by the id
+// captured in the pre-destroy state (the resource's name has changed by the
+// time this runs, and TrueNAS assigns no other stable external handle),
+// matching the established pattern used elsewhere in this provider (e.g.
+// truenas_api_key's acceptance test).
+func testAccCheckKerberosKeytabDestroyed(s *terraform.State) error {
+	rs, ok := s.RootModule().Resources["truenas_kerberos_keytab.test"]
+	if !ok {
+		return fmt.Errorf("resource truenas_kerberos_keytab.test not found in pre-destroy state")
 	}
-}
-
-func testAccCheckKerberosKeytabDestroyed() resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		if stashedKeytabID == "" {
-			return fmt.Errorf("no keytab id was captured during the test run")
-		}
-		id, err := strconv.ParseInt(stashedKeytabID, 10, 64)
-		if err != nil {
-			return fmt.Errorf("parsing keytab id %q: %v", stashedKeytabID, err)
-		}
-		c := acctest.Client()
-		raw, err := c.Call(context.Background(), "kerberos.keytab.query", [][]any{{"id", "=", id}})
-		if err != nil {
-			return fmt.Errorf("error checking Kerberos keytab id=%d: %v", id, err)
-		}
-		var results []struct {
-			ID int64 `json:"id"`
-		}
-		if err := json.Unmarshal(raw, &results); err != nil {
-			return fmt.Errorf("error parsing kerberos.keytab.query response: %v", err)
-		}
-		if len(results) > 0 {
-			return fmt.Errorf("Kerberos keytab id=%s still exists", stashedKeytabID)
-		}
-		return nil
+	idStr, ok := rs.Primary.Attributes["id"]
+	if !ok {
+		return fmt.Errorf("truenas_kerberos_keytab.test has no id attribute in pre-destroy state")
 	}
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		return fmt.Errorf("parsing keytab id %q: %v", idStr, err)
+	}
+
+	c := acctest.Client()
+	raw, err := c.Call(context.Background(), "kerberos.keytab.query", [][]any{{"id", "=", id}})
+	if err != nil {
+		return fmt.Errorf("error checking Kerberos keytab id=%d: %v", id, err)
+	}
+	var results []struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &results); err != nil {
+		return fmt.Errorf("error parsing kerberos.keytab.query response: %v", err)
+	}
+	if len(results) > 0 {
+		return fmt.Errorf("Kerberos keytab id=%d still exists", id)
+	}
+	return nil
 }
