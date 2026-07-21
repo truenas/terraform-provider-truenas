@@ -50,7 +50,7 @@ func firstItem(v any) any {
 func main() {
 	endpoint := os.Getenv("TRUENAS_ENDPOINT")
 	if endpoint == "" {
-		log.Fatal("set TRUENAS_ENDPOINT (e.g. wss://truenas.example.com/websocket)")
+		log.Fatal("set TRUENAS_ENDPOINT (e.g. wss://truenas.example.com/api/current)")
 	}
 	apiKey := os.Getenv("TRUENAS_API_KEY")
 	if apiKey == "" {
@@ -278,6 +278,52 @@ func main() {
 		for _, ns := range names {
 			fmt.Println(ns)
 		}
+	}
+	if section == "keytabprobe" {
+		// Create a throwaway kerberos keytab using a real keytab payload
+		// (base64, via TRUENAS_PROBE_KEYTAB_B64), dump create + query +
+		// get_instance responses to see whether "file" comes back intact,
+		// redacted, or absent, then delete it.
+		fileB64 := os.Getenv("TRUENAS_PROBE_KEYTAB_B64")
+		if fileB64 == "" {
+			log.Fatal("set TRUENAS_PROBE_KEYTAB_B64 (base64 of a real keytab)")
+		}
+		payload := map[string]any{
+			"name": "tf-probe-keytab",
+			"file": fileB64,
+		}
+		raw, err := c.Call(context.Background(), "kerberos.keytab.create", payload)
+		if err != nil {
+			log.Fatal("create:", err)
+		}
+		fmt.Printf("=== create response ===\n%s\n", raw)
+		var created struct {
+			ID int64 `json:"id"`
+		}
+		json.Unmarshal(raw, &created)
+
+		raw2, err := c.Call(context.Background(), "kerberos.keytab.get_instance", created.ID)
+		if err != nil {
+			log.Fatal("get_instance:", err)
+		}
+		fmt.Printf("=== get_instance response ===\n%s\n", raw2)
+
+		raw3, err := c.Call(context.Background(), "kerberos.keytab.query", [][]any{{"id", "=", created.ID}})
+		if err != nil {
+			log.Fatal("query:", err)
+		}
+		fmt.Printf("=== query response ===\n%s\n", raw3)
+
+		raw4, err := c.Call(context.Background(), "kerberos.keytab.update", created.ID, map[string]any{"name": "tf-probe-keytab-renamed"})
+		if err != nil {
+			log.Fatal("update:", err)
+		}
+		fmt.Printf("=== update response (name only) ===\n%s\n", raw4)
+
+		if _, err := c.Call(context.Background(), "kerberos.keytab.delete", created.ID); err != nil {
+			log.Fatal("delete:", err)
+		}
+		fmt.Println("=== deleted ok ===")
 	}
 	if section == "appmethods" {
 		raw, err := c.Call(context.Background(), "core.get_methods")
