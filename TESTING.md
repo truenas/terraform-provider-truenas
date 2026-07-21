@@ -36,6 +36,10 @@ make testacc-disruptive
 | `TRUENAS_TEST_POOL` | `tank` | Pool under which test datasets/zvols are created |
 | `TRUENAS_DISRUPTIVE` | unset | Enables Tier 2 (singleton set-and-restore) |
 | `TRUENAS_APPS` | unset | Enables the app lifecycle test (pulls container images) |
+| `TRUENAS_DS` | unset | Enables directory-services tests against the Samba AD DC (see below) |
+| `TRUENAS_DS_DOMAIN` | — | AD realm, e.g. `TFTEST.LAN` |
+| `TRUENAS_DS_USER` | — | AD admin username, e.g. `Administrator` |
+| `TRUENAS_DS_PASSWORD` | — | AD admin password |
 
 Helpers in `internal/acctest`: `PreCheck` (TF_ACC + credentials),
 `DisruptiveCheck` (adds `TRUENAS_DISRUPTIVE=1`), `AppsCheck`
@@ -149,6 +153,34 @@ management access or migrate system state:
 - `network_interface` bridge creation (global commit/checkin cycle);
   its enp7s0 **datasource** test is read-only and does run
 - `pool` creation (requires dedicated blank disks)
+
+## Directory-services test environment
+
+Tests gated on `TRUENAS_DS=1` (Active Directory join/idmap/etc.) need a real
+domain controller. A dedicated one exists purely for this:
+
+- **VM**: id 210 on Proxmox node `pve`, named `tftest-dc`, static IP
+  `192.168.1.250/24`, Debian 13 (trixie) + Samba 4 (`samba-ad-dc`), 2 vCPU /
+  2 GB RAM / 20 G disk. Login: `ssh root@192.168.1.250` (root's authorized
+  key is the same one used for the other `pve`-hosted test VMs). The
+  TrueNAS 25.10 test VM (id 110, `192.168.1.249`) is a separate, unrelated
+  VM — it must stay running and untouched by DC changes.
+- **Realm**: `TFTEST.LAN`, NetBIOS domain `TFTEST`. The DC's own resolver
+  is pinned to `127.0.0.1` (Samba's internal DNS backend) with search
+  domain `tftest.lan`; `/etc/resolv.conf` on the DC is `chattr +i`-locked
+  so nothing rewrites it back to a DHCP/cloud-init value.
+- **Credentials**: the generated `Administrator` password lives only on
+  `pve`, at `/root/tftest-dc-admin.pass` (root-only, `chmod 600`) — it is
+  intentionally not recorded in this repo. Export it locally as
+  `TRUENAS_DS_PASSWORD` when running DS tests, alongside
+  `TRUENAS_DS_DOMAIN=TFTEST.LAN` and `TRUENAS_DS_USER=Administrator`.
+- **Prerequisite for a DS run**: the TrueNAS box under test must have its
+  nameserver pointed at the DC (`192.168.1.250`) so it can resolve the
+  realm's SRV/A records — the acceptance run flips this via
+  `midclt call network.configuration.update` and must restore the box's
+  original nameserver afterward, pass or fail. Outside of a DS run the
+  TrueNAS box's nameserver is left at its normal value; do not point it at
+  the DC as a standing change.
 
 ## Operational notes
 
