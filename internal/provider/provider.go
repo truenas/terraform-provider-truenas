@@ -46,6 +46,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/replication"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/replication_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/resilver_config"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/rsync_task"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/scrub_task"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/service"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/smb"
@@ -241,6 +242,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		replication.NewResource,
 		replication_config.NewResource,
 		resilver_config.NewResource,
+		rsync_task.NewResource,
 		scrub_task.NewResource,
 		service.NewResource,
 		smb.NewResource,
@@ -297,6 +299,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		replication.NewDataSource,
 		replication_config.NewDataSource,
 		resilver_config.NewDataSource,
+		rsync_task.NewDataSource,
 		scrub_task.NewDataSource,
 		service.NewDataSource,
 		smb.NewDataSource,
