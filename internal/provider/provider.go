@@ -44,6 +44,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/nvmet_subsys"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/periodic_snapshot"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/pool"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/privilege"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/replication"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/replication_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/resilver_config"
@@ -241,6 +242,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		nvmet_subsys.NewResource,
 		periodic_snapshot.NewResource,
 		pool.NewResource,
+		privilege.NewResource,
 		replication.NewResource,
 		replication_config.NewResource,
 		resilver_config.NewResource,
@@ -299,6 +301,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		nvmet_subsys.NewDataSource,
 		periodic_snapshot.NewDataSource,
 		pool.NewDataSource,
+		privilege.NewDataSource,
 		replication.NewDataSource,
 		replication_config.NewDataSource,
 		resilver_config.NewDataSource,
