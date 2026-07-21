@@ -14,6 +14,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/alert_policy"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/alert_service"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/api_key"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/app"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/boot_environment"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cloudsync"
@@ -210,6 +211,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 	return []func() resource.Resource{
 		alert_policy.NewResource,
 		alert_service.NewResource,
+		api_key.NewResource,
 		app.NewResource,
 		boot_environment.NewResource,
 		cloudsync.NewResource,
@@ -267,6 +269,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 	return []func() datasource.DataSource{
 		alert_policy.NewDataSource,
 		alert_service.NewDataSource,
+		api_key.NewDataSource,
 		app.NewDataSource,
 		boot_environment.NewDataSource,
 		cloudsync.NewDataSource,
