@@ -69,6 +69,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/system_dataset"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/system_general"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/tunable"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/twofactor_auth"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/ups_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/user"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/vm"
@@ -275,6 +276,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		system_dataset.NewResource,
 		system_general.NewResource,
 		tunable.NewResource,
+		twofactor_auth.NewResource,
 		user.NewResource,
 		ups_config.NewResource,
 		vm.NewResource,
@@ -342,6 +344,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		system_dataset.NewDataSource,
 		system_general.NewDataSource,
 		tunable.NewDataSource,
+		twofactor_auth.NewDataSource,
 		user.NewDataSource,
 		ups_config.NewDataSource,
 		vm.NewDataSource,
