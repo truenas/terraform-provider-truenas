@@ -678,6 +678,28 @@ func existingKerberosPrincipal(existing *directoryServicesAPI) *string {
 	return existing.Credential.Principal
 }
 
+// needsServiceTypeReset reports whether existing's persisted service_type
+// differs from plan's about-to-be-applied one (both non-empty/known) —
+// i.e. this update is switching the singleton from one directory service
+// type to another (e.g. a previous ACTIVEDIRECTORY/IPA join, now
+// re-pointing at LDAP). See DirectoryServicesResource.resetStaleServiceType
+// in resource.go for why the caller must clear stale state via a
+// preliminary "nuke" update before sending the real one whenever this
+// returns true: TrueNAS's own directoryservices.update has an internal
+// directoryservices.reset() call meant to handle exactly this situation,
+// but it does not reliably clear kerberos_realm/credential on a live box
+// (confirmed live on SCALE 25.10 — see resetStaleServiceType's doc
+// comment), so this provider must not rely on it.
+func needsServiceTypeReset(plan *DirectoryServicesModel, existing *directoryServicesAPI) bool {
+	if existing == nil || existing.ServiceType == nil || *existing.ServiceType == "" {
+		return false
+	}
+	if plan.ServiceType.IsNull() || plan.ServiceType.IsUnknown() {
+		return false
+	}
+	return *existing.ServiceType != plan.ServiceType.ValueString()
+}
+
 // adIdmapToModel builds a types.Object (idmapAttrTypes) from a probed
 // directoryServicesADIdmapAPI, or types.ObjectNull(idmapAttrTypes) if api is
 // nil (no idmap configuration returned — shouldn't normally happen once

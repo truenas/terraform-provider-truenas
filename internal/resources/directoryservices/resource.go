@@ -129,6 +129,51 @@ func (r *DirectoryServicesResource) waitForHealthy(ctx context.Context) error {
 	}
 }
 
+// resetStaleServiceType clears ALL existing directory services
+// configuration via directoryservices.update's "nuke" shape (enable=false,
+// service_type=null, configuration=null, credential=null). Create/Update
+// call this first whenever needsServiceTypeReset (model.go) reports that
+// plan is about to switch the singleton to a different service_type than
+// whatever is currently persisted (e.g. a previous ACTIVEDIRECTORY/IPA join
+// being re-pointed at LDAP).
+//
+// This works around a confirmed live TrueNAS 25.10/26.0 middleware defect
+// (probed against the disposable test VM during Task 3 of the LDAP/IPA
+// plan): directoryservices.update is SUPPOSED to handle a service_type
+// switch by calling its own internal directoryservices.reset() — see that
+// method's "Configuration from a different service type should not by
+// default carry over to the new service_type" comment — but reset() only
+// mutates the on-disk datastore row directly, and the SAME update() call's
+// own later commit (compress(new) + datastore.update) still writes back
+// whatever kerberos_realm/credential value was already in memory before
+// reset() ran, because compress() can resolve and set a kerberos_realm id
+// but has no path to explicitly null one back out (unlike its sibling
+// extend(), which does). Confirmed live: switching this box directly from
+// a disabled ACTIVEDIRECTORY join to LDAP left a stale kerberos_realm in
+// place even though the request omitted it entirely, and
+// directoryservices_/ldap_join_mixin.py's _ldap_activate unconditionally
+// calls kerberos.start() whenever kerberos_realm is truthy — which fails
+// with "[EFAULT] Directory services are not configured to use kerberos
+// credentials" (the LDAP_PLAIN credential isn't Kerberos-based) even
+// though the LDAP bind itself succeeds and directoryservices.status
+// reports HEALTHY moments later. The same stale config would also make
+// existingKerberosPrincipal wrongly resend the OLD machine-account
+// credential instead of the new LDAP_PLAIN one. The one code path in
+// directoryservices.update where its own reset() call is NOT immediately
+// undone is the full "nuke" shape (new['service_type'] is None), so that's
+// what this sends as a preliminary step; the caller re-fetches
+// directoryservices.config afterward to build the real payload against a
+// genuinely clean baseline.
+func (r *DirectoryServicesResource) resetStaleServiceType(ctx context.Context) error {
+	_, err := r.client.CallJob(ctx, "directoryservices.update", map[string]any{
+		"enable":        false,
+		"service_type":  nil,
+		"configuration": nil,
+		"credential":    nil,
+	})
+	return err
+}
+
 func (r *DirectoryServicesResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan DirectoryServicesModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -155,6 +200,21 @@ func (r *DirectoryServicesResource) Create(ctx context.Context, req resource.Cre
 	if err != nil {
 		resp.Diagnostics.AddError("Read directory services configuration failed", err.Error())
 		return
+	}
+
+	// Switching this singleton to a different service_type than whatever is
+	// currently persisted needs a preliminary clear — see
+	// resetStaleServiceType's doc comment.
+	if plan.Enable.ValueBool() && needsServiceTypeReset(&plan, existing) {
+		if err := r.resetStaleServiceType(ctx); err != nil {
+			resp.Diagnostics.AddError("Clearing stale directory services configuration failed", err.Error())
+			return
+		}
+		existing, err = r.fetchConfig(ctx)
+		if err != nil {
+			resp.Diagnostics.AddError("Read directory services configuration failed", err.Error())
+			return
+		}
 	}
 
 	payload, diags := plan.updatePayload(ctx, existing)
@@ -238,6 +298,21 @@ func (r *DirectoryServicesResource) Update(ctx context.Context, req resource.Upd
 	if err != nil {
 		resp.Diagnostics.AddError("Read directory services configuration failed", err.Error())
 		return
+	}
+
+	// Switching this singleton to a different service_type than whatever is
+	// currently persisted needs a preliminary clear — see
+	// resetStaleServiceType's doc comment.
+	if plan.Enable.ValueBool() && needsServiceTypeReset(&plan, existing) {
+		if err := r.resetStaleServiceType(ctx); err != nil {
+			resp.Diagnostics.AddError("Clearing stale directory services configuration failed", err.Error())
+			return
+		}
+		existing, err = r.fetchConfig(ctx)
+		if err != nil {
+			resp.Diagnostics.AddError("Read directory services configuration failed", err.Error())
+			return
+		}
 	}
 
 	payload, diags := plan.updatePayload(ctx, existing)

@@ -1408,3 +1408,70 @@ func TestResponseToModel_ADIdmapReadBack(t *testing.T) {
 // strPtr returns a pointer to s, for building API structs with nullable
 // string fields inline in test literals.
 func strPtr(s string) *string { return &s }
+
+// TestNeedsServiceTypeReset covers the predicate that gates
+// DirectoryServicesResource.resetStaleServiceType (resource.go) — see that
+// method's doc comment for the confirmed-live middleware defect this
+// exists to work around (switching service_type away from a previous
+// ACTIVEDIRECTORY/IPA join leaves a stale kerberos_realm/credential in
+// place unless this singleton is fully cleared first).
+func TestNeedsServiceTypeReset(t *testing.T) {
+	planLDAP := &DirectoryServicesModel{ServiceType: types.StringValue("LDAP")}
+
+	t.Run("nil existing", func(t *testing.T) {
+		if needsServiceTypeReset(planLDAP, nil) {
+			t.Error("want false when existing is nil (fresh box, never configured)")
+		}
+	})
+
+	t.Run("existing never configured (nil service_type)", func(t *testing.T) {
+		existing := &directoryServicesAPI{ServiceType: nil}
+		if needsServiceTypeReset(planLDAP, existing) {
+			t.Error("want false when existing.ServiceType is nil")
+		}
+	})
+
+	t.Run("existing empty service_type", func(t *testing.T) {
+		existing := &directoryServicesAPI{ServiceType: strPtr("")}
+		if needsServiceTypeReset(planLDAP, existing) {
+			t.Error("want false when existing.ServiceType is an empty string")
+		}
+	})
+
+	t.Run("plan service_type unknown", func(t *testing.T) {
+		plan := &DirectoryServicesModel{ServiceType: types.StringUnknown()}
+		existing := &directoryServicesAPI{ServiceType: strPtr("ACTIVEDIRECTORY")}
+		if needsServiceTypeReset(plan, existing) {
+			t.Error("want false when plan.ServiceType is unknown")
+		}
+	})
+
+	t.Run("plan service_type null", func(t *testing.T) {
+		plan := &DirectoryServicesModel{ServiceType: types.StringNull()}
+		existing := &directoryServicesAPI{ServiceType: strPtr("ACTIVEDIRECTORY")}
+		if needsServiceTypeReset(plan, existing) {
+			t.Error("want false when plan.ServiceType is null")
+		}
+	})
+
+	t.Run("switching AD to LDAP needs reset", func(t *testing.T) {
+		existing := &directoryServicesAPI{ServiceType: strPtr("ACTIVEDIRECTORY")}
+		if !needsServiceTypeReset(planLDAP, existing) {
+			t.Error("want true when existing.ServiceType (ACTIVEDIRECTORY) differs from plan.ServiceType (LDAP)")
+		}
+	})
+
+	t.Run("switching IPA to LDAP needs reset", func(t *testing.T) {
+		existing := &directoryServicesAPI{ServiceType: strPtr("IPA")}
+		if !needsServiceTypeReset(planLDAP, existing) {
+			t.Error("want true when existing.ServiceType (IPA) differs from plan.ServiceType (LDAP)")
+		}
+	})
+
+	t.Run("same service_type does not need reset", func(t *testing.T) {
+		existing := &directoryServicesAPI{ServiceType: strPtr("LDAP")}
+		if needsServiceTypeReset(planLDAP, existing) {
+			t.Error("want false when existing.ServiceType already matches plan.ServiceType")
+		}
+	})
+}
