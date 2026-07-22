@@ -1201,6 +1201,109 @@ func TestUpdatePayload_AD_IdmapOmittedWhenUnset(t *testing.T) {
 	}
 }
 
+// TestUpdatePayload_AD_IdmapDomainRIDOmitsADOnlyFields verifies that a RID
+// idmap_domain payload never includes unix_primary_group/unix_nss_info
+// (AD-only fields), even when the model holds known (non-null) Bool values
+// for them — the state their read-back path always populates (see
+// adIdmapToModel: it decodes them unconditionally via types.BoolValue,
+// never types.BoolNull, regardless of the actual backend). Confirmed live
+// (SCALE 25.10, Task 4 of this plan): sending them alongside
+// idmap_backend="RID" fails with "[EINVAL] directoryservices_update.
+// configuration.ACTIVEDIRECTORY.idmap.idmap_domain.RID.unix_nss_info: Extra
+// inputs are not permitted" (and the same for unix_primary_group) — this
+// broke the AD test's own in-place timeout-bump step (Step 2), which
+// resends the idmap block read back from Step 1's join.
+func TestUpdatePayload_AD_IdmapDomainRIDOmitsADOnlyFields(t *testing.T) {
+	ctx := context.Background()
+	m := enabledModel(t, ctx)
+
+	idmapDomain := idmapDomainObject(t, ctx, IdmapDomainModel{
+		IdmapBackend:     types.StringValue("RID"),
+		Name:             types.StringValue("TFTEST"),
+		RangeLow:         types.Int64Value(201000001),
+		RangeHigh:        types.Int64Value(202000000),
+		SSSDCompat:       types.BoolValue(false),
+		SchemaMode:       types.StringNull(),
+		UnixPrimaryGroup: types.BoolValue(false), // known, non-null — as read back from a prior RID join
+		UnixNSSInfo:      types.BoolValue(false),
+	})
+	idmap := idmapObject(t, ctx, types.ObjectNull(idmapBuiltinAttrTypes), idmapDomain)
+
+	var ad ActiveDirectoryConfigModel
+	if diags := m.ConfigurationActiveDirectory.As(ctx, &ad, basetypes.ObjectAsOptions{}); diags.HasError() {
+		t.Fatalf("unexpected error extracting AD config: %v", diags)
+	}
+	ad.Idmap = idmap
+	m.ConfigurationActiveDirectory = adConfigObject(t, ctx, ad)
+
+	p, diags := m.updatePayload(ctx, nil)
+	if diags.HasError() {
+		t.Fatalf("unexpected error: %v", diags)
+	}
+
+	gotConfig := p["configuration"].(map[string]any)
+	gotIdmap := gotConfig["idmap"].(map[string]any)
+	gotDomain := gotIdmap["idmap_domain"].(map[string]any)
+	if _, present := gotDomain["unix_primary_group"]; present {
+		t.Errorf(`idmap_domain (RID) payload = %v, want "unix_primary_group" omitted`, gotDomain)
+	}
+	if _, present := gotDomain["unix_nss_info"]; present {
+		t.Errorf(`idmap_domain (RID) payload = %v, want "unix_nss_info" omitted`, gotDomain)
+	}
+	if _, present := gotDomain["schema_mode"]; present {
+		t.Errorf(`idmap_domain (RID) payload = %v, want "schema_mode" omitted`, gotDomain)
+	}
+	if v, ok := gotDomain["sssd_compat"]; !ok || v != false {
+		t.Errorf(`idmap_domain (RID) payload["sssd_compat"] = %v, want false present`, gotDomain["sssd_compat"])
+	}
+}
+
+// TestUpdatePayload_AD_IdmapDomainADOmitsSSSDCompat verifies the converse of
+// TestUpdatePayload_AD_IdmapDomainRIDOmitsADOnlyFields: an AD idmap_domain
+// payload includes schema_mode/unix_primary_group/unix_nss_info but never
+// sssd_compat (RID-only).
+func TestUpdatePayload_AD_IdmapDomainADOmitsSSSDCompat(t *testing.T) {
+	ctx := context.Background()
+	m := enabledModel(t, ctx)
+
+	idmapDomain := idmapDomainObject(t, ctx, IdmapDomainModel{
+		IdmapBackend:     types.StringValue("AD"),
+		SchemaMode:       types.StringValue("RFC2307"),
+		UnixPrimaryGroup: types.BoolValue(true),
+		UnixNSSInfo:      types.BoolValue(true),
+		SSSDCompat:       types.BoolValue(false), // known, non-null — must still be omitted for AD
+	})
+	idmap := idmapObject(t, ctx, types.ObjectNull(idmapBuiltinAttrTypes), idmapDomain)
+
+	var ad ActiveDirectoryConfigModel
+	if diags := m.ConfigurationActiveDirectory.As(ctx, &ad, basetypes.ObjectAsOptions{}); diags.HasError() {
+		t.Fatalf("unexpected error extracting AD config: %v", diags)
+	}
+	ad.Idmap = idmap
+	m.ConfigurationActiveDirectory = adConfigObject(t, ctx, ad)
+
+	p, diags := m.updatePayload(ctx, nil)
+	if diags.HasError() {
+		t.Fatalf("unexpected error: %v", diags)
+	}
+
+	gotConfig := p["configuration"].(map[string]any)
+	gotIdmap := gotConfig["idmap"].(map[string]any)
+	gotDomain := gotIdmap["idmap_domain"].(map[string]any)
+	if _, present := gotDomain["sssd_compat"]; present {
+		t.Errorf(`idmap_domain (AD) payload = %v, want "sssd_compat" omitted`, gotDomain)
+	}
+	if v, ok := gotDomain["schema_mode"]; !ok || v != "RFC2307" {
+		t.Errorf(`idmap_domain (AD) payload["schema_mode"] = %v, want "RFC2307" present`, gotDomain["schema_mode"])
+	}
+	if v, ok := gotDomain["unix_primary_group"]; !ok || v != true {
+		t.Errorf(`idmap_domain (AD) payload["unix_primary_group"] = %v, want true present`, gotDomain["unix_primary_group"])
+	}
+	if v, ok := gotDomain["unix_nss_info"]; !ok || v != true {
+		t.Errorf(`idmap_domain (AD) payload["unix_nss_info"] = %v, want true present`, gotDomain["unix_nss_info"])
+	}
+}
+
 // TestUpdatePayload_AD_IdmapDomainADRequiresSchemaMode verifies the
 // idmap_domain preflight: idmap_backend "AD" requires schema_mode.
 func TestUpdatePayload_AD_IdmapDomainADRequiresSchemaMode(t *testing.T) {

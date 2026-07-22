@@ -1145,10 +1145,28 @@ func buildADConfigPayload(ctx context.Context, ad ActiveDirectoryConfigModel, ex
 			setThreeWayString(domainPayload, "name", dm.Name)
 			setOptionalInt64(domainPayload, "range_low", dm.RangeLow)
 			setOptionalInt64(domainPayload, "range_high", dm.RangeHigh)
-			setOptionalString(domainPayload, "schema_mode", dm.SchemaMode)
-			setOptionalBool(domainPayload, "unix_primary_group", dm.UnixPrimaryGroup)
-			setOptionalBool(domainPayload, "unix_nss_info", dm.UnixNSSInfo)
-			setOptionalBool(domainPayload, "sssd_compat", dm.SSSDCompat)
+			// schema_mode/unix_primary_group/unix_nss_info and sssd_compat
+			// are mutually exclusive, backend-specific fields on the wire's
+			// discriminated union (AD vs. RID — see idmapDomainAttrTypes's
+			// doc comment). Confirmed live (SCALE 25.10, this plan's Task 4
+			// AD idmap acceptance run): sending unix_primary_group/
+			// unix_nss_info alongside idmap_backend="RID" is rejected with
+			// "[EINVAL] directoryservices_update.configuration.
+			// ACTIVEDIRECTORY.idmap.idmap_domain.RID.unix_nss_info: Extra
+			// inputs are not permitted" (and the same for
+			// unix_primary_group) even though both fields are non-null,
+			// known Bool values in the model — read back from a PRIOR RID
+			// join where the API simply didn't include them (decoding to
+			// the Go zero value, false, since directoryServicesIdmapDomainAPI
+			// has no pointer/omitempty distinction for them). Gating on the
+			// selected backend, not merely on null-ness, is required.
+			if dm.IdmapBackend.ValueString() == "AD" {
+				setOptionalString(domainPayload, "schema_mode", dm.SchemaMode)
+				setOptionalBool(domainPayload, "unix_primary_group", dm.UnixPrimaryGroup)
+				setOptionalBool(domainPayload, "unix_nss_info", dm.UnixNSSInfo)
+			} else {
+				setOptionalBool(domainPayload, "sssd_compat", dm.SSSDCompat)
+			}
 			idmapPayload["idmap_domain"] = domainPayload
 		}
 
