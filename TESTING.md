@@ -57,7 +57,7 @@ Helpers in `internal/acctest`: `PreCheck` (TF_ACC + credentials),
 uuid-style NVMe host NQNs), `Client()` (shared live API client for
 CheckDestroy/fixture queries), `ProviderConfig()` (HCL provider block).
 
-## Unit tests (655 functions across 59 packages)
+## Unit tests (678 functions across 60 packages)
 
 Every resource package carries unit tests for:
 
@@ -78,7 +78,7 @@ Every resource package carries unit tests for:
   test server: calls, errors, context cancellation, auth, and the CallJob
   job-polling loop including its no-job bail-out.
 
-## Acceptance suite (78 test functions, 58 packages)
+## Acceptance suite (80 test functions, 58 packages)
 
 ### Tier 1 — safe (`make testacc-safe`)
 
@@ -118,7 +118,9 @@ Coverage highlights:
 - **Directory services and Kerberos**: kerberos realm (KDC/admin-server
   lists), kerberos keytab (`TRUENAS_DS_KEYTAB_B64`-gated, real keytab
   exported from the Samba AD DC), directoryservices Active Directory join
-  (`TRUENAS_DS=1`-gated, see below)
+  with explicit idmap (builtin + idmap_domain RID), LDAP join (RFC2307,
+  seeded-user visibility check), and IPA join (`TRUENAS_DS=1`-gated, see
+  below — three service types, three dedicated directory servers)
 - **Data movement**: rsync task (MODULE and SSH modes, cron schedule)
 - **Misc**: static route (TEST-NET-2), NTP server (TEST-NET-3 + `force`),
   alert service (Mail attributes JSON), tunable (delete restores the

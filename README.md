@@ -18,7 +18,7 @@ client lives inside the provider.
 | **NVMe-oF** | `truenas_nvmet_subsys`, `truenas_nvmet_port`, `truenas_nvmet_namespace`, `truenas_nvmet_host`, `truenas_nvmet_host_subsys`, `truenas_nvmet_port_subsys`, `truenas_nvmet_global` |
 | **Accounts** | `truenas_user`, `truenas_group` |
 | **Access management** | `truenas_api_key`, `truenas_privilege` |
-| **Directory services & Kerberos** | `truenas_directoryservices` (Active Directory join), `truenas_kerberos_config`, `truenas_kerberos_realm`, `truenas_kerberos_keytab` |
+| **Directory services & Kerberos** | `truenas_directoryservices` (Active Directory, LDAP, and IPA join; explicit AD idmap configuration), `truenas_kerberos_config`, `truenas_kerberos_realm`, `truenas_kerberos_keytab` |
 | **Apps & VMs** | `truenas_app`, `truenas_vm`, `truenas_vm_device` |
 | **Replication & sync** | `truenas_replication_task`, `truenas_cloudsync_task`, `truenas_cloudsync_credentials`, `truenas_rsync_task` |
 | **Network** | `truenas_network_interface`, `truenas_static_route`, `truenas_network_config` |
@@ -191,10 +191,11 @@ terraform apply
   commit/checkin protocol: changes are staged, committed with automatic
   rollback armed, and confirmed only if connectivity survives.
 - **Directory services never leave a domain on destroy.** `truenas_directoryservices`
-  only supports joining Active Directory today (LDAP/IPA are not yet
-  implemented). Destroying the resource disables directory services locally;
-  it never calls the leave-domain API, so the TrueNAS computer account stays
-  on the domain controller — leaving requires a domain administrator
+  supports joining Active Directory, LDAP, or IPA (`service_type`), plus
+  explicit UID/GID idmap configuration on the Active Directory block.
+  Destroying the resource disables directory services locally; it never
+  calls the leave-domain/unjoin API, so an AD computer account or IPA host
+  entry stays on the domain controller — leaving requires an administrator
   credential this provider does not assume is available at destroy time.
 
 ## Development

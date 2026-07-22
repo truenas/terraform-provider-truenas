@@ -9,12 +9,13 @@
 
 The provider implements **58 resources and 58 matching data sources**, covering the
 core storage, sharing, block-storage, accounts, scheduled-task, access-management,
-Active Directory/Kerberos, and system-configuration surface of the TrueNAS SCALE
-API. Every implemented resource has a full acceptance test (create, update, import,
-destroy) run against real TrueNAS boxes on both 25.10 and 26.0, with one deliberate
-exception: `truenas_directoryservices` (Active Directory join) is live-tested on
-the 25.10 VM plus a Samba AD domain controller only — directory-service tests
-never run against the production-serving 26.0 box, by design (see TESTING.md).
+Active Directory/LDAP/IPA/Kerberos, and system-configuration surface of the
+TrueNAS SCALE API. Every implemented resource has a full acceptance test (create,
+update, import, destroy) run against real TrueNAS boxes on both 25.10 and 26.0,
+with one deliberate exception: `truenas_directoryservices` is live-tested on the
+25.10 VM plus dedicated Samba AD, OpenLDAP, and FreeIPA servers only —
+directory-service tests never run against the production-serving 26.0 box, by
+design (see TESTING.md).
 
 Of the 127 API namespaces the middleware exposes, close to half now map to
 declarative resources we cover, a smaller share are uncovered but viable Terraform
@@ -34,9 +35,12 @@ The highest-value gaps, in rough priority order:
    and permission templates, frequently requested alongside dataset + share
    management.
 
-Directory services no longer belongs on this list: Active Directory join and
-Kerberos (config, realms, keytabs) are now covered. LDAP and IPA directory-service
-types, and `idmap`, remain uncovered — see Part 1, §1.2.
+Directory services no longer belongs on this list: Active Directory, LDAP, and
+IPA join, Kerberos (config, realms, keytabs), and explicit AD idmap configuration
+are all covered now — see Part 2. The standalone `idmap` API namespace exposes
+only a cache-clear action (`clear_idmap_cache`), not durable configuration state —
+see Part 1, §1.5 (poor Terraform fit); idmap *configuration* is exposed as a
+nested block on `truenas_directoryservices` instead.
 
 ## Part 1 — Uncovered API Areas
 
@@ -54,22 +58,7 @@ types, and `idmap`, remain uncovered — see Part 1, §1.2.
 | `audit` | Audit subsystem configuration | Singleton config |
 | `reporting.exporters` | Metrics export (e.g. Graphite) | Small CRUD surface |
 
-### 1.2 Directory services (LDAP/IPA and idmap remain uncovered)
-
-Active Directory join and Kerberos are now covered — see Part 2. LDAP, IPA, and
-UID/GID mapping domains are not:
-
-| Namespace(s) | What it manages |
-|---|---|
-| `directoryservices` (LDAP, IPA service types) | LDAP and IPA join/configuration; only the `ACTIVEDIRECTORY` service type is implemented by `truenas_directoryservices` today |
-| `idmap` | UID/GID mapping domains |
-
-Testing an LDAP or IPA join requires a directory server of that type in the lab,
-which we do not currently have (Active Directory coverage uses a Samba AD DC —
-see Part 2 and TESTING.md) — the test-infrastructure cost is the dominant cost
-here, not the resource code.
-
-### 1.3 Containers and applications (26.0 growth area)
+### 1.2 Containers and applications (26.0 growth area)
 
 | Namespace(s) | What it manages | Notes |
 |---|---|---|
@@ -83,7 +72,7 @@ here, not the resource code.
 Our existing `app` resource covers catalog-app install/upgrade/delete lifecycle;
 the namespaces above surround it.
 
-### 1.4 New 26.0 surfaces
+### 1.3 New 26.0 surfaces
 
 | Namespace(s) | What it manages | Notes |
 |---|---|---|
@@ -91,7 +80,7 @@ the namespaces above surround it.
 | `zfs.resource`, `zfs.resource.snapshot`, `zpool`, `zpool.scrub` | Next-generation ZFS namespaces | We use the stable `pool.dataset` / `pool.snapshot` names; watch for deprecation signals before migrating |
 | `tn_connect` | TrueNAS Connect enrollment | Cloud service enrollment; limited Terraform value |
 
-### 1.5 Enterprise / licensed hardware
+### 1.4 Enterprise / licensed hardware
 
 | Namespace(s) | What it manages |
 |---|---|
@@ -108,7 +97,7 @@ These require enterprise/HA systems for verification. Our testing policy (no
 mocks, real systems only) means each of these needs time scheduled on such a
 system before its resource can ship.
 
-### 1.6 Poor Terraform fit (actions, telemetry, one-shots — likely never)
+### 1.5 Poor Terraform fit (actions, telemetry, one-shots — likely never)
 
 | Namespace(s) | Why not |
 |---|---|
@@ -120,6 +109,7 @@ system before its resource can ship.
 | `dns`, `device` | Read-only queries; possible future data sources at most |
 | `core`, `auth`, `api_key` (session half) | Session plumbing — already used internally by our client |
 | `alert` | Alert list/dismiss — operational (we do cover `alertservice` and alert *policy*) |
+| `idmap` | Exposes only the `clear_idmap_cache` action; no durable configuration — idmap *configuration* lives on `truenas_directoryservices`' AD block instead |
 
 ## Part 2 — Covered API Areas
 
@@ -127,8 +117,8 @@ All 58 resources below also ship a matching data source, generated documentation
 unit tests (payload builders, response mappers, schema shape), and a live
 acceptance test with create → update → import → destroy verification and leak
 checks. Suite is green against SCALE 25.10 and 26.0, with the single exception
-noted in the Executive Summary (`truenas_directoryservices`, 25.10 + Samba AD DC
-only).
+noted in the Executive Summary (`truenas_directoryservices`, 25.10 + dedicated
+Samba AD, OpenLDAP, and FreeIPA servers only).
 
 ### Storage
 
@@ -240,7 +230,7 @@ only).
 
 | Terraform resource | API namespace |
 |---|---|
-| `truenas_directoryservices` | `directoryservices` (Active Directory join only; LDAP/IPA service types remain uncovered — see Part 1, §1.2) |
+| `truenas_directoryservices` | `directoryservices` (AD, LDAP, and IPA service types; idmap via the AD configuration block) |
 | `truenas_kerberos_config` | `kerberos` (singleton) |
 | `truenas_kerberos_realm` | `kerberos.realm` |
 | `truenas_kerberos_keytab` | `kerberos.keytab` |
