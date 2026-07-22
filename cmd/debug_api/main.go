@@ -325,6 +325,34 @@ func main() {
 		}
 		fmt.Println("=== deleted ok ===")
 	}
+	if section == "dsprobe" {
+		pp("directoryservices.config", call(c, "directoryservices.config"))
+		pp("directoryservices.status", call(c, "directoryservices.status"))
+	}
+	if section == "dsupdate" {
+		// Reads a directoryservices.update payload as JSON from
+		// TRUENAS_PROBE_PAYLOAD and calls it via CallJob, printing the job
+		// result or error. Used to iterate quickly on the exact payload
+		// shape TrueNAS accepts for in-place updates while directory
+		// services are already enabled, without paying the cost of a full
+		// join/health-wait cycle per attempt.
+		raw := os.Getenv("TRUENAS_PROBE_PAYLOAD")
+		if raw == "" {
+			log.Fatal("set TRUENAS_PROBE_PAYLOAD (JSON object) for dsupdate")
+		}
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+			log.Fatal("parsing TRUENAS_PROBE_PAYLOAD: ", err)
+		}
+		result, err := c.CallJob(context.Background(), "directoryservices.update", payload)
+		if err != nil {
+			fmt.Printf("=== directoryservices.update error ===\n%v\n", err)
+		} else {
+			var v any
+			json.Unmarshal(result, &v)
+			pp("directoryservices.update result", v)
+		}
+	}
 	if section == "appmethods" {
 		raw, err := c.Call(context.Background(), "core.get_methods")
 		if err != nil {

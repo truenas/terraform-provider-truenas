@@ -20,6 +20,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cloudsync"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cloudsync_credentials"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/directoryservices"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/ftp_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/group"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_auth"
@@ -221,6 +222,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		cloudsync.NewResource,
 		cloudsync_credentials.NewResource,
 		dataset.NewResource,
+		directoryservices.NewResource,
 		ftp_config.NewResource,
 		group.NewResource,
 		iscsi_auth.NewResource,
@@ -283,6 +285,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		cloudsync.NewDataSource,
 		cloudsync_credentials.NewDataSource,
 		dataset.NewDataSource,
+		directoryservices.NewDataSource,
 		ftp_config.NewDataSource,
 		group.NewDataSource,
 		iscsi_auth.NewDataSource,

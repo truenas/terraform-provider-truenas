@@ -172,6 +172,36 @@ func AppsCheck(t *testing.T) {
 	}
 }
 
+// DSCheck gates tests that join/leave an Active Directory domain via the
+// truenas_directoryservices resource. It runs PreCheck and then skips
+// unless TRUENAS_DS=1 is set, since domain-join tests mutate real
+// directory-service state and can take minutes to run.
+//
+// When TRUENAS_DS=1 it additionally enforces a disposable-box guard: the
+// env var TRUENAS_DS_ALLOWED_ENDPOINT must be set and must equal
+// Endpoint() exactly. Domain-join acceptance tests must run ONLY against a
+// disposable test VM, never a shared or production TrueNAS box — an
+// unintended AD join (or a failed join left half-configured) is much more
+// disruptive than the other acceptance tests in this suite, so this check
+// fails loudly (t.Fatal, not t.Skip) rather than silently doing the wrong
+// thing if the guard env var is missing or mismatched.
+func DSCheck(t *testing.T) {
+	t.Helper()
+	PreCheck(t)
+	if os.Getenv("TRUENAS_DS") != "1" {
+		t.Skip("Set TRUENAS_DS=1 to run directory services (Active Directory join) acceptance tests")
+	}
+	allowed := os.Getenv("TRUENAS_DS_ALLOWED_ENDPOINT")
+	if allowed == "" {
+		t.Fatal("TRUENAS_DS=1 requires TRUENAS_DS_ALLOWED_ENDPOINT to be set to the disposable test VM's " +
+			"endpoint, as a guard against accidentally domain-joining a shared or production TrueNAS box")
+	}
+	if allowed != Endpoint() {
+		t.Fatalf("TRUENAS_DS_ALLOWED_ENDPOINT (%q) does not match TRUENAS_ENDPOINT (%q): refusing to run "+
+			"directory services acceptance tests against a box that isn't the disposable test VM", allowed, Endpoint())
+	}
+}
+
 // ProviderConfig returns HCL for the provider block used in acceptance tests.
 func ProviderConfig() string {
 	return fmt.Sprintf(`
