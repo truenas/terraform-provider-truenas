@@ -12,12 +12,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/acme_dns_authenticator"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/alert_policy"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/alert_service"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/api_key"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/app"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/audit_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/boot_environment"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/certificate"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cloudsync"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cloudsync_credentials"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cronjob"
@@ -219,12 +221,14 @@ func (p *TrueNASProvider) Configure(ctx context.Context, req provider.ConfigureR
 
 func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
+		acme_dns_authenticator.NewResource,
 		alert_policy.NewResource,
 		alert_service.NewResource,
 		api_key.NewResource,
 		app.NewResource,
 		audit_config.NewResource,
 		boot_environment.NewResource,
+		certificate.NewResource,
 		cloudsync.NewResource,
 		cloudsync_credentials.NewResource,
 		cronjob.NewResource,
@@ -287,12 +291,14 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 
 func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
+		acme_dns_authenticator.NewDataSource,
 		alert_policy.NewDataSource,
 		alert_service.NewDataSource,
 		api_key.NewDataSource,
 		app.NewDataSource,
 		audit_config.NewDataSource,
 		boot_environment.NewDataSource,
+		certificate.NewDataSource,
 		cloudsync.NewDataSource,
 		cloudsync_credentials.NewDataSource,
 		cronjob.NewDataSource,
