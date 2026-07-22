@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
 
@@ -86,6 +87,131 @@ func (d *DirectoryServicesDataSource) Schema(_ context.Context, _ datasource.Sch
 					"enable_trusted_domains": dschema.BoolAttribute{
 						Computed:    true,
 						Description: "Whether support for trusted domains is enabled.",
+					},
+					"idmap": dschema.SingleNestedAttribute{
+						Computed:    true,
+						Description: "Active Directory idmap configuration (UID/GID mapping), or null if not configured for Active Directory.",
+						Attributes: map[string]dschema.Attribute{
+							"builtin": dschema.SingleNestedAttribute{
+								Computed:    true,
+								Description: "UID/GID range for automatically generated well-known/BUILTIN accounts.",
+								Attributes: map[string]dschema.Attribute{
+									"name":       dschema.StringAttribute{Computed: true, Description: "Short name for the domain."},
+									"range_low":  dschema.Int64Attribute{Computed: true, Description: "Lowest UID/GID the idmap backend can assign."},
+									"range_high": dschema.Int64Attribute{Computed: true, Description: "Highest UID/GID the idmap backend can assign."},
+								},
+							},
+							"idmap_domain": dschema.SingleNestedAttribute{
+								Computed:    true,
+								Description: "How domain accounts joined to TrueNAS are mapped to Unix UIDs/GIDs.",
+								Attributes: map[string]dschema.Attribute{
+									"idmap_backend":      dschema.StringAttribute{Computed: true, Description: "Idmap backend type (\"AD\" or \"RID\" for this provider version)."},
+									"name":               dschema.StringAttribute{Computed: true, Description: "Short name for the domain."},
+									"range_low":          dschema.Int64Attribute{Computed: true, Description: "Lowest UID/GID the idmap backend can assign."},
+									"range_high":         dschema.Int64Attribute{Computed: true, Description: "Highest UID/GID the idmap backend can assign."},
+									"schema_mode":        dschema.StringAttribute{Computed: true, Description: "AD backend schema mode."},
+									"unix_primary_group": dschema.BoolAttribute{Computed: true, Description: "AD backend only: primary group source."},
+									"unix_nss_info":      dschema.BoolAttribute{Computed: true, Description: "AD backend only: shell/home directory source."},
+									"sssd_compat":        dschema.BoolAttribute{Computed: true, Description: "RID backend only: SSSD-compatible low range."},
+								},
+							},
+						},
+					},
+				},
+			},
+			"configuration_ldap": dschema.SingleNestedAttribute{
+				Computed:    true,
+				Description: "Plain LDAP directory configuration, or null if not configured for LDAP.",
+				Attributes: map[string]dschema.Attribute{
+					"server_urls": dschema.ListAttribute{
+						Computed:    true,
+						ElementType: types.StringType,
+						Description: "List of LDAP server URIs used for LDAP binds.",
+					},
+					"basedn":                dschema.StringAttribute{Computed: true, Description: "The base DN used for LDAP operations."},
+					"starttls":              dschema.BoolAttribute{Computed: true, Description: "Whether StartTLS is used."},
+					"validate_certificates": dschema.BoolAttribute{Computed: true, Description: "Whether remote LDAP certificates are validated."},
+					"schema":                dschema.StringAttribute{Computed: true, Description: "The LDAP attribute schema in use."},
+					"auxiliary_parameters":  dschema.StringAttribute{Computed: true, Description: "Additional SSSD configuration parameters."},
+					"search_bases": dschema.SingleNestedAttribute{
+						Computed:    true,
+						Description: "Alternative LDAP search base settings.",
+						Attributes: map[string]dschema.Attribute{
+							"base_user":     dschema.StringAttribute{Computed: true, Description: "Base DN for LDAP user searches."},
+							"base_group":    dschema.StringAttribute{Computed: true, Description: "Base DN for LDAP group searches."},
+							"base_netgroup": dschema.StringAttribute{Computed: true, Description: "Base DN for LDAP netgroup searches."},
+						},
+					},
+					"attribute_maps": dschema.SingleNestedAttribute{
+						Computed:    true,
+						Description: "Non-standard LDAP attribute mapping overrides.",
+						Attributes: map[string]dschema.Attribute{
+							"passwd": dschema.SingleNestedAttribute{
+								Computed:    true,
+								Description: "LDAP attribute mappings for user (passwd) entries.",
+								Attributes: map[string]dschema.Attribute{
+									"user_object_class":   dschema.StringAttribute{Computed: true, Description: "User entry object class."},
+									"user_name":           dschema.StringAttribute{Computed: true, Description: "Login name attribute."},
+									"user_uid":            dschema.StringAttribute{Computed: true, Description: "User id attribute."},
+									"user_gid":            dschema.StringAttribute{Computed: true, Description: "Primary group id attribute."},
+									"user_gecos":          dschema.StringAttribute{Computed: true, Description: "Gecos field attribute."},
+									"user_home_directory": dschema.StringAttribute{Computed: true, Description: "Home directory attribute."},
+									"user_shell":          dschema.StringAttribute{Computed: true, Description: "Default shell attribute."},
+								},
+							},
+							"shadow": dschema.SingleNestedAttribute{
+								Computed:    true,
+								Description: "LDAP attribute mappings for shadow password entries.",
+								Attributes: map[string]dschema.Attribute{
+									"shadow_last_change": dschema.StringAttribute{Computed: true, Description: "Last password change attribute."},
+									"shadow_min":         dschema.StringAttribute{Computed: true, Description: "Minimum password age attribute."},
+									"shadow_max":         dschema.StringAttribute{Computed: true, Description: "Maximum password age attribute."},
+									"shadow_warning":     dschema.StringAttribute{Computed: true, Description: "Password warning period attribute."},
+									"shadow_inactive":    dschema.StringAttribute{Computed: true, Description: "Password inactivity period attribute."},
+									"shadow_expire":      dschema.StringAttribute{Computed: true, Description: "Account expiration date attribute."},
+								},
+							},
+							"group": dschema.SingleNestedAttribute{
+								Computed:    true,
+								Description: "LDAP attribute mappings for group entries.",
+								Attributes: map[string]dschema.Attribute{
+									"group_object_class": dschema.StringAttribute{Computed: true, Description: "Group entry object class."},
+									"group_gid":          dschema.StringAttribute{Computed: true, Description: "Group id attribute."},
+									"group_member":       dschema.StringAttribute{Computed: true, Description: "Group member names attribute."},
+								},
+							},
+							"netgroup": dschema.SingleNestedAttribute{
+								Computed:    true,
+								Description: "LDAP attribute mappings for netgroup entries.",
+								Attributes: map[string]dschema.Attribute{
+									"netgroup_object_class": dschema.StringAttribute{Computed: true, Description: "Netgroup entry object class."},
+									"netgroup_member":       dschema.StringAttribute{Computed: true, Description: "Netgroup members attribute."},
+									"netgroup_triple":       dschema.StringAttribute{Computed: true, Description: "Netgroup triple attribute."},
+								},
+							},
+						},
+					},
+				},
+			},
+			"configuration_ipa": dschema.SingleNestedAttribute{
+				Computed:    true,
+				Description: "IPA (FreeIPA) join configuration, or null if not configured for IPA.",
+				Attributes: map[string]dschema.Attribute{
+					"target_server":         dschema.StringAttribute{Computed: true, Description: "The IPA server used to build join/leave URLs."},
+					"hostname":              dschema.StringAttribute{Computed: true, Description: "Hostname of the TrueNAS server registered in IPA."},
+					"domain":                dschema.StringAttribute{Computed: true, Description: "The domain of the IPA server."},
+					"basedn":                dschema.StringAttribute{Computed: true, Description: "The base DN used for LDAP operations."},
+					"validate_certificates": dschema.BoolAttribute{Computed: true, Description: "Whether remote LDAP certificates are validated."},
+					"smb_domain": dschema.SingleNestedAttribute{
+						Computed:    true,
+						Description: "IPA SMB domain settings, detected during the IPA join, or null if not configured.",
+						Attributes: map[string]dschema.Attribute{
+							"name":        dschema.StringAttribute{Computed: true, Description: "Short name for the SMB domain."},
+							"range_low":   dschema.Int64Attribute{Computed: true, Description: "Lowest UID/GID the idmap backend can assign."},
+							"range_high":  dschema.Int64Attribute{Computed: true, Description: "Highest UID/GID the idmap backend can assign."},
+							"domain_name": dschema.StringAttribute{Computed: true, Description: "Name of the SMB domain per the IPA configuration."},
+							"domain_sid":  dschema.StringAttribute{Computed: true, Description: "The domain SID for the joined IPA domain."},
+						},
 					},
 				},
 			},

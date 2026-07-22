@@ -25,6 +25,8 @@ func baseModel() *DirectoryServicesModel {
 		KerberosRealm:                types.StringNull(),
 		Credential:                   types.ObjectNull(credentialAttrTypes),
 		ConfigurationActiveDirectory: types.ObjectNull(adConfigAttrTypes),
+		ConfigurationLDAP:            types.ObjectNull(ldapConfigAttrTypes),
+		ConfigurationIPA:             types.ObjectNull(ipaConfigAttrTypes),
 	}
 }
 
@@ -32,34 +34,136 @@ func baseModel() *DirectoryServicesModel {
 // for tests exercising the enable=true payload shape (which requires one).
 func validCredential(t *testing.T, ctx context.Context) types.Object {
 	t.Helper()
-	cred, diags := types.ObjectValueFrom(ctx, credentialAttrTypes, CredentialModel{
+	return credentialObject(t, ctx, CredentialModel{
 		CredentialType: types.StringValue("KERBEROS_USER"),
 		Username:       types.StringValue("Administrator"),
 		Password:       types.StringValue("hunter2"),
 	})
+}
+
+// credentialObject builds a "credential" types.Object from a CredentialModel.
+// Every types.String field left at its Go zero value serializes identically
+// to an explicit types.StringNull() (StringValue's zero value IS the null
+// state — see basetypes.StringValue's doc comment), so callers only need to
+// set the fields relevant to the credential_type under test.
+func credentialObject(t *testing.T, ctx context.Context, cred CredentialModel) types.Object {
+	t.Helper()
+	obj, diags := types.ObjectValueFrom(ctx, credentialAttrTypes, cred)
 	if diags.HasError() {
 		t.Fatalf("unexpected error building credential object: %v", diags)
 	}
-	return cred
+	return obj
 }
 
 // validADConfig builds a minimal, valid configuration_activedirectory
-// object, for tests exercising the enable=true payload shape (which
-// requires one).
+// object (idmap left null), for tests exercising the enable=true payload
+// shape (which requires one).
 func validADConfig(t *testing.T, ctx context.Context) types.Object {
 	t.Helper()
-	ad, diags := types.ObjectValueFrom(ctx, adConfigAttrTypes, ActiveDirectoryConfigModel{
+	return adConfigObject(t, ctx, ActiveDirectoryConfigModel{
 		Hostname:             types.StringValue("tn2510"),
 		Domain:               types.StringValue("TFTEST.LAN"),
 		Site:                 types.StringNull(),
 		ComputerAccountOU:    types.StringNull(),
 		UseDefaultDomain:     types.BoolValue(false),
 		EnableTrustedDomains: types.BoolValue(false),
+		Idmap:                types.ObjectNull(idmapAttrTypes),
 	})
+}
+
+// adConfigObject builds a "configuration_activedirectory" types.Object from
+// an ActiveDirectoryConfigModel. Unlike credentialObject's plain String
+// fields, "Idmap" is an Object-typed field: its Go zero value is NOT a valid
+// null (types.Object's null representation must carry the correct
+// attributeTypes map), so every caller must explicitly set Idmap to either
+// types.ObjectNull(idmapAttrTypes) or a real idmap object built via
+// idmapObject.
+func adConfigObject(t *testing.T, ctx context.Context, ad ActiveDirectoryConfigModel) types.Object {
+	t.Helper()
+	obj, diags := types.ObjectValueFrom(ctx, adConfigAttrTypes, ad)
 	if diags.HasError() {
 		t.Fatalf("unexpected error building AD config object: %v", diags)
 	}
-	return ad
+	return obj
+}
+
+// idmapBuiltinObject builds an "idmap.builtin" types.Object.
+func idmapBuiltinObject(t *testing.T, ctx context.Context, b IdmapBuiltinModel) types.Object {
+	t.Helper()
+	obj, diags := types.ObjectValueFrom(ctx, idmapBuiltinAttrTypes, b)
+	if diags.HasError() {
+		t.Fatalf("unexpected error building idmap.builtin object: %v", diags)
+	}
+	return obj
+}
+
+// idmapDomainObject builds an "idmap.idmap_domain" types.Object.
+func idmapDomainObject(t *testing.T, ctx context.Context, d IdmapDomainModel) types.Object {
+	t.Helper()
+	obj, diags := types.ObjectValueFrom(ctx, idmapDomainAttrTypes, d)
+	if diags.HasError() {
+		t.Fatalf("unexpected error building idmap.idmap_domain object: %v", diags)
+	}
+	return obj
+}
+
+// idmapObject builds an "idmap" types.Object from builtin/idmap_domain
+// sub-objects (either of which may be types.ObjectNull to leave that
+// sub-block unset).
+func idmapObject(t *testing.T, ctx context.Context, builtin, idmapDomain types.Object) types.Object {
+	t.Helper()
+	obj, diags := types.ObjectValueFrom(ctx, idmapAttrTypes, IdmapModel{
+		Builtin:     builtin,
+		IdmapDomain: idmapDomain,
+	})
+	if diags.HasError() {
+		t.Fatalf("unexpected error building idmap object: %v", diags)
+	}
+	return obj
+}
+
+// validLDAPConfig builds a minimal, valid configuration_ldap object
+// (search_bases/attribute_maps left null), for tests exercising the LDAP
+// enable=true payload shape.
+func validLDAPConfig(t *testing.T, ctx context.Context) types.Object {
+	t.Helper()
+	serverURLs, diags := types.ListValueFrom(ctx, types.StringType, []string{"ldaps://ldap.tftest.lan"})
+	if diags.HasError() {
+		t.Fatalf("unexpected error building server_urls list: %v", diags)
+	}
+	obj, diags := types.ObjectValueFrom(ctx, ldapConfigAttrTypes, LDAPConfigModel{
+		ServerURLs:           serverURLs,
+		BaseDN:               types.StringValue("dc=tftest,dc=lan"),
+		StartTLS:             types.BoolValue(false),
+		ValidateCertificates: types.BoolValue(true),
+		Schema:               types.StringValue("RFC2307"),
+		AuxiliaryParameters:  types.StringNull(),
+		SearchBases:          types.ObjectNull(ldapSearchBasesAttrTypes),
+		AttributeMaps:        types.ObjectNull(ldapAttributeMapsAttrTypes),
+	})
+	if diags.HasError() {
+		t.Fatalf("unexpected error building LDAP config object: %v", diags)
+	}
+	return obj
+}
+
+// validIPAConfig builds a minimal, valid configuration_ipa object
+// (smb_domain left null), for tests exercising the IPA enable=true payload
+// shape.
+func validIPAConfig(t *testing.T, ctx context.Context) types.Object {
+	t.Helper()
+	obj, diags := types.ObjectValueFrom(ctx, ipaConfigAttrTypes, IPAConfigModel{
+		TargetServer:         types.StringValue("ipa.tfipa.lan"),
+		Hostname:             types.StringValue("tn2510"),
+		Domain:               types.StringValue("tfipa.lan"),
+		BaseDN:               types.StringValue("dc=tfipa,dc=lan"),
+		SMBDomain:            types.ObjectNull(ipaSMBDomainAttrTypes),
+		ValidateCertificates: types.BoolValue(true),
+	})
+	if diags.HasError() {
+		t.Fatalf("unexpected error building IPA config object: %v", diags)
+	}
+	return obj
 }
 
 // enabledModel returns a DirectoryServicesModel with enable=true and valid
@@ -351,17 +455,15 @@ func TestUpdatePayload_EnableShape_FullPayload(t *testing.T) {
 // follow the same three-way clear convention as kerberos_realm.
 func TestUpdatePayload_ConfigurationSiteAndOUThreeWay(t *testing.T) {
 	ctx := context.Background()
-	ad, diags := types.ObjectValueFrom(ctx, adConfigAttrTypes, ActiveDirectoryConfigModel{
+	ad := adConfigObject(t, ctx, ActiveDirectoryConfigModel{
 		Hostname:             types.StringValue("tn2510"),
 		Domain:               types.StringValue("TFTEST.LAN"),
 		Site:                 types.StringValue(""), // explicit clear -> nil
 		ComputerAccountOU:    types.StringValue("TRUENAS_SERVERS"),
 		UseDefaultDomain:     types.BoolValue(true),
 		EnableTrustedDomains: types.BoolValue(false),
+		Idmap:                types.ObjectNull(idmapAttrTypes),
 	})
-	if diags.HasError() {
-		t.Fatalf("unexpected error building AD config object: %v", diags)
-	}
 
 	m := enabledModel(t, ctx)
 	m.ConfigurationActiveDirectory = ad
@@ -383,18 +485,19 @@ func TestUpdatePayload_ConfigurationSiteAndOUThreeWay(t *testing.T) {
 	}
 }
 
-// TestUpdatePayload_ExistingIdmapRoundTrip verifies that idmap/
-// trusted_domains from a previously-fetched directoryServicesAPI are
-// copied verbatim into the outgoing "configuration" map — required so an
-// in-place update (e.g. bumping "timeout") on an already-joined resource
-// doesn't look like an idmap/trusted_domains change to TrueNAS (neither is
-// modeled in Terraform state; see the "existing" doc comment on
-// updatePayload). Regression coverage for a live bug: the nested
-// "configuration" object returned by the API does NOT echo back its own
-// "service_type" key, so the round-trip guard must key off the TOP-LEVEL
-// ServiceType (here, not the nested Configuration.ServiceType, which is
-// always "" from a real response).
-func TestUpdatePayload_ExistingIdmapRoundTrip(t *testing.T) {
+// TestUpdatePayload_TrustedDomainsRoundTrip verifies that trusted_domains
+// from a previously-fetched directoryServicesAPI is copied verbatim into
+// the outgoing "configuration" map — required so an in-place update (e.g.
+// bumping "timeout") on an already-joined resource doesn't look like a
+// trusted_domains change to TrueNAS (out of scope for Terraform state; see
+// the "existing" doc comment on updatePayload). idmap itself is NO LONGER
+// round-tripped this way — see TestUpdatePayload_AD_IdmapFromModel — this
+// mechanism now only applies to trusted_domains. Regression coverage for a
+// live bug: the nested "configuration" object returned by the API does NOT
+// echo back its own "service_type" key, so the round-trip guard must key
+// off the TOP-LEVEL ServiceType (here, not the nested
+// Configuration.ServiceType, which is always "" from a real response).
+func TestUpdatePayload_TrustedDomainsRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	m := enabledModel(t, ctx)
 
@@ -407,7 +510,6 @@ func TestUpdatePayload_ExistingIdmapRoundTrip(t *testing.T) {
 			// the nested object, only on the top-level one above.
 			Hostname:       "tn2510",
 			Domain:         "TFTEST.LAN",
-			Idmap:          json.RawMessage(`{"idmap_domain":{"idmap_backend":"RID","name":"TFTEST"}}`),
 			TrustedDomains: json.RawMessage(`[]`),
 		},
 	}
@@ -421,26 +523,17 @@ func TestUpdatePayload_ExistingIdmapRoundTrip(t *testing.T) {
 	if !ok {
 		t.Fatalf("payload[\"configuration\"] = %T, want map[string]any", p["configuration"])
 	}
-	idmap, ok := got["idmap"].(map[string]any)
-	if !ok {
-		t.Fatalf("configuration[\"idmap\"] = %T, want map[string]any", got["idmap"])
-	}
-	idmapDomain, ok := idmap["idmap_domain"].(map[string]any)
-	if !ok || idmapDomain["name"] != "TFTEST" {
-		t.Errorf("configuration[\"idmap\"][\"idmap_domain\"] = %v, want name=TFTEST", idmap["idmap_domain"])
-	}
 	trustedDomains, ok := got["trusted_domains"].([]any)
 	if !ok || len(trustedDomains) != 0 {
 		t.Errorf("configuration[\"trusted_domains\"] = %v, want empty array", got["trusted_domains"])
 	}
 }
 
-// TestUpdatePayload_ExistingIdmapIgnoredForOtherServiceType verifies that
-// existing.Idmap/TrustedDomains are only round-tripped when the existing
-// configuration's own service_type is ACTIVEDIRECTORY (defensive: the
-// discriminated union has different shapes for IPA/LDAP, which this
-// provider does not support in v1).
-func TestUpdatePayload_ExistingIdmapIgnoredForOtherServiceType(t *testing.T) {
+// TestUpdatePayload_TrustedDomainsIgnoredForOtherServiceType verifies that
+// existing.Configuration.TrustedDomains is only round-tripped when the
+// existing configuration's own top-level ServiceType is ACTIVEDIRECTORY
+// (defensive: trusted_domains doesn't exist on the IPA/LDAP variants).
+func TestUpdatePayload_TrustedDomainsIgnoredForOtherServiceType(t *testing.T) {
 	ctx := context.Background()
 	m := enabledModel(t, ctx)
 
@@ -448,7 +541,7 @@ func TestUpdatePayload_ExistingIdmapIgnoredForOtherServiceType(t *testing.T) {
 	existing := &directoryServicesAPI{
 		ServiceType: &serviceType,
 		Configuration: &directoryServicesConfigAPI{
-			Idmap: json.RawMessage(`{"should":"not appear"}`),
+			TrustedDomains: json.RawMessage(`["should not appear"]`),
 		},
 	}
 
@@ -460,8 +553,8 @@ func TestUpdatePayload_ExistingIdmapIgnoredForOtherServiceType(t *testing.T) {
 	if !ok {
 		t.Fatalf("payload[\"configuration\"] = %T, want map[string]any", p["configuration"])
 	}
-	if _, present := got["idmap"]; present {
-		t.Error("idmap should not be round-tripped when existing.ServiceType != ACTIVEDIRECTORY")
+	if _, present := got["trusted_domains"]; present {
+		t.Error("trusted_domains should not be round-tripped when existing.ServiceType != ACTIVEDIRECTORY")
 	}
 }
 
@@ -700,3 +793,618 @@ func TestResponseToDataSourceModel_StatusFields(t *testing.T) {
 		t.Errorf("StatusMsg = %v, want null", m.StatusMsg)
 	}
 }
+
+// ---------------------------------------------------------------------
+// LDAP / IPA / credential-variant / idmap / exactly-one-config coverage
+// (Plan 14 Task 1)
+// ---------------------------------------------------------------------
+
+// ldapEnabledModel returns a DirectoryServicesModel with enable=true,
+// service_type=LDAP, a valid LDAP_PLAIN credential, and a minimal valid
+// configuration_ldap block.
+func ldapEnabledModel(t *testing.T, ctx context.Context) *DirectoryServicesModel {
+	m := baseModel()
+	m.Enable = types.BoolValue(true)
+	m.ServiceType = types.StringValue("LDAP")
+	m.Credential = credentialObject(t, ctx, CredentialModel{
+		CredentialType: types.StringValue("LDAP_PLAIN"),
+		BindDN:         types.StringValue("cn=admin,dc=tftest,dc=lan"),
+		BindPW:         types.StringValue("hunter2"),
+	})
+	m.ConfigurationLDAP = validLDAPConfig(t, ctx)
+	return m
+}
+
+// ipaEnabledModel returns a DirectoryServicesModel with enable=true,
+// service_type=IPA, a valid KERBEROS_USER credential, and a minimal valid
+// configuration_ipa block.
+func ipaEnabledModel(t *testing.T, ctx context.Context) *DirectoryServicesModel {
+	m := baseModel()
+	m.Enable = types.BoolValue(true)
+	m.ServiceType = types.StringValue("IPA")
+	m.Credential = validCredential(t, ctx)
+	m.ConfigurationIPA = validIPAConfig(t, ctx)
+	return m
+}
+
+// TestUpdatePayload_LDAP_MinimalPayload verifies the LDAP configuration
+// payload shape when search_bases/attribute_maps are left unset: they must
+// be omitted entirely (server defaults apply), and credential_type
+// LDAP_ANONYMOUS produces a bare {"credential_type":"LDAP_ANONYMOUS"}.
+func TestUpdatePayload_LDAP_MinimalPayload(t *testing.T) {
+	ctx := context.Background()
+	m := ldapEnabledModel(t, ctx)
+	m.Credential = credentialObject(t, ctx, CredentialModel{
+		CredentialType: types.StringValue("LDAP_ANONYMOUS"),
+	})
+
+	p, diags := m.updatePayload(ctx, nil)
+	if diags.HasError() {
+		t.Fatalf("unexpected error: %v", diags)
+	}
+
+	if p["service_type"] != "LDAP" {
+		t.Errorf(`payload["service_type"] = %v, want "LDAP"`, p["service_type"])
+	}
+	gotCred, ok := p["credential"].(map[string]any)
+	if !ok || len(gotCred) != 1 || gotCred["credential_type"] != "LDAP_ANONYMOUS" {
+		t.Errorf(`payload["credential"] = %v, want {"credential_type":"LDAP_ANONYMOUS"}`, p["credential"])
+	}
+
+	gotConfig, ok := p["configuration"].(map[string]any)
+	if !ok {
+		t.Fatalf("payload[\"configuration\"] = %T, want map[string]any", p["configuration"])
+	}
+	if gotConfig["service_type"] != "LDAP" {
+		t.Errorf(`configuration["service_type"] = %v, want "LDAP"`, gotConfig["service_type"])
+	}
+	if gotConfig["basedn"] != "dc=tftest,dc=lan" {
+		t.Errorf(`configuration["basedn"] = %v, want "dc=tftest,dc=lan"`, gotConfig["basedn"])
+	}
+	urls, ok := gotConfig["server_urls"].([]string)
+	if !ok || len(urls) != 1 || urls[0] != "ldaps://ldap.tftest.lan" {
+		t.Errorf(`configuration["server_urls"] = %v, want ["ldaps://ldap.tftest.lan"]`, gotConfig["server_urls"])
+	}
+	if _, present := gotConfig["search_bases"]; present {
+		t.Error(`configuration["search_bases"] should be omitted when unset`)
+	}
+	if _, present := gotConfig["attribute_maps"]; present {
+		t.Error(`configuration["attribute_maps"] should be omitted when unset`)
+	}
+	if _, present := gotConfig["auxiliary_parameters"]; present {
+		t.Error(`configuration["auxiliary_parameters"] should be omitted when unset (null)`)
+	}
+}
+
+// TestUpdatePayload_LDAP_FullPayload verifies the LDAP configuration
+// payload shape when search_bases and attribute_maps ARE set: only the
+// leaf fields the caller actually set are included, following the same
+// three-way clearable-string convention as the rest of the package.
+func TestUpdatePayload_LDAP_FullPayload(t *testing.T) {
+	ctx := context.Background()
+	m := ldapEnabledModel(t, ctx)
+
+	searchBases, diags := types.ObjectValueFrom(ctx, ldapSearchBasesAttrTypes, LDAPSearchBasesModel{
+		BaseUser:     types.StringValue("ou=people,dc=tftest,dc=lan"),
+		BaseGroup:    types.StringNull(),
+		BaseNetgroup: types.StringNull(),
+	})
+	if diags.HasError() {
+		t.Fatalf("unexpected error building search_bases: %v", diags)
+	}
+
+	passwd, diags := types.ObjectValueFrom(ctx, ldapAttrMapPasswdAttrTypes, LDAPAttrMapPasswdModel{
+		UserObjectClass:   types.StringValue("posixAccount"),
+		UserName:          types.StringNull(),
+		UserUID:           types.StringNull(),
+		UserGID:           types.StringNull(),
+		UserGecos:         types.StringNull(),
+		UserHomeDirectory: types.StringNull(),
+		UserShell:         types.StringNull(),
+	})
+	if diags.HasError() {
+		t.Fatalf("unexpected error building attribute_maps.passwd: %v", diags)
+	}
+	attrMaps, diags := types.ObjectValueFrom(ctx, ldapAttributeMapsAttrTypes, LDAPAttributeMapsModel{
+		Passwd:   passwd,
+		Shadow:   types.ObjectNull(ldapAttrMapShadowAttrTypes),
+		Group:    types.ObjectNull(ldapAttrMapGroupAttrTypes),
+		Netgroup: types.ObjectNull(ldapAttrMapNetgroupAttrTypes),
+	})
+	if diags.HasError() {
+		t.Fatalf("unexpected error building attribute_maps: %v", diags)
+	}
+
+	var l LDAPConfigModel
+	diags = m.ConfigurationLDAP.As(ctx, &l, basetypes.ObjectAsOptions{})
+	if diags.HasError() {
+		t.Fatalf("unexpected error extracting LDAP config: %v", diags)
+	}
+	l.SearchBases = searchBases
+	l.AttributeMaps = attrMaps
+	obj, diags := types.ObjectValueFrom(ctx, ldapConfigAttrTypes, l)
+	if diags.HasError() {
+		t.Fatalf("unexpected error rebuilding LDAP config: %v", diags)
+	}
+	m.ConfigurationLDAP = obj
+
+	p, diags := m.updatePayload(ctx, nil)
+	if diags.HasError() {
+		t.Fatalf("unexpected error: %v", diags)
+	}
+	gotConfig := p["configuration"].(map[string]any)
+
+	sb, ok := gotConfig["search_bases"].(map[string]any)
+	if !ok {
+		t.Fatalf(`configuration["search_bases"] = %T, want map[string]any`, gotConfig["search_bases"])
+	}
+	if sb["base_user"] != "ou=people,dc=tftest,dc=lan" {
+		t.Errorf(`search_bases["base_user"] = %v, want "ou=people,dc=tftest,dc=lan"`, sb["base_user"])
+	}
+	if _, present := sb["base_group"]; present {
+		t.Error(`search_bases["base_group"] should be omitted when unset`)
+	}
+
+	am, ok := gotConfig["attribute_maps"].(map[string]any)
+	if !ok {
+		t.Fatalf(`configuration["attribute_maps"] = %T, want map[string]any`, gotConfig["attribute_maps"])
+	}
+	passwdOut, ok := am["passwd"].(map[string]any)
+	if !ok || passwdOut["user_object_class"] != "posixAccount" {
+		t.Errorf(`attribute_maps["passwd"]["user_object_class"] = %v, want "posixAccount"`, am["passwd"])
+	}
+	if _, present := am["shadow"]; present {
+		t.Error(`attribute_maps["shadow"] should be omitted when its whole block is unset`)
+	}
+}
+
+// TestUpdatePayload_IPA_Payload verifies the IPA configuration payload
+// shape: target_server/hostname/domain/basedn always present, smb_domain
+// omitted when unset (the normal case — it's server-detected during join).
+func TestUpdatePayload_IPA_Payload(t *testing.T) {
+	ctx := context.Background()
+	m := ipaEnabledModel(t, ctx)
+
+	p, diags := m.updatePayload(ctx, nil)
+	if diags.HasError() {
+		t.Fatalf("unexpected error: %v", diags)
+	}
+
+	if p["service_type"] != "IPA" {
+		t.Errorf(`payload["service_type"] = %v, want "IPA"`, p["service_type"])
+	}
+	gotConfig, ok := p["configuration"].(map[string]any)
+	if !ok {
+		t.Fatalf("payload[\"configuration\"] = %T, want map[string]any", p["configuration"])
+	}
+	wantConfig := map[string]any{
+		"service_type":  "IPA",
+		"target_server": "ipa.tfipa.lan",
+		"hostname":      "tn2510",
+		"domain":        "tfipa.lan",
+		"basedn":        "dc=tfipa,dc=lan",
+	}
+	for k, v := range wantConfig {
+		if gotConfig[k] != v {
+			t.Errorf("configuration[%q] = %v, want %v", k, gotConfig[k], v)
+		}
+	}
+	if _, present := gotConfig["smb_domain"]; present {
+		t.Error(`configuration["smb_domain"] should be omitted when unset`)
+	}
+}
+
+// TestUpdatePayload_CredentialVariants table-tests credentialPayload for
+// all five probed credential_type values.
+func TestUpdatePayload_CredentialVariants(t *testing.T) {
+	tests := []struct {
+		name string
+		cred CredentialModel
+		want map[string]any
+	}{
+		{
+			name: "KERBEROS_USER",
+			cred: CredentialModel{
+				CredentialType: types.StringValue("KERBEROS_USER"),
+				Username:       types.StringValue("Administrator"),
+				Password:       types.StringValue("hunter2"),
+			},
+			want: map[string]any{"credential_type": "KERBEROS_USER", "username": "Administrator", "password": "hunter2"},
+		},
+		{
+			name: "KERBEROS_PRINCIPAL",
+			cred: CredentialModel{
+				CredentialType: types.StringValue("KERBEROS_PRINCIPAL"),
+				Principal:      types.StringValue("TN2510$@TFTEST.LAN"),
+			},
+			want: map[string]any{"credential_type": "KERBEROS_PRINCIPAL", "principal": "TN2510$@TFTEST.LAN"},
+		},
+		{
+			name: "LDAP_PLAIN",
+			cred: CredentialModel{
+				CredentialType: types.StringValue("LDAP_PLAIN"),
+				BindDN:         types.StringValue("cn=admin,dc=tftest,dc=lan"),
+				BindPW:         types.StringValue("hunter2"),
+			},
+			want: map[string]any{"credential_type": "LDAP_PLAIN", "binddn": "cn=admin,dc=tftest,dc=lan", "bindpw": "hunter2"},
+		},
+		{
+			name: "LDAP_ANONYMOUS",
+			cred: CredentialModel{
+				CredentialType: types.StringValue("LDAP_ANONYMOUS"),
+			},
+			want: map[string]any{"credential_type": "LDAP_ANONYMOUS"},
+		},
+		{
+			name: "LDAP_MTLS",
+			cred: CredentialModel{
+				CredentialType:    types.StringValue("LDAP_MTLS"),
+				ClientCertificate: types.StringValue("my-client-cert"),
+			},
+			want: map[string]any{"credential_type": "LDAP_MTLS", "client_certificate": "my-client-cert"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if diags := validateCredential(tt.cred); diags.HasError() {
+				t.Fatalf("unexpected validation error: %v", diags)
+			}
+			got := credentialPayload(tt.cred)
+			if len(got) != len(tt.want) {
+				t.Fatalf("credentialPayload() = %v, want %v", got, tt.want)
+			}
+			for k, v := range tt.want {
+				if got[k] != v {
+					t.Errorf("credentialPayload()[%q] = %v, want %v", k, got[k], v)
+				}
+			}
+		})
+	}
+}
+
+// TestValidateCredential_MissingFields table-tests the per-credential-type
+// required-field diagnostics.
+func TestValidateCredential_MissingFields(t *testing.T) {
+	tests := []struct {
+		name string
+		cred CredentialModel
+	}{
+		{"KERBEROS_USER missing username", CredentialModel{CredentialType: types.StringValue("KERBEROS_USER"), Password: types.StringValue("x")}},
+		{"KERBEROS_USER missing password", CredentialModel{CredentialType: types.StringValue("KERBEROS_USER"), Username: types.StringValue("x")}},
+		{"KERBEROS_PRINCIPAL missing principal", CredentialModel{CredentialType: types.StringValue("KERBEROS_PRINCIPAL")}},
+		{"LDAP_PLAIN missing binddn", CredentialModel{CredentialType: types.StringValue("LDAP_PLAIN"), BindPW: types.StringValue("x")}},
+		{"LDAP_PLAIN missing bindpw", CredentialModel{CredentialType: types.StringValue("LDAP_PLAIN"), BindDN: types.StringValue("x")}},
+		{"LDAP_MTLS missing client_certificate", CredentialModel{CredentialType: types.StringValue("LDAP_MTLS")}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if diags := validateCredential(tt.cred); !diags.HasError() {
+				t.Fatal("expected a validation error, got none")
+			}
+		})
+	}
+}
+
+// TestUpdatePayload_ExactlyOneConfigBlock_NoneSet verifies the preflight
+// error when enable=true and service_type is set, but no configuration_*
+// block is set at all.
+func TestUpdatePayload_ExactlyOneConfigBlock_NoneSet(t *testing.T) {
+	ctx := context.Background()
+	m := baseModel()
+	m.Enable = types.BoolValue(true)
+	m.ServiceType = types.StringValue("LDAP")
+	m.Credential = credentialObject(t, ctx, CredentialModel{CredentialType: types.StringValue("LDAP_ANONYMOUS")})
+
+	_, diags := m.updatePayload(ctx, nil)
+	if !diags.HasError() {
+		t.Fatal("expected an error when no configuration_* block is set")
+	}
+}
+
+// TestUpdatePayload_ExactlyOneConfigBlock_TwoSet verifies the preflight
+// error when more than one configuration_* block is set simultaneously.
+func TestUpdatePayload_ExactlyOneConfigBlock_TwoSet(t *testing.T) {
+	ctx := context.Background()
+	m := enabledModel(t, ctx) // has configuration_activedirectory set
+	m.ConfigurationLDAP = validLDAPConfig(t, ctx)
+
+	_, diags := m.updatePayload(ctx, nil)
+	if !diags.HasError() {
+		t.Fatal("expected an error when two configuration_* blocks are set")
+	}
+}
+
+// TestUpdatePayload_ExactlyOneConfigBlock_ServiceTypeMismatch verifies the
+// preflight error when exactly one configuration_* block is set, but it
+// doesn't match service_type.
+func TestUpdatePayload_ExactlyOneConfigBlock_ServiceTypeMismatch(t *testing.T) {
+	ctx := context.Background()
+	m := baseModel()
+	m.Enable = types.BoolValue(true)
+	m.ServiceType = types.StringValue("LDAP")
+	m.Credential = credentialObject(t, ctx, CredentialModel{CredentialType: types.StringValue("LDAP_ANONYMOUS")})
+	m.ConfigurationActiveDirectory = validADConfig(t, ctx) // wrong block for service_type=LDAP
+
+	_, diags := m.updatePayload(ctx, nil)
+	if !diags.HasError() {
+		t.Fatal("expected an error when the set configuration_* block doesn't match service_type")
+	}
+}
+
+// TestUpdatePayload_AD_IdmapFromModel verifies that an explicitly-set
+// idmap block (builtin + idmap_domain RID) is reconstructed byte-for-byte
+// into the outgoing "configuration.idmap" payload.
+func TestUpdatePayload_AD_IdmapFromModel(t *testing.T) {
+	ctx := context.Background()
+	m := enabledModel(t, ctx)
+
+	builtin := idmapBuiltinObject(t, ctx, IdmapBuiltinModel{
+		Name:      types.StringNull(),
+		RangeLow:  types.Int64Value(90000001),
+		RangeHigh: types.Int64Value(100000000),
+	})
+	idmapDomain := idmapDomainObject(t, ctx, IdmapDomainModel{
+		IdmapBackend: types.StringValue("RID"),
+		Name:         types.StringValue("TFTEST"),
+		RangeLow:     types.Int64Value(100000001),
+		RangeHigh:    types.Int64Value(200000000),
+		SSSDCompat:   types.BoolValue(false),
+		SchemaMode:   types.StringNull(),
+	})
+	idmap := idmapObject(t, ctx, builtin, idmapDomain)
+
+	var ad ActiveDirectoryConfigModel
+	if diags := m.ConfigurationActiveDirectory.As(ctx, &ad, basetypes.ObjectAsOptions{}); diags.HasError() {
+		t.Fatalf("unexpected error extracting AD config: %v", diags)
+	}
+	ad.Idmap = idmap
+	m.ConfigurationActiveDirectory = adConfigObject(t, ctx, ad)
+
+	p, diags := m.updatePayload(ctx, nil)
+	if diags.HasError() {
+		t.Fatalf("unexpected error: %v", diags)
+	}
+
+	gotConfig := p["configuration"].(map[string]any)
+	gotIdmap, ok := gotConfig["idmap"].(map[string]any)
+	if !ok {
+		t.Fatalf(`configuration["idmap"] = %T, want map[string]any`, gotConfig["idmap"])
+	}
+	gotBuiltin, ok := gotIdmap["builtin"].(map[string]any)
+	if !ok || gotBuiltin["range_low"] != int64(90000001) || gotBuiltin["range_high"] != int64(100000000) {
+		t.Errorf(`idmap["builtin"] = %v, want range_low=90000001 range_high=100000000`, gotIdmap["builtin"])
+	}
+	gotDomain, ok := gotIdmap["idmap_domain"].(map[string]any)
+	if !ok || gotDomain["idmap_backend"] != "RID" || gotDomain["name"] != "TFTEST" {
+		t.Errorf(`idmap["idmap_domain"] = %v, want idmap_backend=RID name=TFTEST`, gotIdmap["idmap_domain"])
+	}
+}
+
+// TestUpdatePayload_AD_IdmapOmittedWhenUnset verifies that a null/unset
+// idmap block is omitted entirely from the outgoing configuration payload
+// (back-compat: the existing AD acceptance test config, which never sets
+// idmap, must remain valid — see enabledModel/validADConfig, which leave
+// Idmap null).
+func TestUpdatePayload_AD_IdmapOmittedWhenUnset(t *testing.T) {
+	ctx := context.Background()
+	m := enabledModel(t, ctx)
+
+	p, diags := m.updatePayload(ctx, nil)
+	if diags.HasError() {
+		t.Fatalf("unexpected error: %v", diags)
+	}
+	gotConfig := p["configuration"].(map[string]any)
+	if _, present := gotConfig["idmap"]; present {
+		t.Error(`configuration["idmap"] should be omitted when the idmap block is unset`)
+	}
+}
+
+// TestUpdatePayload_AD_IdmapDomainADRequiresSchemaMode verifies the
+// idmap_domain preflight: idmap_backend "AD" requires schema_mode.
+func TestUpdatePayload_AD_IdmapDomainADRequiresSchemaMode(t *testing.T) {
+	ctx := context.Background()
+	m := enabledModel(t, ctx)
+
+	idmapDomain := idmapDomainObject(t, ctx, IdmapDomainModel{
+		IdmapBackend: types.StringValue("AD"),
+		SchemaMode:   types.StringNull(), // missing -> should error
+	})
+	idmap := idmapObject(t, ctx, types.ObjectNull(idmapBuiltinAttrTypes), idmapDomain)
+
+	var ad ActiveDirectoryConfigModel
+	if diags := m.ConfigurationActiveDirectory.As(ctx, &ad, basetypes.ObjectAsOptions{}); diags.HasError() {
+		t.Fatalf("unexpected error extracting AD config: %v", diags)
+	}
+	ad.Idmap = idmap
+	m.ConfigurationActiveDirectory = adConfigObject(t, ctx, ad)
+
+	_, diags := m.updatePayload(ctx, nil)
+	if !diags.HasError() {
+		t.Fatal("expected an error when idmap_backend is AD but schema_mode is unset")
+	}
+}
+
+// TestResponseToModel_LDAPConfig verifies the mapper fills
+// ConfigurationLDAP (and leaves AD/IPA null) when service_type is LDAP,
+// including search_bases/attribute_maps sub-objects.
+func TestResponseToModel_LDAPConfig(t *testing.T) {
+	ctx := context.Background()
+	serviceType := "LDAP"
+	api := &directoryServicesAPI{
+		ID:          1,
+		ServiceType: &serviceType,
+		Enable:      true,
+		Timeout:     10,
+		Configuration: &directoryServicesConfigAPI{
+			BaseDN:               "dc=tftest,dc=lan",
+			ValidateCertificates: true,
+			ServerURLs:           []string{"ldaps://ldap.tftest.lan"},
+			StartTLS:             false,
+			Schema:               "RFC2307",
+			SearchBases: &directoryServicesLDAPSearchBasesAPI{
+				BaseUser: strPtr("ou=people,dc=tftest,dc=lan"),
+			},
+			AttributeMaps: &directoryServicesLDAPAttributeMapsAPI{
+				Passwd: &directoryServicesLDAPAttrMapPasswdAPI{UserObjectClass: strPtr("posixAccount")},
+			},
+		},
+	}
+
+	m := &DirectoryServicesModel{}
+	diags := responseToModel(ctx, api, m)
+	if diags.HasError() {
+		t.Fatalf("unexpected error: %v", diags)
+	}
+	if !m.ConfigurationActiveDirectory.IsNull() {
+		t.Error("ConfigurationActiveDirectory should be null when service_type is LDAP")
+	}
+	if !m.ConfigurationIPA.IsNull() {
+		t.Error("ConfigurationIPA should be null when service_type is LDAP")
+	}
+	if m.ConfigurationLDAP.IsNull() {
+		t.Fatal("ConfigurationLDAP should not be null when service_type is LDAP")
+	}
+
+	var l LDAPConfigModel
+	diags = m.ConfigurationLDAP.As(ctx, &l, basetypes.ObjectAsOptions{})
+	if diags.HasError() {
+		t.Fatalf("unexpected error extracting LDAP config: %v", diags)
+	}
+	if l.BaseDN.ValueString() != "dc=tftest,dc=lan" {
+		t.Errorf("BaseDN = %q, want dc=tftest,dc=lan", l.BaseDN.ValueString())
+	}
+	var urls []string
+	diags = l.ServerURLs.ElementsAs(ctx, &urls, false)
+	if diags.HasError() || len(urls) != 1 || urls[0] != "ldaps://ldap.tftest.lan" {
+		t.Errorf("ServerURLs = %v, want [ldaps://ldap.tftest.lan]", urls)
+	}
+
+	var sb LDAPSearchBasesModel
+	diags = l.SearchBases.As(ctx, &sb, basetypes.ObjectAsOptions{})
+	if diags.HasError() {
+		t.Fatalf("unexpected error extracting search_bases: %v", diags)
+	}
+	if sb.BaseUser.ValueString() != "ou=people,dc=tftest,dc=lan" {
+		t.Errorf("SearchBases.BaseUser = %q, want ou=people,dc=tftest,dc=lan", sb.BaseUser.ValueString())
+	}
+
+	var am LDAPAttributeMapsModel
+	diags = l.AttributeMaps.As(ctx, &am, basetypes.ObjectAsOptions{})
+	if diags.HasError() {
+		t.Fatalf("unexpected error extracting attribute_maps: %v", diags)
+	}
+	var passwd LDAPAttrMapPasswdModel
+	diags = am.Passwd.As(ctx, &passwd, basetypes.ObjectAsOptions{})
+	if diags.HasError() || passwd.UserObjectClass.ValueString() != "posixAccount" {
+		t.Errorf("AttributeMaps.Passwd.UserObjectClass = %q, want posixAccount", passwd.UserObjectClass.ValueString())
+	}
+}
+
+// TestResponseToModel_IPAConfig verifies the mapper fills ConfigurationIPA
+// (and leaves AD/LDAP null) when service_type is IPA.
+func TestResponseToModel_IPAConfig(t *testing.T) {
+	ctx := context.Background()
+	serviceType := "IPA"
+	api := &directoryServicesAPI{
+		ID:          1,
+		ServiceType: &serviceType,
+		Enable:      true,
+		Timeout:     10,
+		Configuration: &directoryServicesConfigAPI{
+			Hostname:             "tn2510",
+			Domain:               "tfipa.lan",
+			BaseDN:               "dc=tfipa,dc=lan",
+			TargetServer:         "ipa.tfipa.lan",
+			ValidateCertificates: true,
+		},
+	}
+
+	m := &DirectoryServicesModel{}
+	diags := responseToModel(ctx, api, m)
+	if diags.HasError() {
+		t.Fatalf("unexpected error: %v", diags)
+	}
+	if !m.ConfigurationActiveDirectory.IsNull() || !m.ConfigurationLDAP.IsNull() {
+		t.Error("ConfigurationActiveDirectory/ConfigurationLDAP should be null when service_type is IPA")
+	}
+	if m.ConfigurationIPA.IsNull() {
+		t.Fatal("ConfigurationIPA should not be null when service_type is IPA")
+	}
+
+	var ipa IPAConfigModel
+	diags = m.ConfigurationIPA.As(ctx, &ipa, basetypes.ObjectAsOptions{})
+	if diags.HasError() {
+		t.Fatalf("unexpected error extracting IPA config: %v", diags)
+	}
+	if ipa.TargetServer.ValueString() != "ipa.tfipa.lan" {
+		t.Errorf("TargetServer = %q, want ipa.tfipa.lan", ipa.TargetServer.ValueString())
+	}
+	if !ipa.SMBDomain.IsNull() {
+		t.Error("SMBDomain should be null when the API response omits it")
+	}
+}
+
+// TestResponseToModel_ADIdmapReadBack verifies the mapper decodes
+// configuration.idmap into the new explicit ActiveDirectoryConfigModel.Idmap
+// object, replacing the old verbatim-JSON round-trip.
+func TestResponseToModel_ADIdmapReadBack(t *testing.T) {
+	ctx := context.Background()
+	serviceType := "ACTIVEDIRECTORY"
+	api := &directoryServicesAPI{
+		ID:          1,
+		ServiceType: &serviceType,
+		Enable:      true,
+		Timeout:     10,
+		Configuration: &directoryServicesConfigAPI{
+			Hostname: "tn2510",
+			Domain:   "TFTEST.LAN",
+			Idmap: &directoryServicesADIdmapAPI{
+				Builtin: &directoryServicesIdmapRangeAPI{RangeLow: 90000001, RangeHigh: 100000000},
+				IdmapDomain: &directoryServicesIdmapDomainAPI{
+					IdmapBackend: "RID",
+					Name:         strPtr("TFTEST"),
+					RangeLow:     100000001,
+					RangeHigh:    200000000,
+					SSSDCompat:   false,
+				},
+			},
+		},
+	}
+
+	m := &DirectoryServicesModel{}
+	diags := responseToModel(ctx, api, m)
+	if diags.HasError() {
+		t.Fatalf("unexpected error: %v", diags)
+	}
+
+	var ad ActiveDirectoryConfigModel
+	diags = m.ConfigurationActiveDirectory.As(ctx, &ad, basetypes.ObjectAsOptions{})
+	if diags.HasError() {
+		t.Fatalf("unexpected error extracting AD config: %v", diags)
+	}
+	if ad.Idmap.IsNull() {
+		t.Fatal("Idmap should not be null when the API response includes it")
+	}
+
+	var idm IdmapModel
+	diags = ad.Idmap.As(ctx, &idm, basetypes.ObjectAsOptions{})
+	if diags.HasError() {
+		t.Fatalf("unexpected error extracting idmap: %v", diags)
+	}
+	var builtin IdmapBuiltinModel
+	diags = idm.Builtin.As(ctx, &builtin, basetypes.ObjectAsOptions{})
+	if diags.HasError() || builtin.RangeLow.ValueInt64() != 90000001 || builtin.RangeHigh.ValueInt64() != 100000000 {
+		t.Errorf("idmap.builtin = %+v, want range_low=90000001 range_high=100000000", builtin)
+	}
+	var domain IdmapDomainModel
+	diags = idm.IdmapDomain.As(ctx, &domain, basetypes.ObjectAsOptions{})
+	if diags.HasError() || domain.IdmapBackend.ValueString() != "RID" || domain.Name.ValueString() != "TFTEST" {
+		t.Errorf("idmap.idmap_domain = %+v, want idmap_backend=RID name=TFTEST", domain)
+	}
+}
+
+// strPtr returns a pointer to s, for building API structs with nullable
+// string fields inline in test literals.
+func strPtr(s string) *string { return &s }

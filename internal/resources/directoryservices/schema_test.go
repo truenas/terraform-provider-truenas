@@ -28,11 +28,10 @@ func TestSchema_IDIsComputed(t *testing.T) {
 	}
 }
 
-// TestSchema_ServiceTypeRestrictedToActiveDirectory verifies that
-// "service_type" carries a validator restricting it to "ACTIVEDIRECTORY"
-// only (IPA/LDAP deferred per the task-8 brief), even though the API
-// itself accepts all three.
-func TestSchema_ServiceTypeRestrictedToActiveDirectory(t *testing.T) {
+// TestSchema_ServiceTypeAllowsThreeTypes verifies that "service_type"
+// carries a validator restricting it to the three service types the
+// middleware itself supports: ACTIVEDIRECTORY, LDAP, IPA.
+func TestSchema_ServiceTypeAllowsThreeTypes(t *testing.T) {
 	s := resourceSchema()
 
 	attr, ok := s.Attributes["service_type"]
@@ -47,7 +46,7 @@ func TestSchema_ServiceTypeRestrictedToActiveDirectory(t *testing.T) {
 		t.Error("'service_type' should be Optional+Computed (nullable on the wire)")
 	}
 	if len(strAttr.Validators) == 0 {
-		t.Fatal("'service_type' should have a validator restricting it to ACTIVEDIRECTORY")
+		t.Fatal("'service_type' should have a validator restricting it to ACTIVEDIRECTORY/LDAP/IPA")
 	}
 }
 
@@ -114,6 +113,9 @@ func TestSchema_CredentialPasswordIsWriteOnly(t *testing.T) {
 	if pwStr.IsComputed() {
 		t.Error("'password' must not be Computed (incompatible with WriteOnly)")
 	}
+	if pwStr.IsRequired() {
+		t.Error("'password' should be Optional (only required when credential_type is KERBEROS_USER, enforced at payload time)")
+	}
 
 	credTypeAttr, ok := nested.Attributes["credential_type"]
 	if !ok {
@@ -124,7 +126,138 @@ func TestSchema_CredentialPasswordIsWriteOnly(t *testing.T) {
 		t.Fatalf("'credential_type' attribute is %T, want schema.StringAttribute", credTypeAttr)
 	}
 	if len(credTypeStr.Validators) == 0 {
-		t.Error("'credential_type' should have a validator restricting it to KERBEROS_USER")
+		t.Error("'credential_type' should have a validator restricting it to the five known types")
+	}
+}
+
+// TestSchema_CredentialLDAPVariantFields verifies the credential block's
+// new LDAP/Kerberos-principal fields: bindpw is Sensitive+WriteOnly (like
+// password); binddn/client_certificate/principal are plain Optional
+// (persisted normally, not sensitive).
+func TestSchema_CredentialLDAPVariantFields(t *testing.T) {
+	s := resourceSchema()
+
+	credAttr := s.Attributes["credential"].(schema.SingleNestedAttribute)
+
+	bindpw, ok := credAttr.Attributes["bindpw"].(schema.StringAttribute)
+	if !ok {
+		t.Fatal("credential schema missing 'bindpw' attribute")
+	}
+	if !bindpw.IsSensitive() || !bindpw.WriteOnly {
+		t.Error("'bindpw' should be Sensitive+WriteOnly")
+	}
+	if !bindpw.IsOptional() || bindpw.IsComputed() {
+		t.Error("'bindpw' should be Optional (not Computed)")
+	}
+
+	for _, name := range []string{"binddn", "client_certificate", "principal"} {
+		attr, ok := credAttr.Attributes[name].(schema.StringAttribute)
+		if !ok {
+			t.Fatalf("credential schema missing %q attribute", name)
+		}
+		if !attr.IsOptional() {
+			t.Errorf("%q should be Optional", name)
+		}
+		if attr.IsSensitive() || attr.WriteOnly {
+			t.Errorf("%q should NOT be Sensitive/WriteOnly", name)
+		}
+	}
+
+	username, ok := credAttr.Attributes["username"].(schema.StringAttribute)
+	if !ok {
+		t.Fatal("credential schema missing 'username' attribute")
+	}
+	if !username.IsOptional() || username.IsRequired() {
+		t.Error("'username' should be Optional (only required when credential_type is KERBEROS_USER)")
+	}
+}
+
+// TestSchema_ConfigurationLDAPAndIPAOptionalComputed verifies the two new
+// discriminated-union blocks exist as Optional+Computed SingleNestedAttribute
+// with their Required leaf fields intact.
+func TestSchema_ConfigurationLDAPAndIPAOptionalComputed(t *testing.T) {
+	s := resourceSchema()
+
+	ldapAttr, ok := s.Attributes["configuration_ldap"].(schema.SingleNestedAttribute)
+	if !ok {
+		t.Fatal("schema missing 'configuration_ldap' attribute")
+	}
+	if !ldapAttr.IsOptional() || !ldapAttr.IsComputed() {
+		t.Error("'configuration_ldap' should be Optional+Computed")
+	}
+	serverURLs, ok := ldapAttr.Attributes["server_urls"].(schema.ListAttribute)
+	if !ok {
+		t.Fatal("configuration_ldap schema missing 'server_urls' attribute")
+	}
+	if !serverURLs.IsRequired() {
+		t.Error("'server_urls' should be Required")
+	}
+	basedn, ok := ldapAttr.Attributes["basedn"].(schema.StringAttribute)
+	if !ok || !basedn.IsRequired() {
+		t.Error("configuration_ldap 'basedn' should be Required")
+	}
+	if _, ok := ldapAttr.Attributes["search_bases"].(schema.SingleNestedAttribute); !ok {
+		t.Error("configuration_ldap missing 'search_bases' nested block")
+	}
+	if _, ok := ldapAttr.Attributes["attribute_maps"].(schema.SingleNestedAttribute); !ok {
+		t.Error("configuration_ldap missing 'attribute_maps' nested block")
+	}
+
+	ipaAttr, ok := s.Attributes["configuration_ipa"].(schema.SingleNestedAttribute)
+	if !ok {
+		t.Fatal("schema missing 'configuration_ipa' attribute")
+	}
+	if !ipaAttr.IsOptional() || !ipaAttr.IsComputed() {
+		t.Error("'configuration_ipa' should be Optional+Computed")
+	}
+	for _, name := range []string{"target_server", "hostname", "domain", "basedn"} {
+		child, ok := ipaAttr.Attributes[name].(schema.StringAttribute)
+		if !ok || !child.IsRequired() {
+			t.Errorf("configuration_ipa %q should be Required", name)
+		}
+	}
+}
+
+// TestSchema_IdmapBlock verifies configuration_activedirectory.idmap is
+// Optional+Computed (back-compat: unset omits it from the payload, and a
+// read-back populates it — see updatePayload's doc comment), and that
+// idmap_domain's idmap_backend is restricted to the two backends this
+// provider version models (AD, RID).
+func TestSchema_IdmapBlock(t *testing.T) {
+	s := resourceSchema()
+
+	adAttr := s.Attributes["configuration_activedirectory"].(schema.SingleNestedAttribute)
+	idmapAttr, ok := adAttr.Attributes["idmap"].(schema.SingleNestedAttribute)
+	if !ok {
+		t.Fatal("configuration_activedirectory schema missing 'idmap' attribute")
+	}
+	if !idmapAttr.IsOptional() || !idmapAttr.IsComputed() {
+		t.Error("'idmap' should be Optional+Computed")
+	}
+
+	builtinAttr, ok := idmapAttr.Attributes["builtin"].(schema.SingleNestedAttribute)
+	if !ok {
+		t.Fatal("idmap schema missing 'builtin' attribute")
+	}
+	for _, name := range []string{"name", "range_low", "range_high"} {
+		if _, ok := builtinAttr.Attributes[name]; !ok {
+			t.Errorf("idmap.builtin missing %q attribute", name)
+		}
+	}
+
+	domainAttr, ok := idmapAttr.Attributes["idmap_domain"].(schema.SingleNestedAttribute)
+	if !ok {
+		t.Fatal("idmap schema missing 'idmap_domain' attribute")
+	}
+	backend, ok := domainAttr.Attributes["idmap_backend"].(schema.StringAttribute)
+	if !ok {
+		t.Fatal("idmap_domain schema missing 'idmap_backend' attribute")
+	}
+	if !backend.IsRequired() {
+		t.Error("'idmap_backend' should be Required")
+	}
+	if len(backend.Validators) == 0 {
+		t.Error("'idmap_backend' should have a validator restricting it to AD/RID")
 	}
 }
 
