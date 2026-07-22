@@ -85,14 +85,18 @@ func restoreTwoFactorAuth(t *testing.T, orig twoFactorAuthOriginal) {
 // safety net if the Terraform steps fail.
 //
 // SAFETY: this test — and the resource's updatePayload — must NEVER set
-// "enabled". The generated config below intentionally omits it, so
-// updatePayload omits it too (Optional+Computed, guarded), leaving the
-// box's system-wide 2FA enable/disable state untouched by this test.
-// (Separately, a one-off scripted SAFETY VERIFICATION documented in
-// task-3-report.md confirmed live that enabling 2FA does not break the
-// provider's own API-key authentication — that check is not part of this
-// committed test, since flipping "enabled" here would violate the
-// never-flip-enabled contract this test exists to enforce.)
+// "enabled". The generated config below intentionally omits it, and
+// updatePayload sources inclusion from req.Config (not req.Plan): a field
+// is only ever included in the auth.twofactor.update payload when the
+// user's HCL explicitly sets it, so an omitted "enabled" attribute stays
+// null in config and is correctly left out of every request this test's
+// steps issue, leaving the box's system-wide 2FA enable/disable state
+// untouched by this test. (Separately, a one-off scripted SAFETY
+// VERIFICATION documented in task-3-report.md confirmed live that enabling
+// 2FA does not break the provider's own API-key authentication — that
+// check is not part of this committed test, since flipping "enabled" here
+// would violate the never-flip-enabled contract this test exists to
+// enforce.)
 func TestAccTwoFactorAuth_setAndRestore(t *testing.T) {
 	acctest.DisruptiveCheck(t)
 
@@ -129,8 +133,9 @@ func TestAccTwoFactorAuth_setAndRestore(t *testing.T) {
 }
 
 // testAccTwoFactorAuthConfig sets ONLY "window" — "enabled" and "services"
-// are deliberately omitted so they are never included in updatePayload,
-// per this resource's never-flip-enabled safety contract.
+// are deliberately omitted from the HCL, so they stay null in req.Config
+// and updatePayload (config-driven) never includes them, per this
+// resource's never-flip-enabled safety contract.
 func testAccTwoFactorAuthConfig(window int64) string {
 	return fmt.Sprintf(`
 resource "truenas_twofactor_auth" "test" {

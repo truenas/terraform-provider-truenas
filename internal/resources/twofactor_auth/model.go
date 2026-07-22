@@ -106,14 +106,27 @@ func responseToDataSourceModel(ctx context.Context, api *twoFactorAuthAPI, m *Tw
 }
 
 // updatePayload builds the auth.twofactor.update argument. Every field is
-// guarded: each is only included when known (Optional+Computed), so an
-// unset optional is omitted entirely and the TrueNAS-side current value is
-// left unchanged rather than overwritten with an explicit zero value. This
-// is what makes it possible for the committed acceptance test to mutate
-// "window" alone without ever touching "enabled": as long as the test
-// config never sets "enabled", it is omitted here and the box's current
-// value is left untouched by auth.twofactor.update's partial-update
-// semantics.
+// guarded: each is only included when non-null/non-unknown, so an unset
+// optional is omitted entirely and the TrueNAS-side current value is left
+// unchanged rather than overwritten with an explicit zero value.
+//
+// CALLERS MUST invoke this on a model populated from req.Config
+// (req.Config.Get), never from req.Plan. "enabled", "window", and
+// "services" are Optional+Computed with UseStateForUnknown plan modifiers:
+// for any of them left unset by the user, the *plan* value is not
+// null — the modifier copies the prior state's value into the plan so
+// Terraform can show a stable diff. Building the payload from the plan
+// would therefore resend a field's last-known value on every Create/Update
+// even when the user never configured it, silently reasserting it against
+// whatever the box's current value happens to be (a revert race if that
+// value changed since the last read). req.Config, by contrast, stays null
+// for anything the user did not set in HCL regardless of plan modifiers,
+// so inclusion here is driven strictly by what the user explicitly
+// configured. This is what makes it possible for the committed acceptance
+// test to mutate "window" alone without ever touching "enabled": as long
+// as the test config never sets "enabled", it stays null in req.Config, is
+// omitted here, and the box's current value is left untouched by
+// auth.twofactor.update's partial-update semantics.
 func (m *TwoFactorAuthModel) updatePayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	p := map[string]any{}

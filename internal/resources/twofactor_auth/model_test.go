@@ -46,14 +46,15 @@ func TestUpdatePayload_AllFieldsSet(t *testing.T) {
 }
 
 // TestUpdatePayload_UnsetOptionalsOmitted verifies that every field is
-// omitted when null/unknown, so the current TrueNAS-side value is left
+// omitted when null (the real-world req.Config shape for an attribute the
+// user never set in HCL), so the current TrueNAS-side value is left
 // unchanged rather than overwritten with a zero value. This is the
 // mechanism the committed acceptance test relies on to mutate "window"
 // without ever touching "enabled".
 func TestUpdatePayload_UnsetOptionalsOmitted(t *testing.T) {
 	m := &TwoFactorAuthModel{
 		Enabled:  types.BoolNull(),
-		Window:   types.Int64Unknown(),
+		Window:   types.Int64Null(),
 		Services: types.ObjectNull(servicesAttrTypes),
 	}
 
@@ -66,15 +67,22 @@ func TestUpdatePayload_UnsetOptionalsOmitted(t *testing.T) {
 	}
 }
 
-// TestUpdatePayload_WindowOnly verifies the exact shape the committed
-// acceptance test relies on: only "window" set, "enabled" and "services"
-// left unset, so "enabled" is never included in (and therefore never
-// changed by) the payload.
+// TestUpdatePayload_WindowOnly verifies the shape updatePayload actually
+// sees on the real Create/Update path when the caller passes a model built
+// from req.Config (as resource.go now does): the acceptance test's HCL
+// sets only "window", so "enabled" and "services" are null in config —
+// NOT Unknown. (Unknown never occurs in req.Config: Terraform resolves
+// config to either a concrete value or null before the provider ever sees
+// it; Unknown only ever appears in the plan, e.g. via a
+// UseStateForUnknown-populated echo of the prior state for an attribute
+// the user didn't configure — which is exactly the shape that must NOT
+// drive payload inclusion, per updatePayload's doc comment.) So this test
+// asserts "enabled" and "services" are omitted and "window" is included.
 func TestUpdatePayload_WindowOnly(t *testing.T) {
 	m := &TwoFactorAuthModel{
 		Enabled:  types.BoolNull(),
 		Window:   types.Int64Value(60),
-		Services: types.ObjectUnknown(servicesAttrTypes),
+		Services: types.ObjectNull(servicesAttrTypes),
 	}
 
 	p, diags := m.updatePayload(context.Background())
@@ -89,6 +97,35 @@ func TestUpdatePayload_WindowOnly(t *testing.T) {
 	}
 	if p["window"] != int64(60) {
 		t.Errorf("payload[%q] = %v, want 60", "window", p["window"])
+	}
+	if len(p) != 1 {
+		t.Errorf("payload has %d keys (%v), want 1", len(p), p)
+	}
+}
+
+// TestUpdatePayload_EnabledExplicitlySet verifies that a user who DOES set
+// "enabled" in their HCL config still gets it included in the payload:
+// the config-driven guard in updatePayload must not suppress
+// explicitly-configured values, only unconfigured (null-in-config) ones.
+func TestUpdatePayload_EnabledExplicitlySet(t *testing.T) {
+	m := &TwoFactorAuthModel{
+		Enabled:  types.BoolValue(true),
+		Window:   types.Int64Null(),
+		Services: types.ObjectNull(servicesAttrTypes),
+	}
+
+	p, diags := m.updatePayload(context.Background())
+	if diags.HasError() {
+		t.Fatalf("unexpected error: %v", diags)
+	}
+	if p["enabled"] != true {
+		t.Errorf("payload[%q] = %v, want true", "enabled", p["enabled"])
+	}
+	if _, ok := p["window"]; ok {
+		t.Errorf("payload contains %q = %v, want omitted", "window", p["window"])
+	}
+	if _, ok := p["services"]; ok {
+		t.Errorf("payload contains %q = %v, want omitted", "services", p["services"])
 	}
 	if len(p) != 1 {
 		t.Errorf("payload has %d keys (%v), want 1", len(p), p)

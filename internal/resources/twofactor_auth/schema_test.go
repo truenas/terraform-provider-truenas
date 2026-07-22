@@ -33,8 +33,9 @@ func TestTwoFactorAuthSchema_IDIsComputed(t *testing.T) {
 
 // TestTwoFactorAuthSchema_EnabledIsOptionalComputed verifies that "enabled"
 // is Optional+Computed with a UseStateForUnknown plan modifier — settable,
-// but never sent unless explicitly configured, which is the mechanism that
-// keeps the committed acceptance test from ever touching it.
+// and (via updatePayload sourcing inclusion from req.Config rather than
+// the plan) never sent unless explicitly configured, which is what keeps
+// the committed acceptance test from ever touching it.
 func TestTwoFactorAuthSchema_EnabledIsOptionalComputed(t *testing.T) {
 	s := resourceSchema()
 

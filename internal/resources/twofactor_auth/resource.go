@@ -63,7 +63,16 @@ func (r *TwoFactorAuthResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	payload, diags := plan.updatePayload(ctx)
+	// Build the payload from req.Config, NOT plan: see updatePayload's doc
+	// comment for why sourcing from the plan would resend prior-state
+	// echoes for fields the user never configured.
+	var config TwoFactorAuthModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	payload, diags := config.updatePayload(ctx)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -116,7 +125,25 @@ func (r *TwoFactorAuthResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
-	payload, diags := plan.updatePayload(ctx)
+	// Build the payload from req.Config, NOT plan. "enabled", "window", and
+	// "services" are Optional+Computed with UseStateForUnknown plan
+	// modifiers, so on Update the *plan* value for any of them left unset
+	// in the user's config is NOT null — the modifier silently repopulates
+	// it with the prior state's value. Sourcing from req.Plan here would
+	// therefore resend a field's last-known value on every Update even
+	// when the user never configured it, which both contradicts this
+	// resource's "unconfigured fields are never sent" contract and creates
+	// a revert race if that field changed on the box between the last read
+	// and this update. req.Config stays null for anything the user did not
+	// set in HCL regardless of plan modifiers, so it is the only correct
+	// source for payload inclusion. See updatePayload's doc comment.
+	var config TwoFactorAuthModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	payload, diags := config.updatePayload(ctx)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
