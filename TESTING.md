@@ -42,6 +42,13 @@ make testacc-disruptive
 | `TRUENAS_DS_PASSWORD` | — | AD admin password |
 | `TRUENAS_DS_ALLOWED_ENDPOINT` | — | Required whenever `TRUENAS_DS=1`; must equal `TRUENAS_ENDPOINT` exactly, or the DS tests `t.Fatal` instead of running — a guard against accidentally domain-joining a shared or production box |
 | `TRUENAS_DS_KEYTAB_B64` | unset | Base64 of a real Kerberos keytab (e.g. from `samba-tool domain exportkeytab` on the DC); enables `TestAccKerberosKeytab_basic`, skips otherwise |
+| `TRUENAS_DS_LDAP_URL` | — | Generic-LDAP test VM URL, e.g. `ldap://192.168.1.251` (or `ldaps://192.168.1.251` for TLS) |
+| `TRUENAS_DS_LDAP_BASEDN` | — | LDAP base DN, e.g. `dc=tftest-ldap,dc=lan` |
+| `TRUENAS_DS_LDAP_BINDDN` | — | LDAP bind DN, e.g. `cn=admin,dc=tftest-ldap,dc=lan` |
+| `TRUENAS_DS_LDAP_BINDPW` | — | LDAP bind password |
+| `TRUENAS_DS_IPA_TARGET` | — | FreeIPA server hostname, e.g. `ipa.tfipa.lan` |
+| `TRUENAS_DS_IPA_DOMAIN` | — | FreeIPA domain, e.g. `tfipa.lan` (realm `TFIPA.LAN`) |
+| `TRUENAS_DS_IPA_PASSWORD` | — | FreeIPA `admin` password |
 
 Helpers in `internal/acctest`: `PreCheck` (TF_ACC + credentials),
 `DisruptiveCheck` (adds `TRUENAS_DISRUPTIVE=1`), `AppsCheck`
@@ -207,6 +214,84 @@ domain controller. A dedicated one exists purely for this:
   --principal=Administrator@TFTEST.LAN` then `base64 -w0 /tmp/tfacc.keytab`.
   The test self-skips (does not fail) when this var is unset, so plain
   Tier-1 sweeps stay green without touching the DC.
+
+### Generic LDAP test VM (RFC2307)
+
+A second dedicated VM covers plain (non-AD) LDAP directory service testing:
+
+- **VM**: id 211 on `pve`, named `tftest-ldap`, static IP `192.168.1.251/24`,
+  Debian 13 (trixie) + OpenLDAP (`slapd`), 1 vCPU / 1 GB RAM / 10 G disk.
+  Login: `ssh root@192.168.1.251` via `pve` (same authorized key as the
+  other `pve`-hosted test VMs — there is no direct route to this VM's
+  subnet from outside `pve`, so proxy through it: `ssh root@pve ssh
+  root@192.168.1.251 ...`).
+- **Directory**: base DN `dc=tftest-ldap,dc=lan`, admin bind DN
+  `cn=admin,dc=tftest-ldap,dc=lan`. RFC2307 data seeded under
+  `ou=People`/`ou=Group`: `tfuser1` (uidNumber 21001), `tfuser2` (uidNumber
+  21002) as posixAccount+inetOrgPerson, primary group `tfgroup` (gidNumber
+  21100, posixGroup).
+- **TLS**: self-signed cert (`/etc/ldap/ssl/ldap.{crt,key}`, CN
+  `tftest-ldap.lan`). Both `ldaps://` (636) and StartTLS on `ldap://` (389)
+  work; clients must tolerate the self-signed cert (`LDAPTLS_REQCERT=allow`
+  for `ldapsearch`, or set `OPT_X_TLS_REQUIRE_CERT`/`OPT_X_TLS_NEWCTX`
+  globally *before* `ldap.initialize()` for python-ldap clients — those
+  options are process-global, not per-connection).
+- **Credentials**: the generated `cn=admin` password lives only on `pve`,
+  at `/root/tftest-ldap-admin.pass` (root-only, `chmod 600`) — not recorded
+  in this repo. Export it as `TRUENAS_DS_LDAP_BINDPW`, alongside
+  `TRUENAS_DS_LDAP_URL=ldap://192.168.1.251` (or `ldaps://192.168.1.251`),
+  `TRUENAS_DS_LDAP_BASEDN=dc=tftest-ldap,dc=lan`, and
+  `TRUENAS_DS_LDAP_BINDDN=cn=admin,dc=tftest-ldap,dc=lan`.
+- **Verification**: `ldapsearch` against all three access modes (plain,
+  StartTLS, ldaps) from `pve` (the reachable vantage point standing in for
+  "workstation" — this environment's sandbox has no route to the VM subnet)
+  and from the TrueNAS 25.10 test VM. The TrueNAS box has no `ldapsearch`/
+  `ldap-utils` (package management is disabled on TrueNAS appliances), but
+  it does ship `python3-ldap` as a middleware dependency, which works fine
+  for ad hoc verification via a short script.
+
+### FreeIPA test VM
+
+A third VM covers FreeIPA (identity management combining Kerberos, LDAP,
+and DNS):
+
+- **VM**: id 212 on `pve`, named `tftest-ipa`, static IP `192.168.1.252/24`,
+  Rocky Linux 9 + `ipa-server`, 2 vCPU / 4 GB RAM / 20 G disk. The Proxmox
+  VM name is `tftest-ipa`, but the OS hostname is pinned to `ipa.tfipa.lan`
+  (`hostnamectl set-hostname` + a matching `/etc/hosts` entry) since
+  FreeIPA requires the server's own FQDN as its hostname. Login: `ssh
+  root@192.168.1.252` via `pve`, same as the LDAP VM above.
+- **Realm**: `TFIPA.LAN`, domain `tfipa.lan`. Installed unattended via
+  `ipa-server-install --realm=TFIPA.LAN --domain=tfipa.lan
+  --hostname=ipa.tfipa.lan --setup-dns --no-forwarders --no-ntp
+  --unattended` with generated Directory Manager and `admin` passwords.
+  `--setup-dns --no-forwarders` gives the VM its own authoritative DNS zone
+  for `tfipa.lan` (including SRV records) without forwarding unrelated
+  queries upstream.
+- **Credentials**: the generated Directory Manager and `admin` passwords
+  live only on `pve`, at `/root/tftest-ipa-admin.pass` (root-only, `chmod
+  600`) — not recorded in this repo. Export the `admin` password as
+  `TRUENAS_DS_IPA_PASSWORD`, alongside `TRUENAS_DS_IPA_TARGET=ipa.tfipa.lan`
+  and `TRUENAS_DS_IPA_DOMAIN=tfipa.lan`.
+- **Verification**: `kinit admin@TFIPA.LAN` + `ipa user-find` on the VM;
+  `host -t SRV _ldap._tcp.tfipa.lan 127.0.0.1` and `host -t SRV
+  _kerberos._tcp.tfipa.lan 127.0.0.1` confirm the DNS zone's SRV records;
+  the same SRV lookups were repeated from the TrueNAS 25.10 test VM
+  querying `192.168.1.252` directly, confirming FreeIPA's DNS answers
+  off-box. The TrueNAS box's own nameserver is left untouched by this
+  verification — pointing it at `192.168.1.252` as a standing change is a
+  later task's concern, not this one.
+
+### Networking quirk shared by all `pve` directory-service VMs
+
+This Proxmox network segment's IPv4 path does not carry working DNS/general
+package-mirror egress for VMs on it (the cloud-init-assigned `nameserver
+192.168.1.1` resolves nothing usable), but IPv6 egress works via SLAAC.
+Debian cloud images resolve fine as-is (mirrors have AAAA records). Rocky
+9's genericcloud image needed `/etc/resolv.conf` pointed at an IPv6
+resolver (`2606:4700:4700::1111` / `2606:4700:4700::1001`) before `dnf`
+would succeed — apply this early on any new Rocky/Alma VM on this segment,
+before running `dnf` or `ipa-server-install`.
 
 ## Operational notes
 
