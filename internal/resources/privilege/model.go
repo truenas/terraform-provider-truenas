@@ -13,8 +13,8 @@ type PrivilegeModel struct {
 	ID          types.Int64  `tfsdk:"id"`
 	Name        types.String `tfsdk:"name"`
 	LocalGroups types.List   `tfsdk:"local_groups"` // List[Int64] of local group GIDs
-	DSGroups    types.List   `tfsdk:"ds_groups"`     // List[Int64] of directory-service group GIDs
-	Roles       types.List   `tfsdk:"roles"`         // List[String]
+	DSGroups    types.List   `tfsdk:"ds_groups"`    // List[Int64] of directory-service group GIDs
+	Roles       types.List   `tfsdk:"roles"`        // List[String]
 	WebShell    types.Bool   `tfsdk:"web_shell"`
 	// Computed only
 	BuiltinName types.String `tfsdk:"builtin_name"` // null for custom (non-builtin) privileges

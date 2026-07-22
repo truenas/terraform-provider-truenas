@@ -50,7 +50,7 @@ Helpers in `internal/acctest`: `PreCheck` (TF_ACC + credentials),
 uuid-style NVMe host NQNs), `Client()` (shared live API client for
 CheckDestroy/fixture queries), `ProviderConfig()` (HCL provider block).
 
-## Unit tests (648 functions across 59 packages)
+## Unit tests (655 functions across 59 packages)
 
 Every resource package carries unit tests for:
 
@@ -92,7 +92,10 @@ Coverage highlights:
 - **Storage**: pool (datasource; creation needs blank disks and is a
   documented manual test), dataset, zvol (resize-up), snapshot
   (`dataset@name` import), periodic_snapshot task, scrub task (per-pool,
-  cron schedule)
+  cron schedule). `TestAccScrubTask_basic` self-skips when the target pool
+  already has a scrub schedule (TrueNAS allows only one per pool), so it
+  commonly shows SKIP in sweeps; full CRUD was verified manually on 25.10
+  (see task report).
 - **Shares**: NFS and SMB shares on own dataset fixtures (SMB exercises the
   SCALE 26.0 `LEGACY_SHARE` purpose/options mapping)
 - **iSCSI end-to-end** (`iscsi_targetextent.TestAccISCSIEndToEnd`): portal →

@@ -4,6 +4,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -53,12 +54,14 @@ func resourceSchema() schema.Schema {
 				Computed: true,
 				Description: "Enable backend caching for user and group lists from the directory service. " +
 					"Defaults to true on TrueNAS.",
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
 			"enable_dns_updates": schema.BoolAttribute{
 				Optional: true,
 				Computed: true,
 				Description: "Enable automatic DNS updates for the TrueNAS server in the domain via nsupdate " +
 					"and GSSAPI/TSIG. Defaults to true on TrueNAS.",
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
 			"timeout": schema.Int64Attribute{
 				Optional: true,
@@ -153,12 +156,14 @@ func resourceSchema() schema.Schema {
 						Description: "Controls whether the domain prefix is removed from Active Directory " +
 							"user and group names (e.g. \"administrator\" instead of " +
 							"\"EXAMPLE\\administrator\"). Defaults to false on TrueNAS.",
+						PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 					},
 					"enable_trusted_domains": schema.BoolAttribute{
 						Optional: true,
 						Computed: true,
 						Description: "Enable support for trusted domains. Defaults to false on TrueNAS. This " +
 							"provider version does not expose per-trusted-domain idmap configuration.",
+						PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 					},
 				},
 			},

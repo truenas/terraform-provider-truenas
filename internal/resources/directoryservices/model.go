@@ -379,10 +379,13 @@ func responseToDataSourceModel(ctx context.Context, api *directoryServicesAPI, s
 // fresh join, which needs real admin credentials to authenticate).
 //
 // Returns an error diagnostic (no client call should be attempted) if
-// m.Enable is true but ConfigurationActiveDirectory is null/unknown (always
-// mandatory), or if Credential is null/unknown AND there's no existing
-// KERBEROS_PRINCIPAL to reuse (mandatory only for the first join) —
-// failing fast here gives a much clearer message than TrueNAS's own EINVAL.
+// m.Enable is true but ServiceType is null/unknown (TrueNAS itself requires
+// it on every enabling update — "[EINVAL] directoryservices_update: Value
+// error, service_type is required in update payloads"), if
+// ConfigurationActiveDirectory is null/unknown (always mandatory), or if
+// Credential is null/unknown AND there's no existing KERBEROS_PRINCIPAL to
+// reuse (mandatory only for the first join) — failing fast here gives a
+// much clearer message than TrueNAS's own EINVAL.
 func (m *DirectoryServicesModel) updatePayload(ctx context.Context, existing *directoryServicesAPI) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	p := map[string]any{}
@@ -406,6 +409,13 @@ func (m *DirectoryServicesModel) updatePayload(ctx context.Context, existing *di
 
 	existingPrincipal := existingKerberosPrincipal(existing)
 
+	if m.ServiceType.IsNull() || m.ServiceType.IsUnknown() {
+		diags.AddError(
+			"Missing directory services type",
+			"\"service_type\" is required whenever \"enable\" is true: TrueNAS rejects an enabling update "+
+				"payload that omits it.",
+		)
+	}
 	if (m.Credential.IsNull() || m.Credential.IsUnknown()) && existingPrincipal == nil {
 		diags.AddError(
 			"Missing directory services credential",

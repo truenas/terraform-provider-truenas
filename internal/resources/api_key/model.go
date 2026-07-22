@@ -222,10 +222,17 @@ func (m *APIKeyModel) createPayload() (map[string]any, diag.Diagnostics) {
 // rotate. expires_at is always included, as either {"$date": ms} or JSON
 // null: unlike api_key.create, api_key.update treats an *omitted*
 // expires_at as "leave unchanged" (probed: renaming a key without
-// resending expires_at left its prior expiration intact) — sending it
-// unconditionally, on every update, is what makes clearing a
-// previously-set expiration (config value going from a timestamp back to
-// null) actually take effect server-side.
+// resending expires_at left its prior expiration intact). Note that
+// removing expires_at from config does NOT reach this "clear" path in
+// practice: expires_at is Optional+Computed, so Terraform carries the
+// prior state value forward into the plan when the attribute is absent
+// from config, and m.ExpiresAt here is never actually null/unknown on an
+// in-place update triggered that way — clearing a previously-set
+// expiration requires tainting the resource (Destroy+Create, which goes
+// through createPayload instead). Sending expires_at unconditionally on
+// every update is still correct: it's harmless (a no-op when unchanged)
+// and keeps the update payload shape deterministic and identical in
+// structure to createPayload's.
 func (m *APIKeyModel) updatePayload() (map[string]any, diag.Diagnostics) {
 	expiresAt, diags := expiresAtToPayload(m.ExpiresAt)
 	if diags.HasError() {

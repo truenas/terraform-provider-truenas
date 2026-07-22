@@ -190,12 +190,26 @@ func TestUpdatePayload_EnableRequiresCredentialAndConfiguration(t *testing.T) {
 		}
 	})
 
+	t.Run("service_type missing", func(t *testing.T) {
+		m := baseModel()
+		m.Enable = types.BoolValue(true)
+		m.Credential = validCredential(t, ctx)
+		m.ConfigurationActiveDirectory = validADConfig(t, ctx)
+		_, diags := m.updatePayload(ctx, nil)
+		if !diags.HasError() {
+			t.Fatal("expected an error when enable=true with no service_type")
+		}
+	})
+
 	t.Run("credential missing but existing KERBEROS_PRINCIPAL available", func(t *testing.T) {
 		// Regression coverage: once joined, m.Credential may legitimately
 		// be omitted from HCL — this must NOT error, and must reuse the
 		// existing principal (see the next test for the payload shape).
+		// ServiceType is set here too: an already-joined resource always
+		// has it populated from a prior apply (Optional+Computed).
 		m := baseModel()
 		m.Enable = types.BoolValue(true)
+		m.ServiceType = types.StringValue("ACTIVEDIRECTORY")
 		m.ConfigurationActiveDirectory = validADConfig(t, ctx)
 
 		serviceType := "ACTIVEDIRECTORY"

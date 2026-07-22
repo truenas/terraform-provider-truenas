@@ -33,12 +33,11 @@ func TestApiPayload_PassesFieldsThrough(t *testing.T) {
 // (e.g. base64-encode an already-base64 string) or otherwise transform it,
 // since the value is already the exact base64 text TrueNAS expects.
 func TestApiPayload_NoDoubleEncode(t *testing.T) {
-	// A realistic base64 keytab payload (from a real Samba AD keytab
-	// probe), containing '/' and '+' — characters that would visibly
-	// mutate under an accidental re-encode.
-	rawB64 := "BQIAAABSAAEAClRGVEVTVC5MQU4ADUFkbWluaXN0cmF0b3IAAAABal/qVgEAEgAgzsRc" +
-		"Gj8099UzijVxmD4uNQ3GQlAxshxfRhPNPe6XYBAAAAABAAAAAAAAAEIAAQAKVEZURVNU" +
-		"LkxBTgANQWRtaW5pc3RyYXRvcgAAAAFqX+pWAQARABAscaZtNWoS2SmFLr4yq+gYAAAAAQ=="
+	// Synthetic, structurally-plausible base64 payload (starts with the
+	// standard keytab magic bytes 0x05 0x02, followed by arbitrary filler
+	// — NOT derived from any real keytab), containing '/' and '+' —
+	// characters that would visibly mutate under an accidental re-encode.
+	rawB64 := "BQL//77vAAA+Pj77/78BAgMEBQYHCAkKCwyqu8zd7v8RIjNEVWZ3iJkA/v38+/r5+Pc="
 
 	m := &KerberosKeytabModel{
 		Name: types.StringValue("tf-test-keytab"),
