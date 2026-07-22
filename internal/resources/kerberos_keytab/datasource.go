@@ -27,7 +27,7 @@ func (d *KerberosKeytabDataSource) Schema(_ context.Context, _ datasource.Schema
 	resp.Schema = dschema.Schema{
 		Description: "Fetches a TrueNAS Kerberos keytab entry by name.",
 		Attributes: map[string]dschema.Attribute{
-			"id":   dschema.Int64Attribute{Computed: true},
+			"id":   dschema.Int64Attribute{Computed: true, Description: "Numeric identifier of the Kerberos keytab entry."},
 			"name": dschema.StringAttribute{Required: true, Description: "Name of the Kerberos keytab entry to look up."},
 			"file": dschema.StringAttribute{
 				Computed:    true,

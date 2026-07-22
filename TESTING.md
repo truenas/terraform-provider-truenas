@@ -40,6 +40,8 @@ make testacc-disruptive
 | `TRUENAS_DS_DOMAIN` | — | AD realm, e.g. `TFTEST.LAN` |
 | `TRUENAS_DS_USER` | — | AD admin username, e.g. `Administrator` |
 | `TRUENAS_DS_PASSWORD` | — | AD admin password |
+| `TRUENAS_DS_ALLOWED_ENDPOINT` | — | Required whenever `TRUENAS_DS=1`; must equal `TRUENAS_ENDPOINT` exactly, or the DS tests `t.Fatal` instead of running — a guard against accidentally domain-joining a shared or production box |
+| `TRUENAS_DS_KEYTAB_B64` | unset | Base64 of a real Kerberos keytab (e.g. from `samba-tool domain exportkeytab` on the DC); enables `TestAccKerberosKeytab_basic`, skips otherwise |
 
 Helpers in `internal/acctest`: `PreCheck` (TF_ACC + credentials),
 `DisruptiveCheck` (adds `TRUENAS_DISRUPTIVE=1`), `AppsCheck`
@@ -48,7 +50,7 @@ Helpers in `internal/acctest`: `PreCheck` (TF_ACC + credentials),
 uuid-style NVMe host NQNs), `Client()` (shared live API client for
 CheckDestroy/fixture queries), `ProviderConfig()` (HCL provider block).
 
-## Unit tests (~527 functions across 51 packages)
+## Unit tests (648 functions across 59 packages)
 
 Every resource package carries unit tests for:
 
@@ -69,7 +71,7 @@ Every resource package carries unit tests for:
   test server: calls, errors, context cancellation, auth, and the CallJob
   job-polling loop including its no-job bail-out.
 
-## Acceptance suite (67 test functions, 49 packages)
+## Acceptance suite (78 test functions, 58 packages)
 
 ### Tier 1 — safe (`make testacc-safe`)
 
@@ -89,7 +91,8 @@ Coverage highlights:
 
 - **Storage**: pool (datasource; creation needs blank disks and is a
   documented manual test), dataset, zvol (resize-up), snapshot
-  (`dataset@name` import), periodic_snapshot task
+  (`dataset@name` import), periodic_snapshot task, scrub task (per-pool,
+  cron schedule)
 - **Shares**: NFS and SMB shares on own dataset fixtures (SMB exercises the
   SCALE 26.0 `LEGACY_SHARE` purpose/options mapping)
 - **iSCSI end-to-end** (`iscsi_targetextent.TestAccISCSIEndToEnd`): portal →
@@ -100,6 +103,13 @@ Coverage highlights:
   associations, plus per-resource basics
 - **Accounts**: user (primary group via `group_create`, write-only
   password), group (sudo commands)
+- **Access management**: api_key (create-once plaintext key, expiry),
+  privilege (local/DS group role grants)
+- **Directory services and Kerberos**: kerberos realm (KDC/admin-server
+  lists), kerberos keytab (`TRUENAS_DS_KEYTAB_B64`-gated, real keytab
+  exported from the Samba AD DC), directoryservices Active Directory join
+  (`TRUENAS_DS=1`-gated, see below)
+- **Data movement**: rsync task (MODULE and SSH modes, cron schedule)
 - **Misc**: static route (TEST-NET-2), NTP server (TEST-NET-3 + `force`),
   alert service (Mail attributes JSON), tunable (delete restores the
   captured `orig_value`), boot environment (clones the active BE, never
@@ -137,6 +147,8 @@ field and restore it:
 | `iscsi_global` | `pool_avail_threshold` (advisory alert threshold) |
 | `nvmet_global` | `xport_referral` |
 | `replication_config` | `max_parallel_replication_tasks` (+1, restore) |
+| `kerberos_config` | `appdefaults_aux` |
+| `resilver_config` | `enabled` |
 | `mail` | `fromname` — **self-skips if mail is unconfigured** (`fromemail` empty: the API requires it on every update, so the unconfigured state could not be restored) |
 | `ups_config` | `description` — **self-skips if UPS is unconfigured** (empty `driver`/`port`, same reasoning) |
 
@@ -181,6 +193,17 @@ domain controller. A dedicated one exists purely for this:
   original nameserver afterward, pass or fail. Outside of a DS run the
   TrueNAS box's nameserver is left at its normal value; do not point it at
   the DC as a standing change.
+- **Disposable-VM guard**: `DSCheck` (`internal/acctest`) requires
+  `TRUENAS_DS_ALLOWED_ENDPOINT` to be set and to exactly match
+  `TRUENAS_ENDPOINT` whenever `TRUENAS_DS=1` — it `t.Fatal`s rather than
+  skipping if the guard is missing or mismatched, since an unintended AD
+  join is far more disruptive than a skipped test.
+- **Keytab fixture**: `TestAccKerberosKeytab_basic` additionally needs
+  `TRUENAS_DS_KEYTAB_B64`, a base64-encoded real keytab. Generate one on
+  the DC: `samba-tool domain exportkeytab /tmp/tfacc.keytab
+  --principal=Administrator@TFTEST.LAN` then `base64 -w0 /tmp/tfacc.keytab`.
+  The test self-skips (does not fail) when this var is unset, so plain
+  Tier-1 sweeps stay green without touching the DC.
 
 ## Operational notes
 

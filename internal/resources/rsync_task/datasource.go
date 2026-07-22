@@ -27,38 +27,86 @@ func (d *RsyncTaskDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 	resp.Schema = dschema.Schema{
 		Description: "Fetches a TrueNAS rsync task by description. Rsync tasks have no name field; desc serves as the lookup key.",
 		Attributes: map[string]dschema.Attribute{
-			"id":              dschema.Int64Attribute{Computed: true},
-			"desc":            dschema.StringAttribute{Required: true, Description: "Task description to look up."},
-			"path":            dschema.StringAttribute{Computed: true},
-			"user":            dschema.StringAttribute{Computed: true},
-			"mode":            dschema.StringAttribute{Computed: true},
-			"remotehost":      dschema.StringAttribute{Computed: true},
-			"remoteport":      dschema.Int64Attribute{Computed: true},
-			"remotemodule":    dschema.StringAttribute{Computed: true},
-			"ssh_credentials": dschema.Int64Attribute{Computed: true},
-			"remotepath":      dschema.StringAttribute{Computed: true},
-			"direction":       dschema.StringAttribute{Computed: true},
+			"id":   dschema.Int64Attribute{Computed: true, Description: "Numeric identifier of the rsync task."},
+			"desc": dschema.StringAttribute{Required: true, Description: "Task description to look up."},
+			"path": dschema.StringAttribute{Computed: true, Description: "Local filesystem path to synchronize."},
+			"user": dschema.StringAttribute{Computed: true, Description: "Username to run the rsync task as."},
+			"mode": dschema.StringAttribute{
+				Computed:    true,
+				Description: "Operating mechanism for rsync: MODULE (rsync module/daemon protocol) or SSH.",
+			},
+			"remotehost": dschema.StringAttribute{
+				Computed:    true,
+				Description: "IP address or hostname of the remote system.",
+			},
+			"remoteport": dschema.Int64Attribute{
+				Computed:    true,
+				Description: "Port number for the SSH connection. Only applies when mode is SSH.",
+			},
+			"remotemodule": dschema.StringAttribute{
+				Computed:    true,
+				Description: "Name of the remote rsync module.",
+			},
+			"ssh_credentials": dschema.Int64Attribute{
+				Computed:    true,
+				Description: "Keychain credential ID (of type SSH_CREDENTIALS) used to connect to the remote host in SSH mode.",
+			},
+			"remotepath": dschema.StringAttribute{
+				Computed:    true,
+				Description: "Path on the remote system to synchronize with.",
+			},
+			"direction": dschema.StringAttribute{
+				Computed:    true,
+				Description: "Whether data is PUSHed to or PULLed from the remote system.",
+			},
 			"schedule": dschema.SingleNestedAttribute{
-				Computed: true,
+				Computed:    true,
+				Description: "Cron schedule for when the rsync task should run.",
 				Attributes: map[string]dschema.Attribute{
-					"minute": dschema.StringAttribute{Computed: true},
-					"hour":   dschema.StringAttribute{Computed: true},
-					"dom":    dschema.StringAttribute{Computed: true},
-					"month":  dschema.StringAttribute{Computed: true},
-					"dow":    dschema.StringAttribute{Computed: true},
+					"minute": dschema.StringAttribute{Computed: true, Description: "Cron minute."},
+					"hour":   dschema.StringAttribute{Computed: true, Description: "Cron hour."},
+					"dom":    dschema.StringAttribute{Computed: true, Description: "Day of month."},
+					"month":  dschema.StringAttribute{Computed: true, Description: "Month."},
+					"dow":    dschema.StringAttribute{Computed: true, Description: "Day of week (cron format, 7=Sunday)."},
 				},
 			},
-			"recursive":    dschema.BoolAttribute{Computed: true},
-			"times":        dschema.BoolAttribute{Computed: true},
-			"compress":     dschema.BoolAttribute{Computed: true},
-			"archive":      dschema.BoolAttribute{Computed: true},
-			"delete":       dschema.BoolAttribute{Computed: true},
-			"quiet":        dschema.BoolAttribute{Computed: true},
-			"preserveperm": dschema.BoolAttribute{Computed: true},
-			"preserveattr": dschema.BoolAttribute{Computed: true},
-			"delayupdates": dschema.BoolAttribute{Computed: true},
-			"extra":        dschema.ListAttribute{Computed: true, ElementType: types.StringType},
-			"enabled":      dschema.BoolAttribute{Computed: true},
+			"recursive": dschema.BoolAttribute{Computed: true, Description: "Recursively transfer subdirectories."},
+			"times":     dschema.BoolAttribute{Computed: true, Description: "Preserve modification times of files."},
+			"compress": dschema.BoolAttribute{
+				Computed:    true,
+				Description: "Reduce the size of the data to be transmitted.",
+			},
+			"archive": dschema.BoolAttribute{
+				Computed: true,
+				Description: "Make rsync run recursively, preserving symlinks, permissions, modification times, " +
+					"group, and special files.",
+			},
+			"delete": dschema.BoolAttribute{
+				Computed:    true,
+				Description: "Delete files in the destination directory that do not exist in the source directory.",
+			},
+			"quiet": dschema.BoolAttribute{
+				Computed:    true,
+				Description: "Suppress informational messages from rsync.",
+			},
+			"preserveperm": dschema.BoolAttribute{
+				Computed:    true,
+				Description: "Preserve original file permissions.",
+			},
+			"preserveattr": dschema.BoolAttribute{
+				Computed:    true,
+				Description: "Preserve extended attributes of files.",
+			},
+			"delayupdates": dschema.BoolAttribute{
+				Computed:    true,
+				Description: "Delay updating destination files until all transfers are complete.",
+			},
+			"extra": dschema.ListAttribute{
+				Computed:    true,
+				ElementType: types.StringType,
+				Description: "Additional rsync command-line options.",
+			},
+			"enabled": dschema.BoolAttribute{Computed: true, Description: "Whether this rsync task is enabled."},
 		},
 	}
 }

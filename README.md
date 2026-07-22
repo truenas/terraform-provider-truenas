@@ -8,17 +8,19 @@ client lives inside the provider.
 
 ## What it manages
 
-49 resources, each with a matching data source:
+58 resources, each with a matching data source:
 
 | Area | Resources |
 |------|-----------|
-| **Storage** | `truenas_pool`, `truenas_dataset`, `truenas_zvol`, `truenas_snapshot`, `truenas_periodic_snapshot_task` |
+| **Storage** | `truenas_pool`, `truenas_dataset`, `truenas_zvol`, `truenas_snapshot`, `truenas_periodic_snapshot_task`, `truenas_scrub_task`, `truenas_resilver_config` |
 | **File shares** | `truenas_nfs_share`, `truenas_smb_share` |
 | **iSCSI** | `truenas_iscsi_target`, `truenas_iscsi_extent`, `truenas_iscsi_initiator`, `truenas_iscsi_portal`, `truenas_iscsi_targetextent`, `truenas_iscsi_auth`, `truenas_iscsi_global` |
 | **NVMe-oF** | `truenas_nvmet_subsys`, `truenas_nvmet_port`, `truenas_nvmet_namespace`, `truenas_nvmet_host`, `truenas_nvmet_host_subsys`, `truenas_nvmet_port_subsys`, `truenas_nvmet_global` |
 | **Accounts** | `truenas_user`, `truenas_group` |
+| **Access management** | `truenas_api_key`, `truenas_privilege` |
+| **Directory services & Kerberos** | `truenas_directoryservices` (Active Directory join), `truenas_kerberos_config`, `truenas_kerberos_realm`, `truenas_kerberos_keytab` |
 | **Apps & VMs** | `truenas_app`, `truenas_vm`, `truenas_vm_device` |
-| **Replication & sync** | `truenas_replication_task`, `truenas_cloudsync_task`, `truenas_cloudsync_credentials` |
+| **Replication & sync** | `truenas_replication_task`, `truenas_cloudsync_task`, `truenas_cloudsync_credentials`, `truenas_rsync_task` |
 | **Network** | `truenas_network_interface`, `truenas_static_route`, `truenas_network_config` |
 | **Services** | `truenas_service`, plus per-service configuration: `truenas_ssh_config`, `truenas_ftp_config`, `truenas_snmp_config`, `truenas_ups_config`, `truenas_smb_config`, `truenas_nfs_config` |
 | **Alerts** | `truenas_alert_service`, `truenas_alert_policy` |
@@ -188,6 +190,12 @@ terraform apply
 - **Staged network changes.** `truenas_network_interface` follows the TrueNAS
   commit/checkin protocol: changes are staged, committed with automatic
   rollback armed, and confirmed only if connectivity survives.
+- **Directory services never leave a domain on destroy.** `truenas_directoryservices`
+  only supports joining Active Directory today (LDAP/IPA are not yet
+  implemented). Destroying the resource disables directory services locally;
+  it never calls the leave-domain API, so the TrueNAS computer account stays
+  on the domain controller — leaving requires a domain administrator
+  credential this provider does not assume is available at destroy time.
 
 ## Development
 

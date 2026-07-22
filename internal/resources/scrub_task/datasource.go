@@ -26,22 +26,29 @@ func (d *ScrubTaskDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 	resp.Schema = dschema.Schema{
 		Description: "Fetches a TrueNAS scrub schedule by pool id.",
 		Attributes: map[string]dschema.Attribute{
-			"id":          dschema.Int64Attribute{Computed: true},
-			"pool":        dschema.Int64Attribute{Required: true, Description: "ID of the pool to look up."},
-			"pool_name":   dschema.StringAttribute{Computed: true},
-			"threshold":   dschema.Int64Attribute{Computed: true},
-			"description": dschema.StringAttribute{Computed: true},
+			"id":        dschema.Int64Attribute{Computed: true, Description: "Numeric identifier of the scrub schedule."},
+			"pool":      dschema.Int64Attribute{Required: true, Description: "ID of the pool to look up."},
+			"pool_name": dschema.StringAttribute{Computed: true, Description: "Name of the pool being scrubbed."},
+			"threshold": dschema.Int64Attribute{
+				Computed:    true,
+				Description: "Days before a scrub is due when a scrub should automatically start.",
+			},
+			"description": dschema.StringAttribute{
+				Computed:    true,
+				Description: "Description or notes for this scrub schedule.",
+			},
 			"schedule": dschema.SingleNestedAttribute{
-				Computed: true,
+				Computed:    true,
+				Description: "Cron schedule for when scrubs should run.",
 				Attributes: map[string]dschema.Attribute{
-					"minute": dschema.StringAttribute{Computed: true},
-					"hour":   dschema.StringAttribute{Computed: true},
-					"dom":    dschema.StringAttribute{Computed: true},
-					"month":  dschema.StringAttribute{Computed: true},
-					"dow":    dschema.StringAttribute{Computed: true},
+					"minute": dschema.StringAttribute{Computed: true, Description: "Cron minute."},
+					"hour":   dschema.StringAttribute{Computed: true, Description: "Cron hour."},
+					"dom":    dschema.StringAttribute{Computed: true, Description: "Day of month."},
+					"month":  dschema.StringAttribute{Computed: true, Description: "Month."},
+					"dow":    dschema.StringAttribute{Computed: true, Description: "Day of week (cron format, 7=Sunday)."},
 				},
 			},
-			"enabled": dschema.BoolAttribute{Computed: true},
+			"enabled": dschema.BoolAttribute{Computed: true, Description: "Whether this scrub schedule is enabled."},
 		},
 	}
 }

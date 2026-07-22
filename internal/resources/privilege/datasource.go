@@ -27,13 +27,32 @@ func (d *PrivilegeDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 	resp.Schema = dschema.Schema{
 		Description: "Fetches a TrueNAS privilege by name.",
 		Attributes: map[string]dschema.Attribute{
-			"id":           dschema.Int64Attribute{Computed: true},
-			"name":         dschema.StringAttribute{Required: true, Description: "Privilege name to look up."},
-			"local_groups": dschema.ListAttribute{Computed: true, ElementType: types.Int64Type},
-			"ds_groups":    dschema.ListAttribute{Computed: true, ElementType: types.Int64Type},
-			"roles":        dschema.ListAttribute{Computed: true, ElementType: types.StringType},
-			"web_shell":    dschema.BoolAttribute{Computed: true},
-			"builtin_name": dschema.StringAttribute{Computed: true},
+			"id":   dschema.Int64Attribute{Computed: true, Description: "Numeric identifier of the privilege."},
+			"name": dschema.StringAttribute{Required: true, Description: "Privilege name to look up."},
+			"local_groups": dschema.ListAttribute{
+				Computed:    true,
+				ElementType: types.Int64Type,
+				Description: "GIDs of local groups whose members gain this privilege.",
+			},
+			"ds_groups": dschema.ListAttribute{
+				Computed:    true,
+				ElementType: types.Int64Type,
+				Description: "GIDs of directory-service groups whose members gain this privilege.",
+			},
+			"roles": dschema.ListAttribute{
+				Computed:    true,
+				ElementType: types.StringType,
+				Description: "Role names included in this privilege.",
+			},
+			"web_shell": dschema.BoolAttribute{
+				Computed:    true,
+				Description: "Whether members of the assigned groups may log in to the web shell.",
+			},
+			"builtin_name": dschema.StringAttribute{
+				Computed: true,
+				Description: "Internal name of the built-in privilege if this is a system privilege " +
+					"(e.g. \"LOCAL_ADMINISTRATOR\"); null for custom privileges.",
+			},
 		},
 	}
 }
