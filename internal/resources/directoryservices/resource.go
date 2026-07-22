@@ -192,10 +192,12 @@ func (r *DirectoryServicesResource) Create(ctx context.Context, req resource.Cre
 	plan.Credential = cfg.Credential
 
 	// Fetch whatever directoryservices.config already holds (normally
-	// nothing, for a brand new join) so idmap/trusted_domains can be
-	// round-tripped verbatim if directory services somehow already have a
-	// persisted AD configuration (e.g. joined previously outside Terraform)
-	// — see updatePayload's doc comment.
+	// nothing, for a brand new join) so trusted_domains can be round-tripped
+	// verbatim if directory services somehow already have a persisted AD
+	// configuration (e.g. joined previously outside Terraform) — see
+	// buildADConfigPayload's doc comment. idmap itself is explicitly modeled
+	// (see ActiveDirectoryConfigModel) and no longer needs this verbatim
+	// round-trip.
 	existing, err := r.fetchConfig(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError("Read directory services configuration failed", err.Error())
@@ -290,10 +292,13 @@ func (r *DirectoryServicesResource) Update(ctx context.Context, req resource.Upd
 	}
 	plan.Credential = cfg.Credential
 
-	// Fetch the currently-persisted configuration so idmap/trusted_domains
-	// (not modeled in Terraform state) can be round-tripped verbatim — see
-	// updatePayload's doc comment for why TrueNAS requires this whenever
-	// plan.Enable is true, even for an update that only bumps "timeout".
+	// Fetch the currently-persisted configuration so trusted_domains (not
+	// modeled in Terraform state) can be round-tripped verbatim — see
+	// buildADConfigPayload's doc comment for why TrueNAS requires this
+	// whenever plan.Enable is true, even for an update that only bumps
+	// "timeout". idmap itself is explicitly modeled (see
+	// ActiveDirectoryConfigModel) and no longer needs this verbatim
+	// round-trip.
 	existing, err := r.fetchConfig(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError("Read directory services configuration failed", err.Error())

@@ -1329,6 +1329,147 @@ func TestUpdatePayload_AD_IdmapDomainADRequiresSchemaMode(t *testing.T) {
 	}
 }
 
+// TestUpdatePayload_AD_IdmapDomainRIDRejectsADOnlyFields verifies the
+// preflight added for finding #1: a user-set AD-only idmap_domain field
+// (schema_mode/unix_primary_group/unix_nss_info) under idmap_backend="RID"
+// is rejected with a diagnostic before any API call, rather than being
+// silently dropped by buildADConfigPayload's backend gating (which would
+// otherwise let the join succeed and only surface as a
+// "Provider produced inconsistent result after apply" error once read-back
+// decodes the dropped field back to false).
+func TestUpdatePayload_AD_IdmapDomainRIDRejectsADOnlyFields(t *testing.T) {
+	tests := []struct {
+		name   string
+		domain IdmapDomainModel
+	}{
+		{
+			name: "schema_mode",
+			domain: IdmapDomainModel{
+				IdmapBackend: types.StringValue("RID"),
+				SchemaMode:   types.StringValue("RFC2307"),
+			},
+		},
+		{
+			name: "unix_primary_group",
+			domain: IdmapDomainModel{
+				IdmapBackend:     types.StringValue("RID"),
+				SchemaMode:       types.StringNull(),
+				UnixPrimaryGroup: types.BoolValue(true),
+			},
+		},
+		{
+			name: "unix_nss_info",
+			domain: IdmapDomainModel{
+				IdmapBackend: types.StringValue("RID"),
+				SchemaMode:   types.StringNull(),
+				UnixNSSInfo:  types.BoolValue(true),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			m := enabledModel(t, ctx)
+
+			idmapDomain := idmapDomainObject(t, ctx, tt.domain)
+			idmap := idmapObject(t, ctx, types.ObjectNull(idmapBuiltinAttrTypes), idmapDomain)
+
+			var ad ActiveDirectoryConfigModel
+			if diags := m.ConfigurationActiveDirectory.As(ctx, &ad, basetypes.ObjectAsOptions{}); diags.HasError() {
+				t.Fatalf("unexpected error extracting AD config: %v", diags)
+			}
+			ad.Idmap = idmap
+			m.ConfigurationActiveDirectory = adConfigObject(t, ctx, ad)
+
+			_, diags := m.updatePayload(ctx, nil)
+			if !diags.HasError() {
+				t.Fatalf("expected an error when %q is set under idmap_backend=RID", tt.name)
+			}
+		})
+	}
+}
+
+// TestUpdatePayload_AD_IdmapDomainADRejectsSSSDCompat verifies the converse
+// preflight added for finding #1: a user-set sssd_compat under
+// idmap_backend="AD" is rejected before any API call (sssd_compat is
+// RID-only).
+func TestUpdatePayload_AD_IdmapDomainADRejectsSSSDCompat(t *testing.T) {
+	ctx := context.Background()
+	m := enabledModel(t, ctx)
+
+	idmapDomain := idmapDomainObject(t, ctx, IdmapDomainModel{
+		IdmapBackend: types.StringValue("AD"),
+		SchemaMode:   types.StringValue("RFC2307"),
+		SSSDCompat:   types.BoolValue(true),
+	})
+	idmap := idmapObject(t, ctx, types.ObjectNull(idmapBuiltinAttrTypes), idmapDomain)
+
+	var ad ActiveDirectoryConfigModel
+	if diags := m.ConfigurationActiveDirectory.As(ctx, &ad, basetypes.ObjectAsOptions{}); diags.HasError() {
+		t.Fatalf("unexpected error extracting AD config: %v", diags)
+	}
+	ad.Idmap = idmap
+	m.ConfigurationActiveDirectory = adConfigObject(t, ctx, ad)
+
+	_, diags := m.updatePayload(ctx, nil)
+	if !diags.HasError() {
+		t.Fatal("expected an error when sssd_compat is set under idmap_backend=AD")
+	}
+}
+
+// TestUpdatePayload_AD_IdmapDomainUnknownBackendOmitsBackendSpecificFields
+// covers finding #2: an idmap_domain read back from an out-of-band
+// LDAP/RFC2307 config (idmap_backend values this provider doesn't model as
+// a full variant — see idmapDomainAttrTypes's doc comment) carries forward
+// into the plan via UseStateForUnknown. buildADConfigPayload must not gain
+// sssd_compat (previously sent unconditionally for "any non-AD backend",
+// which live LDAP/RFC2307 boxes reject with "Extra inputs are not
+// permitted") nor the AD-only fields for such a backend; only the fields
+// common to every idmap_domain variant (idmap_backend/name/range_low/
+// range_high) may be sent.
+func TestUpdatePayload_AD_IdmapDomainUnknownBackendOmitsBackendSpecificFields(t *testing.T) {
+	ctx := context.Background()
+	m := enabledModel(t, ctx)
+
+	idmapDomain := idmapDomainObject(t, ctx, IdmapDomainModel{
+		IdmapBackend:     types.StringValue("LDAP"),
+		Name:             types.StringValue("TFTEST"),
+		RangeLow:         types.Int64Value(100000001),
+		RangeHigh:        types.Int64Value(200000000),
+		SchemaMode:       types.StringNull(),
+		UnixPrimaryGroup: types.BoolValue(false), // known, non-null — carried forward from state
+		UnixNSSInfo:      types.BoolValue(false),
+		SSSDCompat:       types.BoolValue(false),
+	})
+	idmap := idmapObject(t, ctx, types.ObjectNull(idmapBuiltinAttrTypes), idmapDomain)
+
+	var ad ActiveDirectoryConfigModel
+	if diags := m.ConfigurationActiveDirectory.As(ctx, &ad, basetypes.ObjectAsOptions{}); diags.HasError() {
+		t.Fatalf("unexpected error extracting AD config: %v", diags)
+	}
+	ad.Idmap = idmap
+	m.ConfigurationActiveDirectory = adConfigObject(t, ctx, ad)
+
+	p, diags := m.updatePayload(ctx, nil)
+	if diags.HasError() {
+		t.Fatalf("unexpected error: %v", diags)
+	}
+
+	gotConfig := p["configuration"].(map[string]any)
+	gotIdmap := gotConfig["idmap"].(map[string]any)
+	gotDomain := gotIdmap["idmap_domain"].(map[string]any)
+
+	for _, key := range []string{"sssd_compat", "schema_mode", "unix_primary_group", "unix_nss_info"} {
+		if _, present := gotDomain[key]; present {
+			t.Errorf(`idmap_domain (LDAP) payload = %v, want %q omitted`, gotDomain, key)
+		}
+	}
+	if gotDomain["idmap_backend"] != "LDAP" || gotDomain["name"] != "TFTEST" {
+		t.Errorf(`idmap_domain (LDAP) payload = %v, want idmap_backend=LDAP name=TFTEST`, gotDomain)
+	}
+}
+
 // TestResponseToModel_LDAPConfig verifies the mapper fills
 // ConfigurationLDAP (and leaves AD/IPA null) when service_type is LDAP,
 // including search_bases/attribute_maps sub-objects.

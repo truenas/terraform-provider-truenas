@@ -1076,6 +1076,60 @@ func validateCredential(cred CredentialModel) diag.Diagnostics {
 	return diags
 }
 
+// validateIdmapDomainBackendFields returns a preflight error diagnostic for
+// each idmap_domain field the wire's discriminated union does not accept
+// under dm's own idmap_backend (AD-only schema_mode/unix_primary_group/
+// unix_nss_info set while the backend is anything other than "AD"; RID-only
+// sssd_compat set while the backend is "AD"). This runs BEFORE any API call,
+// so a bad combination is rejected at plan/apply-preflight time instead of
+// being silently dropped by buildADConfigPayload's own backend gating,
+// joining successfully, and only then surfacing as a
+// "Provider produced inconsistent result after apply" error once TrueNAS
+// read-back decodes the dropped field back to its Go zero value (false).
+//
+// Only a genuinely truthy (bool) or non-empty (string) value is treated as
+// "the user actually wants this set": every one of these fields is
+// Optional+Computed with UseStateForUnknown, and adIdmapToModel decodes them
+// unconditionally (types.BoolValue/stringPtrOrEmptyNullable), so a value
+// merely carried forward from a prior read-back under a DIFFERENT backend —
+// e.g. unix_primary_group=false surviving in state from before a box was
+// re-pointed at RID — is a known, non-null Bool that is indistinguishable at
+// this layer from one the user just wrote in HCL. false/"" is exactly the
+// value backend-appropriate omission already produces, so it is always safe
+// to let through; only true/non-empty can only originate from the user
+// actually configuring a backend-inapplicable field.
+func validateIdmapDomainBackendFields(dm IdmapDomainModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+	backend := dm.IdmapBackend.ValueString()
+
+	invalid := func(field, applicableBackend string) {
+		diags.AddError(
+			"Invalid idmap_domain configuration",
+			fmt.Sprintf("%q in \"idmap.idmap_domain\" is only applicable when idmap_backend is %q; "+
+				"it cannot be set when idmap_backend is %q.", field, applicableBackend, backend),
+		)
+	}
+
+	if backend != "AD" {
+		if !dm.SchemaMode.IsNull() && !dm.SchemaMode.IsUnknown() && dm.SchemaMode.ValueString() != "" {
+			invalid("schema_mode", "AD")
+		}
+		if !dm.UnixPrimaryGroup.IsNull() && !dm.UnixPrimaryGroup.IsUnknown() && dm.UnixPrimaryGroup.ValueBool() {
+			invalid("unix_primary_group", "AD")
+		}
+		if !dm.UnixNSSInfo.IsNull() && !dm.UnixNSSInfo.IsUnknown() && dm.UnixNSSInfo.ValueBool() {
+			invalid("unix_nss_info", "AD")
+		}
+	}
+	if backend != "RID" {
+		if !dm.SSSDCompat.IsNull() && !dm.SSSDCompat.IsUnknown() && dm.SSSDCompat.ValueBool() {
+			invalid("sssd_compat", "RID")
+		}
+	}
+
+	return diags
+}
+
 // buildADConfigPayload builds the "configuration" payload for service_type
 // ACTIVEDIRECTORY. idmap is built from ad.Idmap when set (see idmapPayload);
 // when ad.Idmap is null/unknown, "idmap" is omitted entirely from the
@@ -1138,6 +1192,10 @@ func buildADConfigPayload(ctx context.Context, ad ActiveDirectoryConfigModel, ex
 					"\"schema_mode\" is required in \"idmap.idmap_domain\" when idmap_backend is \"AD\".",
 				)
 			}
+			diags.Append(validateIdmapDomainBackendFields(dm)...)
+			if diags.HasError() {
+				return p, diags
+			}
 
 			domainPayload := map[string]any{
 				"idmap_backend": dm.IdmapBackend.ValueString(),
@@ -1160,11 +1218,35 @@ func buildADConfigPayload(ctx context.Context, ad ActiveDirectoryConfigModel, ex
 			// the Go zero value, false, since directoryServicesIdmapDomainAPI
 			// has no pointer/omitempty distinction for them). Gating on the
 			// selected backend, not merely on null-ness, is required.
-			if dm.IdmapBackend.ValueString() == "AD" {
+			//
+			// The switch is exhaustive over the two backends this provider
+			// actually models (AD, RID — enforced for user-supplied config by
+			// the idmap_backend schema validator's OneOf("AD", "RID")) and
+			// falls through to a no-op default for any other value. That
+			// default is reachable despite the validator: idmap_domain is
+			// Optional+Computed with UseStateForUnknown, so a value read back
+			// from a box joined to LDAP/RFC2307 out-of-band (idmap_backend
+			// values this provider doesn't otherwise expose — see
+			// idmapDomainAttrTypes's doc comment) carries forward into the
+			// plan verbatim without ever passing through the validator. This
+			// package keeps idmap_domain as a typed struct rather than raw
+			// JSON (unlike trusted_domains), so there is no verbatim wire
+			// payload left to pass through for such a backend; sending our
+			// own guess at AD- or RID-specific fields for it previously sent
+			// sssd_compat unconditionally for "any non-AD backend" and was
+			// rejected live by LDAP/RFC2307 boxes with "[EINVAL] ... Extra
+			// inputs are not permitted". Omitting all backend-specific keys
+			// and sending only the fields common to every variant (
+			// idmap_backend/name/range_low/range_high, set unconditionally
+			// above) is the safe choice: it changes nothing about that
+			// backend's own idmap fields rather than fabricating values for
+			// a shape this provider cannot verify.
+			switch dm.IdmapBackend.ValueString() {
+			case "AD":
 				setOptionalString(domainPayload, "schema_mode", dm.SchemaMode)
 				setOptionalBool(domainPayload, "unix_primary_group", dm.UnixPrimaryGroup)
 				setOptionalBool(domainPayload, "unix_nss_info", dm.UnixNSSInfo)
-			} else {
+			case "RID":
 				setOptionalBool(domainPayload, "sssd_compat", dm.SSSDCompat)
 			}
 			idmapPayload["idmap_domain"] = domainPayload
