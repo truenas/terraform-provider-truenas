@@ -16,6 +16,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/alert_service"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/api_key"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/app"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/audit_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/boot_environment"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cloudsync"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cloudsync_credentials"
@@ -53,6 +54,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/privilege"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/replication"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/replication_config"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/reporting_exporter"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/resilver_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/rsync_task"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/scrub_task"
@@ -220,6 +222,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		alert_service.NewResource,
 		api_key.NewResource,
 		app.NewResource,
+		audit_config.NewResource,
 		boot_environment.NewResource,
 		cloudsync.NewResource,
 		cloudsync_credentials.NewResource,
@@ -257,6 +260,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		privilege.NewResource,
 		replication.NewResource,
 		replication_config.NewResource,
+		reporting_exporter.NewResource,
 		resilver_config.NewResource,
 		rsync_task.NewResource,
 		scrub_task.NewResource,
@@ -285,6 +289,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		alert_service.NewDataSource,
 		api_key.NewDataSource,
 		app.NewDataSource,
+		audit_config.NewDataSource,
 		boot_environment.NewDataSource,
 		cloudsync.NewDataSource,
 		cloudsync_credentials.NewDataSource,
@@ -322,6 +327,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		privilege.NewDataSource,
 		replication.NewDataSource,
 		replication_config.NewDataSource,
+		reporting_exporter.NewDataSource,
 		resilver_config.NewDataSource,
 		rsync_task.NewDataSource,
 		scrub_task.NewDataSource,
