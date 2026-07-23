@@ -67,7 +67,7 @@ a real, observed flake, not a resource defect — so retrying the restore
 across transport drops matters even though the Terraform steps themselves
 already succeeded.
 
-## Unit tests (956 functions across 79 packages)
+## Unit tests (987 functions across 81 packages)
 
 Every resource package carries unit tests for:
 
@@ -88,7 +88,7 @@ Every resource package carries unit tests for:
   test server: calls, errors, context cancellation, auth, and the CallJob
   job-polling loop including its no-job bail-out.
 
-## Acceptance suite (109 test functions, 78 packages)
+## Acceptance suite (112 test functions, 80 packages)
 
 ### Tier 1 — safe (`make testacc-safe`)
 
@@ -185,6 +185,14 @@ Coverage highlights:
   **container and container_image are SCALE 26.0+ only** — self-skip cleanly
   on 25.10 via a version precheck, the `container` namespace does not exist
   there (0 `container.*` methods, confirmed live via `core.get_methods`).
+- **Webshare**: `webshare` (`TestAccWebshare_basic`: create on a RandName
+  dataset fixture → update `enabled` in place (this resource's cosmetic
+  update field — `sharing.webshare` has no `comment` field at all, confirmed
+  live) → ImportState → destroy + CheckDestroy by name); `webshare_config`
+  (datasource-only Tier 1 test — the resource itself is Tier 2, see below).
+  **Both are SCALE 26.0+ only** — self-skip cleanly on 25.10 via a version
+  precheck, the `webshare`/`sharing.webshare` namespaces do not exist there
+  (0 matching methods, confirmed live via `core.get_methods`).
 
 Safety rules baked into the tests — they must never touch the box's live
 objects: iSCSI portal/target id=1, extent id=2; NVMe-oF subsys/port/
@@ -223,6 +231,7 @@ field and restore it:
 | `docker_config` | `enable_image_updates` — **self-skips if Docker is unconfigured** (`docker.config`'s `pool` is null: confirmed on the 25.10 test VM, which has never had Docker set up) |
 | `catalog_config` | `preferred_trains` (removes and restores `"community"`) — probed live to succeed regardless of whether Docker/apps is configured (unlike `docker_config`, `catalog.update` does not require a pool), so this test has no self-skip condition and ran on both boxes |
 | `lxc_config` | `v4_network` — **SCALE 26.0+ only** (self-skips on 25.10, `lxc` namespace absent, confirmed live); **never** sets/reads back `preferred_pool` (same docker-pool safety rule as `docker_config`'s `pool`); additionally self-skips if `lxc.config`'s `preferred_pool` is ever non-null on the target box (LXC in use) — decisive probe against the production 26.0 box found it null, so the test ran there |
+| `webshare_config` | `search` — **SCALE 26.0+ only** (self-skips on 25.10, `webshare` namespace absent, confirmed live); probed live to be a genuine partial update (unlike `mail`/`ups_config`, `webshare.update` does not require other fields on every call), so this test has no unconfigured-service self-skip condition in practice — the self-skip guard is kept anyway as a defensive mirror of the `mail`/`ups_config` precedent |
 
 ### Never-run tier
 

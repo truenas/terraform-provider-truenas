@@ -93,6 +93,72 @@ func main() {
 		}
 		pp("pool.dataset.get_instance", call(c, "pool.dataset.get_instance", name))
 	}
+	if section == "websharedatasetdelay" {
+		pool := os.Getenv("TRUENAS_TEST_POOL")
+		if pool == "" {
+			pool = "tank"
+		}
+		dsName := pool + "/tf-probe-webshare-ds2"
+		if _, err := c.Call(context.Background(), "pool.dataset.create", map[string]any{"name": dsName}); err != nil {
+			log.Fatal("dataset create:", err)
+		}
+		defer c.Call(context.Background(), "pool.dataset.delete", dsName)
+
+		raw, err := c.Call(context.Background(), "sharing.webshare.create", map[string]any{
+			"path": "/mnt/" + dsName, "name": "tf-probe-webshare2", "enabled": true,
+		})
+		if err != nil {
+			log.Fatal("create:", err)
+		}
+		var created struct {
+			ID int64 `json:"id"`
+		}
+		json.Unmarshal(raw, &created)
+		fmt.Printf("=== immediately after create ===\n%s\n", raw)
+
+		for i, wait := range []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second} {
+			time.Sleep(wait)
+			raw2, err := c.Call(context.Background(), "sharing.webshare.get_instance", created.ID)
+			if err != nil {
+				log.Fatal("get_instance:", err)
+			}
+			fmt.Printf("=== get_instance poll %d (+%v) ===\n%s\n", i, wait, raw2)
+		}
+
+		if _, err := c.Call(context.Background(), "sharing.webshare.delete", created.ID); err != nil {
+			log.Fatal("delete:", err)
+		}
+		fmt.Println("=== deleted ok ===")
+	}
+	if section == "webshareleftovercheck" {
+		pp("webshare.config", call(c, "webshare.config"))
+		pp("pool.dataset.query name~tf-acc", call(c, "pool.dataset.query", [][]any{{"id", "~", "tf-acc"}}))
+		pp("sharing.webshare.query name~tf-acc", call(c, "sharing.webshare.query", [][]any{{"name", "~", "tf-acc"}}))
+	}
+	if section == "webshareconfigtoggle" {
+		orig := call(c, "webshare.config")
+		fmt.Printf("=== webshare.config (before) ===\n%v\n", orig)
+		raw, err := c.Call(context.Background(), "webshare.update", map[string]any{"search": true})
+		if err != nil {
+			fmt.Printf("=== webshare.update({search:true}) error ===\n%v\n", err)
+		} else {
+			fmt.Printf("=== webshare.update({search:true}) response ===\n%s\n", raw)
+		}
+		raw2, err := c.Call(context.Background(), "webshare.update", map[string]any{"search": false})
+		if err != nil {
+			fmt.Printf("=== webshare.update({search:false}) error ===\n%v\n", err)
+		} else {
+			fmt.Printf("=== webshare.update({search:false}) response ===\n%s\n", raw2)
+		}
+	}
+	if section == "dsdel" {
+		name := os.Args[2]
+		raw, err := c.Call(context.Background(), "pool.dataset.delete", name)
+		if err != nil {
+			log.Fatal("delete:", err)
+		}
+		fmt.Printf("=== deleted %s ===\n%s\n", name, raw)
+	}
 	if section == "smb" || section == "all" {
 		pp("sharing.smb.query (first item)", firstItem(call(c, "sharing.smb.query", []any{})))
 	}
@@ -736,6 +802,95 @@ func main() {
 			}
 		}
 		pp("app.* and vm.* method names", names)
+	}
+	if section == "webshareprobe" {
+		// Method introspection first: confirm the namespace exists at all
+		// and dump accepts/returns schemas for the singleton + share CRUD
+		// methods (Plan 19 Task 1 probe).
+		raw, err := c.Call(context.Background(), "core.get_methods")
+		if err != nil {
+			log.Fatal(err)
+		}
+		var methods map[string]any
+		json.Unmarshal(raw, &methods)
+		var names []string
+		for name := range methods {
+			if len(name) >= 9 && name[:9] == "webshare." {
+				names = append(names, name)
+				pp(name, methods[name])
+			}
+			if len(name) >= 17 && name[:17] == "sharing.webshare." {
+				names = append(names, name)
+				pp(name, methods[name])
+			}
+		}
+		sortStrings(names)
+		pp("webshare.* and sharing.webshare.* method names", names)
+
+		if len(names) == 0 {
+			fmt.Println("=== webshare namespace absent on this release ===")
+			return
+		}
+
+		// Singleton config as it currently stands on the box.
+		pp("webshare.config", call(c, "webshare.config"))
+		pp("webshare.bindip_choices", call(c, "webshare.bindip_choices"))
+
+		// Share CRUD: throwaway dataset + share, dump create/get_instance/
+		// update/query responses, delete both.
+		pool := os.Getenv("TRUENAS_TEST_POOL")
+		if pool == "" {
+			pool = "tank"
+		}
+		dsName := pool + "/tf-probe-webshare-ds"
+		if _, err := c.Call(context.Background(), "pool.dataset.create", map[string]any{
+			"name": dsName,
+		}); err != nil {
+			log.Fatal("dataset create:", err)
+		}
+		defer c.Call(context.Background(), "pool.dataset.delete", dsName)
+
+		createPayload := map[string]any{
+			"path":    "/mnt/" + dsName,
+			"name":    "tf-probe-webshare",
+			"enabled": true,
+		}
+		raw, err = c.Call(context.Background(), "sharing.webshare.create", createPayload)
+		if err != nil {
+			log.Fatal("sharing.webshare.create:", err)
+		}
+		fmt.Printf("=== sharing.webshare.create response ===\n%s\n", raw)
+
+		var created struct {
+			ID int64 `json:"id"`
+		}
+		json.Unmarshal(raw, &created)
+
+		raw2, err := c.Call(context.Background(), "sharing.webshare.get_instance", created.ID)
+		if err != nil {
+			log.Fatal("sharing.webshare.get_instance:", err)
+		}
+		fmt.Printf("=== sharing.webshare.get_instance response ===\n%s\n", raw2)
+
+		rawUpd, err := c.Call(context.Background(), "sharing.webshare.update", created.ID, map[string]any{
+			"enabled": false,
+		})
+		if err != nil {
+			fmt.Printf("=== sharing.webshare.update error ===\n%v\n", err)
+		} else {
+			fmt.Printf("=== sharing.webshare.update response ===\n%s\n", rawUpd)
+		}
+
+		rawQuery, err := c.Call(context.Background(), "sharing.webshare.query", []any{[]any{"id", "=", created.ID}})
+		if err != nil {
+			log.Fatal("sharing.webshare.query:", err)
+		}
+		fmt.Printf("=== sharing.webshare.query response ===\n%s\n", rawQuery)
+
+		if _, err := c.Call(context.Background(), "sharing.webshare.delete", created.ID); err != nil {
+			log.Fatal("sharing.webshare.delete:", err)
+		}
+		fmt.Println("=== sharing.webshare.delete ok ===")
 	}
 }
 

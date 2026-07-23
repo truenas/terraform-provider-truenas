@@ -89,6 +89,8 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/user"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/vm"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/vm_device"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/webshare"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/webshare_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/zvol"
 )
 
@@ -309,6 +311,8 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		ups_config.NewResource,
 		vm.NewResource,
 		vm_device.NewResource,
+		webshare.NewResource,
+		webshare_config.NewResource,
 		zvol.NewResource,
 	}
 }
@@ -392,6 +396,8 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		ups_config.NewDataSource,
 		vm.NewDataSource,
 		vm_device.NewDataSource,
+		webshare.NewDataSource,
+		webshare_config.NewDataSource,
 		zvol.NewDataSource,
 	}
 }

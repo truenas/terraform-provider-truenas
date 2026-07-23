@@ -8,14 +8,14 @@ client lives inside the provider.
 
 ## What it manages
 
-76 resources (plus two data-source-only namespaces, `truenas_docker_network`
+78 resources (plus two data-source-only namespaces, `truenas_docker_network`
 and `truenas_container_image` — see below), each resource with a matching
 data source:
 
 | Area | Resources |
 |------|-----------|
 | **Storage** | `truenas_pool`, `truenas_dataset`, `truenas_zvol`, `truenas_snapshot`, `truenas_periodic_snapshot_task`, `truenas_scrub_task`, `truenas_resilver_config` |
-| **File shares** | `truenas_nfs_share`, `truenas_smb_share` |
+| **File shares** | `truenas_nfs_share`, `truenas_smb_share`, `truenas_webshare` (SCALE 26.0+ only), `truenas_webshare_config` (Webshare service singleton — bind IPs/search/passkey/groups; SCALE 26.0+ only) |
 | **Filesystem permissions & ACLs** | `truenas_filesystem_permissions`, `truenas_filesystem_acl`, `truenas_acl_template` |
 | **iSCSI** | `truenas_iscsi_target`, `truenas_iscsi_extent`, `truenas_iscsi_initiator`, `truenas_iscsi_portal`, `truenas_iscsi_targetextent`, `truenas_iscsi_auth`, `truenas_iscsi_global` |
 | **NVMe-oF** | `truenas_nvmet_subsys`, `truenas_nvmet_port`, `truenas_nvmet_namespace`, `truenas_nvmet_host`, `truenas_nvmet_host_subsys`, `truenas_nvmet_port_subsys`, `truenas_nvmet_global` |
