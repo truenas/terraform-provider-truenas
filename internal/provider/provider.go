@@ -20,6 +20,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/audit_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/boot_environment"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/certificate"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/cloud_backup"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cloudsync"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cloudsync_credentials"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cronjob"
@@ -231,6 +232,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		audit_config.NewResource,
 		boot_environment.NewResource,
 		certificate.NewResource,
+		cloud_backup.NewResource,
 		cloudsync.NewResource,
 		cloudsync_credentials.NewResource,
 		cronjob.NewResource,
@@ -303,6 +305,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		audit_config.NewDataSource,
 		boot_environment.NewDataSource,
 		certificate.NewDataSource,
+		cloud_backup.NewDataSource,
 		cloudsync.NewDataSource,
 		cloudsync_credentials.NewDataSource,
 		cronjob.NewDataSource,

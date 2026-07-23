@@ -325,6 +325,92 @@ func main() {
 		}
 		fmt.Println("=== deleted ok ===")
 	}
+	if section == "authme" {
+		pp("auth.me", call(c, "auth.me"))
+	}
+	if section == "cbprobe" {
+		// Probe cloud_backup.create/query/get_instance/update/delete against a
+		// throwaway S3-type cloudsync credential + a bucket name that does not
+		// exist, to observe (a) whether create validates the credential/bucket
+		// against the actual S3 endpoint, and (b) whether "password" is
+		// returned verbatim or masked on read-back. Cleans up both the
+		// cloud_backup task (if created) and the credential.
+		credPayload := map[string]any{
+			"name": "tf-probe-cbcreds",
+			"provider": map[string]any{
+				"type":              "S3",
+				"access_key_id":     "AKIAFAKETESTPROBE0001",
+				"secret_access_key": "fakeSecretAccessKeyForProbeTestOnly1234",
+			},
+		}
+		rawCred, err := c.Call(context.Background(), "cloudsync.credentials.create", credPayload)
+		if err != nil {
+			log.Fatal("cloudsync.credentials.create:", err)
+		}
+		fmt.Printf("=== cloudsync.credentials.create response ===\n%s\n", rawCred)
+		var cred struct {
+			ID int64 `json:"id"`
+		}
+		json.Unmarshal(rawCred, &cred)
+		defer func() {
+			if _, err := c.Call(context.Background(), "cloudsync.credentials.delete", cred.ID); err != nil {
+				fmt.Printf("cleanup cloudsync.credentials.delete error: %v\n", err)
+			} else {
+				fmt.Println("=== cloudsync credentials deleted ok ===")
+			}
+		}()
+
+		cbPayload := map[string]any{
+			"description": "tf-probe-cloud-backup",
+			"path":        "/mnt/tank",
+			"credentials": cred.ID,
+			"attributes": map[string]any{
+				"bucket": "tf-probe-nonexistent-bucket-xyz123",
+				"folder": "tf-probe-folder",
+			},
+			"password":  "tf-probe-password-1234",
+			"keep_last": 1,
+			"enabled":   false,
+		}
+		rawCB, err := c.Call(context.Background(), "cloud_backup.create", cbPayload)
+		if err != nil {
+			fmt.Printf("=== cloud_backup.create ERROR (decisive: create validates) ===\n%v\n", err)
+			return
+		}
+		fmt.Printf("=== cloud_backup.create response (decisive: create does NOT validate) ===\n%s\n", rawCB)
+
+		var cb struct {
+			ID int64 `json:"id"`
+		}
+		json.Unmarshal(rawCB, &cb)
+		defer func() {
+			if _, err := c.Call(context.Background(), "cloud_backup.delete", cb.ID); err != nil {
+				fmt.Printf("cleanup cloud_backup.delete error: %v\n", err)
+			} else {
+				fmt.Println("=== cloud_backup deleted ok ===")
+			}
+		}()
+
+		rawGet, err := c.Call(context.Background(), "cloud_backup.get_instance", cb.ID)
+		if err != nil {
+			log.Fatal("cloud_backup.get_instance:", err)
+		}
+		fmt.Printf("=== cloud_backup.get_instance response (password read-back?) ===\n%s\n", rawGet)
+
+		rawQuery, err := c.Call(context.Background(), "cloud_backup.query", [][]any{{"id", "=", cb.ID}})
+		if err != nil {
+			log.Fatal("cloud_backup.query:", err)
+		}
+		fmt.Printf("=== cloud_backup.query response ===\n%s\n", rawQuery)
+
+		rawUpd, err := c.Call(context.Background(), "cloud_backup.update", cb.ID, map[string]any{
+			"description": "tf-probe-cloud-backup-renamed",
+		})
+		if err != nil {
+			log.Fatal("cloud_backup.update:", err)
+		}
+		fmt.Printf("=== cloud_backup.update response ===\n%s\n", rawUpd)
+	}
 	if section == "dsprobe" {
 		pp("directoryservices.config", call(c, "directoryservices.config"))
 		pp("directoryservices.status", call(c, "directoryservices.status"))
