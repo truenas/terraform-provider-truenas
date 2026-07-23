@@ -75,12 +75,26 @@ func resourceSchema() schema.Schema {
 			"vlan": schema.Int64Attribute{
 				Optional: true,
 				Computed: true,
-				Description: "VLAN tag number (0-4096 per the API's own accepts schema) for this channel, " +
-					"or unset/null to disable VLAN tagging. Accepted regardless of \"dhcp\". This is the only " +
-					"field this provider's own committed acceptance tests exercise via set-and-restore (see " +
-					"the resource description's SAFETY note): a real, probed live round trip against the " +
-					"disposable Enterprise HA test box, always paired with a t.Cleanup restore registered " +
-					"before the change.",
+				Description: "VLAN tag number (0-4096 per the API's own accepts schema) for this channel. " +
+					"Accepted regardless of \"dhcp\". This is the only field this provider's own committed " +
+					"acceptance tests exercise via set-and-restore (see the resource description's SAFETY " +
+					"note): a real, probed live round trip against the disposable Enterprise HA test box, " +
+					"always paired with a t.Cleanup restore registered before the change." +
+					"\n\n" +
+					"IMPORTANT: setting `vlan = null` (or removing it from config — Terraform cannot tell " +
+					"these apart) does NOT disable VLAN tagging. The underlying API does accept an explicit " +
+					"null and does clear a previously-set tag (probed live against ipmi.lan.update), but this " +
+					"provider deliberately never sends one: because Optional+Computed attributes make an " +
+					"explicit null indistinguishable from \"never configured\" at every layer Terraform " +
+					"exposes to a provider (config AND plan — this attribute's own UseStateForUnknown plan " +
+					"modifier keeps the planned value pinned to whatever is already in state either way), " +
+					"there is no reliable signal this provider could use to tell a genuine clear request " +
+					"apart from an ordinary unrelated update on a resource that has simply never managed " +
+					"\"vlan\". If this channel currently has a non-null vlan and configuration omits or nulls " +
+					"this attribute, Update returns an error diagnostic rather than guessing; set `vlan = " +
+					"<its current value>` explicitly to keep applying unrelated changes. To actually clear a " +
+					"previously-set VLAN tag, call ipmi.lan.update directly (TrueNAS UI, API, or midclient) " +
+					"and then run `terraform apply -refresh-only` to reconcile state.",
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 			},
 			"vlan_priority": schema.Int64Attribute{

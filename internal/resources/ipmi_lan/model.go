@@ -205,6 +205,35 @@ func responseToDataSourceModel(api *ipmiLanAPI, m *IPMILanDataSourceModel) diag.
 // "vlan" is accepted by BOTH branches (probed live) so it is sent whenever
 // configured, regardless of dhcp.
 //
+// "vlan" is NEVER sent as an explicit null, even though the API accepts
+// one and does clear a previously-set tag (re-confirmed live: SCALE
+// 25.10.4 Enterprise HA, wss://10.220.16.188, channel 1 — setting vlan=100
+// then sending an explicit "vlan": null round-tripped to "vlan_id": null,
+// "vlan_id_enable": false on the next ipmi.lan.query, and the box was
+// restored and independently re-verified byte-for-byte afterward). An
+// earlier version of this method DID send an explicit null on a detected
+// state-had-value/config-is-null transition (a "stateVlanSet" parameter),
+// but that was reverted: req.Config shows null for "vlan" both when the
+// user writes `vlan = null` AND when "vlan" is simply never mentioned in
+// their configuration at all — Optional+Computed attributes make these two
+// cases genuinely indistinguishable, not just here but at the
+// terraform-plugin-framework/terraform-core level (confirmed against
+// int64planmodifier.UseStateForUnknown's source: for a null config value
+// on a top-level Optional+Computed attribute, Terraform's own core-
+// computed proposed plan value comes in *unknown*, and this plan modifier
+// then substitutes the PRIOR STATE value for it — identically whether the
+// null came from an explicit `vlan = null` or from omission). So Terraform's
+// own planned value for "vlan" stays the prior non-null value in both
+// cases, never null — meaning a version of this method that infers "clear"
+// from state-was-set + config-is-null and sends an explicit null to the
+// API produces a final state that no longer matches what Terraform itself
+// planned, which is exactly the "Provider produced inconsistent result
+// after apply" crash this reversion fixes. There is no available signal
+// (config, plan, or otherwise) this method could use to safely distinguish
+// intent, so it never attempts to clear "vlan" — see vlanCannotBeCleared
+// and its use in resource.go's Update, which instead surfaces a diagnostic
+// telling the caller how to clear it outside of a normal Terraform apply.
+//
 // "password" is sent only when configured and non-empty (mirrors
 // iscsi_auth's PeerSecret handling): never read back from the API (see
 // ipmiLanAPI's doc comment), so an empty/unset value must never overwrite
@@ -250,4 +279,24 @@ func (m *IPMILanModel) updatePayload() (map[string]any, error) {
 	}
 
 	return p, nil
+}
+
+// vlanCannotBeCleared reports whether resource.go's Update should refuse to
+// proceed with an apply rather than silently leave "vlan" unchanged on the
+// BMC while Terraform's own state moves it to null. True exactly when the
+// prior state has a non-null "vlan" and the new config's "vlan" is null —
+// see updatePayload's doc comment above for why this is the ONLY signal
+// available (config alone can't tell an explicit `vlan = null` apart from
+// "vlan" simply never being managed, and neither can Terraform's own
+// planned value, which UseStateForUnknown keeps pinned to the prior
+// non-null state in both cases). Note this necessarily also fires for a
+// config that has genuinely never managed "vlan" at all, whenever some
+// OTHER field on the same resource changes and Update is invoked for that
+// unrelated reason — there is no way to avoid that false positive while
+// still catching the real "user asked to clear vlan" case, which is why
+// resource.go's Update surfaces this as an actionable diagnostic (set
+// "vlan" explicitly to its current value to keep applying unrelated
+// changes) rather than silently guessing either way.
+func vlanCannotBeCleared(stateVlan, configVlan types.Int64) bool {
+	return !stateVlan.IsNull() && configVlan.IsNull()
 }

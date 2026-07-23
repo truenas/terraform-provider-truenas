@@ -218,6 +218,65 @@ func TestUpdatePayload_VlanOnlySentWhenConfigured(t *testing.T) {
 	}
 }
 
+// --- updatePayload: "vlan" is never sent as an explicit null ------------
+
+// TestUpdatePayload_VlanNeverSentAsExplicitNull covers every shape of
+// "vlan unconfigured": updatePayload takes no state into account at all
+// (an earlier version did — a "stateVlanSet" parameter — but that was
+// reverted; see updatePayload's doc comment for the full reasoning and the
+// live-confirmed crash it caused). "vlan" must always stay OMITTED, never
+// sent as an explicit null, regardless of what a caller might imagine the
+// prior state was — resource.go's Update is responsible for refusing an
+// apply outright via vlanCannotBeCleared before ever reaching
+// updatePayload, rather than updatePayload silently clearing (or not
+// clearing) a tag on its own guess.
+func TestUpdatePayload_VlanNeverSentAsExplicitNull(t *testing.T) {
+	m := &IPMILanModel{DHCP: types.BoolValue(true)}
+	p, err := m.updatePayload()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := p["vlan"]; ok {
+		t.Errorf(`p["vlan"] = %#v, want key absent`, p["vlan"])
+	}
+}
+
+// --- vlanCannotBeCleared -------------------------------------------------
+
+func TestVlanCannotBeCleared_StateNullConfigNull(t *testing.T) {
+	// "vlan" was never set and still isn't: nothing to clear, no error.
+	if vlanCannotBeCleared(types.Int64Null(), types.Int64Null()) {
+		t.Error("want false: state.Vlan null, nothing to clear")
+	}
+}
+
+func TestVlanCannotBeCleared_StateSetConfigMatches(t *testing.T) {
+	// The ordinary case: config explicitly (re)affirms the same non-null
+	// value the prior state already has.
+	if vlanCannotBeCleared(types.Int64Value(100), types.Int64Value(100)) {
+		t.Error("want false: config.Vlan is non-null")
+	}
+}
+
+func TestVlanCannotBeCleared_StateSetConfigNull(t *testing.T) {
+	// The exact transition resource.go's Update must refuse rather than
+	// guess at: prior state has a non-null "vlan", new config's "vlan" is
+	// null — indistinguishable between "the user just asked to clear it"
+	// and "vlan was simply never mentioned in this config" (see
+	// updatePayload's doc comment for why neither config nor Terraform's
+	// own plan can resolve that ambiguity).
+	if !vlanCannotBeCleared(types.Int64Value(100), types.Int64Null()) {
+		t.Error("want true: state.Vlan non-null, config.Vlan null")
+	}
+}
+
+func TestVlanCannotBeCleared_StateNullConfigSet(t *testing.T) {
+	// Setting a fresh vlan where none existed before is always fine.
+	if vlanCannotBeCleared(types.Int64Null(), types.Int64Value(100)) {
+		t.Error("want false: state.Vlan already null")
+	}
+}
+
 func TestUpdatePayload_PasswordOnlySentWhenConfiguredAndNonEmpty(t *testing.T) {
 	m := &IPMILanModel{DHCP: types.BoolValue(true)}
 	p, _ := m.updatePayload()

@@ -1313,6 +1313,127 @@ func main() {
 			}
 		}
 	}
+	if section == "ipmivlanclear" {
+		// DECISIVE PROBE (Plan 20 Task 2 review finding): does
+		// ipmi.lan.update accept an EXPLICIT "vlan": null to clear a
+		// previously-set VLAN tag, or does it reject/ignore that key?
+		// Captures the channel's original full config FIRST, restores it
+		// (polled, not trust-on-first-response) in every exit path,
+		// including any log.Fatal — this is the live disposable Enterprise
+		// HA box, never left in a different state than it started in.
+		chansRaw, err := c.Call(context.Background(), "ipmi.lan.channels")
+		if err != nil {
+			log.Fatal("ipmi.lan.channels:", err)
+		}
+		var channels []int64
+		if err := json.Unmarshal(chansRaw, &channels); err != nil || len(channels) == 0 {
+			log.Fatalf("ipmi.lan.channels did not return a non-empty array: err=%v raw=%s", err, chansRaw)
+		}
+		channel := channels[0]
+
+		queryArgs := map[string]any{"query-filters": [][]any{{"channel", "=", channel}}}
+		queryChannel := func() map[string]any {
+			raw, err := c.Call(context.Background(), "ipmi.lan.query", queryArgs)
+			if err != nil {
+				log.Fatal("ipmi.lan.query:", err)
+			}
+			var results []map[string]any
+			if err := json.Unmarshal(raw, &results); err != nil || len(results) == 0 {
+				log.Fatalf("ipmi.lan.query returned no result for channel %d: err=%v raw=%s", channel, err, raw)
+			}
+			return results[0]
+		}
+
+		orig := queryChannel()
+		pp(fmt.Sprintf("channel %d ORIGINAL config", channel), orig)
+		origDHCP := orig["ip_address_source"] == "DHCP" || orig["ip_address_source"] == "dhcp"
+		origIP, _ := orig["ip_address"].(string)
+		origNetmask, _ := orig["subnet_mask"].(string)
+		origGateway, _ := orig["default_gateway_ip_address"].(string)
+		origVlan := orig["vlan_id"] // json.Unmarshal gives float64 or nil
+
+		restorePayload := map[string]any{"dhcp": origDHCP}
+		if !origDHCP {
+			restorePayload["ipaddress"] = origIP
+			restorePayload["netmask"] = origNetmask
+			restorePayload["gateway"] = origGateway
+		}
+		restorePayload["vlan"] = origVlan
+
+		restore := func() {
+			fmt.Printf("=== RESTORING channel %d to original vlan=%v ===\n", channel, origVlan)
+			for attempt := 1; attempt <= 8; attempt++ {
+				raw, err := c.Call(context.Background(), "ipmi.lan.update", channel, restorePayload)
+				if err != nil {
+					fmt.Printf("=== restore attempt %d: ipmi.lan.update error: %v ===\n", attempt, err)
+				} else {
+					fmt.Printf("=== restore attempt %d: ipmi.lan.update response: %s ===\n", attempt, raw)
+				}
+				time.Sleep(3 * time.Second)
+				cur := queryChannel()
+				if fmt.Sprintf("%v", cur["vlan_id"]) == fmt.Sprintf("%v", origVlan) &&
+					(origDHCP || (cur["ip_address"] == origIP && cur["subnet_mask"] == origNetmask)) {
+					fmt.Printf("=== RESTORED: channel %d matches original (vlan_id=%v) ===\n", channel, cur["vlan_id"])
+					return
+				}
+			}
+			fmt.Printf("!!! RESTORE FAILED for channel %d: last read %+v, want vlan_id=%v !!!\n", channel, queryChannel(), origVlan)
+		}
+		defer restore()
+
+		// Step 1: ensure the channel has a NON-null vlan set, so clearing it
+		// is an observable transition. If it's already null, set 100 first.
+		testVlan := int64(100)
+		if origVlan != nil {
+			if f, ok := origVlan.(float64); ok {
+				testVlan = int64(f) + 1
+				if testVlan > 4096 {
+					testVlan = 1
+				}
+			}
+		}
+		setPayload := map[string]any{"dhcp": origDHCP}
+		if !origDHCP {
+			setPayload["ipaddress"] = origIP
+			setPayload["netmask"] = origNetmask
+			setPayload["gateway"] = origGateway
+		}
+		setPayload["vlan"] = testVlan
+		fmt.Printf("=== STEP 1: setting vlan=%d via ipmi.lan.update(%d, %v) ===\n", testVlan, channel, setPayload)
+		if raw, err := c.Call(context.Background(), "ipmi.lan.update", channel, setPayload); err != nil {
+			fmt.Printf("=== STEP 1 ipmi.lan.update error: %v ===\n", err)
+		} else {
+			fmt.Printf("=== STEP 1 ipmi.lan.update response: %s ===\n", raw)
+		}
+		time.Sleep(3 * time.Second)
+		afterSet := queryChannel()
+		pp("STEP 1 read-back (expect vlan_id set)", afterSet)
+
+		// Step 2: THE decisive call — send an explicit "vlan": null and see
+		// whether the API accepts it and clears the tag, or rejects/ignores.
+		clearPayload := map[string]any{"dhcp": origDHCP}
+		if !origDHCP {
+			clearPayload["ipaddress"] = origIP
+			clearPayload["netmask"] = origNetmask
+			clearPayload["gateway"] = origGateway
+		}
+		clearPayload["vlan"] = nil
+		fmt.Printf("=== STEP 2 (DECISIVE): clearing via ipmi.lan.update(%d, %v) [\"vlan\": null explicit] ===\n", channel, clearPayload)
+		clearRaw, clearErr := c.Call(context.Background(), "ipmi.lan.update", channel, clearPayload)
+		if clearErr != nil {
+			fmt.Printf("=== STEP 2 ipmi.lan.update ERROR (API REJECTS explicit vlan:null): %v ===\n", clearErr)
+		} else {
+			fmt.Printf("=== STEP 2 ipmi.lan.update response: %s ===\n", clearRaw)
+		}
+		time.Sleep(3 * time.Second)
+		afterClear := queryChannel()
+		pp("STEP 2 read-back (decisive: does vlan_id read back null?)", afterClear)
+		if clearErr == nil && afterClear["vlan_id"] == nil {
+			fmt.Println("=== VERDICT: API ACCEPTS explicit \"vlan\": null and CLEARS the tag ===")
+		} else {
+			fmt.Printf("=== VERDICT: API does NOT clear on explicit \"vlan\": null (call err=%v, vlan_id after=%v) ===\n", clearErr, afterClear["vlan_id"])
+		}
+	}
 }
 
 // waitJob polls core.get_jobs for jobID until it reaches a terminal state,

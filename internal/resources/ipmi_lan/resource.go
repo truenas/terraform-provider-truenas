@@ -205,6 +205,39 @@ func (r *IPMILanResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 	plan.Password = config.Password
 
+	// See vlanCannotBeCleared's doc comment in model.go (and updatePayload's,
+	// above it) for the full reasoning: Terraform cannot distinguish an
+	// explicit `vlan = null` from "vlan" simply never being managed in
+	// config, at any layer (config, plan, or otherwise), so this resource
+	// never guesses — it refuses the apply with an actionable diagnostic
+	// instead of either silently ignoring the user's clear request or
+	// silently clearing a tag nobody asked to touch (both of which were
+	// tried and rejected; the latter also produced a live-confirmed
+	// "Provider produced inconsistent result after apply" crash, since
+	// Terraform's own planned value for "vlan" stays the prior non-null
+	// state in this exact situation).
+	if vlanCannotBeCleared(state.Vlan, config.Vlan) {
+		resp.Diagnostics.AddError(
+			"Cannot clear \"vlan\" via Terraform",
+			"This channel's prior state has a non-null \"vlan\", but this apply's configuration does not "+
+				"set it. Terraform's Optional+Computed attribute semantics make an explicit `vlan = null` "+
+				"indistinguishable from \"vlan\" simply never being managed in configuration at all, so this "+
+				"provider can never safely infer that you want to clear it — silently guessing either way "+
+				"was tried and rejected (guessing \"clear\" produces a \"Provider produced inconsistent "+
+				"result after apply\" error, since Terraform's own plan keeps \"vlan\" pinned to its prior "+
+				"value in both cases).\n\n"+
+				"If you want this resource to keep managing \"vlan\" unchanged going forward (so this error "+
+				"stops appearing on unrelated changes), set `vlan = <its current value>` explicitly in "+
+				"configuration.\n\n"+
+				"To actually clear the VLAN tag on the BMC, call ipmi.lan.update directly (TrueNAS UI, API, "+
+				"or midclient) with an explicit \"vlan\": null, then run `terraform apply -refresh-only` (or "+
+				"a plan/apply cycle) to reconcile Terraform state with the change. `terraform apply -replace` "+
+				"does NOT achieve this on its own: Create() treats a null \"vlan\" the same safe way — "+
+				"leaving whatever the hardware already has untouched — for the identical reason.",
+		)
+		return
+	}
+
 	payload, err := config.updatePayload()
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid configuration", err.Error())
