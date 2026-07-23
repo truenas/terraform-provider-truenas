@@ -67,7 +67,7 @@ a real, observed flake, not a resource defect — so retrying the restore
 across transport drops matters even though the Terraform steps themselves
 already succeeded.
 
-## Unit tests (1032 functions across 84 packages)
+## Unit tests (1070 functions across 85 packages)
 
 Every resource package carries unit tests for:
 
@@ -88,7 +88,7 @@ Every resource package carries unit tests for:
   test server: calls, errors, context cancellation, auth, and the CallJob
   job-polling loop including its no-job bail-out.
 
-## Acceptance suite (115 test functions, 82 packages)
+## Acceptance suite (119 test functions, 84 packages)
 
 ### Tier 1 — safe (`make testacc-safe`)
 
