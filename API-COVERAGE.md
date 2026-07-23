@@ -7,28 +7,30 @@
 
 ## Executive Summary
 
-The provider implements **75 resources and 76 matching data sources** (one
-data source, `truenas_docker_network`, has no corresponding resource — Docker
-networks are managed by Docker itself, not by TrueNAS's own config surface;
-see Part 2, Virtualization and apps), covering the core storage, sharing,
-block-storage, accounts, scheduled-task, access-management, certificates/ACME,
-keychain/remote-replication, filesystem permissions/ACLs, Active
-Directory/LDAP/IPA/Kerberos, containers/apps, and system-configuration surface
-of the TrueNAS SCALE API. Every implemented resource has a full acceptance
-test (create, update, import, destroy) run against real TrueNAS boxes on both
-25.10 and 26.0, with four deliberate exceptions: `truenas_directoryservices`
-is live-tested on the 25.10 VM plus dedicated Samba AD, OpenLDAP, and FreeIPA
-servers only — directory-service tests never run against the
-production-serving 26.0 box, by design (see TESTING.md) —
-`truenas_cloud_backup` and `truenas_app_registry`, each with a documented,
-permanent acceptance-test skip because their respective `create` calls
-validate credentials against a real remote endpoint (a cloud storage bucket
-and a container registry, respectively) and no live fixture of that kind is
-available in this environment (see Part 2, Data protection and movement /
-Virtualization and apps) — and `truenas_lxc_config`, whose acceptance test
-requires TrueNAS SCALE 26.0 (the `lxc` namespace does not exist on 25.10,
-confirmed live) and skips cleanly, rather than failing, on the 25.10 box (see
-Part 2, Virtualization and apps).
+The provider implements **76 resources and 78 matching data sources** (two
+data sources have no corresponding resource: `truenas_docker_network` —
+Docker networks are managed by Docker itself, not by TrueNAS's own config
+surface — and `truenas_container_image`, a read-only lookup against the
+upstream LXC image registry; see Part 2, Virtualization and apps), covering
+the core storage, sharing, block-storage, accounts, scheduled-task,
+access-management, certificates/ACME, keychain/remote-replication, filesystem
+permissions/ACLs, Active Directory/LDAP/IPA/Kerberos, containers/apps, and
+system-configuration surface of the TrueNAS SCALE API. Every implemented
+resource has a full acceptance test (create, update, import, destroy) run
+against real TrueNAS boxes on both 25.10 and 26.0, with five deliberate
+exceptions: `truenas_directoryservices` is live-tested on the 25.10 VM plus
+dedicated Samba AD, OpenLDAP, and FreeIPA servers only — directory-service
+tests never run against the production-serving 26.0 box, by design (see
+TESTING.md) — `truenas_cloud_backup` and `truenas_app_registry`, each with a
+documented, permanent acceptance-test skip because their respective `create`
+calls validate credentials against a real remote endpoint (a cloud storage
+bucket and a container registry, respectively) and no live fixture of that
+kind is available in this environment (see Part 2, Data protection and
+movement / Virtualization and apps) — and `truenas_lxc_config` and
+`truenas_container`/`truenas_container_image`, whose acceptance tests
+require TrueNAS SCALE 26.0 (the `lxc` and `container` namespaces do not
+exist on 25.10, confirmed live) and skip cleanly, rather than failing, on
+the 25.10 box (see Part 2, Virtualization and apps).
 
 Of the 127 API namespaces the middleware exposes, more than half now map to
 declarative resources we cover, a smaller share are uncovered but viable Terraform
@@ -39,8 +41,9 @@ dedicated hardware scheduled for testing.
 Every gap previously tracked as high-value (§1.1: certificates/ACME, remote
 replication, scheduled tasks, filesystem ACLs, two-factor auth, cloud backup,
 audit config, reporting exporters) is now covered — see Part 2. Containers and
-apps (Docker service configuration, private registries, app catalog trains)
-are covered too — see Part 2, Virtualization and apps. The next-highest-value
+apps (Docker service configuration, private registries, app catalog trains,
+and now LXC container lifecycle — create/start/stop/delete, 26.0+) are
+covered too — see Part 2, Virtualization and apps. The next-highest-value
 gaps, in rough priority order:
 
 1. **New 26.0 share type** — `webshare`/`sharing.webshare` (WebDAV-style web
@@ -76,6 +79,7 @@ gaps is §1.2 below.
 | `webshare`, `sharing.webshare` | WebDAV-style web shares (new share type) | Natural fit next to `nfs`/`smb` |
 | `zfs.resource`, `zfs.resource.snapshot`, `zpool`, `zpool.scrub` | Next-generation ZFS namespaces | We use the stable `pool.dataset` / `pool.snapshot` names; watch for deprecation signals before migrating |
 | `tn_connect` | TrueNAS Connect enrollment | Cloud service enrollment; limited Terraform value |
+| `container.device` | Per-container device attachment (filesystem/GPU/NIC/USB passthrough) | Deferred — not needed for the base `truenas_container` lifecycle (see Virtualization and apps); add when requested |
 
 ### 1.3 Enterprise / licensed hardware
 
@@ -110,16 +114,18 @@ system before its resource can ship.
 
 ## Part 2 — Covered API Areas
 
-All 75 resources below also ship a matching data source (`truenas_docker_network`
-is the one exception in the other direction: a data source with no resource —
-see Virtualization and apps), generated documentation, unit tests (payload
-builders, response mappers, schema shape), and a live acceptance test with
-create → update → import → destroy verification and leak checks. Suite is
-green against SCALE 25.10 and 26.0, with the four exceptions noted in the
-Executive Summary (`truenas_directoryservices`, 25.10 + dedicated Samba AD,
-OpenLDAP, and FreeIPA servers only; `truenas_cloud_backup` and
-`truenas_app_registry`, each a documented permanent acceptance-test skip;
-`truenas_lxc_config`, SCALE 26.0-only with a clean skip on 25.10).
+All 76 resources below also ship a matching data source (`truenas_docker_network`
+and `truenas_container_image` are the exceptions in the other direction: data
+sources with no resource — see Virtualization and apps), generated
+documentation, unit tests (payload builders, response mappers, schema shape),
+and a live acceptance test with create → update → import → destroy
+verification and leak checks. Suite is green against SCALE 25.10 and 26.0,
+with the five exceptions noted in the Executive Summary
+(`truenas_directoryservices`, 25.10 + dedicated Samba AD, OpenLDAP, and
+FreeIPA servers only; `truenas_cloud_backup` and `truenas_app_registry`, each
+a documented permanent acceptance-test skip; `truenas_lxc_config` and
+`truenas_container`/`truenas_container_image`, SCALE 26.0-only with a clean
+skip on 25.10).
 
 ### Storage
 
@@ -281,16 +287,22 @@ OpenLDAP, and FreeIPA servers only; `truenas_cloud_backup` and
 | `truenas_app_registry` | `app.registry` (private container registry credentials; `app.registry.create` validates username/password/uri against the real registry endpoint synchronously — confirmed live via a rejected throwaway create against an unreachable TEST-NET-1 host — so its acceptance test, `TestAccAppRegistry_basic`, is a documented, permanent skip: no live, reachable container registry fixture is available in this environment) |
 | `truenas_catalog_config` | `catalog` (singleton: preferred app-catalog trains; `label`/`location` are read-only) |
 | `truenas_lxc_config` | `lxc` (singleton: preferred storage pool, network bridge, IPv4/IPv6 network CIDRs for LXC-based instances; **SCALE 26.0+ only** — the `lxc` namespace does not exist on 25.10, confirmed live (`lxc.config` returns "Method does not exist" there), so Create/Read/Update fail with a clean version-gate diagnostic instead of the raw API error on older releases) |
+| `truenas_container` | `container` (LXC container lifecycle: create/update/start/stop/delete, `dataset`/`default_network`/`status` read back on create; `running` mirrors vm's running-state attribute — true starts the container, false stops it, tolerating the "domain does not exist" never-started case; **SCALE 26.0+ only** — the `container` namespace does not exist on 25.10, confirmed live via `core.get_methods` (0 `container.*` methods there), so Create/Read/Update fail with a clean version-gate diagnostic instead of the raw API error on older releases) |
+| `truenas_container_image` | `container.image.query_registry` (**datasource only**: looks up available versions of an upstream LXC image by name, e.g. `alpine:3.22:amd64:default`, exposing `versions` and `latest_version` so HCL can reference a current build instead of hardcoding one — the upstream registry, images.linuxcontainers.org, prunes old builds, confirmed live: a version the registry still listed 404'd on download once pruned; **SCALE 26.0+ only**, same version gate as `truenas_container`) |
 
-**Exclusion note:** the deprecated incus system-container family —
-`container`, `container.device`, `container.image` — remains intentionally
-excluded from this provider (superseded upstream; not tracked as backlog).
-This is narrower than an earlier internal scope note that had also lumped
-the `lxc` namespace itself into that exclusion; a decisive live probe
-(SCALE 26.0) showed `lxc` is its own supported singleton config surface —
-`lxc.config`/`lxc.update`/`lxc.bridge_choices`, unrelated to the incus
-`container.*` API family — so it is covered above as `truenas_lxc_config`
-instead.
+**Exclusion note:** `container.device` (per-container device attachment —
+filesystem/GPU/NIC/USB passthrough) is deferred, not yet a Terraform
+resource (tracked as backlog, not excluded on principle). Everything else in
+the `container`/`container.image` families that maps to durable declarative
+state is now covered above as `truenas_container` and
+`truenas_container_image`. This narrows an earlier, broader exclusion note
+that had lumped the entire `container`/`container.image`/`container.device`
+family in with the deprecated incus tooling as "superseded upstream" —
+a decisive live probe (SCALE 26.0) showed `container.*` is itself the
+modern, actively-developed LXC container surface (not incus), so most of it
+is covered rather than excluded. `lxc` (the service-wide pool/bridge/network
+singleton `truenas_container` instances run under) is a separate namespace,
+covered above as `truenas_lxc_config`.
 
 ## Method
 

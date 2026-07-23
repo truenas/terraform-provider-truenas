@@ -67,7 +67,7 @@ a real, observed flake, not a resource defect — so retrying the restore
 across transport drops matters even though the Terraform steps themselves
 already succeeded.
 
-## Unit tests (916 functions across 77 packages)
+## Unit tests (956 functions across 79 packages)
 
 Every resource package carries unit tests for:
 
@@ -88,7 +88,7 @@ Every resource package carries unit tests for:
   test server: calls, errors, context cancellation, auth, and the CallJob
   job-polling loop including its no-job bail-out.
 
-## Acceptance suite (106 test functions, 76 packages)
+## Acceptance suite (109 test functions, 78 packages)
 
 ### Tier 1 — safe (`make testacc-safe`)
 
@@ -172,7 +172,19 @@ Coverage highlights:
   has no Tier-1 test — see Never-run tier below; lxc_config (datasource-only
   Tier 1 test — the resource itself is Tier 2, see below; **SCALE 26.0+
   only** — self-skips cleanly on 25.10 via a version precheck, the `lxc`
-  namespace does not exist there, confirmed live)
+  namespace does not exist there, confirmed live); container
+  (`TestAccContainer_basic`: image datasource lookup → create running=false
+  → update description → start and verify RUNNING → stop → ImportState
+  (`image` in `ImportStateVerifyIgnore` — not recoverable from the read-back
+  API) → destroy + CheckDestroy by name; RandName `tf-acc-` container on the
+  explicit test pool, autostart always false, own object only — same
+  container/VM safety convention as `vm`); container_image
+  (`TestAccContainerImageDataSource_basic` + `_notFound`: datasource lookup
+  of `alpine:3.22:amd64:default`'s `latest_version`/`versions`, plus a clean
+  not-found diagnostic for a nonexistent image name — never writes).
+  **container and container_image are SCALE 26.0+ only** — self-skip cleanly
+  on 25.10 via a version precheck, the `container` namespace does not exist
+  there (0 `container.*` methods, confirmed live via `core.get_methods`).
 
 Safety rules baked into the tests — they must never touch the box's live
 objects: iSCSI portal/target id=1, extent id=2; NVMe-oF subsys/port/

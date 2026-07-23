@@ -8,8 +8,9 @@ client lives inside the provider.
 
 ## What it manages
 
-75 resources (plus one data-source-only namespace, `truenas_docker_network` —
-see below), each resource with a matching data source:
+76 resources (plus two data-source-only namespaces, `truenas_docker_network`
+and `truenas_container_image` — see below), each resource with a matching
+data source:
 
 | Area | Resources |
 |------|-----------|
@@ -22,7 +23,7 @@ see below), each resource with a matching data source:
 | **Access management** | `truenas_api_key`, `truenas_privilege`, `truenas_twofactor_auth` |
 | **Certificates & ACME** | `truenas_certificate`, `truenas_acme_dns_authenticator` |
 | **Directory services & Kerberos** | `truenas_directoryservices` (Active Directory, LDAP, and IPA join; explicit AD idmap configuration), `truenas_kerberos_config`, `truenas_kerberos_realm`, `truenas_kerberos_keytab` |
-| **Apps, containers & VMs** | `truenas_app`, `truenas_vm`, `truenas_vm_device`, `truenas_docker_config` (Docker service singleton), `truenas_app_registry` (private container registry credentials), `truenas_catalog_config` (app catalog trains singleton), `truenas_lxc_config` (LXC service singleton — pool/bridge/network CIDRs; SCALE 26.0+ only); `truenas_docker_network` is a **data source only** — Docker networks are managed by Docker itself, not by TrueNAS's config surface |
+| **Apps, containers & VMs** | `truenas_app`, `truenas_vm`, `truenas_vm_device`, `truenas_docker_config` (Docker service singleton), `truenas_app_registry` (private container registry credentials), `truenas_catalog_config` (app catalog trains singleton), `truenas_lxc_config` (LXC service singleton — pool/bridge/network CIDRs; SCALE 26.0+ only), `truenas_container` (LXC container lifecycle — create/start/stop/delete; SCALE 26.0+ only); `truenas_docker_network` and `truenas_container_image` (LXC image registry lookup) are **data source only** — Docker networks are managed by Docker itself, not by TrueNAS's config surface, and container images live in an upstream registry, not TrueNAS-managed state |
 | **Replication & sync** | `truenas_replication_task` (local push and remote SSH transport), `truenas_cloudsync_task`, `truenas_cloudsync_credentials`, `truenas_cloud_backup`, `truenas_rsync_task` |
 | **Keychain** | `truenas_keychain_ssh_keypair`, `truenas_keychain_ssh_connection` |
 | **Scheduled tasks** | `truenas_cronjob`, `truenas_init_shutdown_script` |
