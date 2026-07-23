@@ -67,7 +67,7 @@ a real, observed flake, not a resource defect — so retrying the restore
 across transport drops matters even though the Terraform steps themselves
 already succeeded.
 
-## Unit tests (987 functions across 81 packages)
+## Unit tests (1009 functions across 82 packages)
 
 Every resource package carries unit tests for:
 
@@ -88,7 +88,7 @@ Every resource package carries unit tests for:
   test server: calls, errors, context cancellation, auth, and the CallJob
   job-polling loop including its no-job bail-out.
 
-## Acceptance suite (112 test functions, 80 packages)
+## Acceptance suite (113 test functions, 81 packages)
 
 ### Tier 1 — safe (`make testacc-safe`)
 
@@ -185,6 +185,21 @@ Coverage highlights:
   **container and container_image are SCALE 26.0+ only** — self-skip cleanly
   on 25.10 via a version precheck, the `container` namespace does not exist
   there (0 `container.*` methods, confirmed live via `core.get_methods`).
+  container_device (`TestAccContainerDevice_basic`: RandName container +
+  dataset fixtures → attach a FILESYSTEM device (`source` = the dataset's
+  mountpoint, `target` = `/data`) → update `target` in place → ImportState →
+  destroy + CheckDestroy that both the device and the container are gone;
+  never starts the container, so attach/detach only ever rewrites libvirt
+  domain XML on disk, never a live bind-mount). **SCALE 26.0+ only** —
+  self-skips cleanly on 25.10 via a version precheck, the `container.device`
+  namespace does not exist there (0 `container.device.*` methods, confirmed
+  live via `core.get_methods`). NIC and USB device types were live-tested
+  (create/delete round trip against `truenasbr0` and the box's own
+  `usb_choices` entry respectively) but are not exercised by the acceptance
+  test itself, which stays on FILESYSTEM per the design spec; GPU is
+  schema-only (no GPU hardware on the probe box — `gpu_choices` empty, and
+  `container.device.create` validates `pci_address`/`gpu_type` against real
+  host inventory, confirmed live with a fabricated PCI address).
 - **Webshare**: `webshare` (`TestAccWebshare_basic`: create on a RandName
   dataset fixture → update `enabled` in place (this resource's cosmetic
   update field — `sharing.webshare` has no `comment` field at all, confirmed

@@ -266,6 +266,13 @@ func main() {
 	if section == "containerprobe" {
 		runContainerProbe(c)
 	}
+	if section == "containerdeviceprobe" {
+		runContainerDeviceProbe(c)
+	}
+	if section == "ctrdevleftovercheck" {
+		pp("containers matching tf-acc-ctrdev", call(c, "container.query", [][]any{{"name", "^", "tf-acc-ctrdev"}}))
+		pp("datasets matching tf-acc-ds-ctrdev", call(c, "pool.dataset.query", [][]any{{"id", "~", "tf-acc-ds-ctrdev"}}))
+	}
 	if section == "smbprobe" {
 		// Create a throwaway dataset + share, dump create + get_instance
 		// responses, delete both.
@@ -1061,4 +1068,335 @@ func runContainerProbe(c *client.Client) {
 		log.Fatal("container.get_instance:", err)
 	}
 	fmt.Printf("=== container.get_instance (final) ===\n%s\n", raw)
+}
+
+// runContainerDeviceProbe dumps the core.get_methods "accepts" JSON schema
+// for the full container.device.* namespace (the discriminated device-type
+// union create/update accept, plus the choices helpers), then exercises a
+// real create/update/query/get_instance/delete round trip for the
+// filesystem-type device against a disposable, never-started probe
+// container + dataset it creates and cleans up itself.
+func runContainerDeviceProbe(c *client.Client) {
+	raw, err := c.Call(context.Background(), "core.get_methods")
+	if err != nil {
+		log.Fatal(err)
+	}
+	var methods map[string]any
+	json.Unmarshal(raw, &methods)
+
+	// Discover every container.device.* method verbatim, not just an assumed
+	// list, in case there are helpers beyond what the design doc anticipated.
+	var deviceMethods []string
+	for name := range methods {
+		if len(name) > len("container.device.") && name[:len("container.device.")] == "container.device." {
+			deviceMethods = append(deviceMethods, name)
+		}
+	}
+	sortStrings(deviceMethods)
+	fmt.Printf("=== container.device.* methods (%d) ===\n", len(deviceMethods))
+	for _, m := range deviceMethods {
+		fmt.Println(" ", m)
+	}
+	for _, m := range deviceMethods {
+		pp(m+" (core.get_methods)", methods[m])
+	}
+
+	// Dump the choices helpers' live results too (empty on a box with no
+	// USB/GPU/NIC hardware exposed for passthrough tells us those types are
+	// not safely live-testable here).
+	for _, m := range []string{"container.device.usb_choices", "container.device.nic_attach_choices", "container.device.gpu_choices"} {
+		if _, ok := methods[m]; ok {
+			pp(m+" (live result)", call(c, m))
+		} else {
+			fmt.Printf("[%s] not present in core.get_methods\n", m)
+		}
+	}
+
+	pool := os.Getenv("TRUENAS_TEST_POOL")
+	if pool == "" {
+		pool = "tank"
+	}
+
+	// Resolve the image version FIRST (log.Fatal's before anything is
+	// created if container.image.query_registry doesn't exist, e.g. a
+	// namespace-absent 25.10 box) so a version-gate skip never leaves a
+	// stray dataset behind.
+	registryRaw := call(c, "container.image.query_registry")
+	var alpineEntry any
+	if arr, ok := registryRaw.([]any); ok {
+		for _, item := range arr {
+			if entry, ok := item.(map[string]any); ok {
+				if entry["name"] == "alpine:3.22:amd64:default" {
+					alpineEntry = entry
+				}
+			}
+		}
+	}
+	imageVersion := os.Getenv("TRUENAS_PROBE_IMAGE_VERSION")
+	if imageVersion == "" {
+		if entry, ok := alpineEntry.(map[string]any); ok {
+			if versions, ok := entry["versions"].([]any); ok && len(versions) > 0 {
+				if last, ok := versions[len(versions)-1].(map[string]any); ok {
+					if v, ok := last["version"].(string); ok {
+						imageVersion = v
+					}
+				}
+			}
+		}
+	}
+	if imageVersion == "" {
+		log.Fatal("could not determine an image version to probe with (set TRUENAS_PROBE_IMAGE_VERSION)")
+	}
+
+	// Now safe to create the disposable dataset + probe container
+	// (autostart=false, mirrors runContainerProbe) to attach devices to.
+	// Never started.
+	dsName := pool + "/tf-probe-container-device-ds"
+	if _, err := c.Call(context.Background(), "pool.dataset.create", map[string]any{"name": dsName}); err != nil {
+		log.Fatal("dataset create:", err)
+	}
+	defer func() {
+		fmt.Println("=== cleanup: pool.dataset.delete ===")
+		if _, err := c.Call(context.Background(), "pool.dataset.delete", dsName); err != nil {
+			fmt.Printf("dataset delete error: %v\n", err)
+		}
+	}()
+
+	createPayload := map[string]any{
+		"name":      "tf-probe-container-device",
+		"pool":      pool,
+		"autostart": false,
+		"image":     map[string]any{"name": "alpine:3.22:amd64:default", "version": imageVersion},
+	}
+	raw, err = c.Call(context.Background(), "container.create", createPayload)
+	if err != nil {
+		log.Fatal("container.create (job submit):", err)
+	}
+	var jobID int64
+	json.Unmarshal(raw, &jobID)
+	createResult := waitJob(c, jobID, "container.create")
+	if createResult == nil {
+		log.Fatal("container.create did not succeed; aborting probe")
+	}
+	var createdContainer struct {
+		ID   int64  `json:"id"`
+		Name string `json:"name"`
+	}
+	json.Unmarshal(createResult, &createdContainer)
+	fmt.Printf("=== probe container created: id=%d name=%s ===\n", createdContainer.ID, createdContainer.Name)
+
+	defer func() {
+		fmt.Println("=== cleanup: container.delete ===")
+		raw, err := c.Call(context.Background(), "container.delete", createdContainer.ID)
+		if err != nil {
+			fmt.Printf("container.delete error: %v\n", err)
+			return
+		}
+		var delJobID int64
+		if json.Unmarshal(raw, &delJobID) == nil && delJobID != 0 {
+			waitJob(c, delJobID, "container.delete")
+		}
+		fmt.Println("=== cleanup: container deleted ===")
+	}()
+
+	// Try a FILESYSTEM-type device create using the field names discovered
+	// from the accepts schema dumped above. Adjust the dtype/keys below
+	// after inspecting the schema output if the first attempt is rejected.
+	devicePayload := map[string]any{
+		"container": createdContainer.ID,
+		"attributes": map[string]any{
+			"dtype":  "FILESYSTEM",
+			"source": "/mnt/" + dsName,
+			"target": "/data",
+		},
+	}
+	fmt.Printf("=== container.device.create payload (attempt) ===\n%v\n", devicePayload)
+	devRaw, err := c.Call(context.Background(), "container.device.create", devicePayload)
+	if err != nil {
+		fmt.Printf("=== container.device.create error ===\n%v\n", err)
+		return
+	}
+	fmt.Printf("=== container.device.create response ===\n%s\n", devRaw)
+
+	var createdDevice struct {
+		ID int64 `json:"id"`
+	}
+	json.Unmarshal(devRaw, &createdDevice)
+
+	getRaw, err := c.Call(context.Background(), "container.device.get_instance", createdDevice.ID)
+	if err != nil {
+		fmt.Printf("=== container.device.get_instance error ===\n%v\n", err)
+	} else {
+		fmt.Printf("=== container.device.get_instance response ===\n%s\n", getRaw)
+	}
+
+	queryRaw, err := c.Call(context.Background(), "container.device.query", [][]any{{"id", "=", createdDevice.ID}})
+	if err != nil {
+		fmt.Printf("=== container.device.query error ===\n%v\n", err)
+	} else {
+		fmt.Printf("=== container.device.query response ===\n%s\n", queryRaw)
+	}
+
+	updatePayload := map[string]any{
+		"attributes": map[string]any{
+			"dtype":  "FILESYSTEM",
+			"source": "/mnt/" + dsName,
+			"target": "/data2",
+		},
+	}
+	updRaw, err := c.Call(context.Background(), "container.device.update", createdDevice.ID, updatePayload)
+	if err != nil {
+		fmt.Printf("=== container.device.update error ===\n%v\n", err)
+	} else {
+		fmt.Printf("=== container.device.update response ===\n%s\n", updRaw)
+	}
+
+	if _, err := c.Call(context.Background(), "container.device.delete", createdDevice.ID); err != nil {
+		fmt.Printf("=== container.device.delete error ===\n%v\n", err)
+	} else {
+		fmt.Println("=== container.device.delete ok ===")
+	}
+
+	// Edge cases: target under /mnt/ (expect rejection, mirrors source's
+	// "must reside within a pool mount point" but for the in-container
+	// side), and a FILESYSTEM device with source/target omitted entirely
+	// (see what the real server-applied default is, vs the odd
+	// "/usr/bin/zsh" literal the accepts schema advertised above).
+	badTargetPayload := map[string]any{
+		"container": createdContainer.ID,
+		"attributes": map[string]any{
+			"dtype":  "FILESYSTEM",
+			"source": "/mnt/" + dsName,
+			"target": "/mnt/probe",
+		},
+	}
+	if raw, err := c.Call(context.Background(), "container.device.create", badTargetPayload); err != nil {
+		fmt.Printf("=== container.device.create (target under /mnt/) error ===\n%v\n", err)
+	} else {
+		fmt.Printf("=== container.device.create (target under /mnt/) response ===\n%s\n", raw)
+		var d struct {
+			ID int64 `json:"id"`
+		}
+		json.Unmarshal(raw, &d)
+		c.Call(context.Background(), "container.device.delete", d.ID)
+	}
+
+	noSourceTargetPayload := map[string]any{
+		"container": createdContainer.ID,
+		"attributes": map[string]any{
+			"dtype": "FILESYSTEM",
+		},
+	}
+	if raw, err := c.Call(context.Background(), "container.device.create", noSourceTargetPayload); err != nil {
+		fmt.Printf("=== container.device.create (no source/target) error ===\n%v\n", err)
+	} else {
+		fmt.Printf("=== container.device.create (no source/target) response ===\n%s\n", raw)
+		var d struct {
+			ID int64 `json:"id"`
+		}
+		json.Unmarshal(raw, &d)
+		c.Call(context.Background(), "container.device.delete", d.ID)
+	}
+
+	noTargetPayload := map[string]any{
+		"container": createdContainer.ID,
+		"attributes": map[string]any{
+			"dtype":  "FILESYSTEM",
+			"source": "/mnt/" + dsName,
+		},
+	}
+	if raw, err := c.Call(context.Background(), "container.device.create", noTargetPayload); err != nil {
+		fmt.Printf("=== container.device.create (source only, no target) error ===\n%v\n", err)
+	} else {
+		fmt.Printf("=== container.device.create (source only, no target) response ===\n%s\n", raw)
+		var d struct {
+			ID int64 `json:"id"`
+		}
+		json.Unmarshal(raw, &d)
+		c.Call(context.Background(), "container.device.delete", d.ID)
+	}
+
+	// NIC device against the truenasbr0 software bridge nic_attach_choices
+	// reported above — safe, never-started container, no actual host
+	// interface state changes until (if ever) the container is started.
+	nicPayload := map[string]any{
+		"container": createdContainer.ID,
+		"attributes": map[string]any{
+			"dtype":      "NIC",
+			"nic_attach": "truenasbr0",
+		},
+	}
+	if raw, err := c.Call(context.Background(), "container.device.create", nicPayload); err != nil {
+		fmt.Printf("=== container.device.create (NIC) error ===\n%v\n", err)
+	} else {
+		fmt.Printf("=== container.device.create (NIC) response ===\n%s\n", raw)
+		var d struct {
+			ID int64 `json:"id"`
+		}
+		json.Unmarshal(raw, &d)
+		c.Call(context.Background(), "container.device.delete", d.ID)
+	}
+
+	// USB device against the usb_1_4 device usb_choices reported above
+	// (available:true) — same never-started-container safety rationale.
+	usbPayload := map[string]any{
+		"container": createdContainer.ID,
+		"attributes": map[string]any{
+			"dtype": "USB",
+			"usb": map[string]any{
+				"vendor_id":  "0x046b",
+				"product_id": "0xff10",
+			},
+		},
+	}
+	if raw, err := c.Call(context.Background(), "container.device.create", usbPayload); err != nil {
+		fmt.Printf("=== container.device.create (USB) error ===\n%v\n", err)
+	} else {
+		fmt.Printf("=== container.device.create (USB) response ===\n%s\n", raw)
+		var d struct {
+			ID int64 `json:"id"`
+		}
+		json.Unmarshal(raw, &d)
+		c.Call(context.Background(), "container.device.delete", d.ID)
+	}
+
+	// GPU device with a fabricated PCI address (gpu_choices returned {} on
+	// this box — no real GPU to reference), purely to see whether
+	// pci_address is validated against actual host hardware.
+	gpuPayload := map[string]any{
+		"container": createdContainer.ID,
+		"attributes": map[string]any{
+			"dtype":       "GPU",
+			"gpu_type":    "NVIDIA",
+			"pci_address": "0000:00:99.9",
+		},
+	}
+	if raw, err := c.Call(context.Background(), "container.device.create", gpuPayload); err != nil {
+		fmt.Printf("=== container.device.create (GPU, fabricated pci_address) error ===\n%v\n", err)
+	} else {
+		fmt.Printf("=== container.device.create (GPU, fabricated pci_address) response ===\n%s\n", raw)
+		var d struct {
+			ID int64 `json:"id"`
+		}
+		json.Unmarshal(raw, &d)
+		c.Call(context.Background(), "container.device.delete", d.ID)
+	}
+
+	// USB controller-only device (usb: null per the schema).
+	usbNullPayload := map[string]any{
+		"container": createdContainer.ID,
+		"attributes": map[string]any{
+			"dtype": "USB",
+		},
+	}
+	if raw, err := c.Call(context.Background(), "container.device.create", usbNullPayload); err != nil {
+		fmt.Printf("=== container.device.create (USB controller-only) error ===\n%v\n", err)
+	} else {
+		fmt.Printf("=== container.device.create (USB controller-only) response ===\n%s\n", raw)
+		var d struct {
+			ID int64 `json:"id"`
+		}
+		json.Unmarshal(raw, &d)
+		c.Call(context.Background(), "container.device.delete", d.ID)
+	}
 }

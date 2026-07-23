@@ -79,7 +79,6 @@ gaps is §1.2 below.
 | `webshare`, `sharing.webshare` | WebDAV-style web shares (new share type) | Natural fit next to `nfs`/`smb` |
 | `zfs.resource`, `zfs.resource.snapshot`, `zpool`, `zpool.scrub` | Next-generation ZFS namespaces | We use the stable `pool.dataset` / `pool.snapshot` names; watch for deprecation signals before migrating |
 | `tn_connect` | TrueNAS Connect enrollment | Cloud service enrollment; limited Terraform value |
-| `container.device` | Per-container device attachment (filesystem/GPU/NIC/USB passthrough) | Deferred — not needed for the base `truenas_container` lifecycle (see Virtualization and apps); add when requested |
 
 ### 1.3 Enterprise / licensed hardware
 
@@ -289,18 +288,17 @@ skip on 25.10).
 | `truenas_lxc_config` | `lxc` (singleton: preferred storage pool, network bridge, IPv4/IPv6 network CIDRs for LXC-based instances; **SCALE 26.0+ only** — the `lxc` namespace does not exist on 25.10, confirmed live (`lxc.config` returns "Method does not exist" there), so Create/Read/Update fail with a clean version-gate diagnostic instead of the raw API error on older releases) |
 | `truenas_container` | `container` (LXC container lifecycle: create/update/start/stop/delete, `dataset`/`default_network`/`status` read back on create; `running` mirrors vm's running-state attribute — true starts the container, false stops it, tolerating the "domain does not exist" never-started case; **SCALE 26.0+ only** — the `container` namespace does not exist on 25.10, confirmed live via `core.get_methods` (0 `container.*` methods there), so Create/Read/Update fail with a clean version-gate diagnostic instead of the raw API error on older releases) |
 | `truenas_container_image` | `container.image.query_registry` (**datasource only**: looks up available versions of an upstream LXC image by name, e.g. `alpine:3.22:amd64:default`, exposing `versions` and `latest_version` so HCL can reference a current build instead of hardcoding one — the upstream registry, images.linuxcontainers.org, prunes old builds, confirmed live: a version the registry still listed 404'd on download once pruned; **SCALE 26.0+ only**, same version gate as `truenas_container`) |
+| `truenas_container_device` | `container.device` (per-container device attachment: create/update/delete/query/get_instance, all `job:false`; `attributes` is an opaque JSON document keyed by `"dtype"`, mirroring `truenas_vm_device` — live-tested FILESYSTEM (bind-mount, `source`/`target`), NIC (`nic_attach`/`type`/`mac`), and USB (`device` or `usb.vendor_id`/`usb.product_id`); GPU is schema-only — `gpu_choices` returned no entries and `container.device.create` validates `pci_address`/`gpu_type` against real host hardware on every probe environment used, so no synthetic value could be live-tested; **SCALE 26.0+ only**, same version gate as `truenas_container`) |
 
-**Exclusion note:** `container.device` (per-container device attachment —
-filesystem/GPU/NIC/USB passthrough) is deferred, not yet a Terraform
-resource (tracked as backlog, not excluded on principle). Everything else in
-the `container`/`container.image` families that maps to durable declarative
-state is now covered above as `truenas_container` and
-`truenas_container_image`. This narrows an earlier, broader exclusion note
-that had lumped the entire `container`/`container.image`/`container.device`
-family in with the deprecated incus tooling as "superseded upstream" —
-a decisive live probe (SCALE 26.0) showed `container.*` is itself the
-modern, actively-developed LXC container surface (not incus), so most of it
-is covered rather than excluded. `lxc` (the service-wide pool/bridge/network
+**Exclusion note:** everything in the
+`container`/`container.image`/`container.device` families that maps to
+durable declarative state is now covered above as `truenas_container`,
+`truenas_container_image`, and `truenas_container_device`. This narrows an
+earlier, broader exclusion note that had lumped the entire family in with
+the deprecated incus tooling as "superseded upstream" — a decisive live
+probe (SCALE 26.0) showed `container.*` is itself the modern,
+actively-developed LXC container surface (not incus), so most of it is
+covered rather than excluded. `lxc` (the service-wide pool/bridge/network
 singleton `truenas_container` instances run under) is a separate namespace,
 covered above as `truenas_lxc_config`.
 

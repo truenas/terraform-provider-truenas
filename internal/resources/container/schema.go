@@ -19,10 +19,9 @@ func resourceSchema() schema.Schema {
 			"server fails with a clean error during Create/Read/Update rather than a raw API error." +
 			"\n\n" +
 			"This is the modern, actively-developed LXC container surface — distinct from the deprecated incus " +
-			"system-container family this provider does not otherwise track. Device attachment " +
-			"(container.device.*: filesystem/GPU/NIC/USB passthrough) is out of scope for now; see " +
-			"truenas_lxc_config for the service-wide pool/bridge/network configuration this resource's " +
-			"containers run under.",
+			"system-container family this provider does not otherwise track. See truenas_container_device for " +
+			"per-container device attachment (filesystem/NIC/USB passthrough), and truenas_lxc_config for the " +
+			"service-wide pool/bridge/network configuration this resource's containers run under.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{
 				Computed:    true,
