@@ -26,7 +26,7 @@ func resourceSchema() schema.Schema {
 			"`nvidia` (NVIDIA GPU support) is readable on every probed release, but writable only on TrueNAS " +
 			"SCALE 25.10 and earlier: SCALE 26.0+ dropped it from docker.update's accepted fields (probed live) " +
 			"— docker.config still reports its current value there, this resource can still display it, but " +
-			"setting it explicitly in configuration against a 26.0+ target is a plan-time error.",
+			"setting it explicitly in configuration against a 26.0+ target is an apply-time error.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:      true,
@@ -61,7 +61,7 @@ func resourceSchema() schema.Schema {
 				Computed: true,
 				Description: "Whether NVIDIA GPU support is enabled for containers. Readable on every probed " +
 					"release; writable only on TrueNAS SCALE 25.10 and earlier — SCALE 26.0+ dropped it from " +
-					"docker.update's accepted fields, so explicitly setting it there is a plan-time error.",
+					"docker.update's accepted fields, so explicitly setting it there is an apply-time error.",
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
 				},

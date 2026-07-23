@@ -4,7 +4,7 @@
 #
 # "nvidia" is writable only on TrueNAS SCALE 25.10 and earlier -- SCALE
 # 26.0+ dropped it from docker.update's accepted fields, so setting it
-# explicitly against a 26.0+ target is a plan-time error. Omit it (or
+# explicitly against a 26.0+ target is an apply-time error. Omit it (or
 # reference it read-only) when targeting 26.0+.
 resource "truenas_docker_config" "config" {
   pool                 = "tank"

@@ -56,7 +56,7 @@ type RegistryMirrorModel struct {
 // removed "nvidia" from docker.update's accepted fields (probed live, see
 // task-1-report.md), so this resource can display but no longer change it
 // there. Explicitly setting it in HCL against a 26.0+ target is a
-// plan-time error (see resource.go's applyNvidiaSupport, which uses the
+// apply-time error (see resource.go's applyNvidiaSupport, which uses the
 // raw practitioner Config — not the resolved Plan — to distinguish "the
 // user wrote this" from "UseStateForUnknown carried the previous known
 // value forward").

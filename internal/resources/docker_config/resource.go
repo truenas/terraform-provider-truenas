@@ -59,7 +59,7 @@ func (r *DockerConfigResource) fetchConfig(ctx context.Context) (*dockerConfigAP
 }
 
 // applyNvidiaSupport folds "nvidia" into payload when the user explicitly
-// set it in HCL, then strips it (with a clear plan-time error) if the
+// set it in HCL, then strips it (with a clear apply-time error) if the
 // target server is SCALE 26.0+.
 //
 // configNvidia MUST come from the practitioner's raw Config, not the
