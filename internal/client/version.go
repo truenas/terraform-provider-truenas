@@ -41,6 +41,18 @@ func (c *Client) VersionAtLeast(ctx context.Context, major, minor int) (bool, er
 	return versionAtLeast(v, major, minor), nil
 }
 
+// VersionAtLeastString is the pure comparator VersionAtLeast wraps: given an
+// already-probed dotted release string (e.g. from ServerVersion), it reports
+// whether the string's major.minor prefix is at or above the given floor,
+// with no client or network access. Exported so resources that gate their
+// entire Create/Read/Update behind a version floor (e.g. lxc_config, absent
+// below SCALE 26.0) can build their own diagnostics as pure,
+// client-independent functions of a probed version string, independently
+// unit-testable without a live TrueNAS connection.
+func VersionAtLeastString(version string, major, minor int) bool {
+	return versionAtLeast(version, major, minor)
+}
+
 // versionAtLeast compares a dotted release string's leading major.minor
 // against the given floor. Unparseable strings compare as 0.0 (below any
 // real floor), so a malformed version fails closed on "new enough" checks.

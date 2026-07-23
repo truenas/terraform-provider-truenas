@@ -192,6 +192,10 @@ func main() {
 		pp("systemdataset.config", call(c, "systemdataset.config"))
 		pp("replication.config.config", call(c, "replication.config.config"))
 	}
+	if section == "lxc" || section == "all" {
+		pp("lxc.config", call(c, "lxc.config"))
+		pp("lxc.bridge_choices", call(c, "lxc.bridge_choices"))
+	}
 	if section == "smbprobe" {
 		// Create a throwaway dataset + share, dump create + get_instance
 		// responses, delete both.
