@@ -439,6 +439,109 @@ func main() {
 			pp("directoryservices.update result", v)
 		}
 	}
+	if section == "fspermprobe" {
+		// Probe filesystem.setperm (job) + filesystem.stat (sync) round trip
+		// on a throwaway dataset directory: create dataset, setperm with
+		// mode/uid/gid, stat before+after, then stat a nonexistent path to
+		// see the not-found error shape.
+		ds := "tank/tf-probe-fsperm"
+		if _, err := c.Call(context.Background(), "pool.dataset.create", map[string]any{"name": ds}); err != nil {
+			log.Fatal("dataset create:", err)
+		}
+		defer c.Call(context.Background(), "pool.dataset.delete", ds, map[string]any{"recursive": true})
+		path := "/mnt/" + ds
+
+		rawStat0, err := c.Call(context.Background(), "filesystem.stat", path)
+		if err != nil {
+			log.Fatal("stat before:", err)
+		}
+		fmt.Printf("=== filesystem.stat (before setperm) ===\n%s\n", rawStat0)
+
+		result, err := c.CallJob(context.Background(), "filesystem.setperm", map[string]any{
+			"path": path,
+			"mode": "0750",
+			"uid":  1000,
+			"gid":  1000,
+		})
+		if err != nil {
+			log.Fatal("setperm job:", err)
+		}
+		fmt.Printf("=== filesystem.setperm job result ===\n%s\n", result)
+
+		rawStat1, err := c.Call(context.Background(), "filesystem.stat", path)
+		if err != nil {
+			log.Fatal("stat after:", err)
+		}
+		fmt.Printf("=== filesystem.stat (after setperm 0750, uid=gid=1000) ===\n%s\n", rawStat1)
+
+		_, statErr := c.Call(context.Background(), "filesystem.stat", "/mnt/tank/tf-probe-fsperm-does-not-exist-xyz")
+		fmt.Printf("=== filesystem.stat (nonexistent path) error ===\n%v\n", statErr)
+	}
+	if section == "acltprobe" {
+		// List all existing (builtin) ACL templates, then create/query/
+		// update/delete a throwaway NFS4 one to observe exact wire shapes.
+		rawQ, err := c.Call(context.Background(), "filesystem.acltemplate.query", []any{})
+		if err != nil {
+			log.Fatal("acltemplate.query (all):", err)
+		}
+		fmt.Printf("=== filesystem.acltemplate.query (all, presumably builtins only) ===\n%s\n", rawQ)
+
+		payload := map[string]any{
+			"name":    "tf-probe-acltemplate",
+			"acltype": "NFS4",
+			"comment": "tf probe",
+			"acl": []map[string]any{
+				{
+					"tag":   "owner@",
+					"type":  "ALLOW",
+					"perms": map[string]any{"BASIC": "FULL_CONTROL"},
+					"flags": map[string]any{"BASIC": "INHERIT"},
+				},
+				{
+					"tag":   "group@",
+					"type":  "ALLOW",
+					"perms": map[string]any{"BASIC": "MODIFY"},
+					"flags": map[string]any{"BASIC": "INHERIT"},
+				},
+				{
+					"tag":   "everyone@",
+					"type":  "ALLOW",
+					"perms": map[string]any{"BASIC": "READ"},
+					"flags": map[string]any{"BASIC": "INHERIT"},
+				},
+			},
+		}
+		rawC, err := c.Call(context.Background(), "filesystem.acltemplate.create", payload)
+		if err != nil {
+			log.Fatal("acltemplate.create:", err)
+		}
+		fmt.Printf("=== filesystem.acltemplate.create response ===\n%s\n", rawC)
+		var created struct {
+			ID int64 `json:"id"`
+		}
+		json.Unmarshal(rawC, &created)
+		defer func() {
+			if _, err := c.Call(context.Background(), "filesystem.acltemplate.delete", created.ID); err != nil {
+				fmt.Printf("cleanup delete error: %v\n", err)
+			} else {
+				fmt.Println("=== acltemplate deleted ok ===")
+			}
+		}()
+
+		rawG, err := c.Call(context.Background(), "filesystem.acltemplate.get_instance", created.ID)
+		if err != nil {
+			log.Fatal("acltemplate.get_instance:", err)
+		}
+		fmt.Printf("=== filesystem.acltemplate.get_instance response ===\n%s\n", rawG)
+
+		rawU, err := c.Call(context.Background(), "filesystem.acltemplate.update", created.ID, map[string]any{
+			"comment": "tf probe updated",
+		})
+		if err != nil {
+			log.Fatal("acltemplate.update:", err)
+		}
+		fmt.Printf("=== filesystem.acltemplate.update response (comment only) ===\n%s\n", rawU)
+	}
 	if section == "appmethods" {
 		raw, err := c.Call(context.Background(), "core.get_methods")
 		if err != nil {

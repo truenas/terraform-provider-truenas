@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/acl_template"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/acme_dns_authenticator"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/alert_policy"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/alert_service"
@@ -26,6 +27,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cronjob"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/directoryservices"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/filesystem_permissions"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/ftp_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/group"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/init_shutdown_script"
@@ -224,6 +226,7 @@ func (p *TrueNASProvider) Configure(ctx context.Context, req provider.ConfigureR
 
 func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
+		acl_template.NewResource,
 		acme_dns_authenticator.NewResource,
 		alert_policy.NewResource,
 		alert_service.NewResource,
@@ -238,6 +241,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		cronjob.NewResource,
 		dataset.NewResource,
 		directoryservices.NewResource,
+		filesystem_permissions.NewResource,
 		ftp_config.NewResource,
 		group.NewResource,
 		init_shutdown_script.NewResource,
@@ -297,6 +301,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 
 func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
+		acl_template.NewDataSource,
 		acme_dns_authenticator.NewDataSource,
 		alert_policy.NewDataSource,
 		alert_service.NewDataSource,
@@ -311,6 +316,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		cronjob.NewDataSource,
 		dataset.NewDataSource,
 		directoryservices.NewDataSource,
+		filesystem_permissions.NewDataSource,
 		ftp_config.NewDataSource,
 		group.NewDataSource,
 		init_shutdown_script.NewDataSource,
