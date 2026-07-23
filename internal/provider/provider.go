@@ -21,6 +21,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/app_registry"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/audit_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/boot_environment"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/catalog_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/certificate"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cloud_backup"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cloudsync"
@@ -239,6 +240,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		app_registry.NewResource,
 		audit_config.NewResource,
 		boot_environment.NewResource,
+		catalog_config.NewResource,
 		certificate.NewResource,
 		cloud_backup.NewResource,
 		cloudsync.NewResource,
@@ -317,6 +319,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		app_registry.NewDataSource,
 		audit_config.NewDataSource,
 		boot_environment.NewDataSource,
+		catalog_config.NewDataSource,
 		certificate.NewDataSource,
 		cloud_backup.NewDataSource,
 		cloudsync.NewDataSource,
