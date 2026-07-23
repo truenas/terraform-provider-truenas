@@ -810,6 +810,88 @@ func main() {
 		}
 		pp("app.* and vm.* method names", names)
 	}
+	if section == "tnconnectmethods" {
+		// Method introspection only: confirm the tn_connect namespace exists
+		// at all and dump accepts/returns schemas for every tn_connect.*
+		// method (Plan 19 Task 3 probe). No config-mutating calls here.
+		raw, err := c.Call(context.Background(), "core.get_methods")
+		if err != nil {
+			log.Fatal(err)
+		}
+		var methods map[string]any
+		json.Unmarshal(raw, &methods)
+		var names []string
+		for name := range methods {
+			if len(name) >= 11 && name[:11] == "tn_connect." {
+				names = append(names, name)
+			}
+		}
+		sortStrings(names)
+		pp("tn_connect.* method names", names)
+		for _, name := range names {
+			pp(name, methods[name])
+		}
+		if len(names) == 0 {
+			fmt.Println("=== tn_connect namespace absent on this release ===")
+			return
+		}
+		pp("tn_connect.config (read-only, current state)", call(c, "tn_connect.config"))
+	}
+	if section == "tnconnectdecisive" {
+		// DECISIVE probe (26.0 only, per task-3 brief): with the box's
+		// current tn_connect.config reporting enabled=false, can a cosmetic
+		// field (e.g. "ips") be updated via tn_connect.update with ZERO side
+		// effects, sending a partial payload that never includes "enabled"?
+		// SAFETY: this probe NEVER sends {"enabled": true} under any
+		// circumstance — it aborts entirely if the box's current config
+		// already shows enabled=true (unsafe to experiment further; cloud
+		// enrollment may already be active or pending) rather than risk
+		// toggling it.
+		before := call(c, "tn_connect.config")
+		pp("tn_connect.config (before)", before)
+		beforeMap, ok := before.(map[string]any)
+		if !ok {
+			log.Fatal("tn_connect.config did not return a JSON object")
+		}
+		if enabled, _ := beforeMap["enabled"].(bool); enabled {
+			log.Fatal("ABORT: tn_connect.config reports enabled=true already; refusing to probe further")
+		}
+
+		origIPs, _ := beforeMap["ips"].([]any)
+		fmt.Printf("=== original ips ===\n%v\n", origIPs)
+
+		// Partial update: ONLY "ips", deliberately omitting "enabled"
+		// entirely so a genuinely partial-update API leaves enabled
+		// untouched (never sent, never flipped).
+		probeIPs := []string{"127.0.0.1"}
+		rawUpd, err := c.Call(context.Background(), "tn_connect.update", map[string]any{"ips": probeIPs})
+		if err != nil {
+			fmt.Printf("=== tn_connect.update({ips: [127.0.0.1]}) ERROR ===\n%v\n", err)
+		} else {
+			fmt.Printf("=== tn_connect.update({ips: [127.0.0.1]}) response ===\n%s\n", rawUpd)
+		}
+
+		after := call(c, "tn_connect.config")
+		pp("tn_connect.config (after ips update)", after)
+		if afterMap, ok := after.(map[string]any); ok {
+			if enabled, _ := afterMap["enabled"].(bool); enabled {
+				fmt.Println("=== !!! SIDE EFFECT: enabled flipped to true after ips-only update !!! ===")
+			} else {
+				fmt.Println("=== confirmed: enabled still false after ips-only update ===")
+			}
+		}
+
+		// Restore ips to its original value immediately, still never
+		// touching "enabled".
+		restorePayload := map[string]any{"ips": origIPs}
+		rawRestore, err := c.Call(context.Background(), "tn_connect.update", restorePayload)
+		if err != nil {
+			fmt.Printf("=== tn_connect.update (restore ips) ERROR ===\n%v\n", err)
+		} else {
+			fmt.Printf("=== tn_connect.update (restore ips) response ===\n%s\n", rawRestore)
+		}
+		pp("tn_connect.config (after restore)", call(c, "tn_connect.config"))
+	}
 	if section == "webshareprobe" {
 		// Method introspection first: confirm the namespace exists at all
 		// and dump accepts/returns schemas for the singleton + share CRUD

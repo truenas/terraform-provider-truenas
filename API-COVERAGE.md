@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-The provider implements **76 resources and 78 matching data sources** (two
+The provider implements **80 resources and 82 matching data sources** (two
 data sources have no corresponding resource: `truenas_docker_network` —
 Docker networks are managed by Docker itself, not by TrueNAS's own config
 surface — and `truenas_container_image`, a read-only lookup against the
@@ -17,7 +17,7 @@ access-management, certificates/ACME, keychain/remote-replication, filesystem
 permissions/ACLs, Active Directory/LDAP/IPA/Kerberos, containers/apps, and
 system-configuration surface of the TrueNAS SCALE API. Every implemented
 resource has a full acceptance test (create, update, import, destroy) run
-against real TrueNAS boxes on both 25.10 and 26.0, with five deliberate
+against real TrueNAS boxes on both 25.10 and 26.0, with six deliberate
 exceptions: `truenas_directoryservices` is live-tested on the 25.10 VM plus
 dedicated Samba AD, OpenLDAP, and FreeIPA servers only — directory-service
 tests never run against the production-serving 26.0 box, by design (see
@@ -26,11 +26,17 @@ documented, permanent acceptance-test skip because their respective `create`
 calls validate credentials against a real remote endpoint (a cloud storage
 bucket and a container registry, respectively) and no live fixture of that
 kind is available in this environment (see Part 2, Data protection and
-movement / Virtualization and apps) — and `truenas_lxc_config` and
-`truenas_container`/`truenas_container_image`, whose acceptance tests
-require TrueNAS SCALE 26.0 (the `lxc` and `container` namespaces do not
-exist on 25.10, confirmed live) and skip cleanly, rather than failing, on
-the 25.10 box (see Part 2, Virtualization and apps).
+movement / Virtualization and apps) — `truenas_lxc_config` and
+`truenas_container`/`truenas_container_image`/`truenas_webshare`/
+`truenas_webshare_config`, whose acceptance tests require TrueNAS SCALE
+26.0 (the `lxc`, `container`, and `webshare`/`sharing.webshare` namespaces
+do not exist on 25.10, confirmed live) and skip cleanly, rather than
+failing, on the 25.10 box (see Part 2, Virtualization and apps / Sharing) —
+and `truenas_tn_connect_config`, whose singleton mutate-and-restore test is
+a documented, permanent skip: `tn_connect.update`'s own accepts schema on
+SCALE 26.0 exposes exactly one writable field, `enabled`, and setting it
+true starts real TrueNAS Connect cloud enrollment — a side effect this
+provider's tests never trigger (see Part 2, System configuration).
 
 Of the 127 API namespaces the middleware exposes, more than half now map to
 declarative resources we cover, a smaller share are uncovered but viable Terraform
@@ -43,12 +49,12 @@ replication, scheduled tasks, filesystem ACLs, two-factor auth, cloud backup,
 audit config, reporting exporters) is now covered — see Part 2. Containers and
 apps (Docker service configuration, private registries, app catalog trains,
 and now LXC container lifecycle — create/start/stop/delete, 26.0+) are
-covered too — see Part 2, Virtualization and apps. The next-highest-value
-gaps, in rough priority order:
+covered too — see Part 2, Virtualization and apps. §1.2's new-26.0-surfaces
+list is now empty too: web shares (`webshare`/`sharing.webshare`) and
+TrueNAS Connect enrollment status (`tn_connect`) are both covered — see
+Part 2, Sharing and System configuration. The remaining gap is:
 
-1. **New 26.0 share type** — `webshare`/`sharing.webshare` (WebDAV-style web
-   shares), a natural fit next to `truenas_nfs_share`/`truenas_smb_share`.
-2. **Enterprise/HA hardware** — failover controller pairs, Fibre Channel,
+1. **Enterprise/HA hardware** — failover controller pairs, Fibre Channel,
    JBOF shelves, enclosure management, IPMI, RDMA: all need dedicated hardware
    scheduled for testing before they can ship under this project's
    no-mocks policy.
@@ -74,11 +80,21 @@ gaps is §1.2 below.
 
 ### 1.2 New 26.0 surfaces
 
-| Namespace(s) | What it manages | Notes |
-|---|---|---|
-| `webshare`, `sharing.webshare` | WebDAV-style web shares (new share type) | Natural fit next to `nfs`/`smb` |
-| `zfs.resource`, `zfs.resource.snapshot`, `zpool`, `zpool.scrub` | Next-generation ZFS namespaces | We use the stable `pool.dataset` / `pool.snapshot` names; watch for deprecation signals before migrating |
-| `tn_connect` | TrueNAS Connect enrollment | Cloud service enrollment; limited Terraform value |
+*(empty)* — `webshare`/`sharing.webshare` and `tn_connect` (the two viable
+Terraform resources previously tracked here) are now covered — see Part 2,
+Sharing and System configuration respectively. `zfs.resource`,
+`zfs.resource.snapshot`, `zpool`, `zpool.scrub` (the next-generation ZFS
+namespaces) were deliberately **not** adopted and are not tracked as a gap:
+they duplicate the stable `pool.dataset`/`pool.snapshot`/`pool.scrub`
+namespaces this provider already covers, so there is no coverage gain from
+switching, only churn. Kept as a watch-item below in case TrueNAS ever
+deprecates the `pool.*` names in favor of these.
+
+**Watch-item (not a gap):** `zfs.resource`, `zfs.resource.snapshot`,
+`zpool`, `zpool.scrub` — next-generation ZFS namespaces introduced
+alongside the stable `pool.dataset`/`pool.snapshot`/`pool.scrub` ones this
+provider uses. Revisit only if TrueNAS signals deprecation of the `pool.*`
+namespaces.
 
 ### 1.3 Enterprise / licensed hardware
 
@@ -147,6 +163,8 @@ skip on 25.10).
 | `truenas_smb_share` | `sharing.smb` |
 | `truenas_nfs_config` | `nfs` |
 | `truenas_smb_config` | `smb` |
+| `truenas_webshare` | `sharing.webshare` (WebDAV-style web shares: `name`/`path`/`enabled`/`is_home_base`; no `comment` field — confirmed live, rejected as an extra input; **SCALE 26.0+ only**, the `sharing.webshare` namespace does not exist on 25.10, confirmed live via `core.get_methods`) |
+| `truenas_webshare_config` | `webshare` (singleton: bind IPs, search indexing, passkey auth mode, allowed AD/LDAP groups; **SCALE 26.0+ only**, same version gate as `truenas_webshare`) |
 
 ### Block storage — iSCSI
 
@@ -210,6 +228,7 @@ skip on 25.10).
 | `truenas_service` | `service` |
 | `truenas_audit_config` | `audit` (singleton: retention/reservation/quota for the local audit databases; no top-level enable/disable — auditing is toggled per service) |
 | `truenas_reporting_exporter` | `reporting.exporters` (GRAPHITE exporter, the only type TrueNAS currently supports, exposed as a typed nested block) |
+| `truenas_tn_connect_config` | `tn_connect` (singleton: TrueNAS Connect cloud enrollment status. **SAFETY**: `enabled` is the only writable field — confirmed live, `tn_connect.update`'s own accepts schema on SCALE 26.0 exposes nothing else — and setting it true starts real cloud enrollment, so this provider's own tests never do so; enrollment actions (claim token generation, registration URI) are out of scope. Present on both 25.10 and 26.0, unlike most other new-26.0 surfaces, but the two releases' `tn_connect.config`/`tn_connect.update` field shapes diverge — SCALE 25.10 additionally reports `ips`/`interfaces`/`interfaces_ips`/`use_all_interfaces` (absent on 26.0, which selects addresses automatically instead), SCALE 26.0 additionally reports `tier`/`last_heartbeat_failure_datetime` (absent on 25.10) — both sets are exposed as Computed, release-conditional attributes that read as null where absent) |
 
 ### Scheduled tasks
 

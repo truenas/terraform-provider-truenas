@@ -67,7 +67,7 @@ a real, observed flake, not a resource defect — so retrying the restore
 across transport drops matters even though the Terraform steps themselves
 already succeeded.
 
-## Unit tests (1009 functions across 82 packages)
+## Unit tests (1032 functions across 84 packages)
 
 Every resource package carries unit tests for:
 
@@ -88,7 +88,7 @@ Every resource package carries unit tests for:
   test server: calls, errors, context cancellation, auth, and the CallJob
   job-polling loop including its no-job bail-out.
 
-## Acceptance suite (113 test functions, 81 packages)
+## Acceptance suite (115 test functions, 82 packages)
 
 ### Tier 1 — safe (`make testacc-safe`)
 
@@ -208,6 +208,12 @@ Coverage highlights:
   **Both are SCALE 26.0+ only** — self-skip cleanly on 25.10 via a version
   precheck, the `webshare`/`sharing.webshare` namespaces do not exist there
   (0 matching methods, confirmed live via `core.get_methods`).
+- **TrueNAS Connect**: `tn_connect_config` (`TestAccTnConnectConfigDataSource_basic`,
+  datasource-only Tier 1 test — the resource itself has no Tier 2 test at
+  all, see Never-run tier below). Unlike `webshare`/`lxc_config`/
+  `container_device`, this namespace needs **no version gate**: probed
+  live, `tn_connect.config`/`tn_connect.update` are present on both SCALE
+  25.10 and 26.0, so the test runs unconditionally on either release.
 
 Safety rules baked into the tests — they must never touch the box's live
 objects: iSCSI portal/target id=1, extent id=2; NVMe-oF subsys/port/
@@ -278,6 +284,23 @@ management access or migrate system state:
   skip (unconditional `t.Skip`, no `TF_ACC` gate needed). See the in-file
   doc comment for the decisive probe evidence and instructions to enable it
   against an environment with a real container registry.
+- `tn_connect_config` Tier 2 set-and-restore — `tn_connect.update`'s own
+  `core.get_methods` accepts schema exposes **exactly one** writable
+  property on SCALE 26.0: `enabled`. There is no cosmetic/informational
+  field this resource could safely toggle without touching `enabled`
+  (starting real TrueNAS Connect cloud enrollment — forbidden
+  unconditionally, see the resource's schema description), so
+  `TestAccTnConnectConfig_setAndRestore` is a documented, permanent skip
+  (unconditional `t.Skip`, no `TF_ACC` gate needed), mirroring
+  `cloud_backup`/`app_registry` above. Independently decisive: the
+  production 26.0 box is already enrolled (`enabled=true`, `tier=FOUNDATION`)
+  — a real account, not a disposable fixture. SCALE 25.10's
+  `tn_connect.update` does accept a richer schema (also `ips`, `interfaces`,
+  `use_all_interfaces`), and a supplementary live probe there confirmed an
+  `ips`-only update leaves `enabled` untouched, but this resource
+  deliberately does not expose those fields as writable on any release
+  (see the in-file doc comment on `TestAccTnConnectConfig_setAndRestore`
+  and `.superpowers/sdd/task-3-report.md` for the full transcript).
 
 ## Directory-services test environment
 

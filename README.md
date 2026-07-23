@@ -8,7 +8,7 @@ client lives inside the provider.
 
 ## What it manages
 
-79 resources (plus two data-source-only namespaces, `truenas_docker_network`
+80 resources (plus two data-source-only namespaces, `truenas_docker_network`
 and `truenas_container_image` — see below), each resource with a matching
 data source:
 
@@ -30,7 +30,7 @@ data source:
 | **Network** | `truenas_network_interface`, `truenas_static_route`, `truenas_network_config` |
 | **Services** | `truenas_service`, plus per-service configuration: `truenas_ssh_config`, `truenas_ftp_config`, `truenas_snmp_config`, `truenas_ups_config`, `truenas_smb_config`, `truenas_nfs_config` |
 | **Alerts** | `truenas_alert_service`, `truenas_alert_policy` |
-| **System** | `truenas_boot_environment`, `truenas_tunable`, `truenas_ntp_server`, `truenas_mail`, `truenas_system_general`, `truenas_system_advanced`, `truenas_system_dataset`, `truenas_replication_config`, `truenas_audit_config`, `truenas_reporting_exporter` |
+| **System** | `truenas_boot_environment`, `truenas_tunable`, `truenas_ntp_server`, `truenas_mail`, `truenas_system_general`, `truenas_system_advanced`, `truenas_system_dataset`, `truenas_replication_config`, `truenas_audit_config`, `truenas_reporting_exporter`, `truenas_tn_connect_config` (TrueNAS Connect service singleton — enrollment status only; SAFETY: enabling starts real cloud enrollment, see the resource's own docs) |
 
 Both block-storage stacks are expressible end-to-end in HCL: iSCSI
 (portal → target → extent → LUN association → CHAP auth) and NVMe-oF
