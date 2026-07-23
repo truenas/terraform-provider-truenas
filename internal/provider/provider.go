@@ -26,6 +26,8 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cloud_backup"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cloudsync"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cloudsync_credentials"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/container"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/container_image"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cronjob"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/directoryservices"
@@ -246,6 +248,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		cloud_backup.NewResource,
 		cloudsync.NewResource,
 		cloudsync_credentials.NewResource,
+		container.NewResource,
 		cronjob.NewResource,
 		dataset.NewResource,
 		directoryservices.NewResource,
@@ -326,6 +329,8 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		cloud_backup.NewDataSource,
 		cloudsync.NewDataSource,
 		cloudsync_credentials.NewDataSource,
+		container.NewDataSource,
+		container_image.NewDataSource, // datasource-only: no truenas_container_image resource exists (see internal/resources/container_image/schema.go)
 		cronjob.NewDataSource,
 		dataset.NewDataSource,
 		directoryservices.NewDataSource,

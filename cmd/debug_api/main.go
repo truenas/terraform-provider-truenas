@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"time"
 
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
@@ -195,6 +196,9 @@ func main() {
 	if section == "lxc" || section == "all" {
 		pp("lxc.config", call(c, "lxc.config"))
 		pp("lxc.bridge_choices", call(c, "lxc.bridge_choices"))
+	}
+	if section == "containerprobe" {
+		runContainerProbe(c)
 	}
 	if section == "smbprobe" {
 		// Create a throwaway dataset + share, dump create + get_instance
@@ -733,4 +737,173 @@ func main() {
 		}
 		pp("app.* and vm.* method names", names)
 	}
+}
+
+// waitJob polls core.get_jobs for jobID until it reaches a terminal state,
+// printing progress every 5th poll. Returns the job's result on SUCCESS.
+func waitJob(c *client.Client, jobID int64, label string) json.RawMessage {
+	for i := 0; ; i++ {
+		jobs, err := c.Call(context.Background(), "core.get_jobs", []any{[]any{"id", "=", jobID}})
+		if err != nil {
+			log.Fatalf("%s: polling job %d: %v", label, jobID, err)
+		}
+		var entries []struct {
+			State  string          `json:"state"`
+			Result json.RawMessage `json:"result"`
+			Error  string          `json:"error"`
+		}
+		json.Unmarshal(jobs, &entries)
+		if len(entries) > 0 {
+			switch entries[0].State {
+			case "SUCCESS":
+				return entries[0].Result
+			case "FAILED", "ABORTED":
+				fmt.Printf("=== %s job %s ===\n%s\n", label, entries[0].State, entries[0].Error)
+				return nil
+			}
+		}
+		if i%5 == 0 {
+			fmt.Printf("... waiting for %s job %d (poll %d)\n", label, jobID, i)
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
+// runContainerProbe probes container.update's accepted fields (decides
+// ForceNew for the truenas_container resource), container.image.
+// query_registry's version ordering, the stop-on-never-started error text,
+// and the full create/get_instance response shape (idmap, capabilities_*,
+// dataset, default_network, status) via one real, disposable container on
+// the target box. Cleans itself up (best-effort) regardless of outcome.
+func runContainerProbe(c *client.Client) {
+	raw, err := c.Call(context.Background(), "core.get_methods")
+	if err != nil {
+		log.Fatal(err)
+	}
+	var methods map[string]any
+	json.Unmarshal(raw, &methods)
+	for _, m := range []string{"container.create", "container.update", "container.start", "container.stop", "container.delete", "container.get_instance", "container.query", "container.image.query_registry", "container.pool_choices"} {
+		if info, ok := methods[m]; ok {
+			pp(m+" (core.get_methods)", info)
+		} else {
+			fmt.Printf("[%s] not present in core.get_methods\n", m)
+		}
+	}
+
+	// container.image.query_registry takes NO arguments (probed: "Too many
+	// arguments (expected 0, found 1)" when a query filter is passed) — it
+	// returns every image name in the registry, so the truenas_container_image
+	// datasource must filter client-side by name.
+	registryRaw := call(c, "container.image.query_registry")
+	var alpineEntry any
+	if arr, ok := registryRaw.([]any); ok {
+		fmt.Printf("=== container.image.query_registry: %d total image names ===\n", len(arr))
+		for _, item := range arr {
+			if entry, ok := item.(map[string]any); ok {
+				if entry["name"] == "alpine:3.22:amd64:default" {
+					alpineEntry = entry
+				}
+			}
+		}
+	}
+	pp("container.image.query_registry (alpine:3.22:amd64:default entry)", alpineEntry)
+
+	imageVersion := os.Getenv("TRUENAS_PROBE_IMAGE_VERSION")
+	if imageVersion == "" {
+		// Pull the last (newest) version out of the registry response so
+		// the probe container create doesn't need a hardcoded version that
+		// the upstream registry may have pruned.
+		if entry, ok := alpineEntry.(map[string]any); ok {
+			if versions, ok := entry["versions"].([]any); ok && len(versions) > 0 {
+				fmt.Printf("=== alpine:3.22:amd64:default versions (registry order, %d entries) ===\n", len(versions))
+				for i, v := range versions {
+					if vm, ok := v.(map[string]any); ok {
+						fmt.Printf("  [%d] %v\n", i, vm["version"])
+					}
+				}
+				if last, ok := versions[len(versions)-1].(map[string]any); ok {
+					if v, ok := last["version"].(string); ok {
+						imageVersion = v
+					}
+				}
+			}
+		}
+	}
+	if imageVersion == "" {
+		log.Fatal("could not determine an image version to probe with (set TRUENAS_PROBE_IMAGE_VERSION)")
+	}
+	fmt.Printf("=== using image version %q ===\n", imageVersion)
+
+	name := "tf-probe-container"
+	createPayload := map[string]any{
+		"name":      name,
+		"pool":      "tank",
+		"autostart": false,
+		"image":     map[string]any{"name": "alpine:3.22:amd64:default", "version": imageVersion},
+	}
+	fmt.Printf("=== container.create payload ===\n%v\n", createPayload)
+	raw, err = c.Call(context.Background(), "container.create", createPayload)
+	if err != nil {
+		log.Fatal("container.create (job submit):", err)
+	}
+	var jobID int64
+	json.Unmarshal(raw, &jobID)
+	fmt.Printf("=== container.create job id === %d\n", jobID)
+
+	createResult := waitJob(c, jobID, "container.create")
+	if createResult == nil {
+		log.Fatal("container.create did not succeed; aborting probe")
+	}
+	fmt.Printf("=== container.create result ===\n%s\n", createResult)
+
+	var created struct {
+		ID int64 `json:"id"`
+	}
+	json.Unmarshal(createResult, &created)
+
+	defer func() {
+		fmt.Println("=== cleanup: container.delete ===")
+		raw, err := c.Call(context.Background(), "container.delete", created.ID)
+		if err != nil {
+			fmt.Printf("container.delete error: %v\n", err)
+			return
+		}
+		var delJobID int64
+		if json.Unmarshal(raw, &delJobID) == nil && delJobID != 0 {
+			waitJob(c, delJobID, "container.delete")
+		}
+		fmt.Println("=== cleanup: deleted ===")
+	}()
+
+	// Probe stop-on-never-started error text.
+	raw, err = c.Call(context.Background(), "container.stop", created.ID, map[string]any{"force": false})
+	if err != nil {
+		fmt.Printf("=== container.stop (never started) error ===\n%v\n", err)
+	} else {
+		var stopJobID int64
+		json.Unmarshal(raw, &stopJobID)
+		waitJob(c, stopJobID, "container.stop (never started)")
+	}
+
+	// Probe container.update: description (expected to work), then name and
+	// pool changes to see if they're accepted or rejected (decides
+	// ForceNew for the truenas_container resource's name/pool fields).
+	for _, probe := range []map[string]any{
+		{"description": "probe-updated-description"},
+		{"name": "tf-probe-container-renamed"},
+		{"pool": "tank"},
+	} {
+		raw, err := c.Call(context.Background(), "container.update", created.ID, probe)
+		if err != nil {
+			fmt.Printf("=== container.update(%v) error ===\n%v\n", probe, err)
+		} else {
+			fmt.Printf("=== container.update(%v) result ===\n%s\n", probe, raw)
+		}
+	}
+
+	raw, err = c.Call(context.Background(), "container.get_instance", created.ID)
+	if err != nil {
+		log.Fatal("container.get_instance:", err)
+	}
+	fmt.Printf("=== container.get_instance (final) ===\n%s\n", raw)
 }
