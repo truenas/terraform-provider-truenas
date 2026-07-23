@@ -106,13 +106,6 @@ func testAccCheckReplicationDestroyed(name string) resource.TestCheckFunc {
 	}
 }
 
-// testAccSSHReplUsername is the local TrueNAS user this test temporarily
-// authorizes a throwaway SSH key for, mirroring
-// keychain_ssh_connection's acceptance test's testAccConnectionUsername —
-// kept package-local (not shared/exported) since each acceptance package
-// builds its own copy of this fixture pattern.
-const testAccSSHReplUsername = "truenas_admin"
-
 // genEd25519OpenSSHKeyPair generates an ed25519 key pair and returns the
 // OpenSSH-format PEM private key plus the exact authorized_keys-format
 // public key line — identical in behavior to the like-named helper in
@@ -159,52 +152,6 @@ func scanRemoteHostKey(t *testing.T, host string) string {
 		t.Fatalf("parsing remote_ssh_host_key_scan response: %v", err)
 	}
 	return hostKey
-}
-
-// authorizeTestKey appends pubKeyLine to testAccSSHReplUsername's
-// "sshpubkey" via a live user.query + user.update, and returns a restore
-// func that puts the exact original value back (nil if the user had none
-// set) — identical pattern to keychain_ssh_connection's acceptance test.
-func authorizeTestKey(t *testing.T, pubKeyLine string) func() {
-	t.Helper()
-	c := acctest.Client()
-
-	raw, err := c.Call(context.Background(), "user.query", [][]any{{"username", "=", testAccSSHReplUsername}})
-	if err != nil {
-		t.Fatalf("querying user %q: %v", testAccSSHReplUsername, err)
-	}
-	var users []struct {
-		ID        int64   `json:"id"`
-		SSHPubKey *string `json:"sshpubkey"`
-	}
-	if err := json.Unmarshal(raw, &users); err != nil {
-		t.Fatalf("parsing user.query response: %v", err)
-	}
-	if len(users) == 0 {
-		t.Fatalf("user %q not found on the acceptance-test box", testAccSSHReplUsername)
-	}
-	userID := users[0].ID
-	original := users[0].SSHPubKey
-
-	updated := ""
-	if original != nil {
-		updated = strings.TrimRight(*original, "\n") + "\n"
-	}
-	updated += strings.TrimRight(pubKeyLine, "\n") + "\n"
-
-	if _, err := c.Call(context.Background(), "user.update", userID, map[string]any{"sshpubkey": updated}); err != nil {
-		t.Fatalf("authorizing test key for %q: %v", testAccSSHReplUsername, err)
-	}
-
-	return func() {
-		var restoreVal any
-		if original != nil {
-			restoreVal = *original
-		}
-		if _, err := c.Call(context.Background(), "user.update", userID, map[string]any{"sshpubkey": restoreVal}); err != nil {
-			t.Errorf("restoring original sshpubkey for %q: %v", testAccSSHReplUsername, err)
-		}
-	}
 }
 
 // takeMatchingSnapshot creates a snapshot on dataset whose name matches the
@@ -273,24 +220,53 @@ func runReplicationAndVerify(t *testing.T, resourceName string) resource.TestChe
 // TestAccReplication_RemoteSSH exercises transport = "SSH" end to end: an
 // ed25519 truenas_keychain_ssh_keypair + truenas_keychain_ssh_connection
 // fixture pair (HCL-referenced, per the loopback pattern established by
-// keychain_ssh_connection's own acceptance test), the connection's public
-// key temporarily authorized on the box's own truenas_admin user (restored
-// in t.Cleanup), and a PUSH replication task over that connection —
-// full contract (create with compression/speed_limit/sudo set, in-place
-// update, import), plus a genuine replication.run round trip against a
-// real snapshot (see runReplicationAndVerify's doc comment for why a full
-// run was chosen over a state-only check).
+// keychain_ssh_connection's own acceptance test), a throwaway
+// truenas_user fixture (also HCL-referenced) whose sshpubkey and
+// sudo_commands_nopasswd are set directly in config rather than mutating
+// any pre-existing box account, and a PUSH replication task over that
+// connection — full contract (create with compression/speed_limit/sudo
+// set, in-place update, import), plus a genuine replication.run round
+// trip against a real snapshot (see runReplicationAndVerify's doc comment
+// for why a full run was chosen over a state-only check).
+//
+// This used to authorize the test key on the box's own "truenas_admin"
+// user and rely on that account's sudo config already being passwordless.
+// That assumption held on the 25.10 disposable VM but not on the 26.0
+// box (real Task 10 sweep failure: replication.run's remote zfs receive
+// hit "sudo: a password is required" because truenas_admin there has
+// sudo_commands=["ALL"] but an empty sudo_commands_nopasswd — a
+// per-box account configuration difference, not a TrueNAS release
+// difference or a provider defect). Provisioning a disposable
+// Terraform-managed user with sudo_commands_nopasswd = ["ALL"] makes the
+// test self-sufficient and portable across boxes without ever touching a
+// pre-existing account's sudo policy — especially important on the 26.0
+// box, which is production-serving and must never have its admin
+// account's privileges altered by a test run.
 func TestAccReplication_RemoteSSH(t *testing.T) {
 	acctest.PreCheck(t)
 
 	host := acctest.EndpointHost()
+	username := acctest.RandName("tf-acc-replssh-user")
+	homeDS := acctest.RandName("tf-acc-replssh-home")
 	keypairName := acctest.RandName("tf-acc-replssh-keypair")
 	connName := acctest.RandName("tf-acc-replssh-conn")
 	privateKeyPEM, publicKeyLine := genEd25519OpenSSHKeyPair(t, keypairName)
+	// ssh.MarshalAuthorizedKey appends a trailing newline, but TrueNAS's
+	// user.create/user.update strip it before persisting sshpubkey, so the
+	// server's post-create read-back never carries it. Terraform's plan
+	// step otherwise uses the config value (including the newline) as the
+	// planned value for this Optional+Computed attribute, which then
+	// mismatches the applied state and trips "provider produced
+	// inconsistent result after apply" (probed live). Trimming here,
+	// test-side, keeps the config's value identical to what the box
+	// stores. Provider-side note for final review: truenas_user.sshpubkey
+	// has no whitespace normalization of its own, so any real config
+	// supplying a trailing newline hits this same error — a candidate for
+	// a provider-side fix (e.g. a plan modifier trimming the configured
+	// value), not implemented here since a test-side trim fully unblocks
+	// this test.
+	publicKeyLine = strings.TrimSpace(publicKeyLine)
 	hostKey := scanRemoteHostKey(t, host)
-
-	restore := authorizeTestKey(t, publicKeyLine)
-	t.Cleanup(restore)
 
 	name := acctest.RandName("tf-acc-repl-ssh")
 	srcDS := acctest.RandName("tf-acc-repl-ssh-src")
@@ -298,11 +274,11 @@ func TestAccReplication_RemoteSSH(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckReplicationSSHDestroyed(name),
+		CheckDestroy:             testAccCheckReplicationSSHDestroyed(name, username),
 		Steps: []resource.TestStep{
 			{
 				Config: acctest.ProviderConfig() + testAccReplicationSSHConfig(
-					keypairName, privateKeyPEM, connName, host, hostKey, srcDS, dstDS, name, true),
+					username, homeDS, publicKeyLine, keypairName, privateKeyPEM, connName, host, hostKey, srcDS, dstDS, name, true),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("truenas_replication_task.test", "id"),
 					resource.TestCheckResourceAttr("truenas_replication_task.test", "name", name),
@@ -314,6 +290,7 @@ func TestAccReplication_RemoteSSH(t *testing.T) {
 					resource.TestCheckResourceAttrPair(
 						"truenas_replication_task.test", "ssh_credentials",
 						"truenas_keychain_ssh_connection.test", "id"),
+					resource.TestCheckResourceAttr("truenas_user.sshuser", "username", username),
 					// Real data-transfer round trip: take a snapshot matching
 					// the task's also_include_naming_schema, then run it.
 					takeMatchingSnapshot(t, fmt.Sprintf("%s/%s", acctest.TestPool(), srcDS)),
@@ -326,7 +303,7 @@ func TestAccReplication_RemoteSSH(t *testing.T) {
 			// enabled-toggle-only update step.
 			{
 				Config: acctest.ProviderConfig() + testAccReplicationSSHConfig(
-					keypairName, privateKeyPEM, connName, host, hostKey, srcDS, dstDS, name, false),
+					username, homeDS, publicKeyLine, keypairName, privateKeyPEM, connName, host, hostKey, srcDS, dstDS, name, false),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_replication_task.test", "enabled", "false"),
 				),
@@ -340,7 +317,7 @@ func TestAccReplication_RemoteSSH(t *testing.T) {
 	})
 }
 
-func testAccReplicationSSHConfig(keypairName, privateKeyPEM, connName, host, hostKey, srcDS, dstDS, name string, enabled bool) string {
+func testAccReplicationSSHConfig(username, homeDS, publicKeyLine, keypairName, privateKeyPEM, connName, host, hostKey, srcDS, dstDS, name string, enabled bool) string {
 	pool := acctest.TestPool()
 	return fmt.Sprintf(`
 resource "truenas_dataset" "src" {
@@ -351,23 +328,43 @@ resource "truenas_dataset" "dst" {
   name = %[2]q
 }
 
+# user_create requires the home directory of any user with an sshpubkey to
+# be a writable path inside a data pool (a stub like /var/empty is
+# rejected), so the throwaway SSH user below gets its own dedicated,
+# Terraform-managed dataset as a home — destroyed along with the user
+# fixture, never touching any pre-existing pool path.
+resource "truenas_dataset" "sshuser_home" {
+  name = %[3]q
+}
+
+resource "truenas_user" "sshuser" {
+  username               = %[4]q
+  full_name              = "TF Acceptance SSH Replication User"
+  password_disabled      = true
+  home                   = "/mnt/${truenas_dataset.sshuser_home.name}"
+  shell                  = "/usr/bin/bash"
+  group_create           = true
+  sshpubkey              = %[5]q
+  sudo_commands_nopasswd = ["ALL"]
+}
+
 resource "truenas_keychain_ssh_keypair" "test" {
-  name        = %[3]q
-  private_key = %[4]q
+  name        = %[6]q
+  private_key = %[7]q
 }
 
 resource "truenas_keychain_ssh_connection" "test" {
-  name            = %[5]q
-  host            = %[6]q
+  name            = %[8]q
+  host            = %[9]q
   port            = 22
-  username        = %[7]q
+  username        = truenas_user.sshuser.username
   private_key_id  = truenas_keychain_ssh_keypair.test.id
-  remote_host_key = %[8]q
+  remote_host_key = %[10]q
   connect_timeout = 10
 }
 
 resource "truenas_replication_task" "test" {
-  name             = %[9]q
+  name             = %[11]q
   direction        = "PUSH"
   transport        = "SSH"
   ssh_credentials  = truenas_keychain_ssh_connection.test.id
@@ -380,18 +377,18 @@ resource "truenas_replication_task" "test" {
   auto             = false
   retention_policy = "SOURCE"
   readonly         = "IGNORE"
-  enabled          = %[10]v
+  enabled          = %[12]v
 
   also_include_naming_schema = ["auto-%%Y-%%m-%%d_%%H-%%M"]
 }
-`, pool+"/"+srcDS, pool+"/"+dstDS, keypairName, privateKeyPEM, connName, host, testAccSSHReplUsername, hostKey, name, enabled)
+`, pool+"/"+srcDS, pool+"/"+dstDS, pool+"/"+homeDS, username, publicKeyLine, keypairName, privateKeyPEM, connName, host, hostKey, name, enabled)
 }
 
 // testAccCheckReplicationSSHDestroyed verifies the replication task, the
-// keychain connection, and the keychain keypair are all gone, matching
-// keychain_ssh_connection's acceptance test's multi-resource CheckDestroy
-// pattern.
-func testAccCheckReplicationSSHDestroyed(name string) resource.TestCheckFunc {
+// keychain connection, the keychain keypair, and the throwaway SSH user
+// fixture are all gone, matching keychain_ssh_connection's acceptance
+// test's multi-resource CheckDestroy pattern.
+func testAccCheckReplicationSSHDestroyed(name, username string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		c := acctest.Client()
 
@@ -436,6 +433,20 @@ func testAccCheckReplicationSSHDestroyed(name string) resource.TestCheckFunc {
 			if len(credResults) > 0 {
 				return fmt.Errorf("keychain credential id=%d (%s) still exists", id, addr)
 			}
+		}
+
+		userRaw, err := c.Call(context.Background(), "user.query", [][]any{{"username", "=", username}})
+		if err != nil {
+			return fmt.Errorf("querying user %q: %w", username, err)
+		}
+		var userResults []struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.Unmarshal(userRaw, &userResults); err != nil {
+			return fmt.Errorf("decoding user.query: %w", err)
+		}
+		if len(userResults) > 0 {
+			return fmt.Errorf("throwaway SSH user %q still exists (id %d)", username, userResults[0].ID)
 		}
 		return nil
 	}
