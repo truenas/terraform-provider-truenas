@@ -40,6 +40,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/ftp_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/group"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/init_shutdown_script"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/ipmi_lan"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_auth"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_extent"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/iscsi_global"
@@ -265,6 +266,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		ftp_config.NewResource,
 		group.NewResource,
 		init_shutdown_script.NewResource,
+		ipmi_lan.NewResource,
 		iscsi_auth.NewResource,
 		iscsi_extent.NewResource,
 		iscsi_global.NewResource,
@@ -353,6 +355,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		ftp_config.NewDataSource,
 		group.NewDataSource,
 		init_shutdown_script.NewDataSource,
+		ipmi_lan.NewDataSource,
 		iscsi_auth.NewDataSource,
 		iscsi_extent.NewDataSource,
 		iscsi_global.NewDataSource,

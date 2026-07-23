@@ -1142,6 +1142,177 @@ func main() {
 		// only against the box named by TRUENAS_HA_ALLOWED_ENDPOINT.
 		runHAFailover(c)
 	}
+	if section == "ipmimethods" {
+		// Method introspection for the ipmi.* namespace. Per the Plan 20
+		// Task 1 finding (25.10.4 HA box: failover.update was directly
+		// callable despite being absent from core.get_methods), this ALSO
+		// direct-calls every candidate method by name regardless of whether
+		// core.get_methods listed it, so an under-reported method is not
+		// missed.
+		raw, err := c.Call(context.Background(), "core.get_methods")
+		if err != nil {
+			log.Fatal(err)
+		}
+		var methods map[string]any
+		json.Unmarshal(raw, &methods)
+		var names []string
+		for name := range methods {
+			if len(name) >= 5 && name[:5] == "ipmi." {
+				names = append(names, name)
+			}
+		}
+		sortStrings(names)
+		pp("ipmi.* method names (core.get_methods)", names)
+		for _, name := range names {
+			pp(name, methods[name])
+		}
+
+		fmt.Println("\n=== direct-call verification (bypassing core.get_methods listing) ===")
+		pp("ipmi.is_loaded", call(c, "ipmi.is_loaded"))
+		pp("ipmi.lan.query", call(c, "ipmi.lan.query"))
+		pp("ipmi.lan.channels", call(c, "ipmi.lan.channels"))
+	}
+	if section == "ipmiprobe" {
+		// Safe, read-mostly probe of ipmi.lan.query/channels/update shapes
+		// (Plan 20 Task 2). The ONLY mutating call is a same-value update
+		// round trip on channel 1 (re-sending exactly what query already
+		// reported), to observe: (a) the exact update payload shape
+		// ipmi.lan.update accepts (channel-keyed? full replace vs partial?),
+		// (b) whether "password" is echoed back on query/channels
+		// (WriteOnly vs Sensitive evidence), (c) whether an "apply_remote"
+		// (or similar) flag exists for the HA peer. Never sends a password
+		// value, never changes dhcp/ipaddress/netmask/gateway/vlan to a
+		// different value than what was already read.
+		lanRaw, err := c.Call(context.Background(), "ipmi.lan.query")
+		if err != nil {
+			log.Fatal("ipmi.lan.query:", err)
+		}
+		fmt.Printf("=== ipmi.lan.query (all channels, before) ===\n%s\n", lanRaw)
+
+		chansRaw, err := c.Call(context.Background(), "ipmi.lan.channels")
+		if err != nil {
+			fmt.Printf("=== ipmi.lan.channels error ===\n%v\n", err)
+		} else {
+			fmt.Printf("=== ipmi.lan.channels ===\n%s\n", chansRaw)
+		}
+
+		var channels []map[string]any
+		if err := json.Unmarshal(lanRaw, &channels); err != nil || len(channels) == 0 {
+			log.Fatalf("ipmi.lan.query did not return a non-empty array: err=%v raw=%s", err, lanRaw)
+		}
+		first := channels[0]
+		fmt.Printf("=== first channel object keys ===\n")
+		var keys []string
+		for k := range first {
+			keys = append(keys, k)
+		}
+		sortStrings(keys)
+		for _, k := range keys {
+			fmt.Printf("  %s: %v (%T)\n", k, first[k], first[k])
+		}
+
+		channelNum, ok := first["channel"]
+		if !ok {
+			log.Fatal("first channel object has no \"channel\" key; inspect keys above to find the real id field")
+		}
+
+		// SAME-VALUE round trip: only "vlan" (if present) is resent, since
+		// per the task brief dhcp/network fields are riskier to touch even
+		// with the identical value on live enterprise BMC firmware. If
+		// "vlan" is absent, fall back to re-sending the whole first object
+		// verbatim minus any password-shaped key, to observe the accepts
+		// shape without risking a real BMC network change.
+		payload := map[string]any{}
+		if vlan, ok := first["vlan"]; ok {
+			payload["vlan"] = vlan
+		} else {
+			for k, v := range first {
+				if k == "channel" || k == "id" || k == "password" {
+					continue
+				}
+				payload[k] = v
+			}
+		}
+		fmt.Printf("=== ipmi.lan.update(%v, %v) payload ===\n", channelNum, payload)
+		updRaw, err := c.Call(context.Background(), "ipmi.lan.update", channelNum, payload)
+		if err != nil {
+			fmt.Printf("=== ipmi.lan.update error ===\n%v\n", err)
+		} else {
+			fmt.Printf("=== ipmi.lan.update response ===\n%s\n", updRaw)
+		}
+
+		lanRaw2, err := c.Call(context.Background(), "ipmi.lan.query")
+		if err != nil {
+			log.Fatal("ipmi.lan.query (after):", err)
+		}
+		fmt.Printf("=== ipmi.lan.query (all channels, after) ===\n%s\n", lanRaw2)
+	}
+	if section == "ipmirestore" {
+		// SAFETY TOOL: repeatedly resends a known-good static IPMI LAN
+		// config to a channel and polls ipmi.lan.query until ip_address/
+		// subnet_mask actually stick (observed live: a single
+		// ipmi.lan.update call round-tripped successfully but the very
+		// next ipmi.lan.query read back "0.0.0.0"/"0.0.0.0" for
+		// ip_address/subnet_mask instead of the values just sent — real
+		// BMC firmware settle-time behavior, not a client bug, per repeat
+		// testing during Plan 20 Task 2). Args (all via env, so this can be
+		// invoked with a single-line command per channel number,
+		// ipaddress, netmask, gateway):
+		//   TRUENAS_PROBE_CHANNEL, TRUENAS_PROBE_IPADDRESS,
+		//   TRUENAS_PROBE_NETMASK, TRUENAS_PROBE_GATEWAY
+		channelStr := os.Getenv("TRUENAS_PROBE_CHANNEL")
+		ipaddress := os.Getenv("TRUENAS_PROBE_IPADDRESS")
+		netmask := os.Getenv("TRUENAS_PROBE_NETMASK")
+		gateway := os.Getenv("TRUENAS_PROBE_GATEWAY")
+		if channelStr == "" || ipaddress == "" || netmask == "" || gateway == "" {
+			log.Fatal("set TRUENAS_PROBE_CHANNEL, TRUENAS_PROBE_IPADDRESS, TRUENAS_PROBE_NETMASK, TRUENAS_PROBE_GATEWAY")
+		}
+		var channel int64
+		fmt.Sscanf(channelStr, "%d", &channel)
+
+		payload := map[string]any{
+			"dhcp":      false,
+			"ipaddress": ipaddress,
+			"netmask":   netmask,
+			"gateway":   gateway,
+			"vlan":      nil,
+		}
+
+		deadline := time.Now().Add(5 * time.Minute)
+		attempt := 0
+		for {
+			attempt++
+			fmt.Printf("=== attempt %d: ipmi.lan.update(%d, %v) ===\n", attempt, channel, payload)
+			raw, err := c.Call(context.Background(), "ipmi.lan.update", channel, payload)
+			if err != nil {
+				fmt.Printf("=== ipmi.lan.update error ===\n%v\n", err)
+			} else {
+				fmt.Printf("=== ipmi.lan.update response ===\n%s\n", raw)
+			}
+
+			time.Sleep(5 * time.Second)
+
+			queryRaw, err := c.Call(context.Background(), "ipmi.lan.query", map[string]any{
+				"query-filters": []any{[]any{"channel", "=", channel}},
+			})
+			if err != nil {
+				fmt.Printf("=== ipmi.lan.query error ===\n%v\n", err)
+			} else {
+				fmt.Printf("=== ipmi.lan.query (attempt %d) ===\n%s\n", attempt, queryRaw)
+				var results []map[string]any
+				json.Unmarshal(queryRaw, &results)
+				if len(results) > 0 && results[0]["ip_address"] == ipaddress && results[0]["subnet_mask"] == netmask {
+					fmt.Println("=== RESTORED: ip_address/subnet_mask match target ===")
+					return
+				}
+			}
+
+			if time.Now().After(deadline) {
+				fmt.Println("=== GAVE UP after 5 minutes: ip_address/subnet_mask still do not match target ===")
+				return
+			}
+		}
+	}
 }
 
 // waitJob polls core.get_jobs for jobID until it reaches a terminal state,
