@@ -89,12 +89,14 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/system_dataset"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/system_general"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/tn_connect_config"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/truecommand_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/tunable"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/twofactor_auth"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/ups_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/user"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/vm"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/vm_device"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/vmware"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/webshare"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/webshare_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/zvol"
@@ -316,12 +318,14 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		system_dataset.NewResource,
 		system_general.NewResource,
 		tn_connect_config.NewResource,
+		truecommand_config.NewResource,
 		tunable.NewResource,
 		twofactor_auth.NewResource,
 		user.NewResource,
 		ups_config.NewResource,
 		vm.NewResource,
 		vm_device.NewResource,
+		vmware.NewResource,
 		webshare.NewResource,
 		webshare_config.NewResource,
 		zvol.NewResource,
@@ -406,12 +410,14 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		system_dataset.NewDataSource,
 		system_general.NewDataSource,
 		tn_connect_config.NewDataSource,
+		truecommand_config.NewDataSource,
 		tunable.NewDataSource,
 		twofactor_auth.NewDataSource,
 		user.NewDataSource,
 		ups_config.NewDataSource,
 		vm.NewDataSource,
 		vm_device.NewDataSource,
+		vmware.NewDataSource,
 		webshare.NewDataSource,
 		webshare_config.NewDataSource,
 		zvol.NewDataSource,

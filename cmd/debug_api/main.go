@@ -1577,6 +1577,192 @@ func main() {
 			fmt.Printf("=== VERDICT: API does NOT clear on explicit \"vlan\": null (call err=%v, vlan_id after=%v) ===\n", clearErr, afterClear["vlan_id"])
 		}
 	}
+	if section == "tcmethods" {
+		// Method introspection for the truecommand.* namespace (Plan 20 Task
+		// 4). Per prior tasks' repeated finding that core.get_methods can
+		// under-report on 25.10.4, this ALSO direct-calls truecommand.config
+		// regardless of what the listing showed.
+		raw, err := c.Call(context.Background(), "core.get_methods")
+		if err != nil {
+			log.Fatal(err)
+		}
+		var methods map[string]any
+		json.Unmarshal(raw, &methods)
+		var names []string
+		for name := range methods {
+			if len(name) >= 12 && name[:12] == "truecommand." {
+				names = append(names, name)
+			}
+		}
+		sortStrings(names)
+		pp("truecommand.* method names (core.get_methods)", names)
+		for _, name := range names {
+			pp(name, methods[name])
+		}
+
+		fmt.Println("\n=== direct-call verification (bypassing core.get_methods listing) ===")
+		pp("truecommand.config", call(c, "truecommand.config"))
+	}
+	if section == "tcprobe" {
+		// DECISIVE probe (Plan 20 Task 4): with the box's current
+		// truecommand.config reporting enabled=false, can a cosmetic field be
+		// updated via truecommand.update with ZERO side effects, sending a
+		// payload that never includes "enabled": true? SAFETY: this probe
+		// NEVER sends {"enabled": true} under any circumstance — it aborts
+		// entirely if the box's current config already shows enabled=true.
+		before := call(c, "truecommand.config")
+		pp("truecommand.config (before)", before)
+		beforeMap, ok := before.(map[string]any)
+		if !ok {
+			log.Fatal("truecommand.config did not return a JSON object")
+		}
+		if enabled, _ := beforeMap["enabled"].(bool); enabled {
+			log.Fatal("ABORT: truecommand.config reports enabled=true already; refusing to probe further")
+		}
+
+		// Probe truecommand.update's accepts schema WITHOUT ever sending a
+		// valid "enabled" value: a deliberately wrong-typed value for a
+		// field that does not exist reports "Extra inputs are not
+		// permitted" (or similar) before any middleware side effect runs,
+		// distinguishing "field exists" from "field absent" safely.
+		for _, badField := range []string{"api_key", "enabled"} {
+			_, err := c.Call(context.Background(), "truecommand.update", map[string]any{badField: 12345})
+			fmt.Printf("=== truecommand.update({%q: 12345}) (deliberately wrong type) error ===\n%v\n", badField, err)
+		}
+
+		// If api_key is present in the response, dump its exact JSON
+		// representation verbatim (decisive for WriteOnly vs Sensitive).
+		if v, ok := beforeMap["api_key"]; ok {
+			fmt.Printf("=== truecommand.config[\"api_key\"] verbatim (before) = %#v ===\n", v)
+		} else {
+			fmt.Println("=== truecommand.config has no \"api_key\" key at all ===")
+		}
+
+		// DECISIVE round trip: truecommand.update's own accepts schema
+		// (probed above via core.get_methods) exposes EXACTLY TWO
+		// properties, "enabled" and "api_key" (16-char string or null) —
+		// unlike tn_connect.update on 25.10, there is no third cosmetic
+		// field at all. This sends ONLY "api_key" (a fabricated but
+		// schema-valid 16-char string), deliberately never touching
+		// "enabled", to determine whether setting api_key alone while
+		// enabled stays false is genuinely side-effect-free (no outbound
+		// call to iX Portal) or itself triggers real external behavior
+		// (e.g. status_reason transitioning to the "Pending Confirmation"
+		// state observed in the schema's enum). Restores api_key to null
+		// immediately afterward regardless of outcome.
+		fakeKey := "abcd1234abcd1234" // 16 chars, satisfies minLength/maxLength
+		fmt.Printf("\n=== DECISIVE: truecommand.update({\"api_key\": %q}) [enabled untouched] ===\n", fakeKey)
+		rawUpd, err := c.Call(context.Background(), "truecommand.update", map[string]any{"api_key": fakeKey})
+		if err != nil {
+			fmt.Printf("=== truecommand.update(api_key only) ERROR ===\n%v\n", err)
+		} else {
+			fmt.Printf("=== truecommand.update(api_key only) response ===\n%s\n", rawUpd)
+		}
+
+		afterSet := call(c, "truecommand.config")
+		pp("truecommand.config (after api_key-only update)", afterSet)
+		if afterMap, ok := afterSet.(map[string]any); ok {
+			if enabled, _ := afterMap["enabled"].(bool); enabled {
+				fmt.Println("=== !!! SIDE EFFECT: enabled flipped to true after api_key-only update !!! ===")
+			} else {
+				fmt.Println("=== confirmed: enabled still false after api_key-only update ===")
+			}
+			fmt.Printf("=== status/status_reason after api_key-only update: %v / %v ===\n", afterMap["status"], afterMap["status_reason"])
+		}
+
+		fmt.Println("\n=== RESTORING api_key to null ===")
+		rawRestore, err := c.Call(context.Background(), "truecommand.update", map[string]any{"api_key": nil})
+		if err != nil {
+			fmt.Printf("=== truecommand.update (restore api_key=null) ERROR ===\n%v\n", err)
+		} else {
+			fmt.Printf("=== truecommand.update (restore api_key=null) response ===\n%s\n", rawRestore)
+		}
+		pp("truecommand.config (after restore)", call(c, "truecommand.config"))
+	}
+	if section == "vmwaremethods" {
+		// Method introspection for the vmware.* namespace (Plan 20 Task 4).
+		// Direct-calls vmware.query regardless of what the core.get_methods
+		// listing showed, per prior tasks' repeated 25.10.4 under-reporting
+		// finding.
+		raw, err := c.Call(context.Background(), "core.get_methods")
+		if err != nil {
+			log.Fatal(err)
+		}
+		var methods map[string]any
+		json.Unmarshal(raw, &methods)
+		var names []string
+		for name := range methods {
+			if len(name) >= 7 && name[:7] == "vmware." {
+				names = append(names, name)
+			}
+		}
+		sortStrings(names)
+		pp("vmware.* method names (core.get_methods)", names)
+		for _, name := range names {
+			pp(name, methods[name])
+		}
+
+		fmt.Println("\n=== direct-call verification (bypassing core.get_methods listing) ===")
+		pp("vmware.query", call(c, "vmware.query"))
+	}
+	if section == "vmwareprobe" {
+		// DECISIVE probe (Plan 20 Task 4): does vmware.create validate the
+		// hostname/username/password against a real vCenter/ESXi endpoint
+		// before persisting anything? Uses an RFC 5737 TEST-NET-1 address
+		// (unreachable, reserved for documentation) plus fabricated
+		// credentials. If create unexpectedly succeeds (i.e. does NOT
+		// validate), the created record is deleted immediately afterward.
+		pool := os.Getenv("TRUENAS_TEST_POOL")
+		if pool == "" {
+			pool = "tank"
+		}
+
+		fmt.Println("=== vmware.query (before, should be empty or pre-existing only) ===")
+		pp("vmware.query (before)", call(c, "vmware.query"))
+
+		createPayload := map[string]any{
+			"datastore":  "tf-probe-datastore",
+			"filesystem": pool,
+			"hostname":   "192.0.2.123",
+			"password":   "tf-probe-fake-password-1234",
+			"username":   "tfprobeuser",
+		}
+		fmt.Printf("=== vmware.create payload (DECISIVE) ===\n%v\n", createPayload)
+		raw, err := c.Call(context.Background(), "vmware.create", createPayload)
+		if err != nil {
+			fmt.Printf("=== vmware.create ERROR (verbatim; decisive: create validates against the real endpoint) ===\n%v\n", err)
+			return
+		}
+		fmt.Printf("=== vmware.create response (decisive: create does NOT validate) ===\n%s\n", raw)
+
+		var created struct {
+			ID int64 `json:"id"`
+		}
+		json.Unmarshal(raw, &created)
+
+		rawGet, err := c.Call(context.Background(), "vmware.get_instance", created.ID)
+		if err != nil {
+			fmt.Printf("=== vmware.get_instance error ===\n%v\n", err)
+		} else {
+			fmt.Printf("=== vmware.get_instance response (password read-back?) ===\n%s\n", rawGet)
+		}
+
+		rawUpd, err := c.Call(context.Background(), "vmware.update", created.ID, map[string]any{
+			"datastore": "tf-probe-datastore-renamed",
+		})
+		if err != nil {
+			fmt.Printf("=== vmware.update error ===\n%v\n", err)
+		} else {
+			fmt.Printf("=== vmware.update response ===\n%s\n", rawUpd)
+		}
+
+		fmt.Println("=== cleanup: vmware.delete (create unexpectedly persisted) ===")
+		if _, err := c.Call(context.Background(), "vmware.delete", created.ID); err != nil {
+			fmt.Printf("vmware.delete error: %v\n", err)
+		} else {
+			fmt.Println("=== vmware deleted ok ===")
+		}
+	}
 }
 
 // waitJob polls core.get_jobs for jobID until it reaches a terminal state,
