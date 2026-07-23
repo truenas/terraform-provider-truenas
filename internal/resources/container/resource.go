@@ -248,6 +248,11 @@ func (r *ContainerResource) Update(ctx context.Context, req resource.UpdateReque
 // assumption that it was a job like container.stop) and takes no options
 // beyond the id.
 func (r *ContainerResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	resp.Diagnostics.Append(r.checkVersion(ctx)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	var state ContainerModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {

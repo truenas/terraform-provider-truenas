@@ -476,5 +476,8 @@ func isContainerAlreadyStopped(err error) bool {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
+	if !strings.Contains(msg, "domain") {
+		return false
+	}
 	return strings.Contains(msg, "does not exist") || strings.Contains(msg, "is not active")
 }
