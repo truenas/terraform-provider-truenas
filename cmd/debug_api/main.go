@@ -981,6 +981,149 @@ func main() {
 		}
 		fmt.Println("=== sharing.webshare.delete ok ===")
 	}
+	if section == "enclosuremethods" {
+		// Method introspection for the enclosure*/enclosure2* namespaces
+		// (Plan 20 Task 3). Per Task 1's finding that core.get_methods can
+		// under-report on 25.10.4, this ALSO direct-calls the candidate
+		// methods regardless of what the listing showed.
+		raw, err := c.Call(context.Background(), "core.get_methods")
+		if err != nil {
+			log.Fatal(err)
+		}
+		var methods map[string]any
+		json.Unmarshal(raw, &methods)
+		var names []string
+		for name := range methods {
+			if len(name) >= 10 && name[:10] == "enclosure." {
+				names = append(names, name)
+			}
+			if len(name) >= 11 && name[:11] == "enclosure2." {
+				names = append(names, name)
+			}
+		}
+		sortStrings(names)
+		pp("enclosure*/enclosure2* method names (core.get_methods)", names)
+		for _, name := range names {
+			pp(name, methods[name])
+		}
+
+		fmt.Println("\n=== direct-call verification (bypassing core.get_methods listing) ===")
+		pp("enclosure2.query", call(c, "enclosure2.query"))
+		pp("enclosure.query", call(c, "enclosure.query"))
+	}
+	if section == "enclosureprobe" {
+		// Read-mostly shape probe of enclosure2.query (Plan 20 Task 3), plus
+		// a live round-trip of enclosure.label.set on the known enclosure id
+		// "3b0ad6d1c00006c0", restoring the original label immediately
+		// afterward. This is the DECISIVE probe for: (a) enclosure2.query's
+		// full response shape (where does the label live — top-level? per
+		// element_type/slot? both?), (b) enclosure.label.set's positional
+		// arg shape (id, label), (c) whether the new label round-trips
+		// through enclosure2.query afterward, and how quickly (same-call
+		// synchronous vs needing a re-query).
+		raw, err := c.Call(context.Background(), "enclosure2.query")
+		if err != nil {
+			log.Fatal("enclosure2.query:", err)
+		}
+		fmt.Printf("=== enclosure2.query (before) ===\n%s\n", raw)
+
+		var encs []map[string]any
+		if err := json.Unmarshal(raw, &encs); err != nil {
+			log.Fatalf("enclosure2.query did not return an array: err=%v raw=%s", err, raw)
+		}
+		if len(encs) == 0 {
+			fmt.Println("=== enclosure2.query returned an EMPTY array on this box (no enclosure hardware / not supported) ===")
+			return
+		}
+
+		targetID := os.Getenv("TRUENAS_PROBE_ENCLOSURE_ID")
+		if targetID == "" {
+			targetID = "3b0ad6d1c00006c0"
+		}
+		var target map[string]any
+		for _, e := range encs {
+			if id, _ := e["id"].(string); id == targetID {
+				target = e
+				break
+			}
+		}
+		if target == nil {
+			fmt.Printf("=== enclosure id %q not found; using first result instead ===\n", targetID)
+			target = encs[0]
+			targetID, _ = target["id"].(string)
+		}
+
+		fmt.Printf("=== target enclosure (id=%s) top-level keys ===\n", targetID)
+		var keys []string
+		for k := range target {
+			keys = append(keys, k)
+		}
+		sortStrings(keys)
+		for _, k := range keys {
+			fmt.Printf("  %s: %v (%T)\n", k, target[k], target[k])
+		}
+		origLabel, _ := target["label"].(string)
+		fmt.Printf("=== original label (top-level \"label\" key) = %q ===\n", origLabel)
+
+		fmt.Println("\n=== enclosure.get_instance(id) probe ===")
+		pp("enclosure.get_instance", call(c, "enclosure.get_instance", targetID))
+
+		fmt.Println("\n=== enclosure.label.set probe: setting a throwaway label ===")
+		probeLabel := "tf-probe-enclosure-label"
+		setRaw, err := c.Call(context.Background(), "enclosure.label.set", targetID, probeLabel)
+		if err != nil {
+			fmt.Printf("=== enclosure.label.set error (2-positional-arg form) ===\n%v\n", err)
+		} else {
+			fmt.Printf("=== enclosure.label.set response ===\n%s\n", setRaw)
+		}
+
+		raw2, err := c.Call(context.Background(), "enclosure2.query")
+		if err != nil {
+			log.Fatal("enclosure2.query (after set):", err)
+		}
+		fmt.Printf("=== enclosure2.query (after set) ===\n%s\n", raw2)
+		var encs2 []map[string]any
+		json.Unmarshal(raw2, &encs2)
+		for _, e := range encs2 {
+			if id, _ := e["id"].(string); id == targetID {
+				fmt.Printf("=== read-back label after set = %q ===\n", e["label"])
+			}
+		}
+
+		fmt.Println("\n=== RESTORING original label ===")
+		restoreRaw, err := c.Call(context.Background(), "enclosure.label.set", targetID, origLabel)
+		if err != nil {
+			log.Fatalf("RESTORE FAILED: enclosure.label.set(%q, %q): %v -- MANUAL INTERVENTION NEEDED", targetID, origLabel, err)
+		}
+		fmt.Printf("=== enclosure.label.set (restore) response ===\n%s\n", restoreRaw)
+
+		raw3, err := c.Call(context.Background(), "enclosure2.query")
+		if err != nil {
+			log.Fatal("enclosure2.query (after restore):", err)
+		}
+		var encs3 []map[string]any
+		json.Unmarshal(raw3, &encs3)
+		for _, e := range encs3 {
+			if id, _ := e["id"].(string); id == targetID {
+				fmt.Printf("=== read-back label after restore = %q (want %q) ===\n", e["label"], origLabel)
+			}
+		}
+	}
+	if section == "enclosurefilter" {
+		// Read-only probe (Plan 20 Task 3): does enclosure2.query accept
+		// query-filters/query-options the usual two-positional-arg way
+		// (unlike ipmi.lan.query's single-"data"-object quirk)? And does
+		// core.get_methods under-report the enclosure2.* namespace on a
+		// different (26.0) release the same way it did for failover.*/
+		// ipmi.* on 25.10.4?
+		id := os.Getenv("TRUENAS_PROBE_ENCLOSURE_ID")
+		if id == "" {
+			id = "3b0ad6d1c00006e0"
+		}
+		pp("enclosure2.query([[id,=,id]])", call(c, "enclosure2.query", [][]any{{"id", "=", id}}))
+		pp("enclosure2.query([[id,=,id]], {select})", call(c, "enclosure2.query", [][]any{{"id", "=", id}}, map[string]any{"select": []string{"id", "label", "name"}}))
+		pp("system.version_short", call(c, "system.version_short"))
+	}
 	if section == "haprobe" {
 		// Read-only introspection of the failover.* namespace (Plan 20 Task
 		// 1 probe). Never mutates anything: no failover.update / .become_*

@@ -34,6 +34,8 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/directoryservices"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/docker_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/docker_network"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/enclosure"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/enclosure_label"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/failover_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/filesystem_acl"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/filesystem_permissions"
@@ -260,6 +262,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		dataset.NewResource,
 		directoryservices.NewResource,
 		docker_config.NewResource,
+		enclosure_label.NewResource,
 		failover_config.NewResource,
 		filesystem_acl.NewResource,
 		filesystem_permissions.NewResource,
@@ -349,6 +352,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		directoryservices.NewDataSource,
 		docker_config.NewDataSource,
 		docker_network.NewDataSource, // datasource-only: no truenas_docker_network resource exists (see internal/resources/docker_network/schema.go)
+		enclosure.NewDataSource,      // read-only enclosure lookup; label management lives in truenas_enclosure_label (see internal/resources/enclosure/schema.go)
 		failover_config.NewDataSource,
 		filesystem_acl.NewDataSource,
 		filesystem_permissions.NewDataSource,
