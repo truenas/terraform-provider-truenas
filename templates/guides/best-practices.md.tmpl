@@ -162,6 +162,53 @@ sources never mutate and can't accidentally destroy anything.
   `truenas_periodic_snapshot` task or set `naming_schema` explicitly. A
   schema must include time components (`%Y%m%d%H%M` style) — TrueNAS
   rejects date-only schemas.
+- `truenas_replication_task`'s `transport` defaults to `LOCAL`; set it to
+  `SSH` for remote replication, which requires `ssh_credentials` (the id of
+  a `truenas_keychain_ssh_connection`) — the two must agree, `SSH` without
+  credentials and `LOCAL` with them are both config-time errors.
+  `compression`/`speed_limit` are accepted only under `SSH`.
+- Passwordless `sudo` on the remote system's SSH user is required for real
+  ZFS transfers over `SSH` transport unless that user is `root`: without it
+  `replication.run` fails partway through with a destination-unmount
+  permission error (verified live), even though the task itself creates and
+  updates without complaint. Set `sudo = true` and configure passwordless
+  sudo for the remote user, or use a `root`-owned SSH credential.
+
+```hcl
+resource "truenas_keychain_ssh_keypair" "repl" {
+  name     = "replication-key"
+  generate = true
+}
+
+resource "truenas_keychain_ssh_connection" "backup_target" {
+  name            = "backup-target"
+  host            = "backup.example.com"
+  username        = "replication_user"
+  private_key_id  = truenas_keychain_ssh_keypair.repl.id
+  remote_host_key = var.backup_target_host_key # see note below
+}
+
+resource "truenas_replication_task" "offsite" {
+  name             = "offsite-backup"
+  direction        = "PUSH"
+  transport        = "SSH"
+  ssh_credentials  = truenas_keychain_ssh_connection.backup_target.id
+  sudo             = true # remote user must have passwordless sudo, or be root
+  compression      = "LZ4"
+  source_datasets  = ["tank/data"]
+  target_dataset   = "backup/tank-data"
+  recursive        = true
+  auto             = false
+  retention_policy = "SOURCE"
+
+  also_include_naming_schema = ["auto-%Y-%m-%d_%H-%M"]
+}
+```
+
+  (The remote host key isn't looked up automatically — obtain it out of
+  band, e.g. via `keychaincredential.remote_ssh_host_key_scan` in a
+  provisioning script, and pass it in as shown; this provider doesn't call
+  that method itself.)
 
 ## Running in CI
 

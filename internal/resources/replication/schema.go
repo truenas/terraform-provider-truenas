@@ -1,18 +1,24 @@
 package replication
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a replication task on TrueNAS SCALE.",
+		Description: "Manages a replication task on TrueNAS SCALE. Supports LOCAL replication (within the " +
+			"same system) and remote replication over SSH (transport = \"SSH\", authenticating via a " +
+			"truenas_keychain_ssh_connection credential referenced by \"ssh_credentials\").",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{
 				Computed:    true,
@@ -33,27 +39,48 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"transport": schema.StringAttribute{
-				Required:    true,
-				Description: "SSH, SSH+NETCAT, or LOCAL. Changing this forces a new resource.",
+				Optional: true,
+				Computed: true,
+				Description: "LOCAL (default) replicates within the same system; SSH replicates to/from a " +
+					"remote system over a truenas_keychain_ssh_connection credential (\"ssh_credentials\"). " +
+					"SSH+NETCAT is accepted by the underlying API but not exposed here. Changing this forces a " +
+					"new resource.",
+				Validators: []validator.String{stringvalidator.OneOf("LOCAL", "SSH")},
+				Default:    stringdefault.StaticString("LOCAL"),
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"ssh_credentials": schema.Int64Attribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "Keychain SSH credential ID. Unset (0) for LOCAL transport.",
+				Optional: true,
+				Computed: true,
+				Description: "Numeric id of a truenas_keychain_ssh_connection (keychaincredential of type " +
+					"SSH_CREDENTIALS) to replicate over. Required when transport = \"SSH\"; must be unset (0) " +
+					"for transport = \"LOCAL\".",
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.UseStateForUnknown(),
 				},
 			},
 			"sudo": schema.BoolAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "Use sudo for ZFS commands on the remote system.",
+				Optional: true,
+				Computed: true,
+				Description: "Use sudo (expected to be passwordless on the remote system) to run zfs commands " +
+					"over SSH. Only meaningful for transport = \"SSH\".",
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
 				},
+			},
+			"compression": schema.StringAttribute{
+				Optional: true,
+				Description: "Compresses the SSH stream: LZ4, PIGZ, or PLZIP. Available only for transport = " +
+					"\"SSH\"; must be unset for transport = \"LOCAL\".",
+				Validators: []validator.String{stringvalidator.OneOf("LZ4", "PIGZ", "PLZIP")},
+			},
+			"speed_limit": schema.Int64Attribute{
+				Optional: true,
+				Description: "Limits the speed of the SSH stream, in bytes per second. Available only for " +
+					"transport = \"SSH\"; must be unset for transport = \"LOCAL\".",
+				Validators: []validator.Int64{int64validator.AtLeast(1)},
 			},
 			"source_datasets": schema.ListAttribute{
 				Required:    true,

@@ -33,6 +33,8 @@ func (d *ReplicationDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			"transport":                  dschema.StringAttribute{Computed: true},
 			"ssh_credentials":            dschema.Int64Attribute{Computed: true},
 			"sudo":                       dschema.BoolAttribute{Computed: true},
+			"compression":                dschema.StringAttribute{Computed: true},
+			"speed_limit":                dschema.Int64Attribute{Computed: true},
 			"source_datasets":            dschema.ListAttribute{Computed: true, ElementType: types.StringType},
 			"target_dataset":             dschema.StringAttribute{Computed: true},
 			"recursive":                  dschema.BoolAttribute{Computed: true},

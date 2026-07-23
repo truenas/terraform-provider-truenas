@@ -35,6 +35,8 @@ type ReplicationModel struct {
 	Transport               types.String `tfsdk:"transport"`       // SSH, SSH+NETCAT, LOCAL
 	SSHCredentials          types.Int64  `tfsdk:"ssh_credentials"` // keychain credential id; 0 = unset (LOCAL)
 	Sudo                    types.Bool   `tfsdk:"sudo"`
+	Compression             types.String `tfsdk:"compression"`     // LZ4, PIGZ, PLZIP; null unless transport = SSH
+	SpeedLimit              types.Int64  `tfsdk:"speed_limit"`     // bytes/sec; null unless transport = SSH
 	SourceDatasets          types.List   `tfsdk:"source_datasets"` // List[String], Required
 	TargetDataset           types.String `tfsdk:"target_dataset"`
 	Recursive               types.Bool   `tfsdk:"recursive"`
@@ -69,6 +71,8 @@ type replicationAPI struct {
 	Transport               string         `json:"transport"`
 	SSHCredentials          any            `json:"ssh_credentials"` // null, int, or embedded object {id: int}
 	Sudo                    bool           `json:"sudo"`
+	Compression             *string        `json:"compression"`
+	SpeedLimit              *int64         `json:"speed_limit"`
 	SourceDatasets          []string       `json:"source_datasets"`
 	TargetDataset           string         `json:"target_dataset"`
 	Recursive               bool           `json:"recursive"`
@@ -145,6 +149,18 @@ func responseToModel(ctx context.Context, api *replicationAPI, m *ReplicationMod
 	m.Transport = types.StringValue(api.Transport)
 	m.SSHCredentials = types.Int64Value(sshCredentialsID(api.SSHCredentials))
 	m.Sudo = types.BoolValue(api.Sudo)
+
+	if api.Compression != nil {
+		m.Compression = types.StringValue(*api.Compression)
+	} else {
+		m.Compression = types.StringNull()
+	}
+
+	if api.SpeedLimit != nil {
+		m.SpeedLimit = types.Int64Value(*api.SpeedLimit)
+	} else {
+		m.SpeedLimit = types.Int64Null()
+	}
 
 	sourceDatasets := api.SourceDatasets
 	if sourceDatasets == nil {
@@ -303,6 +319,21 @@ func (m *ReplicationModel) apiPayload(ctx context.Context) (map[string]any, diag
 	}
 	if !m.Retries.IsNull() && !m.Retries.IsUnknown() {
 		p["retries"] = m.Retries.ValueInt64()
+	}
+
+	// compression / speed_limit: SSH-only, nullable on the wire. Always
+	// send the key (value or nil) so an update can clear a previously-set
+	// value, matching the lifetime_value/lifetime_unit nil-clearing pattern
+	// above.
+	if !m.Compression.IsNull() && !m.Compression.IsUnknown() {
+		p["compression"] = m.Compression.ValueString()
+	} else {
+		p["compression"] = nil
+	}
+	if !m.SpeedLimit.IsNull() && !m.SpeedLimit.IsUnknown() {
+		p["speed_limit"] = m.SpeedLimit.ValueInt64()
+	} else {
+		p["speed_limit"] = nil
 	}
 
 	// name_regex: send only when non-empty. When set, naming_schema and

@@ -42,7 +42,7 @@ func TestReplicationSchema(t *testing.T) {
 		t.Error("'direction' should have RequiresReplace plan modifier")
 	}
 
-	// transport: Required + RequiresReplace.
+	// transport: Optional + Computed (default LOCAL) + RequiresReplace.
 	transAttr, ok := s.Attributes["transport"]
 	if !ok {
 		t.Fatal("schema missing 'transport' attribute")
@@ -51,11 +51,56 @@ func TestReplicationSchema(t *testing.T) {
 	if !ok {
 		t.Fatalf("'transport' is %T, want schema.StringAttribute", transAttr)
 	}
-	if !transStr.IsRequired() {
-		t.Error("'transport' should be Required")
+	if !transStr.IsOptional() || !transStr.IsComputed() {
+		t.Error("'transport' should be Optional+Computed")
+	}
+	if transStr.IsRequired() {
+		t.Error("'transport' should not be Required")
+	}
+	if transStr.StringDefaultValue() == nil {
+		t.Error("'transport' should have a Default")
 	}
 	if len(transStr.PlanModifiers) == 0 {
 		t.Error("'transport' should have RequiresReplace plan modifier")
+	}
+	if len(transStr.Validators) == 0 {
+		t.Error("'transport' should have a LOCAL|SSH validator")
+	}
+
+	// compression: Optional String, SSH-only (no Computed/default — plain
+	// nullable, unset stays null forever).
+	compAttr, ok := s.Attributes["compression"]
+	if !ok {
+		t.Fatal("schema missing 'compression' attribute")
+	}
+	compStr, ok := compAttr.(schema.StringAttribute)
+	if !ok {
+		t.Fatalf("'compression' is %T, want schema.StringAttribute", compAttr)
+	}
+	if !compStr.IsOptional() {
+		t.Error("'compression' should be Optional")
+	}
+	if compStr.IsComputed() {
+		t.Error("'compression' should not be Computed")
+	}
+	if len(compStr.Validators) == 0 {
+		t.Error("'compression' should have an LZ4|PIGZ|PLZIP validator")
+	}
+
+	// speed_limit: Optional Int64, SSH-only.
+	slAttr, ok := s.Attributes["speed_limit"]
+	if !ok {
+		t.Fatal("schema missing 'speed_limit' attribute")
+	}
+	slInt64, ok := slAttr.(schema.Int64Attribute)
+	if !ok {
+		t.Fatalf("'speed_limit' is %T, want schema.Int64Attribute", slAttr)
+	}
+	if !slInt64.IsOptional() {
+		t.Error("'speed_limit' should be Optional")
+	}
+	if slInt64.IsComputed() {
+		t.Error("'speed_limit' should not be Computed")
 	}
 
 	// Required fields.
@@ -520,6 +565,8 @@ func TestReplicationApiPayload_OmitsUnsetOptionals(t *testing.T) {
 		Transport:               types.StringValue("LOCAL"),
 		SSHCredentials:          types.Int64Null(),
 		Sudo:                    types.BoolNull(),
+		Compression:             types.StringNull(),
+		SpeedLimit:              types.Int64Null(),
 		SourceDatasets:          types.ListValueMust(types.StringType, []attr.Value{types.StringValue("tank/data")}),
 		TargetDataset:           types.StringValue("backup/data"),
 		Recursive:               types.BoolValue(true),
@@ -606,6 +653,159 @@ func TestNameRegexConflict(t *testing.T) {
 	}
 }
 
+// TestReplicationPayload_CompressionSpeedLimitSet verifies compression and
+// speed_limit pass through to the payload when set (SSH-only fields).
+func TestReplicationPayload_CompressionSpeedLimitSet(t *testing.T) {
+	ctx := context.Background()
+
+	m := baseModel(ctx, t)
+	m.Compression = types.StringValue("LZ4")
+	m.SpeedLimit = types.Int64Value(1048576)
+
+	payload, diags := m.apiPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("apiPayload returned errors: %v", diags)
+	}
+
+	if v := payload["compression"]; v != "LZ4" {
+		t.Errorf("payload[compression] = %v, want LZ4", v)
+	}
+	if v := payload["speed_limit"]; v != int64(1048576) {
+		t.Errorf("payload[speed_limit] = %v, want 1048576", v)
+	}
+}
+
+// TestReplicationPayload_CompressionSpeedLimitNullBecomesNil verifies the
+// unset (null) case always sends an explicit nil rather than omitting the
+// key — matching the lifetime_value/lifetime_unit nil-clearing pattern, so
+// an in-place update can clear a previously-set compression/speed_limit.
+func TestReplicationPayload_CompressionSpeedLimitNullBecomesNil(t *testing.T) {
+	ctx := context.Background()
+
+	m := baseModel(ctx, t)
+	m.Compression = types.StringNull()
+	m.SpeedLimit = types.Int64Null()
+
+	payload, diags := m.apiPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("apiPayload returned errors: %v", diags)
+	}
+
+	if v, ok := payload["compression"]; !ok || v != nil {
+		t.Errorf("payload[compression] = %v, want nil", v)
+	}
+	if v, ok := payload["speed_limit"]; !ok || v != nil {
+		t.Errorf("payload[speed_limit] = %v, want nil", v)
+	}
+}
+
+// TestTransportSSHCredentialsMismatch exercises the preflight enforced in
+// ValidateConfig: transport = "SSH" requires ssh_credentials, transport =
+// "LOCAL" (explicit or defaulted from an unset/unknown config value)
+// forbids it.
+func TestTransportSSHCredentialsMismatch(t *testing.T) {
+	cases := []struct {
+		name      string
+		transport types.String
+		sshCreds  types.Int64
+		wantBad   bool
+	}{
+		{"SSH with credentials", types.StringValue("SSH"), types.Int64Value(7), false},
+		{"SSH without credentials", types.StringValue("SSH"), types.Int64Null(), true},
+		{"SSH with zero credentials", types.StringValue("SSH"), types.Int64Value(0), true},
+		{"SSH with unknown credentials", types.StringValue("SSH"), types.Int64Unknown(), false},
+		{"LOCAL without credentials", types.StringValue("LOCAL"), types.Int64Null(), false},
+		{"LOCAL with credentials", types.StringValue("LOCAL"), types.Int64Value(7), true},
+		{"unset transport (defaults LOCAL) without credentials", types.StringNull(), types.Int64Null(), false},
+		{"unset transport (defaults LOCAL) with credentials", types.StringNull(), types.Int64Value(7), true},
+		{"unknown transport (not yet knowable) skips validation", types.StringUnknown(), types.Int64Value(7), false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &ReplicationModel{Transport: tc.transport, SSHCredentials: tc.sshCreds}
+			got := transportSSHCredentialsMismatch(config) != ""
+			if got != tc.wantBad {
+				t.Errorf("transportSSHCredentialsMismatch() bad=%v, want %v", got, tc.wantBad)
+			}
+		})
+	}
+}
+
+// TestSSHOnlyFieldsWithoutSSH exercises the preflight enforced in
+// ValidateConfig: compression/speed_limit are only valid for transport =
+// "SSH".
+func TestSSHOnlyFieldsWithoutSSH(t *testing.T) {
+	cases := []struct {
+		name        string
+		transport   types.String
+		compression types.String
+		speedLimit  types.Int64
+		wantBad     bool
+	}{
+		{"SSH with both set", types.StringValue("SSH"), types.StringValue("LZ4"), types.Int64Value(100), false},
+		{"SSH with neither set", types.StringValue("SSH"), types.StringNull(), types.Int64Null(), false},
+		{"LOCAL with neither set", types.StringValue("LOCAL"), types.StringNull(), types.Int64Null(), false},
+		{"LOCAL with compression set", types.StringValue("LOCAL"), types.StringValue("LZ4"), types.Int64Null(), true},
+		{"LOCAL with speed_limit set", types.StringValue("LOCAL"), types.StringNull(), types.Int64Value(100), true},
+		{"unset transport (defaults LOCAL) with compression set", types.StringNull(), types.StringValue("LZ4"), types.Int64Null(), true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &ReplicationModel{
+				Transport:   tc.transport,
+				Compression: tc.compression,
+				SpeedLimit:  tc.speedLimit,
+			}
+			got := sshOnlyFieldsWithoutSSH(config) != ""
+			if got != tc.wantBad {
+				t.Errorf("sshOnlyFieldsWithoutSSH() bad=%v, want %v", got, tc.wantBad)
+			}
+		})
+	}
+}
+
+// TestResponseToModel_CompressionSpeedLimit verifies both the nil (LOCAL
+// task, or SSH task with neither set) and populated (SSH task) cases decode
+// to null / concrete values respectively.
+func TestResponseToModel_CompressionSpeedLimit(t *testing.T) {
+	ctx := context.Background()
+
+	api := &replicationAPI{
+		ID: 1, Name: "t", Direction: "PUSH", Transport: "LOCAL",
+		SourceDatasets: []string{"tank/data"}, TargetDataset: "backup/data", RetentionPolicy: "SOURCE",
+	}
+	var m ReplicationModel
+	if diags := responseToModel(ctx, api, &m); diags.HasError() {
+		t.Fatalf("responseToModel returned errors: %v", diags)
+	}
+	if !m.Compression.IsNull() {
+		t.Error("Compression should be null when API compression is nil")
+	}
+	if !m.SpeedLimit.IsNull() {
+		t.Error("SpeedLimit should be null when API speed_limit is nil")
+	}
+
+	compression := "PIGZ"
+	speedLimit := int64(2048)
+	api2 := &replicationAPI{
+		ID: 2, Name: "t2", Direction: "PUSH", Transport: "SSH",
+		SourceDatasets: []string{"tank/data"}, TargetDataset: "backup/data", RetentionPolicy: "SOURCE",
+		Compression: &compression, SpeedLimit: &speedLimit,
+	}
+	var m2 ReplicationModel
+	if diags := responseToModel(ctx, api2, &m2); diags.HasError() {
+		t.Fatalf("responseToModel returned errors: %v", diags)
+	}
+	if m2.Compression.ValueString() != "PIGZ" {
+		t.Errorf("Compression = %q, want PIGZ", m2.Compression.ValueString())
+	}
+	if m2.SpeedLimit.ValueInt64() != 2048 {
+		t.Errorf("SpeedLimit = %v, want 2048", m2.SpeedLimit.ValueInt64())
+	}
+}
+
 // baseModel builds a fully-populated, valid ReplicationModel for payload tests.
 func baseModel(ctx context.Context, t *testing.T) ReplicationModel {
 	t.Helper()
@@ -616,6 +816,8 @@ func baseModel(ctx context.Context, t *testing.T) ReplicationModel {
 		Transport:               types.StringValue("SSH"),
 		SSHCredentials:          types.Int64Value(1),
 		Sudo:                    types.BoolValue(false),
+		Compression:             types.StringNull(),
+		SpeedLimit:              types.Int64Null(),
 		SourceDatasets:          types.ListValueMust(types.StringType, []attr.Value{types.StringValue("tank/data")}),
 		TargetDataset:           types.StringValue("backup/data"),
 		Recursive:               types.BoolValue(true),

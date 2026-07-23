@@ -3,12 +3,12 @@
 page_title: "truenas_replication_task Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a replication task on TrueNAS SCALE.
+  Manages a replication task on TrueNAS SCALE. Supports LOCAL replication (within the same system) and remote replication over SSH (transport = "SSH", authenticating via a truenas_keychain_ssh_connection credential referenced by "ssh_credentials").
 ---
 
 # truenas_replication_task (Resource)
 
-Manages a replication task on TrueNAS SCALE.
+Manages a replication task on TrueNAS SCALE. Supports LOCAL replication (within the same system) and remote replication over SSH (transport = "SSH", authenticating via a truenas_keychain_ssh_connection credential referenced by "ssh_credentials").
 
 ## Example Usage
 
@@ -46,11 +46,11 @@ resource "truenas_replication_task" "local_backup" {
 - `retention_policy` (String) SOURCE, CUSTOM, or NONE.
 - `source_datasets` (List of String) Source dataset paths to replicate.
 - `target_dataset` (String) Target dataset path.
-- `transport` (String) SSH, SSH+NETCAT, or LOCAL. Changing this forces a new resource.
 
 ### Optional
 
 - `also_include_naming_schema` (List of String) Additional naming schemas to include. Mutually exclusive with name_regex.
+- `compression` (String) Compresses the SSH stream: LZ4, PIGZ, or PLZIP. Available only for transport = "SSH"; must be unset for transport = "LOCAL".
 - `enabled` (Boolean) Whether the replication task is enabled.
 - `exclude` (List of String) Dataset paths to exclude from a recursive replication.
 - `lifetime_unit` (String) HOUR, DAY, WEEK, MONTH, or YEAR. Unset ("") when retention_policy is not CUSTOM.
@@ -63,8 +63,10 @@ resource "truenas_replication_task" "local_backup" {
 - `replicate` (Boolean) Replicate the full dataset tree.
 - `retries` (Number) Number of retries on failure.
 - `schedule` (Attributes) Cron schedule for automatic replication runs. (see [below for nested schema](#nestedatt--schedule))
-- `ssh_credentials` (Number) Keychain SSH credential ID. Unset (0) for LOCAL transport.
-- `sudo` (Boolean) Use sudo for ZFS commands on the remote system.
+- `speed_limit` (Number) Limits the speed of the SSH stream, in bytes per second. Available only for transport = "SSH"; must be unset for transport = "LOCAL".
+- `ssh_credentials` (Number) Numeric id of a truenas_keychain_ssh_connection (keychaincredential of type SSH_CREDENTIALS) to replicate over. Required when transport = "SSH"; must be unset (0) for transport = "LOCAL".
+- `sudo` (Boolean) Use sudo (expected to be passwordless on the remote system) to run zfs commands over SSH. Only meaningful for transport = "SSH".
+- `transport` (String) LOCAL (default) replicates within the same system; SSH replicates to/from a remote system over a truenas_keychain_ssh_connection credential ("ssh_credentials"). SSH+NETCAT is accepted by the underlying API but not exposed here. Changing this forces a new resource.
 
 ### Read-Only
 

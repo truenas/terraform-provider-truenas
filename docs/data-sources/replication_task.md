@@ -23,6 +23,7 @@ Fetches a TrueNAS replication task by name.
 
 - `also_include_naming_schema` (List of String)
 - `auto` (Boolean)
+- `compression` (String)
 - `direction` (String)
 - `enabled` (Boolean)
 - `exclude` (List of String)
@@ -40,6 +41,7 @@ Fetches a TrueNAS replication task by name.
 - `retries` (Number)
 - `schedule` (Attributes) (see [below for nested schema](#nestedatt--schedule))
 - `source_datasets` (List of String)
+- `speed_limit` (Number)
 - `ssh_credentials` (Number)
 - `sudo` (Boolean)
 - `target_dataset` (String)

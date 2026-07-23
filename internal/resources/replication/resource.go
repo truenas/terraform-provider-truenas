@@ -57,10 +57,89 @@ func nameRegexConflict(config *ReplicationModel) bool {
 	return hasRegex && (hasSchema || hasAlso)
 }
 
-// ValidateConfig enforces that name_regex is mutually exclusive with
-// naming_schema and also_include_naming_schema: the API rejects combining
-// them, so surface that as a config-time error rather than a Create/Update
-// API failure.
+// transportOrDefault resolves the effective transport for preflight
+// purposes: the config's own value when known, "LOCAL" (the schema
+// default applied at plan time — ValidateConfig runs against the raw
+// config, before that default lands, so an omitted transport must be
+// treated as its eventual default here too) when the config omits it
+// (null), or "" when it isn't knowable yet (unknown — e.g. interpolated
+// from another resource's not-yet-applied attribute). Callers treat ""
+// as "can't conclude, don't flag an error", the same treatment
+// nameRegexConflict gives unknown naming_schema/also_include_naming_schema
+// values.
+func transportOrDefault(config *ReplicationModel) string {
+	if config.Transport.IsUnknown() {
+		return ""
+	}
+	if config.Transport.IsNull() {
+		return "LOCAL"
+	}
+	return config.Transport.ValueString()
+}
+
+// sshCredentialsSet reports whether config sets a non-zero ssh_credentials,
+// treating null/0 as unset (0 is the sentinel model.go's
+// responseToModel/apiPayload use for "no ssh_credentials", matching the
+// pre-existing LOCAL-transport convention). Callers must check
+// IsUnknown() themselves where that distinction matters.
+func sshCredentialsSet(config *ReplicationModel) bool {
+	return !config.SSHCredentials.IsNull() && !config.SSHCredentials.IsUnknown() && config.SSHCredentials.ValueInt64() != 0
+}
+
+// transportSSHCredentialsMismatch enforces the pairing the API requires:
+// transport = "SSH" needs ssh_credentials (replication.create rejects SSH
+// without it), and transport = "LOCAL" must not carry one (there is no
+// remote system to authenticate to). Returns "" when the config is
+// consistent (including when either value isn't knowable yet — e.g. the
+// acceptance test's `ssh_credentials = truenas_keychain_ssh_connection.test.id`
+// is Unknown during ValidateConfig, before that resource is created).
+func transportSSHCredentialsMismatch(config *ReplicationModel) string {
+	if config.SSHCredentials.IsUnknown() {
+		return ""
+	}
+	transport := transportOrDefault(config)
+	if transport == "" {
+		return ""
+	}
+	hasCred := sshCredentialsSet(config)
+	switch transport {
+	case "SSH":
+		if !hasCred {
+			return "transport = \"SSH\" requires ssh_credentials to be set (the id of a " +
+				"truenas_keychain_ssh_connection credential)."
+		}
+	case "LOCAL":
+		if hasCred {
+			return "transport = \"LOCAL\" (the default) does not accept ssh_credentials; either unset " +
+				"ssh_credentials or set transport = \"SSH\"."
+		}
+	}
+	return ""
+}
+
+// sshOnlyFieldsWithoutSSH reports whether compression or speed_limit are
+// set while transport isn't "SSH" — both are SSH-stream-only per the API
+// schema (probed live: their descriptions read "Available only for SSH
+// transport"), so LOCAL replication must not carry them. Returns "" when
+// the config is consistent, including when transport isn't knowable yet.
+func sshOnlyFieldsWithoutSSH(config *ReplicationModel) string {
+	transport := transportOrDefault(config)
+	if transport == "" || transport == "SSH" {
+		return ""
+	}
+	hasCompression := !config.Compression.IsNull() && !config.Compression.IsUnknown()
+	hasSpeedLimit := !config.SpeedLimit.IsNull() && !config.SpeedLimit.IsUnknown()
+	if hasCompression || hasSpeedLimit {
+		return "compression and speed_limit are only valid for transport = \"SSH\"."
+	}
+	return ""
+}
+
+// ValidateConfig enforces config-time invariants the API only checks at
+// Create/Update time: name_regex is mutually exclusive with naming_schema
+// and also_include_naming_schema; transport = "SSH" requires
+// ssh_credentials while transport = "LOCAL" forbids it; compression and
+// speed_limit are SSH-only.
 func (r *ReplicationResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var config ReplicationModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
@@ -73,6 +152,14 @@ func (r *ReplicationResource) ValidateConfig(ctx context.Context, req resource.V
 			"Conflicting attributes",
 			"name_regex is mutually exclusive with naming_schema and also_include_naming_schema.",
 		)
+	}
+
+	if msg := transportSSHCredentialsMismatch(&config); msg != "" {
+		resp.Diagnostics.AddError("Invalid ssh_credentials for transport", msg)
+	}
+
+	if msg := sshOnlyFieldsWithoutSSH(&config); msg != "" {
+		resp.Diagnostics.AddError("SSH-only attribute set", msg)
 	}
 }
 
