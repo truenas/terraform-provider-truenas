@@ -146,11 +146,16 @@ Coverage highlights:
 - **Keychain**: keychain_ssh_keypair (both generate=true and imported-key
   paths), keychain_ssh_connection (wired to a keypair fixture)
 - **Filesystem permissions and ACLs**: filesystem_permissions (mode/uid/gid
-  on a dataset fixture, recursive option), filesystem_acl (NFS4 and
-  POSIX1E entries, including the POSIX1E named-entry-requires-a-MASK-entry
-  rule), acl_template (NFS4 and POSIX1E template CRUD)
-- **Scheduled tasks**: cronjob (schedule block, stdout/stderr flags),
-  init_shutdown_script (COMMAND and SCRIPT types, PREINIT/POSTINIT/SHUTDOWN)
+  on a dataset fixture live-tested; `recursive` appears only in
+  ImportStateVerifyIgnore, not exercised), filesystem_acl (NFS4 entries
+  live-tested; POSIX1E entries, including the named-entry-requires-a-MASK
+  rule, are unit-tested plus live probes, not run through the acceptance
+  test itself), acl_template (NFS4 templates live-tested; POSIX1E
+  templates unit-tested only)
+- **Scheduled tasks**: cronjob (schedule block live-tested; stdout/stderr
+  flags are not set by the test), init_shutdown_script (COMMAND type at
+  POSTINIT live-tested; SCRIPT type and the other timings, PREINIT/
+  SHUTDOWN, are unit-tested only)
 - **Misc**: static route (TEST-NET-2), NTP server (TEST-NET-3 + `force`),
   alert service (Mail attributes JSON), tunable (delete restores the
   captured `orig_value`), boot environment (clones the active BE, never
