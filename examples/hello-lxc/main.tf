@@ -17,12 +17,18 @@ variable "truenas_api_key" {
   sensitive = true
 }
 
+variable "truenas_endpoint" {
+  type        = string
+  description = "e.g. wss://truenas.example.com/api/current (SCALE 26.0+)"
+}
+
 provider "truenas" {
-  endpoint = "wss://192.168.1.68/api/current" # SCALE 26.0 box
+  endpoint = var.truenas_endpoint
   api_key  = var.truenas_api_key
   insecure = true # self-signed certificate
 }
 
+# Adjust pool/network below to your box (pool_choices lists valid pools).
 # 1. Point the LXC subsystem at a pool.
 resource "truenas_lxc_config" "this" {
   preferred_pool = "tank"
