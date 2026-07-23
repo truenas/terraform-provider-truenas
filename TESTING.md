@@ -67,7 +67,7 @@ a real, observed flake, not a resource defect — so retrying the restore
 across transport drops matters even though the Terraform steps themselves
 already succeeded.
 
-## Unit tests (857 functions across 72 packages)
+## Unit tests (901 functions across 77 packages)
 
 Every resource package carries unit tests for:
 
@@ -88,7 +88,7 @@ Every resource package carries unit tests for:
   test server: calls, errors, context cancellation, auth, and the CallJob
   job-polling loop including its no-job bail-out.
 
-## Acceptance suite (98 test functions, 71 packages)
+## Acceptance suite (104 test functions, 75 packages)
 
 ### Tier 1 — safe (`make testacc-safe`)
 
@@ -164,6 +164,12 @@ Coverage highlights:
   alphanumeric name) and VM DISPLAY device (SPICE + password + distinct
   ports)
 - **App** (`TRUENAS_APPS=1` only): syncthing catalog app lifecycle
+- **Virtualization and apps, continued**: docker_config (datasource-only Tier
+  1 test — the resource itself is Tier 2, see below), docker_network
+  (datasource lookup of the built-in `"bridge"` network; self-skips when
+  Docker is unconfigured on the target box — `docker.config`'s `pool` is
+  null), catalog_config (datasource, includes `catalog.trains`); app_registry
+  has no Tier-1 test — see Never-run tier below
 
 Safety rules baked into the tests — they must never touch the box's live
 objects: iSCSI portal/target id=1, extent id=2; NVMe-oF subsys/port/
@@ -199,6 +205,8 @@ field and restore it:
 | `ups_config` | `description` — **self-skips if UPS is unconfigured** (empty `driver`/`port`, same reasoning) |
 | `audit_config` | `quota_fill_warning` |
 | `twofactor_auth` | `window` — **SAFETY**: the test never toggles `enabled`, only `window`, to avoid locking out password-based logins mid-run |
+| `docker_config` | `enable_image_updates` — **self-skips if Docker is unconfigured** (`docker.config`'s `pool` is null: confirmed on the 25.10 test VM, which has never had Docker set up) |
+| `catalog_config` | `preferred_trains` (removes and restores `"community"`) — probed live to succeed regardless of whether Docker/apps is configured (unlike `docker_config`, `catalog.update` does not require a pool), so this test has no self-skip condition and ran on both boxes |
 
 ### Never-run tier
 
@@ -220,6 +228,16 @@ management access or migrate system state:
   `TestAccCloudBackup_basic` is a documented, permanent skip. See the
   in-file doc comment for the decisive probe evidence and instructions to
   enable it against an environment with real cloud storage credentials.
+- `app_registry` — `app.registry.create` validates the supplied
+  username/password/uri against the real container registry endpoint
+  synchronously (confirmed live on SCALE 26.0: a throwaway create with
+  fabricated credentials against an unreachable TEST-NET-1 host was rejected
+  with "Invalid credentials for registry" before anything was persisted); no
+  live, reachable container registry fixture is available in this
+  environment, so `TestAccAppRegistry_basic` is a documented, permanent
+  skip (unconditional `t.Skip`, no `TF_ACC` gate needed). See the in-file
+  doc comment for the decisive probe evidence and instructions to enable it
+  against an environment with a real container registry.
 
 ## Directory-services test environment
 

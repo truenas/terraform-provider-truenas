@@ -3,24 +3,29 @@
 **Audience:** Engineering management
 **Provider:** terraform-provider-truenas
 **Surveyed against:** TrueNAS SCALE 26.0 (127 live API namespaces), cross-checked on 25.10
-**Date:** 2026-07-22
+**Date:** 2026-07-23
 
 ## Executive Summary
 
-The provider implements **71 resources and 71 matching data sources**, covering the
-core storage, sharing, block-storage, accounts, scheduled-task, access-management,
-certificates/ACME, keychain/remote-replication, filesystem permissions/ACLs,
-Active Directory/LDAP/IPA/Kerberos, and system-configuration surface of the
-TrueNAS SCALE API. Every implemented resource has a full acceptance test (create,
-update, import, destroy) run against real TrueNAS boxes on both 25.10 and 26.0,
-with two deliberate exceptions: `truenas_directoryservices` is live-tested on the
-25.10 VM plus dedicated Samba AD, OpenLDAP, and FreeIPA servers only —
-directory-service tests never run against the production-serving 26.0 box, by
-design (see TESTING.md) — and `truenas_cloud_backup`, whose acceptance test is a
-documented, permanent skip because `cloud_backup.create` validates the
-credential/bucket against a real remote endpoint and no live S3-compatible bucket
-fixture is available in this environment (see Part 2, Data protection and
-movement).
+The provider implements **74 resources and 75 matching data sources** (one
+data source, `truenas_docker_network`, has no corresponding resource — Docker
+networks are managed by Docker itself, not by TrueNAS's own config surface;
+see Part 2, Virtualization and apps), covering the core storage, sharing,
+block-storage, accounts, scheduled-task, access-management, certificates/ACME,
+keychain/remote-replication, filesystem permissions/ACLs, Active
+Directory/LDAP/IPA/Kerberos, containers/apps, and system-configuration surface
+of the TrueNAS SCALE API. Every implemented resource has a full acceptance
+test (create, update, import, destroy) run against real TrueNAS boxes on both
+25.10 and 26.0, with three deliberate exceptions: `truenas_directoryservices`
+is live-tested on the 25.10 VM plus dedicated Samba AD, OpenLDAP, and FreeIPA
+servers only — directory-service tests never run against the
+production-serving 26.0 box, by design (see TESTING.md) — and
+`truenas_cloud_backup` and `truenas_app_registry`, each with a documented,
+permanent acceptance-test skip because their respective `create` calls
+validate credentials against a real remote endpoint (a cloud storage bucket
+and a container registry, respectively) and no live fixture of that kind is
+available in this environment (see Part 2, Data protection and movement /
+Virtualization and apps).
 
 Of the 127 API namespaces the middleware exposes, more than half now map to
 declarative resources we cover, a smaller share are uncovered but viable Terraform
@@ -30,17 +35,14 @@ dedicated hardware scheduled for testing.
 
 Every gap previously tracked as high-value (§1.1: certificates/ACME, remote
 replication, scheduled tasks, filesystem ACLs, two-factor auth, cloud backup,
-audit config, reporting exporters) is now covered — see Part 2. The
-next-highest-value gaps, in rough priority order:
+audit config, reporting exporters) is now covered — see Part 2. Containers and
+apps (Docker service configuration, private registries, app catalog trains)
+are covered too — see Part 2, Virtualization and apps. The next-highest-value
+gaps, in rough priority order:
 
-1. **Containers and apps (26.0)** — Incus system containers (`container`,
-   `container.device`, `container.image`), Docker service configuration
-   (`docker`, `docker.network`), and private registries (`app.registry`) sit
-   alongside our existing `truenas_app` catalog-app coverage but remain
-   uncovered themselves.
-2. **New 26.0 share type** — `webshare`/`sharing.webshare` (WebDAV-style web
+1. **New 26.0 share type** — `webshare`/`sharing.webshare` (WebDAV-style web
    shares), a natural fit next to `truenas_nfs_share`/`truenas_smb_share`.
-3. **Enterprise/HA hardware** — failover controller pairs, Fibre Channel,
+2. **Enterprise/HA hardware** — failover controller pairs, Fibre Channel,
    JBOF shelves, enclosure management, IPMI, RDMA: all need dedicated hardware
    scheduled for testing before they can ship under this project's
    no-mocks policy.
@@ -49,7 +51,7 @@ Directory services no longer belongs on this list: Active Directory, LDAP, and
 IPA join, Kerberos (config, realms, keytabs), and explicit AD idmap configuration
 are all covered now — see Part 2. The standalone `idmap` API namespace exposes
 only a cache-clear action (`clear_idmap_cache`), not durable configuration state —
-see Part 1, §1.5 (poor Terraform fit); idmap *configuration* is exposed as a
+see Part 1, §1.4 (poor Terraform fit); idmap *configuration* is exposed as a
 nested block on `truenas_directoryservices` instead.
 
 ## Part 1 — Uncovered API Areas
@@ -64,21 +66,7 @@ Part 2 (Certificates & ACME, Scheduled tasks, Access management, Keychain &
 remote replication, Filesystem permissions & ACLs, System). The next tier of
 gaps is §1.2 below.
 
-### 1.2 Containers and applications (26.0 growth area)
-
-| Namespace(s) | What it manages | Notes |
-|---|---|---|
-| `container`, `container.device`, `container.image` | Incus system containers (new in 26.0) | Parallel to our `vm`/`vm_device` pair |
-| `lxc` | LXC image import | |
-| `docker`, `docker.network` | Docker service configuration and networks | Singleton + CRUD |
-| `app.registry` | Private container registries | Small CRUD |
-| `catalog` | App catalog trains configuration | Singleton |
-| `virt.*` (25.10 only) | Predecessor of `container` | Superseded in 26.0; recommend covering `container` only |
-
-Our existing `app` resource covers catalog-app install/upgrade/delete lifecycle;
-the namespaces above surround it.
-
-### 1.3 New 26.0 surfaces
+### 1.2 New 26.0 surfaces
 
 | Namespace(s) | What it manages | Notes |
 |---|---|---|
@@ -86,7 +74,7 @@ the namespaces above surround it.
 | `zfs.resource`, `zfs.resource.snapshot`, `zpool`, `zpool.scrub` | Next-generation ZFS namespaces | We use the stable `pool.dataset` / `pool.snapshot` names; watch for deprecation signals before migrating |
 | `tn_connect` | TrueNAS Connect enrollment | Cloud service enrollment; limited Terraform value |
 
-### 1.4 Enterprise / licensed hardware
+### 1.3 Enterprise / licensed hardware
 
 | Namespace(s) | What it manages |
 |---|---|
@@ -103,7 +91,7 @@ These require enterprise/HA systems for verification. Our testing policy (no
 mocks, real systems only) means each of these needs time scheduled on such a
 system before its resource can ship.
 
-### 1.5 Poor Terraform fit (actions, telemetry, one-shots — likely never)
+### 1.4 Poor Terraform fit (actions, telemetry, one-shots — likely never)
 
 | Namespace(s) | Why not |
 |---|---|
@@ -119,13 +107,15 @@ system before its resource can ship.
 
 ## Part 2 — Covered API Areas
 
-All 71 resources below also ship a matching data source, generated documentation,
-unit tests (payload builders, response mappers, schema shape), and a live
-acceptance test with create → update → import → destroy verification and leak
-checks. Suite is green against SCALE 25.10 and 26.0, with the two exceptions
-noted in the Executive Summary (`truenas_directoryservices`, 25.10 + dedicated
-Samba AD, OpenLDAP, and FreeIPA servers only; `truenas_cloud_backup`, documented
-permanent acceptance-test skip).
+All 74 resources below also ship a matching data source (`truenas_docker_network`
+is the one exception in the other direction: a data source with no resource —
+see Virtualization and apps), generated documentation, unit tests (payload
+builders, response mappers, schema shape), and a live acceptance test with
+create → update → import → destroy verification and leak checks. Suite is
+green against SCALE 25.10 and 26.0, with the three exceptions noted in the
+Executive Summary (`truenas_directoryservices`, 25.10 + dedicated Samba AD,
+OpenLDAP, and FreeIPA servers only; `truenas_cloud_backup` and
+`truenas_app_registry`, each a documented permanent acceptance-test skip).
 
 ### Storage
 
@@ -282,6 +272,10 @@ permanent acceptance-test skip).
 | `truenas_vm` | `vm` |
 | `truenas_vm_device` | `vm.device` |
 | `truenas_app` | `app` |
+| `truenas_docker_config` | `docker` (singleton: pool/dataset, image-update checks, address pools, IPv6 CIDR, registry mirrors; `nvidia` writable on 25.10 and earlier only — dropped from `docker.update`'s accepted fields on 26.0+) |
+| `truenas_docker_network` | `docker.network` — **datasource only, read-only namespace**: Docker networks are created/destroyed by Docker itself (and by installed applications), not by TrueNAS's own config surface, so there is no corresponding resource |
+| `truenas_app_registry` | `app.registry` (private container registry credentials; `app.registry.create` validates username/password/uri against the real registry endpoint synchronously — confirmed live via a rejected throwaway create against an unreachable TEST-NET-1 host — so its acceptance test, `TestAccAppRegistry_basic`, is a documented, permanent skip: no live, reachable container registry fixture is available in this environment) |
+| `truenas_catalog_config` | `catalog` (singleton: preferred app-catalog trains; `label`/`location` are read-only) |
 
 ## Method
 
