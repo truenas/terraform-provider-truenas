@@ -7,33 +7,43 @@
 
 ## Executive Summary
 
-The provider implements **58 resources and 58 matching data sources**, covering the
+The provider implements **71 resources and 71 matching data sources**, covering the
 core storage, sharing, block-storage, accounts, scheduled-task, access-management,
+certificates/ACME, keychain/remote-replication, filesystem permissions/ACLs,
 Active Directory/LDAP/IPA/Kerberos, and system-configuration surface of the
 TrueNAS SCALE API. Every implemented resource has a full acceptance test (create,
 update, import, destroy) run against real TrueNAS boxes on both 25.10 and 26.0,
-with one deliberate exception: `truenas_directoryservices` is live-tested on the
+with two deliberate exceptions: `truenas_directoryservices` is live-tested on the
 25.10 VM plus dedicated Samba AD, OpenLDAP, and FreeIPA servers only —
 directory-service tests never run against the production-serving 26.0 box, by
-design (see TESTING.md).
+design (see TESTING.md) — and `truenas_cloud_backup`, whose acceptance test is a
+documented, permanent skip because `cloud_backup.create` validates the
+credential/bucket against a real remote endpoint and no live S3-compatible bucket
+fixture is available in this environment (see Part 2, Data protection and
+movement).
 
-Of the 127 API namespaces the middleware exposes, close to half now map to
+Of the 127 API namespaces the middleware exposes, more than half now map to
 declarative resources we cover, a smaller share are uncovered but viable Terraform
 resources (the backlog, detailed below), and the remainder are actions, telemetry,
 or enterprise hardware features that are either a poor fit for Terraform or need
 dedicated hardware scheduled for testing.
 
-The highest-value gaps, in rough priority order:
+Every gap previously tracked as high-value (§1.1: certificates/ACME, remote
+replication, scheduled tasks, filesystem ACLs, two-factor auth, cloud backup,
+audit config, reporting exporters) is now covered — see Part 2. The
+next-highest-value gaps, in rough priority order:
 
-1. **Certificates** — no certificate or ACME management; blocks TLS automation.
-2. **Remote replication** — the replication resource supports local push only;
-   remote targets require the uncovered `keychaincredential` namespace (SSH
-   keypairs and connections).
-3. **Scheduled tasks** — cron jobs and boot/shutdown scripts remain uncovered
-   (rsync tasks and pool scrub/resilver schedules are now covered — see Part 2).
-4. **Filesystem ACLs** — `filesystem`, `filesystem.acltemplate`: POSIX/NFSv4 ACLs
-   and permission templates, frequently requested alongside dataset + share
-   management.
+1. **Containers and apps (26.0)** — Incus system containers (`container`,
+   `container.device`, `container.image`), Docker service configuration
+   (`docker`, `docker.network`), and private registries (`app.registry`) sit
+   alongside our existing `truenas_app` catalog-app coverage but remain
+   uncovered themselves.
+2. **New 26.0 share type** — `webshare`/`sharing.webshare` (WebDAV-style web
+   shares), a natural fit next to `truenas_nfs_share`/`truenas_smb_share`.
+3. **Enterprise/HA hardware** — failover controller pairs, Fibre Channel,
+   JBOF shelves, enclosure management, IPMI, RDMA: all need dedicated hardware
+   scheduled for testing before they can ship under this project's
+   no-mocks policy.
 
 Directory services no longer belongs on this list: Active Directory, LDAP, and
 IPA join, Kerberos (config, realms, keytabs), and explicit AD idmap configuration
@@ -46,17 +56,13 @@ nested block on `truenas_directoryservices` instead.
 
 ### 1.1 High-value gaps (viable resources, requested workflows)
 
-| Namespace(s) | What it manages | Notes |
-|---|---|---|
-| `certificate`, `acme.dns.authenticator` | TLS certificates, CSRs, ACME (Let's Encrypt) DNS validation | Needed before `system_general` UI-certificate management is useful end-to-end |
-| `keychaincredential` | SSH keypairs and SSH connections | Prerequisite for remote replication; our `replication` resource is local-only today because of this gap. `rsync_task` (see Part 2) covers SSH-mode rsync without it, using the run-as user's own keys |
-| `cronjob` | Scheduled shell commands | Straightforward CRUD |
-| `initshutdownscript` | Boot/shutdown hook scripts | Straightforward CRUD |
-| `cloud_backup` | TrueCloud (Storj) backup tasks | Same shape as our existing `cloudsync` resource |
-| `auth.twofactor` | Two-factor authentication policy | Singleton config |
-| `filesystem`, `filesystem.acltemplate` | POSIX/NFSv4 ACLs, permissions, ACL templates | Frequently requested alongside dataset + share management |
-| `audit` | Audit subsystem configuration | Singleton config |
-| `reporting.exporters` | Metrics export (e.g. Graphite) | Small CRUD surface |
+*(empty)* — every namespace previously tracked here (`certificate`,
+`acme.dns.authenticator`, `keychaincredential`, `cronjob`,
+`initshutdownscript`, `cloud_backup`, `auth.twofactor`, `filesystem`,
+`filesystem.acltemplate`, `audit`, `reporting.exporters`) is now covered; see
+Part 2 (Certificates & ACME, Scheduled tasks, Access management, Keychain &
+remote replication, Filesystem permissions & ACLs, System). The next tier of
+gaps is §1.2 below.
 
 ### 1.2 Containers and applications (26.0 growth area)
 
@@ -113,12 +119,13 @@ system before its resource can ship.
 
 ## Part 2 — Covered API Areas
 
-All 58 resources below also ship a matching data source, generated documentation,
+All 71 resources below also ship a matching data source, generated documentation,
 unit tests (payload builders, response mappers, schema shape), and a live
 acceptance test with create → update → import → destroy verification and leak
-checks. Suite is green against SCALE 25.10 and 26.0, with the single exception
+checks. Suite is green against SCALE 25.10 and 26.0, with the two exceptions
 noted in the Executive Summary (`truenas_directoryservices`, 25.10 + dedicated
-Samba AD, OpenLDAP, and FreeIPA servers only).
+Samba AD, OpenLDAP, and FreeIPA servers only; `truenas_cloud_backup`, documented
+permanent acceptance-test skip).
 
 ### Storage
 
@@ -177,10 +184,11 @@ Samba AD, OpenLDAP, and FreeIPA servers only).
 
 | Terraform resource | API namespace |
 |---|---|
-| `truenas_replication_task` | `replication` (local push; remote blocked on `keychaincredential`, see Part 1) |
+| `truenas_replication_task` | `replication` (LOCAL push and remote SSH transport, the latter authenticating via a `truenas_keychain_ssh_connection` credential referenced by `ssh_credentials` — no longer blocked on `keychaincredential`, live-tested end to end as `TestAccReplication_RemoteSSH`) |
 | `truenas_replication_config` | `replication.config` |
 | `truenas_cloudsync_task` | `cloudsync` |
 | `truenas_cloudsync_credentials` | `cloudsync.credentials` |
+| `truenas_cloud_backup` | `cloud_backup` (restic-based backup to a cloud bucket, distinct from `cloudsync`; `cloud_backup.create` validates the credential/bucket against the real remote endpoint at apply time — confirmed live via a bogus S3 access key rejected before any local state was created — so its acceptance test, `TestAccCloudBackup_basic`, is a documented, permanent skip: no live S3-compatible bucket fixture is available in this environment. Schema, unit tests, and payload/response mapping are exercised without a live run) |
 | `truenas_rsync_task` | `rsynctask` (MODULE and SSH modes; SSH mode uses the run-as user's own keys unless `ssh_credentials` is set) |
 
 ### Network
@@ -201,6 +209,37 @@ Samba AD, OpenLDAP, and FreeIPA servers only).
 | `truenas_tunable` | `tunable` |
 | `truenas_boot_environment` | `boot.environment` |
 | `truenas_service` | `service` |
+| `truenas_audit_config` | `audit` (singleton: retention/reservation/quota for the local audit databases; no top-level enable/disable — auditing is toggled per service) |
+| `truenas_reporting_exporter` | `reporting.exporters` (GRAPHITE exporter, the only type TrueNAS currently supports, exposed as a typed nested block) |
+
+### Scheduled tasks
+
+| Terraform resource | API namespace |
+|---|---|
+| `truenas_cronjob` | `cronjob` |
+| `truenas_init_shutdown_script` | `initshutdownscript` |
+
+### Certificates & ACME
+
+| Terraform resource | API namespace |
+|---|---|
+| `truenas_certificate` | `certificate` (four immutable creation modes: imported cert+key, on-box CSR generation, imported CSR+key, ACME. ACME issuance — DNS challenge orchestration, renewal polling — is schema-and-preflight only: `acme_directory_uri`/`csr_id`/`tos`/`dns_mapping` are accepted and forwarded to `certificate.create`, but live issuance is deferred and not exercised by the acceptance suite) |
+| `truenas_acme_dns_authenticator` | `acme.dns.authenticator` (cloudflare, digitalocean, OVH, route53, shell — five discriminated variants, so `attributes` is a free-form JSON document) |
+
+### Keychain & remote replication
+
+| Terraform resource | API namespace |
+|---|---|
+| `truenas_keychain_ssh_keypair` | `keychaincredential` (type SSH_KEY_PAIR; import or on-box generate) |
+| `truenas_keychain_ssh_connection` | `keychaincredential` (type SSH_CREDENTIALS) — together with `truenas_keychain_ssh_keypair`, this unblocks `truenas_replication_task`'s SSH transport (see Data protection and movement above) |
+
+### Filesystem permissions & ACLs
+
+| Terraform resource | API namespace |
+|---|---|
+| `truenas_filesystem_permissions` | `filesystem` (`setperm`/`stat`; declarative mode/uid/gid on an existing path, keyed by path rather than a TrueNAS-assigned id) |
+| `truenas_filesystem_acl` | `filesystem` (`setacl`/`getacl`; declarative NFS4/POSIX1E ACL on an existing path) |
+| `truenas_acl_template` | `filesystem.acltemplate` (reusable named ACL templates; never touches TrueNAS's 9 builtin templates unless one is explicitly imported) |
 
 ### Service configuration (singletons)
 
@@ -225,6 +264,7 @@ Samba AD, OpenLDAP, and FreeIPA servers only).
 |---|---|
 | `truenas_api_key` | `api_key` (key rotation via the API's `reset` flag is not exposed — taint and recreate to rotate) |
 | `truenas_privilege` | `privilege` |
+| `truenas_twofactor_auth` | `auth.twofactor` (singleton: system-wide enable, TOTP window, per-service requirement. Does not affect API-key authentication, confirmed live) |
 
 ### Directory services and Kerberos
 

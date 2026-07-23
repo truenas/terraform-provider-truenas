@@ -55,9 +55,19 @@ Helpers in `internal/acctest`: `PreCheck` (TF_ACC + credentials),
 (`TRUENAS_APPS=1`), `Endpoint()`, `TestPool()`, `RandName(prefix)`
 (crypto-random `prefix-xxxxxxxx` names), `RandNQN()` (valid RFC-4122
 uuid-style NVMe host NQNs), `Client()` (shared live API client for
-CheckDestroy/fixture queries), `ProviderConfig()` (HCL provider block).
+CheckDestroy/fixture queries), `ProviderConfig()` (HCL provider block),
+`RestoreCall(ctx, method, params...)` — used by the `audit_config` and
+`twofactor_auth` Tier-2 tests for both the pre-change read and the
+`t.Cleanup`-registered restore write, through the shared `acctest.Client()`
+connection, with the same transient-failure retry and reconnect behavior as
+`client.CallRead`. That connection sits idle for the whole duration of a
+Tier-2 test's Terraform steps (which run over the provider's own, separate
+connection) and has occasionally gone stale by the time `t.Cleanup` fires —
+a real, observed flake, not a resource defect — so retrying the restore
+across transport drops matters even though the Terraform steps themselves
+already succeeded.
 
-## Unit tests (678 functions across 60 packages)
+## Unit tests (857 functions across 72 packages)
 
 Every resource package carries unit tests for:
 
@@ -78,7 +88,7 @@ Every resource package carries unit tests for:
   test server: calls, errors, context cancellation, auth, and the CallJob
   job-polling loop including its no-job bail-out.
 
-## Acceptance suite (80 test functions, 58 packages)
+## Acceptance suite (98 test functions, 71 packages)
 
 ### Tier 1 — safe (`make testacc-safe`)
 
@@ -121,14 +131,33 @@ Coverage highlights:
   with explicit idmap (builtin + idmap_domain RID), LDAP join (RFC2307,
   seeded-user visibility check), and IPA join (`TRUENAS_DS=1`-gated, see
   below — three service types, three dedicated directory servers)
-- **Data movement**: rsync task (MODULE and SSH modes, cron schedule)
+- **Data movement**: rsync task (MODULE and SSH modes, cron schedule),
+  replication task (LOCAL push with dataset fixtures, plus `TestAccReplication_RemoteSSH`
+  exercising transport = SSH end to end with a self-provisioned NOPASSWD sudo
+  user and a `truenas_keychain_ssh_connection` credential); `cloud_backup` is
+  the one resource in this area with no Tier-1 test — see Never-run tier
+  below
+- **Certificates & ACME**: certificate (CERTIFICATE_CREATE_IMPORTED and
+  CERTIFICATE_CREATE_CSR paths), acme_dns_authenticator (cloudflare variant
+  with a syntactically valid but fake token — `acme.dns.authenticator.create`
+  does not validate credentials against the real DNS provider for any
+  variant except shell, which uniquely performs a local file-existence
+  check, so cloudflare is used to keep the test self-contained)
+- **Keychain**: keychain_ssh_keypair (both generate=true and imported-key
+  paths), keychain_ssh_connection (wired to a keypair fixture)
+- **Filesystem permissions and ACLs**: filesystem_permissions (mode/uid/gid
+  on a dataset fixture, recursive option), filesystem_acl (NFS4 and
+  POSIX1E entries, including the POSIX1E named-entry-requires-a-MASK-entry
+  rule), acl_template (NFS4 and POSIX1E template CRUD)
+- **Scheduled tasks**: cronjob (schedule block, stdout/stderr flags),
+  init_shutdown_script (COMMAND and SCRIPT types, PREINIT/POSTINIT/SHUTDOWN)
 - **Misc**: static route (TEST-NET-2), NTP server (TEST-NET-3 + `force`),
   alert service (Mail attributes JSON), tunable (delete restores the
   captured `orig_value`), boot environment (clones the active BE, never
   activates), cloudsync credentials (26.0 provider/attributes split),
-  replication task (LOCAL push with dataset fixtures), service (toggles the
-  stopped `ftp` service and restores), VM (stopped, alphanumeric name) and
-  VM DISPLAY device (SPICE + password + distinct ports)
+  service (toggles the stopped `ftp` service and restores), VM (stopped,
+  alphanumeric name) and VM DISPLAY device (SPICE + password + distinct
+  ports)
 - **App** (`TRUENAS_APPS=1` only): syncthing catalog app lifecycle
 
 Safety rules baked into the tests — they must never touch the box's live
@@ -163,6 +192,8 @@ field and restore it:
 | `resilver_config` | `enabled` |
 | `mail` | `fromname` — **self-skips if mail is unconfigured** (`fromemail` empty: the API requires it on every update, so the unconfigured state could not be restored) |
 | `ups_config` | `description` — **self-skips if UPS is unconfigured** (empty `driver`/`port`, same reasoning) |
+| `audit_config` | `quota_fill_warning` |
+| `twofactor_auth` | `window` — **SAFETY**: the test never toggles `enabled`, only `window`, to avoid locking out password-based logins mid-run |
 
 ### Never-run tier
 
@@ -177,6 +208,13 @@ management access or migrate system state:
 - `network_interface` bridge creation (global commit/checkin cycle);
   its enp7s0 **datasource** test is read-only and does run
 - `pool` creation (requires dedicated blank disks)
+- `cloud_backup` — `cloud_backup.create` validates the credential/bucket
+  against the real remote endpoint at apply time (confirmed live: a bogus
+  S3 access key was rejected before any local state was created); no live
+  S3-compatible bucket fixture is available in this environment, so
+  `TestAccCloudBackup_basic` is a documented, permanent skip. See the
+  in-file doc comment for the decisive probe evidence and instructions to
+  enable it against an environment with real cloud storage credentials.
 
 ## Directory-services test environment
 

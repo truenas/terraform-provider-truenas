@@ -8,27 +8,34 @@ client lives inside the provider.
 
 ## What it manages
 
-58 resources, each with a matching data source:
+71 resources, each with a matching data source:
 
 | Area | Resources |
 |------|-----------|
 | **Storage** | `truenas_pool`, `truenas_dataset`, `truenas_zvol`, `truenas_snapshot`, `truenas_periodic_snapshot_task`, `truenas_scrub_task`, `truenas_resilver_config` |
 | **File shares** | `truenas_nfs_share`, `truenas_smb_share` |
+| **Filesystem permissions & ACLs** | `truenas_filesystem_permissions`, `truenas_filesystem_acl`, `truenas_acl_template` |
 | **iSCSI** | `truenas_iscsi_target`, `truenas_iscsi_extent`, `truenas_iscsi_initiator`, `truenas_iscsi_portal`, `truenas_iscsi_targetextent`, `truenas_iscsi_auth`, `truenas_iscsi_global` |
 | **NVMe-oF** | `truenas_nvmet_subsys`, `truenas_nvmet_port`, `truenas_nvmet_namespace`, `truenas_nvmet_host`, `truenas_nvmet_host_subsys`, `truenas_nvmet_port_subsys`, `truenas_nvmet_global` |
 | **Accounts** | `truenas_user`, `truenas_group` |
-| **Access management** | `truenas_api_key`, `truenas_privilege` |
+| **Access management** | `truenas_api_key`, `truenas_privilege`, `truenas_twofactor_auth` |
+| **Certificates & ACME** | `truenas_certificate`, `truenas_acme_dns_authenticator` |
 | **Directory services & Kerberos** | `truenas_directoryservices` (Active Directory, LDAP, and IPA join; explicit AD idmap configuration), `truenas_kerberos_config`, `truenas_kerberos_realm`, `truenas_kerberos_keytab` |
 | **Apps & VMs** | `truenas_app`, `truenas_vm`, `truenas_vm_device` |
-| **Replication & sync** | `truenas_replication_task`, `truenas_cloudsync_task`, `truenas_cloudsync_credentials`, `truenas_rsync_task` |
+| **Replication & sync** | `truenas_replication_task` (local push and remote SSH transport), `truenas_cloudsync_task`, `truenas_cloudsync_credentials`, `truenas_cloud_backup`, `truenas_rsync_task` |
+| **Keychain** | `truenas_keychain_ssh_keypair`, `truenas_keychain_ssh_connection` |
+| **Scheduled tasks** | `truenas_cronjob`, `truenas_init_shutdown_script` |
 | **Network** | `truenas_network_interface`, `truenas_static_route`, `truenas_network_config` |
 | **Services** | `truenas_service`, plus per-service configuration: `truenas_ssh_config`, `truenas_ftp_config`, `truenas_snmp_config`, `truenas_ups_config`, `truenas_smb_config`, `truenas_nfs_config` |
 | **Alerts** | `truenas_alert_service`, `truenas_alert_policy` |
-| **System** | `truenas_boot_environment`, `truenas_tunable`, `truenas_ntp_server`, `truenas_mail`, `truenas_system_general`, `truenas_system_advanced`, `truenas_system_dataset`, `truenas_replication_config` |
+| **System** | `truenas_boot_environment`, `truenas_tunable`, `truenas_ntp_server`, `truenas_mail`, `truenas_system_general`, `truenas_system_advanced`, `truenas_system_dataset`, `truenas_replication_config`, `truenas_audit_config`, `truenas_reporting_exporter` |
 
 Both block-storage stacks are expressible end-to-end in HCL: iSCSI
 (portal → target → extent → LUN association → CHAP auth) and NVMe-oF
-(port → subsystem → namespace → host grant → port binding).
+(port → subsystem → namespace → host grant → port binding). Remote
+replication is expressible end-to-end too: `truenas_keychain_ssh_keypair` →
+`truenas_keychain_ssh_connection` → `truenas_replication_task` (SSH
+transport).
 
 Working examples for every resource are under [`examples/resources/`](examples/resources/).
 
@@ -197,6 +204,32 @@ terraform apply
   calls the leave-domain/unjoin API, so an AD computer account or IPA host
   entry stays on the domain controller — leaving requires an administrator
   credential this provider does not assume is available at destroy time.
+- **Filesystem permissions and ACLs are path-keyed, not TrueNAS-tracked
+  objects.** `truenas_filesystem_permissions` and `truenas_filesystem_acl`
+  wrap `filesystem.setperm`/`filesystem.setacl` on an existing path; the
+  resource ID is the path itself. `terraform destroy` on
+  `truenas_filesystem_permissions` never reverts mode/uid/gid — it only
+  forgets the resource, with a warning. `truenas_filesystem_acl` differs:
+  destroy strips the ACL back to a trivial mode-only one
+  (`options.stripacl`), since that conversion was confirmed clean live on
+  both NFS4 and POSIX1E. `truenas_acl_template` manages reusable named ACL
+  templates and never touches TrueNAS's built-in templates unless one is
+  explicitly imported.
+- **Certificates and remote replication over SSH.** `truenas_certificate`
+  supports importing a cert+key pair, generating a CSR on-box, importing an
+  externally-generated CSR, or ACME — though ACME issuance itself (DNS
+  challenge orchestration, renewal polling) is schema-and-preflight only in
+  this provider version, not live-exercised. `truenas_keychain_ssh_keypair`
+  and `truenas_keychain_ssh_connection` store SSH credentials in the
+  TrueNAS keychain; wiring a connection's ID into `truenas_replication_task`'s
+  `ssh_credentials` unblocks its SSH transport for remote (not just local
+  push) replication.
+- **Two-factor auth is a safety-sensitive singleton.**
+  `truenas_twofactor_auth`'s `enabled` field controls system-wide 2FA for
+  password-based logins; this provider's own API-key authentication is
+  unaffected by it (confirmed live), but changing it deliberately can lock
+  out other users. Change it deliberately, same as any other singleton
+  above.
 
 ## Development
 
