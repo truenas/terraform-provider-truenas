@@ -50,7 +50,7 @@ type auditConfigOriginal struct {
 // audit.config, so the test can restore it exactly afterward.
 func readAuditConfigOriginal(t *testing.T) auditConfigOriginal {
 	t.Helper()
-	raw, err := acctest.Client().Call(context.Background(), "audit.config")
+	raw, err := acctest.RestoreCall(context.Background(), "audit.config")
 	if err != nil {
 		t.Fatalf("error reading current audit config: %v", err)
 	}
@@ -66,7 +66,7 @@ func readAuditConfigOriginal(t *testing.T) auditConfigOriginal {
 // Terraform steps themselves fail partway through.
 func restoreAuditConfig(t *testing.T, orig auditConfigOriginal) {
 	t.Helper()
-	if _, err := acctest.Client().Call(context.Background(), "audit.update", map[string]any{
+	if _, err := acctest.RestoreCall(context.Background(), "audit.update", map[string]any{
 		"quota_fill_warning": orig.QuotaFillWarning,
 	}); err != nil {
 		t.Fatalf("error restoring audit config: %v", err)

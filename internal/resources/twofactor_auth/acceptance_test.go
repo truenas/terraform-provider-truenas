@@ -50,7 +50,7 @@ type twoFactorAuthOriginal struct {
 // auth.twofactor.config, so the test can restore it exactly afterward.
 func readTwoFactorAuthOriginal(t *testing.T) twoFactorAuthOriginal {
 	t.Helper()
-	raw, err := acctest.Client().Call(context.Background(), "auth.twofactor.config")
+	raw, err := acctest.RestoreCall(context.Background(), "auth.twofactor.config")
 	if err != nil {
 		t.Fatalf("error reading current two-factor auth config: %v", err)
 	}
@@ -69,7 +69,7 @@ func readTwoFactorAuthOriginal(t *testing.T) twoFactorAuthOriginal {
 // flip system-wide 2FA on or off.
 func restoreTwoFactorAuth(t *testing.T, orig twoFactorAuthOriginal) {
 	t.Helper()
-	if _, err := acctest.Client().Call(context.Background(), "auth.twofactor.update", map[string]any{
+	if _, err := acctest.RestoreCall(context.Background(), "auth.twofactor.update", map[string]any{
 		"window": orig.Window,
 	}); err != nil {
 		t.Fatalf("error restoring two-factor auth config: %v", err)

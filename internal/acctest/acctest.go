@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -112,6 +113,26 @@ func Client() *client.Client {
 		testClient = c
 	})
 	return testClient
+}
+
+// RestoreCall invokes an idempotent singleton-config read or write (e.g. a
+// t.Cleanup-registered restore, or the paired "read the original value"
+// call that precedes it) through the shared acctest.Client() connection,
+// with the same transient-failure retry and reconnect behavior as
+// client.CallRead.
+//
+// The long-lived acctest.Client() connection sits idle for the whole
+// duration of a Tier-2 set-and-restore test's Terraform steps (which run
+// over the provider's own, separate connection), so by the time t.Cleanup
+// fires it has occasionally gone stale and a plain Call returns "not
+// connected" — a real, observed flake (see task-2-report.md and this
+// task's report), not a resource defect: the Terraform steps themselves,
+// including the step that already applies the restored value, still
+// succeeded. Both directions (read-original and restore-write) are
+// idempotent, so retrying either on a transient failure is safe — same
+// justification CallRead already relies on for reads.
+func RestoreCall(ctx context.Context, method string, params ...any) (json.RawMessage, error) {
+	return Client().CallRead(ctx, method, params...)
 }
 
 // ServerVersionAtLeast reports whether the acceptance-test server is at or
