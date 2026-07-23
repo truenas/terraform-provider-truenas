@@ -18,6 +18,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/alert_service"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/api_key"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/app"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/app_registry"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/audit_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/boot_environment"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/certificate"
@@ -235,6 +236,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		alert_service.NewResource,
 		api_key.NewResource,
 		app.NewResource,
+		app_registry.NewResource,
 		audit_config.NewResource,
 		boot_environment.NewResource,
 		certificate.NewResource,
@@ -312,6 +314,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		alert_service.NewDataSource,
 		api_key.NewDataSource,
 		app.NewDataSource,
+		app_registry.NewDataSource,
 		audit_config.NewDataSource,
 		boot_environment.NewDataSource,
 		certificate.NewDataSource,
