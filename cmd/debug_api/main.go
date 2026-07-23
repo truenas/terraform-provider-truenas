@@ -542,6 +542,175 @@ func main() {
 		}
 		fmt.Printf("=== filesystem.acltemplate.update response (comment only) ===\n%s\n", rawU)
 	}
+	if section == "faclmethods" {
+		raw, err := c.Call(context.Background(), "core.get_methods")
+		if err != nil {
+			log.Fatal(err)
+		}
+		var methods map[string]any
+		json.Unmarshal(raw, &methods)
+		for _, name := range []string{"filesystem.getacl", "filesystem.setacl"} {
+			if info, ok := methods[name]; ok {
+				pp(name, info)
+			} else {
+				fmt.Printf("=== %s: NOT FOUND ===\n", name)
+			}
+		}
+	}
+	if section == "faclprobe" {
+		// Probe filesystem.getacl (sync) + filesystem.setacl (job) round
+		// trip on a throwaway dataset directory: create dataset, getacl
+		// on the trivial (freshly-created) state, setacl with an NFS4
+		// entry set (owner@/group@/user:1000), getacl again, then setacl
+		// again with options.stripacl=true to see whether it cleanly
+		// reverts to a trivial/mode-based ACL (decisive for this
+		// resource's Delete semantic).
+		ds := "tank/tf-probe-facl"
+		if _, err := c.Call(context.Background(), "pool.dataset.create", map[string]any{"name": ds, "acltype": "NFSV4", "aclmode": "PASSTHROUGH"}); err != nil {
+			log.Fatal("dataset create:", err)
+		}
+		defer c.Call(context.Background(), "pool.dataset.delete", ds, map[string]any{"recursive": true})
+		path := "/mnt/" + ds
+
+		rawGetAcl0, err := c.Call(context.Background(), "filesystem.getacl", path)
+		if err != nil {
+			log.Fatal("getacl (trivial):", err)
+		}
+		fmt.Printf("=== filesystem.getacl (trivial, freshly-created dataset dir) ===\n%s\n", rawGetAcl0)
+
+		nfs4Payload := map[string]any{
+			"path": path,
+			"dacl": []map[string]any{
+				{
+					"tag":   "owner@",
+					"id":    nil,
+					"type":  "ALLOW",
+					"perms": map[string]any{"BASIC": "FULL_CONTROL"},
+					"flags": map[string]any{"BASIC": "INHERIT"},
+				},
+				{
+					"tag":   "group@",
+					"id":    nil,
+					"type":  "ALLOW",
+					"perms": map[string]any{"BASIC": "MODIFY"},
+					"flags": map[string]any{"BASIC": "INHERIT"},
+				},
+				{
+					"tag":   "USER",
+					"id":    1000,
+					"type":  "ALLOW",
+					"perms": map[string]any{"BASIC": "READ"},
+					"flags": map[string]any{"BASIC": "INHERIT"},
+				},
+			},
+			"options": map[string]any{
+				"recursive": false,
+				"traverse":  false,
+				"stripacl":  false,
+			},
+		}
+		resultSet, err := c.CallJob(context.Background(), "filesystem.setacl", nfs4Payload)
+		if err != nil {
+			fmt.Printf("=== filesystem.setacl (nfs4 dacl) ERROR ===\n%v\n", err)
+		} else {
+			fmt.Printf("=== filesystem.setacl (nfs4 dacl) job result ===\n%s\n", resultSet)
+		}
+
+		rawGetAcl1, err := c.Call(context.Background(), "filesystem.getacl", path)
+		if err != nil {
+			log.Fatal("getacl (after setacl nfs4):", err)
+		}
+		fmt.Printf("=== filesystem.getacl (after setacl nfs4 dacl) ===\n%s\n", rawGetAcl1)
+
+		// DECISIVE: stripacl=true.
+		stripPayload := map[string]any{
+			"path": path,
+			"dacl": []any{},
+			"options": map[string]any{
+				"stripacl": true,
+			},
+		}
+		resultStrip, err := c.CallJob(context.Background(), "filesystem.setacl", stripPayload)
+		if err != nil {
+			fmt.Printf("=== filesystem.setacl (stripacl=true) ERROR ===\n%v\n", err)
+		} else {
+			fmt.Printf("=== filesystem.setacl (stripacl=true) job result ===\n%s\n", resultStrip)
+		}
+
+		rawGetAcl2, err := c.Call(context.Background(), "filesystem.getacl", path)
+		if err != nil {
+			log.Fatal("getacl (after stripacl):", err)
+		}
+		fmt.Printf("=== filesystem.getacl (after stripacl=true) ===\n%s\n", rawGetAcl2)
+
+		rawStat, err := c.Call(context.Background(), "filesystem.stat", path)
+		if err != nil {
+			log.Fatal("stat (after stripacl):", err)
+		}
+		fmt.Printf("=== filesystem.stat (after stripacl=true) ===\n%s\n", rawStat)
+
+		_, getAclErr := c.Call(context.Background(), "filesystem.getacl", "/mnt/tank/tf-probe-facl-does-not-exist-xyz")
+		fmt.Printf("=== filesystem.getacl (nonexistent path) error ===\n%v\n", getAclErr)
+	}
+	if section == "faclprobeposix" {
+		// POSIX1E round trip: this pool's root (tank) has acltype=POSIX
+		// LOCAL (probed live), so a dataset created without an explicit
+		// acltype override inherits POSIX1E - use that default here (no
+		// override) to probe POSIX1E entry shapes for real via setacl.
+		ds := "tank/tf-probe-faclposix"
+		if _, err := c.Call(context.Background(), "pool.dataset.create", map[string]any{"name": ds}); err != nil {
+			log.Fatal("dataset create:", err)
+		}
+		defer c.Call(context.Background(), "pool.dataset.delete", ds, map[string]any{"recursive": true})
+		path := "/mnt/" + ds
+
+		rawGetAcl0, err := c.Call(context.Background(), "filesystem.getacl", path)
+		if err != nil {
+			log.Fatal("getacl (trivial posix):", err)
+		}
+		fmt.Printf("=== filesystem.getacl (trivial POSIX1E) ===\n%s\n", rawGetAcl0)
+
+		posixPayload := map[string]any{
+			"path": path,
+			"dacl": []map[string]any{
+				{"tag": "USER_OBJ", "perms": map[string]any{"READ": true, "WRITE": true, "EXECUTE": true}, "default": false},
+				{"tag": "GROUP_OBJ", "perms": map[string]any{"READ": true, "WRITE": false, "EXECUTE": true}, "default": false},
+				{"tag": "OTHER", "perms": map[string]any{"READ": false, "WRITE": false, "EXECUTE": false}, "default": false},
+				{"tag": "USER", "id": 1000, "perms": map[string]any{"READ": true, "WRITE": false, "EXECUTE": false}, "default": false},
+				{"tag": "MASK", "perms": map[string]any{"READ": true, "WRITE": true, "EXECUTE": true}, "default": false},
+			},
+			"options": map[string]any{"recursive": false, "traverse": false, "stripacl": false},
+		}
+		resultSet, err := c.CallJob(context.Background(), "filesystem.setacl", posixPayload)
+		if err != nil {
+			fmt.Printf("=== filesystem.setacl (posix1e dacl) ERROR ===\n%v\n", err)
+		} else {
+			fmt.Printf("=== filesystem.setacl (posix1e dacl) job result ===\n%s\n", resultSet)
+		}
+
+		rawGetAcl1, err := c.Call(context.Background(), "filesystem.getacl", path)
+		if err != nil {
+			log.Fatal("getacl (after setacl posix1e):", err)
+		}
+		fmt.Printf("=== filesystem.getacl (after setacl posix1e dacl) ===\n%s\n", rawGetAcl1)
+
+		stripPayload := map[string]any{
+			"path":    path,
+			"dacl":    []any{},
+			"options": map[string]any{"stripacl": true},
+		}
+		resultStrip, err := c.CallJob(context.Background(), "filesystem.setacl", stripPayload)
+		if err != nil {
+			fmt.Printf("=== filesystem.setacl (posix1e stripacl=true) ERROR ===\n%v\n", err)
+		} else {
+			fmt.Printf("=== filesystem.setacl (posix1e stripacl=true) job result ===\n%s\n", resultStrip)
+		}
+		rawGetAcl2, err := c.Call(context.Background(), "filesystem.getacl", path)
+		if err != nil {
+			log.Fatal("getacl (after posix stripacl):", err)
+		}
+		fmt.Printf("=== filesystem.getacl (after posix1e stripacl=true) ===\n%s\n", rawGetAcl2)
+	}
 	if section == "appmethods" {
 		raw, err := c.Call(context.Background(), "core.get_methods")
 		if err != nil {

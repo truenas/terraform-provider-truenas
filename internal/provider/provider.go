@@ -27,6 +27,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/cronjob"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/directoryservices"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/filesystem_acl"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/filesystem_permissions"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/ftp_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/group"
@@ -241,6 +242,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		cronjob.NewResource,
 		dataset.NewResource,
 		directoryservices.NewResource,
+		filesystem_acl.NewResource,
 		filesystem_permissions.NewResource,
 		ftp_config.NewResource,
 		group.NewResource,
@@ -316,6 +318,7 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		cronjob.NewDataSource,
 		dataset.NewDataSource,
 		directoryservices.NewDataSource,
+		filesystem_acl.NewDataSource,
 		filesystem_permissions.NewDataSource,
 		ftp_config.NewDataSource,
 		group.NewDataSource,
