@@ -38,6 +38,8 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/kerberos_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/kerberos_keytab"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/kerberos_realm"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/keychain_ssh_connection"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/keychain_ssh_keypair"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/mail"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/network_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/network_interface"
@@ -247,6 +249,8 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		kerberos_config.NewResource,
 		kerberos_keytab.NewResource,
 		kerberos_realm.NewResource,
+		keychain_ssh_connection.NewResource,
+		keychain_ssh_keypair.NewResource,
 		mail.NewResource,
 		nfs.NewResource,
 		nfs_config.NewResource,
@@ -317,6 +321,8 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		kerberos_config.NewDataSource,
 		kerberos_keytab.NewDataSource,
 		kerberos_realm.NewDataSource,
+		keychain_ssh_connection.NewDataSource,
+		keychain_ssh_keypair.NewDataSource,
 		mail.NewDataSource,
 		nfs.NewDataSource,
 		nfs_config.NewDataSource,
