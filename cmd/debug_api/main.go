@@ -981,6 +981,167 @@ func main() {
 		}
 		fmt.Println("=== sharing.webshare.delete ok ===")
 	}
+	if section == "haprobe" {
+		// Read-only introspection of the failover.* namespace (Plan 20 Task
+		// 1 probe). Never mutates anything: no failover.update / .become_*
+		// / .reboot.* calls here — those are handled by the dedicated
+		// haupdateprobe / hafailover sections below, gated separately.
+		raw, err := c.Call(context.Background(), "core.get_methods")
+		if err != nil {
+			log.Fatal(err)
+		}
+		var methods map[string]any
+		json.Unmarshal(raw, &methods)
+		var names []string
+		for name := range methods {
+			if len(name) >= 9 && name[:9] == "failover." {
+				names = append(names, name)
+			}
+		}
+		sortStrings(names)
+		for _, name := range names {
+			pp(name, methods[name])
+		}
+		pp("failover.* method names", names)
+
+		if len(names) == 0 {
+			fmt.Println("=== failover namespace absent on this release ===")
+			return
+		}
+
+		for _, m := range []string{"failover.licensed", "failover.config", "failover.status",
+			"failover.node", "failover.disabled.reasons", "failover.disabled_reasons"} {
+			raw, err := c.Call(context.Background(), m)
+			if err != nil {
+				fmt.Printf("=== %s error ===\n%v\n", m, err)
+				continue
+			}
+			fmt.Printf("=== %s ===\n%s\n", m, raw)
+		}
+	}
+	if section == "haupdateprobe" {
+		// Probes failover.update's writable-field semantics via a harmless
+		// no-op-content round trip: reads the current "timeout" value back
+		// via failover.config, then re-sends that SAME value through
+		// failover.update, confirming the call succeeds and nothing else
+		// changes. Never touches "disabled" or "master" (those are the
+		// fields with real failover-triggering side effects). DISPOSABLE
+		// HA box only — never run against a shared/production system.
+		raw, err := c.Call(context.Background(), "failover.config")
+		if err != nil {
+			log.Fatal("failover.config:", err)
+		}
+		fmt.Printf("=== failover.config (before) ===\n%s\n", raw)
+		var cfg struct {
+			Timeout int64 `json:"timeout"`
+		}
+		json.Unmarshal(raw, &cfg)
+
+		rawUpd, err := c.Call(context.Background(), "failover.update", map[string]any{
+			"timeout": cfg.Timeout,
+		})
+		if err != nil {
+			fmt.Printf("=== failover.update({timeout: %d}) error ===\n%v\n", cfg.Timeout, err)
+		} else {
+			fmt.Printf("=== failover.update({timeout: %d}) response ===\n%s\n", cfg.Timeout, rawUpd)
+		}
+
+		raw2, err := c.Call(context.Background(), "failover.config")
+		if err != nil {
+			log.Fatal("failover.config (after):", err)
+		}
+		fmt.Printf("=== failover.config (after) ===\n%s\n", raw2)
+
+		// Elicit failover.update's accepts schema for "master" and
+		// "disabled" WITHOUT ever sending a valid value for either: a
+		// deliberately wrong-typed value fails schema validation before
+		// middleware executes anything, so this is safe to run even though
+		// failover.update is otherwise absent from core.get_methods
+		// (privately registered). If the field name is unknown entirely,
+		// middleware reports "Extra inputs are not permitted" instead of a
+		// type error — that distinguishes "field exists, wrong type" from
+		// "field does not exist" without ever risking a real value.
+		for _, badField := range []string{"master", "disabled"} {
+			_, err := c.Call(context.Background(), "failover.update", map[string]any{badField: 12345})
+			fmt.Printf("=== failover.update({%q: 12345}) (deliberately wrong type) error ===\n%v\n", badField, err)
+		}
+
+		// Probe "timeout"'s bounds: negative and a very large value. If
+		// either round-trips as accepted, restore to the original value
+		// read above immediately afterward.
+		for _, tv := range []int64{-1, 999999999} {
+			raw, err := c.Call(context.Background(), "failover.update", map[string]any{"timeout": tv})
+			if err != nil {
+				fmt.Printf("=== failover.update({timeout: %d}) error ===\n%v\n", tv, err)
+				continue
+			}
+			fmt.Printf("=== failover.update({timeout: %d}) response ===\n%s\n", tv, raw)
+			if _, err := c.Call(context.Background(), "failover.update", map[string]any{"timeout": cfg.Timeout}); err != nil {
+				log.Fatal("RESTORE FAILED after timeout bounds probe:", err)
+			}
+		}
+		raw3, err := c.Call(context.Background(), "failover.config")
+		if err != nil {
+			log.Fatal("failover.config (final):", err)
+		}
+		fmt.Printf("=== failover.config (final, should match original) ===\n%s\n", raw3)
+	}
+	if section == "hahealthpoll" {
+		// Continues past pollHAUntilStable's status/node stabilization
+		// (which only confirms the surviving node reports MASTER, not that
+		// the failed-over peer has actually rejoined the cluster): polls
+		// failover.disabled.reasons every 10s until it goes empty (peer
+		// fully back and heartbeating) or the budget below elapses,
+		// printing every read so a persistently non-empty reasons list
+		// (peer still rebooting, or a real problem) is fully visible in
+		// the transcript either way.
+		ctx := context.Background()
+		start := time.Now()
+		budget := 9 * time.Minute
+		deadline := start.Add(budget)
+		fmt.Println("=== POLLING failover.disabled.reasons until empty (peer node fully rejoined) ===")
+		var lastReasons string
+		for time.Now().Before(deadline) {
+			raw, err := c.CallRead(ctx, "failover.disabled.reasons")
+			elapsed := time.Since(start).Round(time.Second)
+			if err != nil {
+				fmt.Printf("[%s] failover.disabled.reasons poll error: %v\n", elapsed, err)
+			} else {
+				var reasons []string
+				json.Unmarshal(raw, &reasons)
+				fmt.Printf("[%s] failover.disabled.reasons=%v\n", elapsed, reasons)
+				lastReasons = fmt.Sprintf("%v", reasons)
+				if len(reasons) == 0 {
+					break
+				}
+			}
+			time.Sleep(10 * time.Second)
+		}
+		fmt.Printf("\n=== FINAL failover.disabled.reasons after %s: %s ===\n", time.Since(start).Round(time.Second), lastReasons)
+
+		fmt.Println("\n=== FINAL HEALTH CHECK ===")
+		pp("system.version_short", call(c, "system.version_short"))
+		pp("failover.status", call(c, "failover.status"))
+		pp("failover.node", call(c, "failover.node"))
+		pp("failover.disabled.reasons", call(c, "failover.disabled.reasons"))
+		pp("failover.config", call(c, "failover.config"))
+	}
+	if section == "hapoll" {
+		// Continues monitoring an already-triggered failover (used when
+		// the trigger call itself returned a transport error because the
+		// node went passive mid-response — see task-1-report.md for why
+		// runHAFailover's own trigger-error branch could not distinguish
+		// that case from a genuine rejection). Never calls become_passive
+		// itself; read-only polling plus a final health check.
+		pollHAUntilStable(c, time.Now(), 10*time.Minute)
+	}
+	if section == "hafailover" {
+		// SCRIPTED ONE-OFF: executes ONE real, controlled failover against
+		// the disposable HA box (Plan 20 Task 1). NOT part of `all` or any
+		// other automated section — must be invoked explicitly by name, and
+		// only against the box named by TRUENAS_HA_ALLOWED_ENDPOINT.
+		runHAFailover(c)
+	}
 }
 
 // waitJob polls core.get_jobs for jobID until it reaches a terminal state,
@@ -1481,4 +1642,124 @@ func runContainerDeviceProbe(c *client.Client) {
 		json.Unmarshal(raw, &d)
 		c.Call(context.Background(), "container.device.delete", d.ID)
 	}
+}
+
+// runHAFailover executes ONE real, controlled failover against the
+// disposable HA box (Plan 20 Task 1's scripted one-off exercise).
+//
+// Trigger choice (decided from live probe evidence, see task-1-report.md):
+// failover.become_passive, not failover.reboot.other_node. The endpoint
+// (TRUENAS_ENDPOINT) resolves to 10.220.16.188, confirmed live via
+// interface.query to be a VRRP failover_virtual_alias — i.e. the floating
+// HA management IP, currently in vrrp_config state MASTER on the connected
+// node (node B). failover.reboot.other_node, called against this
+// connection, would only reboot the STANDBY node (node A) — it does not
+// relinquish this node's mastership, so it would not exercise a real
+// failover. failover.become_passive, called against this (master)
+// connection, makes THIS node (B) relinquish mastership so node A takes
+// over — a genuine controlled failover — and because 10.220.16.188 is the
+// VRRP VIP, reconnecting to the SAME endpoint afterward is expected to
+// land on node A once VRRP has migrated the address.
+func runHAFailover(c *client.Client) {
+	ctx := context.Background()
+	start := time.Now()
+	elapsed := func() time.Duration { return time.Since(start).Round(time.Second) }
+
+	fmt.Println("=== HA FAILOVER EXERCISE: BEFORE STATE ===")
+	pp("system.version_short (before)", call(c, "system.version_short"))
+	pp("failover.status (before)", call(c, "failover.status"))
+	pp("failover.node (before)", call(c, "failover.node"))
+	pp("failover.config (before)", call(c, "failover.config"))
+	pp("failover.disabled.reasons (before)", call(c, "failover.disabled.reasons"))
+
+	fmt.Println("\n=== TRIGGER: failover.become_passive ===")
+	raw, err := c.Call(ctx, "failover.become_passive")
+	if err != nil {
+		// A transport-level error here is ambiguous, not necessarily a
+		// rejected trigger: become_passive uses STCNITH ("Shoot The
+		// Current Node In The Head") to guarantee the node truly gets out
+		// of the way, so a successful call can legitimately never return a
+		// normal response — the node can go passive (or reboot) before
+		// the response is written back over this same connection,
+		// surfacing here as "connection reset by peer" rather than a
+		// clean result. Observed live exactly this way: see
+		// task-1-report.md for the verbatim error and the immediate
+		// follow-up probe that confirmed the failover really had started
+		// (failover.disabled.reasons briefly showed ["LOC_FAILOVER_ONGOING",
+		// "NO_PONG"] on reconnect). So: log the error verbatim, but do NOT
+		// treat it as "trigger rejected" — fall through to the same
+		// stabilization poll a successful call would use. A genuinely
+		// rejected trigger (e.g. failover already disabled) would show up
+		// as a clean APIError instead, in which case the poll loop below
+		// simply confirms nothing changed and exits quickly.
+		fmt.Printf("failover.become_passive returned an error (verbatim, may be a transport drop caused by the "+
+			"trigger itself firing, not necessarily a rejection): %v\n", err)
+		fmt.Println("Proceeding to the stabilization poll to determine what actually happened; a rejected " +
+			"trigger will show as no state change.")
+	} else {
+		fmt.Printf("failover.become_passive response: %s\n", raw)
+	}
+	fmt.Printf("[%s] become_passive call returned\n", elapsed())
+
+	pollHAUntilStable(c, start, 10*time.Minute)
+}
+
+// pollHAUntilStable polls failover.status/failover.node every 5s (via
+// CallRead, which auto-reconnects on transient transport failures — the
+// endpoint may go fully unreachable for a stretch while VRRP migrates the
+// virtual IP between nodes) until 3 consecutive non-transitional reads
+// agree, or until deadline (start + budget) passes, then runs the
+// post-event health check (system.version_short, failover.status,
+// failover.disabled.reasons, failover.config).
+func pollHAUntilStable(c *client.Client, start time.Time, budget time.Duration) {
+	ctx := context.Background()
+	elapsed := func() time.Duration { return time.Since(start).Round(time.Second) }
+
+	fmt.Println("\n=== POLLING failover.status until stabilized (generous timeout: 10 minutes) ===")
+	deadline := start.Add(budget)
+	var lastStatus, lastNode string
+	stableCount := 0
+	for time.Now().Before(deadline) {
+		time.Sleep(5 * time.Second)
+
+		statusRaw, err := c.CallRead(ctx, "failover.status")
+		if err != nil {
+			fmt.Printf("[%s] failover.status poll error (endpoint may be mid-migration): %v\n", elapsed(), err)
+			stableCount = 0
+			continue
+		}
+		var status string
+		json.Unmarshal(statusRaw, &status)
+
+		var node string
+		if nodeRaw, err := c.CallRead(ctx, "failover.node"); err == nil {
+			json.Unmarshal(nodeRaw, &node)
+		} else {
+			fmt.Printf("[%s] failover.node poll error: %v\n", elapsed(), err)
+		}
+
+		fmt.Printf("[%s] failover.status=%s failover.node=%s\n", elapsed(), status, node)
+
+		transitional := status == "ELECTING" || status == "IMPORTING" || status == "ERROR" || status == ""
+		if !transitional && status == lastStatus && node == lastNode {
+			stableCount++
+		} else {
+			stableCount = 1
+		}
+		lastStatus, lastNode = status, node
+
+		// 3 consecutive stable, non-transitional reads (~15s of agreement)
+		// before declaring the failover complete.
+		if !transitional && stableCount >= 3 {
+			break
+		}
+	}
+	fmt.Printf("\n=== STABILIZED after %s: failover.status=%s failover.node=%s ===\n", elapsed(), lastStatus, lastNode)
+
+	fmt.Println("\n=== AFTER STATE (health check) ===")
+	pp("system.version_short (after)", call(c, "system.version_short"))
+	pp("failover.status (after)", call(c, "failover.status"))
+	pp("failover.node (after)", call(c, "failover.node"))
+	pp("failover.disabled.reasons (after)", call(c, "failover.disabled.reasons"))
+	pp("failover.config (after)", call(c, "failover.config"))
 }

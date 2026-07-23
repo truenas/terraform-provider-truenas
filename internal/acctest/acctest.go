@@ -223,6 +223,57 @@ func DSCheck(t *testing.T) {
 	}
 }
 
+// HACheck gates tests that exercise Enterprise HA failover behavior via the
+// truenas_failover_config resource/datasource. It runs PreCheck and then
+// skips unless TRUENAS_HA=1 is set, since these tests mutate the box's
+// live failover configuration (timeout, and — outside any committed test —
+// the genuinely disruptive "disabled"/"master" fields) and are only
+// meaningful against a disposable HA pair.
+//
+// When TRUENAS_HA=1 it additionally enforces a disposable-box guard,
+// mirroring DSCheck's: TRUENAS_HA_ALLOWED_ENDPOINT must be set and must
+// equal Endpoint() exactly, else t.Fatal — HA tests must never run against
+// a box that isn't explicitly designated disposable, since an unintended
+// failover trigger is far more disruptive than the other acceptance tests
+// in this suite.
+//
+// Finally, once both env guards pass, it does a live failover.licensed
+// probe: a box that is reachable and correctly guarded but not actually
+// licensed for Enterprise HA (e.g. the cross-release 26.0 box used only
+// for shape probing in this provider's own test matrix) has nothing
+// meaningful for an HA-gated test to exercise. That is a clean t.Skip, not
+// a t.Fatal — unlike the endpoint guard above, an unlicensed box is not a
+// safety problem, just an environment that doesn't support the feature.
+func HACheck(t *testing.T) {
+	t.Helper()
+	PreCheck(t)
+	if os.Getenv("TRUENAS_HA") != "1" {
+		t.Skip("Set TRUENAS_HA=1 to run Enterprise HA / failover acceptance tests")
+	}
+	allowed := os.Getenv("TRUENAS_HA_ALLOWED_ENDPOINT")
+	if allowed == "" {
+		t.Fatal("TRUENAS_HA=1 requires TRUENAS_HA_ALLOWED_ENDPOINT to be set to the disposable HA test box's " +
+			"endpoint, as a guard against accidentally exercising real failover behavior against a shared or " +
+			"production TrueNAS box")
+	}
+	if allowed != Endpoint() {
+		t.Fatalf("TRUENAS_HA_ALLOWED_ENDPOINT (%q) does not match TRUENAS_ENDPOINT (%q): refusing to run "+
+			"Enterprise HA acceptance tests against a box that isn't the disposable HA test box", allowed, Endpoint())
+	}
+
+	raw, err := Client().CallRead(context.Background(), "failover.licensed")
+	if err != nil {
+		t.Fatalf("acctest: cannot determine failover.licensed: %v", err)
+	}
+	var licensed bool
+	if err := json.Unmarshal(raw, &licensed); err != nil {
+		t.Fatalf("acctest: cannot parse failover.licensed response: %v", err)
+	}
+	if !licensed {
+		t.Skip("failover.licensed=false on this box: not licensed for Enterprise HA, skipping")
+	}
+}
+
 // ProviderConfig returns HCL for the provider block used in acceptance tests.
 func ProviderConfig() string {
 	return fmt.Sprintf(`
