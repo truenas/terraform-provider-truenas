@@ -67,7 +67,7 @@ a real, observed flake, not a resource defect — so retrying the restore
 across transport drops matters even though the Terraform steps themselves
 already succeeded.
 
-## Unit tests (901 functions across 77 packages)
+## Unit tests (916 functions across 77 packages)
 
 Every resource package carries unit tests for:
 
@@ -88,7 +88,7 @@ Every resource package carries unit tests for:
   test server: calls, errors, context cancellation, auth, and the CallJob
   job-polling loop including its no-job bail-out.
 
-## Acceptance suite (104 test functions, 75 packages)
+## Acceptance suite (106 test functions, 76 packages)
 
 ### Tier 1 — safe (`make testacc-safe`)
 
@@ -169,7 +169,10 @@ Coverage highlights:
   (datasource lookup of the built-in `"bridge"` network; self-skips when
   Docker is unconfigured on the target box — `docker.config`'s `pool` is
   null), catalog_config (datasource, includes `catalog.trains`); app_registry
-  has no Tier-1 test — see Never-run tier below
+  has no Tier-1 test — see Never-run tier below; lxc_config (datasource-only
+  Tier 1 test — the resource itself is Tier 2, see below; **SCALE 26.0+
+  only** — self-skips cleanly on 25.10 via a version precheck, the `lxc`
+  namespace does not exist there, confirmed live)
 
 Safety rules baked into the tests — they must never touch the box's live
 objects: iSCSI portal/target id=1, extent id=2; NVMe-oF subsys/port/
@@ -207,6 +210,7 @@ field and restore it:
 | `twofactor_auth` | `window` — **SAFETY**: the test never toggles `enabled`, only `window`, to avoid locking out password-based logins mid-run |
 | `docker_config` | `enable_image_updates` — **self-skips if Docker is unconfigured** (`docker.config`'s `pool` is null: confirmed on the 25.10 test VM, which has never had Docker set up) |
 | `catalog_config` | `preferred_trains` (removes and restores `"community"`) — probed live to succeed regardless of whether Docker/apps is configured (unlike `docker_config`, `catalog.update` does not require a pool), so this test has no self-skip condition and ran on both boxes |
+| `lxc_config` | `v4_network` — **SCALE 26.0+ only** (self-skips on 25.10, `lxc` namespace absent, confirmed live); **never** sets/reads back `preferred_pool` (same docker-pool safety rule as `docker_config`'s `pool`); additionally self-skips if `lxc.config`'s `preferred_pool` is ever non-null on the target box (LXC in use) — decisive probe against the production 26.0 box found it null, so the test ran there |
 
 ### Never-run tier
 

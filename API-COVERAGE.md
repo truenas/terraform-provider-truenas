@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-The provider implements **74 resources and 75 matching data sources** (one
+The provider implements **75 resources and 76 matching data sources** (one
 data source, `truenas_docker_network`, has no corresponding resource — Docker
 networks are managed by Docker itself, not by TrueNAS's own config surface;
 see Part 2, Virtualization and apps), covering the core storage, sharing,
@@ -16,16 +16,19 @@ keychain/remote-replication, filesystem permissions/ACLs, Active
 Directory/LDAP/IPA/Kerberos, containers/apps, and system-configuration surface
 of the TrueNAS SCALE API. Every implemented resource has a full acceptance
 test (create, update, import, destroy) run against real TrueNAS boxes on both
-25.10 and 26.0, with three deliberate exceptions: `truenas_directoryservices`
+25.10 and 26.0, with four deliberate exceptions: `truenas_directoryservices`
 is live-tested on the 25.10 VM plus dedicated Samba AD, OpenLDAP, and FreeIPA
 servers only — directory-service tests never run against the
-production-serving 26.0 box, by design (see TESTING.md) — and
+production-serving 26.0 box, by design (see TESTING.md) —
 `truenas_cloud_backup` and `truenas_app_registry`, each with a documented,
 permanent acceptance-test skip because their respective `create` calls
 validate credentials against a real remote endpoint (a cloud storage bucket
 and a container registry, respectively) and no live fixture of that kind is
 available in this environment (see Part 2, Data protection and movement /
-Virtualization and apps).
+Virtualization and apps) — and `truenas_lxc_config`, whose acceptance test
+requires TrueNAS SCALE 26.0 (the `lxc` namespace does not exist on 25.10,
+confirmed live) and skips cleanly, rather than failing, on the 25.10 box (see
+Part 2, Virtualization and apps).
 
 Of the 127 API namespaces the middleware exposes, more than half now map to
 declarative resources we cover, a smaller share are uncovered but viable Terraform
@@ -107,15 +110,16 @@ system before its resource can ship.
 
 ## Part 2 — Covered API Areas
 
-All 74 resources below also ship a matching data source (`truenas_docker_network`
+All 75 resources below also ship a matching data source (`truenas_docker_network`
 is the one exception in the other direction: a data source with no resource —
 see Virtualization and apps), generated documentation, unit tests (payload
 builders, response mappers, schema shape), and a live acceptance test with
 create → update → import → destroy verification and leak checks. Suite is
-green against SCALE 25.10 and 26.0, with the three exceptions noted in the
+green against SCALE 25.10 and 26.0, with the four exceptions noted in the
 Executive Summary (`truenas_directoryservices`, 25.10 + dedicated Samba AD,
 OpenLDAP, and FreeIPA servers only; `truenas_cloud_backup` and
-`truenas_app_registry`, each a documented permanent acceptance-test skip).
+`truenas_app_registry`, each a documented permanent acceptance-test skip;
+`truenas_lxc_config`, SCALE 26.0-only with a clean skip on 25.10).
 
 ### Storage
 
@@ -276,6 +280,17 @@ OpenLDAP, and FreeIPA servers only; `truenas_cloud_backup` and
 | `truenas_docker_network` | `docker.network` — **datasource only, read-only namespace**: Docker networks are created/destroyed by Docker itself (and by installed applications), not by TrueNAS's own config surface, so there is no corresponding resource |
 | `truenas_app_registry` | `app.registry` (private container registry credentials; `app.registry.create` validates username/password/uri against the real registry endpoint synchronously — confirmed live via a rejected throwaway create against an unreachable TEST-NET-1 host — so its acceptance test, `TestAccAppRegistry_basic`, is a documented, permanent skip: no live, reachable container registry fixture is available in this environment) |
 | `truenas_catalog_config` | `catalog` (singleton: preferred app-catalog trains; `label`/`location` are read-only) |
+| `truenas_lxc_config` | `lxc` (singleton: preferred storage pool, network bridge, IPv4/IPv6 network CIDRs for LXC-based instances; **SCALE 26.0+ only** — the `lxc` namespace does not exist on 25.10, confirmed live (`lxc.config` returns "Method does not exist" there), so Create/Read/Update fail with a clean version-gate diagnostic instead of the raw API error on older releases) |
+
+**Exclusion note:** the deprecated incus system-container family —
+`container`, `container.device`, `container.image` — remains intentionally
+excluded from this provider (superseded upstream; not tracked as backlog).
+This is narrower than an earlier internal scope note that had also lumped
+the `lxc` namespace itself into that exclusion; a decisive live probe
+(SCALE 26.0) showed `lxc` is its own supported singleton config surface —
+`lxc.config`/`lxc.update`/`lxc.bridge_choices`, unrelated to the incus
+`container.*` API family — so it is covered above as `truenas_lxc_config`
+instead.
 
 ## Method
 
