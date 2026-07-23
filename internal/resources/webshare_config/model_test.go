@@ -118,6 +118,16 @@ func TestResponseToDataSourceModel(t *testing.T) {
 }
 
 // --- updatePayload -------------------------------------------------------
+//
+// updatePayload's CALLERS MUST contract (see model.go) requires callers to
+// invoke it on a model populated from req.Config, never req.Plan: for an
+// Optional+Computed field the user never set in HCL, req.Config leaves it
+// null, while req.Plan (via UseStateForUnknown) echoes the prior state's
+// value. The tests below therefore exercise the config-driven shapes —
+// null-in-config means omitted, explicitly-set means included — mirroring
+// twofactor_auth/model_test.go's precedent, plus an Unknown case as a
+// defensive mirror (Unknown never actually appears in req.Config, only in
+// req.Plan, but updatePayload guards it anyway).
 
 func TestUpdatePayload_AllUnknownOmitsEverything(t *testing.T) {
 	m := &WebshareConfigModel{
@@ -132,6 +142,94 @@ func TestUpdatePayload_AllUnknownOmitsEverything(t *testing.T) {
 	}
 	if len(p) != 0 {
 		t.Errorf("expected empty payload, got %#v", p)
+	}
+}
+
+// TestUpdatePayload_UnsetOptionalsOmitted verifies that every field is
+// omitted when null (the real-world req.Config shape for an attribute the
+// user never set in HCL), so the current TrueNAS-side value is left
+// unchanged rather than overwritten with a zero value.
+func TestUpdatePayload_UnsetOptionalsOmitted(t *testing.T) {
+	m := &WebshareConfigModel{
+		BindIP:  types.ListNull(types.StringType),
+		Search:  types.BoolNull(),
+		Passkey: types.StringNull(),
+		Groups:  types.ListNull(types.StringType),
+	}
+	p, diags := m.updatePayload(context.Background())
+	if diags.HasError() {
+		t.Fatalf("unexpected error: %v", diags)
+	}
+	if len(p) != 0 {
+		t.Errorf("payload has %d keys (%v), want 0 (all omitted)", len(p), p)
+	}
+}
+
+// TestUpdatePayload_SearchOnly verifies the shape updatePayload actually
+// sees on the real Create/Update path when the caller passes a model built
+// from req.Config: an HCL config that sets only "search" leaves "bindip",
+// "passkey", and "groups" null in config — NOT Unknown (Unknown never
+// occurs in req.Config; Terraform resolves config to either a concrete
+// value or null before the provider ever sees it). So this test asserts
+// "bindip", "passkey", and "groups" are omitted and "search" is included,
+// matching the committed acceptance test's mutate-search-only path.
+func TestUpdatePayload_SearchOnly(t *testing.T) {
+	m := &WebshareConfigModel{
+		BindIP:  types.ListNull(types.StringType),
+		Search:  types.BoolValue(true),
+		Passkey: types.StringNull(),
+		Groups:  types.ListNull(types.StringType),
+	}
+	p, diags := m.updatePayload(context.Background())
+	if diags.HasError() {
+		t.Fatalf("unexpected error: %v", diags)
+	}
+	if _, ok := p["bindip"]; ok {
+		t.Errorf("payload contains %q = %v, want omitted", "bindip", p["bindip"])
+	}
+	if _, ok := p["passkey"]; ok {
+		t.Errorf("payload contains %q = %v, want omitted", "passkey", p["passkey"])
+	}
+	if _, ok := p["groups"]; ok {
+		t.Errorf("payload contains %q = %v, want omitted", "groups", p["groups"])
+	}
+	if p["search"] != true {
+		t.Errorf("payload[%q] = %v, want true", "search", p["search"])
+	}
+	if len(p) != 1 {
+		t.Errorf("payload has %d keys (%v), want 1", len(p), p)
+	}
+}
+
+// TestUpdatePayload_PasskeyExplicitlySet verifies that a user who DOES set
+// "passkey" in their HCL config still gets it included in the payload: the
+// config-driven guard in updatePayload must not suppress
+// explicitly-configured values, only unconfigured (null-in-config) ones.
+func TestUpdatePayload_PasskeyExplicitlySet(t *testing.T) {
+	m := &WebshareConfigModel{
+		BindIP:  types.ListNull(types.StringType),
+		Search:  types.BoolNull(),
+		Passkey: types.StringValue("REQUIRED"),
+		Groups:  types.ListNull(types.StringType),
+	}
+	p, diags := m.updatePayload(context.Background())
+	if diags.HasError() {
+		t.Fatalf("unexpected error: %v", diags)
+	}
+	if p["passkey"] != "REQUIRED" {
+		t.Errorf("payload[%q] = %v, want REQUIRED", "passkey", p["passkey"])
+	}
+	if _, ok := p["search"]; ok {
+		t.Errorf("payload contains %q = %v, want omitted", "search", p["search"])
+	}
+	if _, ok := p["bindip"]; ok {
+		t.Errorf("payload contains %q = %v, want omitted", "bindip", p["bindip"])
+	}
+	if _, ok := p["groups"]; ok {
+		t.Errorf("payload contains %q = %v, want omitted", "groups", p["groups"])
+	}
+	if len(p) != 1 {
+		t.Errorf("payload has %d keys (%v), want 1", len(p), p)
 	}
 }
 

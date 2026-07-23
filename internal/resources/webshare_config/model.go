@@ -149,6 +149,20 @@ func responseToDataSourceModel(ctx context.Context, api *webshareConfigAPI, m *W
 // genuine partial update (no "default" on any accepted field, probed live —
 // omitting a field leaves its current TrueNAS-side value unchanged, unlike
 // e.g. ups.update which requires several fields on every call).
+//
+// CALLERS MUST invoke this on a model populated from req.Config
+// (req.Config.Get), never from req.Plan. "bindip", "search", "passkey", and
+// "groups" are Optional+Computed with UseStateForUnknown plan modifiers:
+// for any of them left unset by the user, the *plan* value is not
+// null — the modifier copies the prior state's value into the plan so
+// Terraform can show a stable diff. Building the payload from the plan
+// would therefore resend a field's last-known value on every Create/Update
+// even when the user never configured it, silently reasserting it against
+// whatever the box's current value happens to be (a revert race if that
+// value changed since the last read). req.Config, by contrast, stays null
+// for anything the user did not set in HCL regardless of plan modifiers,
+// so inclusion here is driven strictly by what the user explicitly
+// configured.
 func (m *WebshareConfigModel) updatePayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	p := map[string]any{}
