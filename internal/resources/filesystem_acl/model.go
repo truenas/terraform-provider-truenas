@@ -60,10 +60,13 @@ type fsGetAclAPI struct {
 // cosmetic noise the server introduces but that never reflects a real
 // configuration difference: an "id" of null or -1 (both observed live on
 // filesystem.getacl for entries where tag isn't USER/GROUP - a real
-// uid/gid is never -1) and a "who" of null. Mirrors acl_template's
-// aclEntriesNormalized (that package's types are unexported and not meant
-// to be imported - this is the same normalization re-implemented against
-// this resource's own probe of filesystem.getacl/setacl).
+// uid/gid is never -1) and a "who" of null. Normalization deliberately does
+// NOT sort entries, so server-side reordering (seen with POSIX1E) surfaces as
+// drift; keep-order rationale: entry order is semantically significant for
+// ACL evaluation. Mirrors acl_template's aclEntriesNormalized (that package's
+// types are unexported and not meant to be imported - this is the same
+// normalization re-implemented against this resource's own probe of
+// filesystem.getacl/setacl).
 func entriesNormalized(raw json.RawMessage) ([]map[string]any, error) {
 	if len(raw) == 0 {
 		return nil, fmt.Errorf("empty ACL entries JSON")

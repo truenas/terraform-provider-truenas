@@ -79,7 +79,10 @@ func resourceSchema() schema.Schema {
 					"of -1 or null (both observed live for entries where tag isn't USER/GROUP - a real uid/gid " +
 					"is never -1) is normalized away rather than causing perpetual drift; the exact JSON text " +
 					"is otherwise preserved as configured (write-what-you-said) unless the server-side content " +
-					"genuinely changes.",
+					"genuinely changes. TrueNAS may reorder ACL entries server-side on write (observed live with " +
+					"POSIX1E ACLs, e.g. USER_OBJ, USER, GROUP_OBJ, MASK, OTHER ordering); if the configured entry " +
+					"order differs from the server's canonical order, the provider reports drift — write POSIX1E " +
+					"entries in the server's canonical order. NFS4 ACLs were not observed to reorder.",
 			},
 			"uid": schema.Int64Attribute{
 				Optional: true,
