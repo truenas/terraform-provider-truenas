@@ -200,7 +200,7 @@ documented manual procedure, **26.0** = version-gated.
 |---|---|---|---|
 | Storage | pool, dataset, zvol, snapshot, periodic_snapshot, scrub_task, resilver_config, system_dataset | T1 (pool: datasource + manual create; system_dataset: never-run write) | scrub_task self-skips when the pool already has a schedule (one per pool) |
 | Shares | nfs, smb, webshare (26.0), nfs_config, smb_config, webshare_config (26.0) | T1 + T2 | SMB exercises 26.0 purpose/options mapping |
-| iSCSI | global, portal, initiator, auth, extent, target, targetextent | T1 + end-to-end wiring test | never touches the 26.0 box's live portal/target/extent (Proxmox storage) |
+| iSCSI | global, portal, initiator, auth, extent, target, targetextent | T1 + end-to-end wiring test | never touches a box's pre-existing portal/target/extent objects |
 | NVMe-oF | global, subsys, port, namespace, host, host_subsys, port_subsys | T1 + end-to-end | test ports 14420/14421 disabled; id=1 objects untouchable |
 | Accounts & access | user, group, api_key, privilege, twofactor_auth | T1 + T2 | api_key test re-authenticates a fresh client with the created key (SCRAM on 26.0); 2FA committed test never flips enabled |
 | Directory services | directoryservices (AD/LDAP/IPA), kerberos_config/realm/keytab, idmap (via AD block) | DS gate; T1/T2 for kerberos | real joins against all three server types; destroy disables (never leaves); keytab tests use a real DC-exported keytab |

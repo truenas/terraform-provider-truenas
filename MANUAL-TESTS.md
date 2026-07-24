@@ -866,7 +866,7 @@ target box.
 
 ## Block Storage (iSCSI and NVMe-oF)
 
-> **Safety note for every case in this section.** On a TrueNAS box that is serving production storage, the live iSCSI portal/target/extent with `id=1` (commonly named "proxmox") and the live NVMe-oF subsystem/port/namespace/port_subsys with `id=1` (commonly named "proxmox-test") are attached to real initiators/hosts and MUST NOT be modified, disabled, or deleted by any test in this section. All test fixtures below use `tf-acc-manual-` prefixed names, bind listeners to the box's own IP address (never `0.0.0.0` — SCALE 26.0+ rejects a second portal bound to `0.0.0.0` because it collides with the live portal), and use NVMe-oF test ports on service IDs `14420`/`14421` (distinct from the live port's `4420`) created with `enabled = false` so they never open a live listener. CHAP auth test cases use `tag = 998` or `999`, distinct from any live tag. Before starting, record the box's live iSCSI/NVMe-oF configuration (`midclt call iscsi.global.config`, `midclt call nvmet.global.config`, `midclt call iscsi.target.query`, `midclt call nvmet.subsys.query`) so any accidental drift is detectable.
+> **Safety note for every case in this section.** On a TrueNAS box that is serving production storage, any pre-existing live iSCSI portal/target/extent (often `id=1`) and any pre-existing live NVMe-oF subsystem/port/namespace/port_subsys (often `id=1`) are attached to real initiators/hosts and MUST NOT be modified, disabled, or deleted by any test in this section. All test fixtures below use `tf-acc-manual-` prefixed names, bind listeners to the box's own IP address (never `0.0.0.0` — SCALE 26.0+ rejects a second portal bound to `0.0.0.0` because it collides with the live portal), and use NVMe-oF test ports on service IDs `14420`/`14421` (distinct from the live port's `4420`) created with `enabled = false` so they never open a live listener. CHAP auth test cases use `tag = 998` or `999`, distinct from any live tag. Before starting, record the box's live iSCSI/NVMe-oF configuration (`midclt call iscsi.global.config`, `midclt call nvmet.global.config`, `midclt call iscsi.target.query`, `midclt call nvmet.subsys.query`) so any accidental drift is detectable.
 >
 > Environment variables referenced below (`TRUENAS_ENDPOINT`, `TRUENAS_API_KEY` or `TRUENAS_USERNAME`/`TRUENAS_PASSWORD`, `TRUENAS_TEST_POOL`) configure the provider block; substitute your own test box values. All HCL below assumes a `terraform` provider block for `truenas/truenas` is already configured in the working directory (not repeated in every case for brevity) and that a ZFS pool (default `tank`) exists for zvol fixtures.
 
@@ -1137,7 +1137,7 @@ resource "truenas_iscsi_extent" "test" {
 
 **Resource:** `truenas_iscsi_target`
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE box. Uses its own portal fixture bound to the box IP (not `0.0.0.0`) — distinct from the box's live portal/target (`id=1`, e.g. "proxmox").
+**Environment:** Any TrueNAS SCALE box. Uses its own portal fixture bound to the box IP (not `0.0.0.0`) — distinct from any pre-existing live portal/target on the box.
 **Preconditions:** Know the box's iSCSI IP address.
 
 **Config (initial):**
@@ -1272,7 +1272,7 @@ resource "truenas_iscsi_targetextent" "test" {
 
 **Resource:** `truenas_iscsi_portal`, `truenas_iscsi_initiator`, `truenas_iscsi_auth`, `truenas_zvol`, `truenas_iscsi_extent`, `truenas_iscsi_target`, `truenas_iscsi_targetextent`
 **Type:** Integration (multi-resource)
-**Environment:** Any TrueNAS SCALE box, including production-serving ones — this test is entirely self-contained and never references the box's live iSCSI configuration (live portal `id=1`, live target `id=1` "proxmox", live extent `id=2`, live targetextent `id=2`, if present). The test portal binds the box's own IP (not `0.0.0.0`), and the CHAP auth group uses `tag = 999`, distinct from any live tag. This reproduces `TestAccISCSIEndToEnd` in `internal/resources/iscsi_targetextent/acceptance_test.go`.
+**Environment:** Any TrueNAS SCALE box, including production-serving ones — this test is entirely self-contained and never references any pre-existing live iSCSI configuration on the box (live portal/target/extent/targetextent, if present). The test portal binds the box's own IP (not `0.0.0.0`), and the CHAP auth group uses `tag = 999`, distinct from any live tag. This reproduces `TestAccISCSIEndToEnd` in `internal/resources/iscsi_targetextent/acceptance_test.go`.
 **Preconditions:** A pool exists (default `tank`); confirm tag 999 is free: `midclt call iscsi.auth.query '[["tag","=",999]]'` returns empty.
 
 **Config (initial):**
@@ -1445,7 +1445,7 @@ resource "truenas_nvmet_global" "test" {
 
 **Resource:** `truenas_nvmet_subsys`
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE box. `name` is `RequiresReplace`. Never touches the box's existing live subsystem (commonly `id=1`, e.g. "proxmox-test").
+**Environment:** Any TrueNAS SCALE box. `name` is `RequiresReplace`. Never touches any pre-existing live subsystem on the box.
 **Preconditions:** None.
 
 **Config (initial):**
@@ -1730,7 +1730,7 @@ resource "truenas_nvmet_port_subsys" "test" {
 
 **Resource:** `truenas_nvmet_subsys`, `truenas_nvmet_port`, `truenas_zvol`, `truenas_nvmet_namespace`, `truenas_nvmet_host`, `truenas_nvmet_host_subsys`, `truenas_nvmet_port_subsys`
 **Type:** Integration (multi-resource)
-**Environment:** Any TrueNAS SCALE box, including production-serving ones — this test is entirely self-contained and never references the box's live NVMe-oF configuration (live subsys `id=1` "proxmox-test", live port `id=1` TCP 4420, live namespace `id=1`, live port_subsys `id=1`, if present). The test port listens on the box IP at service ID **14420** (distinct from the live port's 4420) and is created with `enabled = false` throughout so it never opens a live listener. This reproduces `TestAccNVMeTEndToEnd` in `internal/resources/nvmet_port_subsys/acceptance_test.go`. `description` on the host only exists on the wire from SCALE 26.0+; omit it on older releases.
+**Environment:** Any TrueNAS SCALE box, including production-serving ones — this test is entirely self-contained and never references any pre-existing live NVMe-oF configuration on the box (live subsys/port/namespace/port_subsys, if present). The test port listens on the box IP at service ID **14420** (distinct from the live port's 4420) and is created with `enabled = false` throughout so it never opens a live listener. This reproduces `TestAccNVMeTEndToEnd` in `internal/resources/nvmet_port_subsys/acceptance_test.go`. `description` on the host only exists on the wire from SCALE 26.0+; omit it on older releases.
 **Preconditions:** A pool exists (default `tank`). Generate a valid v4 UUID NQN for the host fixture. Confirm SCALE version for the `description` field: `midclt call system.version`.
 
 **Config (initial — namespace enabled, host description set):**

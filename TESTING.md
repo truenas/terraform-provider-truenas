@@ -237,7 +237,7 @@ Coverage highlights:
 
 Safety rules baked into the tests — they must never touch the box's live
 objects: iSCSI portal/target id=1, extent id=2; NVMe-oF subsys/port/
-namespace/port_subsys id=1 (serving Proxmox storage); the management NIC
+namespace/port_subsys id=1 (a box may have live block-storage clients); the management NIC
 `enp7s0`; the three stock Debian NTP servers; the active boot environment.
 Test portals bind the box IP (0.0.0.0 collides with the live portal on
 26.0); NVMe test ports use 14420/14421 disabled.
