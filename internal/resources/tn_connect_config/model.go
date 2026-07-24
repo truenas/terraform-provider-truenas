@@ -284,6 +284,21 @@ func (m *TnConnectConfigModel) updatePayload() map[string]any {
 	return p
 }
 
+// needsUpdateCall reports whether payload (as built by updatePayload) has
+// anything in it worth sending to tn_connect.update at all. "enabled" is
+// the only field updatePayload ever includes, and only when the user
+// explicitly configured it (see updatePayload's doc comment) — so a
+// practitioner who never sets "enabled" in HCL produces an empty payload.
+// Calling tn_connect.update({}) in that case would be an entirely
+// unprobed, unnecessary API call for a resource whose SAFETY-CRITICAL
+// update semantics are otherwise fully probe-driven (see updatePayload's
+// doc comment): Create/Update must degrade to a plain read (fetchConfig
+// only) instead. Pure function of the already-built payload map, so this
+// decision is independently unit-testable without a live client.
+func needsUpdateCall(payload map[string]any) bool {
+	return len(payload) > 0
+}
+
 // deleteWarningDiagnostics builds the warning diagnostic emitted by Delete.
 // Delete makes NO client calls: tn_connect.config governs whether this
 // system is enrolled with the TrueNAS Connect cloud service, so removing

@@ -285,6 +285,47 @@ func TestUpdatePayload_NeverIncludesAnyOtherField(t *testing.T) {
 	}
 }
 
+// --- needsUpdateCall -------------------------------------------------------
+//
+// This is what makes "an empty-config Create/Update performs a read-only
+// fetchConfig, never an unprobed tn_connect.update({})" independently
+// testable without a live client: Create/Update call needsUpdateCall(payload)
+// on the exact map updatePayload returns, and skip applyUpdate entirely when
+// it reports false.
+
+func TestNeedsUpdateCall_EmptyPayloadIsFalse(t *testing.T) {
+	m := &TnConnectConfigModel{Enabled: types.BoolNull()}
+	if needsUpdateCall(m.updatePayload()) {
+		t.Error("needsUpdateCall should be false for an empty payload (enabled never configured)")
+	}
+}
+
+func TestNeedsUpdateCall_ExplicitFalseIsTrue(t *testing.T) {
+	m := &TnConnectConfigModel{Enabled: types.BoolValue(false)}
+	if !needsUpdateCall(m.updatePayload()) {
+		t.Error("needsUpdateCall should be true when the user explicitly configured enabled = false")
+	}
+}
+
+func TestNeedsUpdateCall_ExplicitTrueIsTrue(t *testing.T) {
+	m := &TnConnectConfigModel{Enabled: types.BoolValue(true)}
+	if !needsUpdateCall(m.updatePayload()) {
+		t.Error("needsUpdateCall should be true when the user explicitly configured enabled = true")
+	}
+}
+
+func TestNeedsUpdateCall_DirectEmptyMap(t *testing.T) {
+	if needsUpdateCall(map[string]any{}) {
+		t.Error("needsUpdateCall(map[string]any{}) should be false")
+	}
+	if needsUpdateCall(nil) {
+		t.Error("needsUpdateCall(nil) should be false")
+	}
+	if !needsUpdateCall(map[string]any{"enabled": false}) {
+		t.Error("needsUpdateCall should be true for any non-empty payload")
+	}
+}
+
 // --- deleteWarningDiagnostics --------------------------------------------
 
 func TestDeleteWarningDiagnostics(t *testing.T) {

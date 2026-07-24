@@ -85,9 +85,16 @@ func (r *TnConnectConfigResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	if err := r.applyUpdate(ctx, config.updatePayload()); err != nil {
-		resp.Diagnostics.AddError("Create TrueNAS Connect configuration failed", err.Error())
-		return
+	// A practitioner who never sets "enabled" in HCL produces an empty
+	// payload (see updatePayload's doc comment); skip the tn_connect.update
+	// call entirely in that case rather than sending an unprobed {} update —
+	// see needsUpdateCall's doc comment.
+	payload := config.updatePayload()
+	if needsUpdateCall(payload) {
+		if err := r.applyUpdate(ctx, payload); err != nil {
+			resp.Diagnostics.AddError("Create TrueNAS Connect configuration failed", err.Error())
+			return
+		}
 	}
 
 	api, err := r.fetchConfig(ctx)
@@ -149,9 +156,16 @@ func (r *TnConnectConfigResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	if err := r.applyUpdate(ctx, config.updatePayload()); err != nil {
-		resp.Diagnostics.AddError("Update TrueNAS Connect configuration failed", err.Error())
-		return
+	// A practitioner who never sets "enabled" in HCL produces an empty
+	// payload (see updatePayload's doc comment); skip the tn_connect.update
+	// call entirely in that case rather than sending an unprobed {} update —
+	// see needsUpdateCall's doc comment.
+	payload := config.updatePayload()
+	if needsUpdateCall(payload) {
+		if err := r.applyUpdate(ctx, payload); err != nil {
+			resp.Diagnostics.AddError("Update TrueNAS Connect configuration failed", err.Error())
+			return
+		}
 	}
 
 	api, err := r.fetchConfig(ctx)
