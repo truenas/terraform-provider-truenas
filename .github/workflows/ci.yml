@@ -1,0 +1,80 @@
+# Continuous integration: build, vet, format, lint, and unit tests.
+#
+# Runs on public GitHub runners. Acceptance tests are NOT run here — this
+# provider's testing policy is "no mocks", so acceptance tests require a
+# live TrueNAS SCALE box (plus, for some suites, directory servers and an
+# HA pair). Those run on a self-hosted runner with lab access; see
+# TEST-PLAN.md and the acceptance workflow.
+name: CI
+
+on:
+  pull_request:
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - run: go build ./...
+      - run: go vet ./...
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-clean:"; echo "$unformatted"; exit 1
+          fi
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - name: Unit tests
+        run: go test ./... -count=1 -timeout 10m
+        # TF_ACC is unset, so acceptance tests skip and only pure-function
+        # unit tests run.
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - name: Verify generated docs are up to date
+        run: |
+          make generate
+          if [ -n "$(git status --porcelain docs/)" ]; then
+            echo "Generated docs are out of date. Run 'make generate' and commit."
+            git --no-pager diff docs/
+            exit 1
+          fi

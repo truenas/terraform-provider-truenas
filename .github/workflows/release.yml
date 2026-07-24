@@ -1,0 +1,41 @@
+# Release: build signed cross-platform archives for the Terraform Registry.
+#
+# Triggered by pushing a semver tag (vX.Y.Z). Requires two repository
+# secrets:
+#   GPG_PRIVATE_KEY  — the ASCII-armored private signing key
+#   PASSPHRASE       — its passphrase (if any)
+# The key's public half must be registered on the provider's Terraform
+# Registry publisher settings so the Registry can verify the signature.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v6
+        id: import_gpg
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
