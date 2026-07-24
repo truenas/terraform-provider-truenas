@@ -322,8 +322,8 @@ management access or migrate system state:
   `use_all_interfaces`), and a supplementary live probe there confirmed an
   `ips`-only update leaves `enabled` untouched, but this resource
   deliberately does not expose those fields as writable on any release
-  (see the in-file doc comment on `TestAccTnConnectConfig_setAndRestore`
-  and `.superpowers/sdd/task-3-report.md` for the full transcript).
+  (see the in-file doc comment on `TestAccTnConnectConfig_setAndRestore`,
+  which carries the full transcript inline).
 - `vmware` — `vmware.create` validates `hostname`/`username`/`password`
   against the real vCenter/ESXi endpoint synchronously (confirmed live on
   BOTH the HA pair and the SCALE 26.0 box: a throwaway create with an RFC

@@ -38,8 +38,8 @@ data "truenas_tn_connect_config" "test" {}
 // TestAccTnConnectConfig_setAndRestore is intentionally skipped
 // unconditionally.
 //
-// DECISIVE PROBE RESULT (both releases, live, 2026-07-23) — see
-// .superpowers/sdd/task-3-report.md for the full transcript:
+// DECISIVE PROBE RESULT (both releases, live, 2026-07-23) — the full
+// transcript is inline below:
 //
 //  1. tn_connect.update's own "accepts" schema (core.get_methods), probed
 //     against the SCALE 26.0 production box (192.168.1.68, this resource's
@@ -77,5 +77,5 @@ data "truenas_tn_connect_config" "test" {}
 // one. It is never reachable from resource.Test, so it can never call
 // tn_connect.update with any payload, let alone {"enabled": true}.
 func TestAccTnConnectConfig_setAndRestore(t *testing.T) {
-	t.Skip("tn_connect.update accepts ONLY \"enabled\" on SCALE 26.0 (probed live via core.get_methods against the production box) — there is no cosmetic field this resource could safely mutate in a Tier 2 set-and-restore test without touching \"enabled\", which this resource's safety contract forbids unconditionally. That same 26.0 box is also already enrolled (enabled=true, tier=FOUNDATION) — a real production TrueNAS Connect account, not a disposable fixture. See the doc comment on TestAccTnConnectConfig_setAndRestore and .superpowers/sdd/task-3-report.md for the full probe transcript across both SCALE 25.10 and 26.0.")
+	t.Skip("tn_connect.update accepts ONLY \"enabled\" on SCALE 26.0 (probed live via core.get_methods against the production box) — there is no cosmetic field this resource could safely mutate in a Tier 2 set-and-restore test without touching \"enabled\", which this resource's safety contract forbids unconditionally. That same 26.0 box is also already enrolled (enabled=true, tier=FOUNDATION) — a real production TrueNAS Connect account, not a disposable fixture. See the doc comment on TestAccTnConnectConfig_setAndRestore above for the full probe transcript across both SCALE 25.10 and 26.0.")
 }
