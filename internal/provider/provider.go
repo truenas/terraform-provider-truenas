@@ -217,7 +217,7 @@ func (p *TrueNASProvider) Configure(ctx context.Context, req provider.ConfigureR
 		return
 	}
 
-	c := client.New(endpoint, tlsCfg)
+	c := client.New(endpoint, tlsCfg, client.WithUserAgent(p.version))
 
 	var authFn func(ctx context.Context) error
 	if hasAPIKey {

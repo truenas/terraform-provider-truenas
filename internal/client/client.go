@@ -121,15 +121,51 @@ type Client struct {
 	// versionMu guards version, fetched lazily by ServerVersion.
 	versionMu sync.Mutex
 	version   string
+
+	// userAgent is sent as the User-Agent header on the WebSocket
+	// handshake, identifying the provider (and its version) to the
+	// TrueNAS middleware. Set via WithUserAgent; defaults to a "dev"
+	// build identifier when unset.
+	userAgent string
 }
 
-// New creates a Client. Call Connect() before use.
-func New(endpoint string, tlsCfg *tls.Config) *Client {
-	return &Client{
+// userAgentBase and userAgentURL compose the default and
+// WithUserAgent-derived User-Agent header values.
+const (
+	userAgentBase = "terraform-provider-truenas"
+	userAgentURL  = "https://github.com/truenas/terraform-provider-truenas"
+)
+
+// Option configures optional Client behavior at construction time.
+type Option func(*Client)
+
+// WithUserAgent sets the User-Agent header sent on the WebSocket handshake
+// to identify this provider (and its version) to the TrueNAS middleware.
+// An empty version yields the default "dev" identifier.
+func WithUserAgent(version string) Option {
+	if version == "" {
+		version = "dev"
+	}
+	ua := fmt.Sprintf("%s/%s (+%s)", userAgentBase, version, userAgentURL)
+	return func(c *Client) {
+		c.userAgent = ua
+	}
+}
+
+// New creates a Client. Call Connect() before use. By default the client
+// identifies itself with a "dev" User-Agent; pass WithUserAgent to set the
+// real provider version.
+func New(endpoint string, tlsCfg *tls.Config, opts ...Option) *Client {
+	c := &Client{
 		endpoint:  endpoint,
 		tlsConfig: tlsCfg,
 		pending:   make(map[uint64]*pendingCall),
+		userAgent: fmt.Sprintf("%s/dev (+%s)", userAgentBase, userAgentURL),
 	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 // Connect dials the WebSocket, then calls authenticateFn (if non-nil).
@@ -155,7 +191,10 @@ func (c *Client) dial(ctx context.Context) error {
 		WriteBufferSize:  65536,
 	}
 
-	conn, _, err := dialer.DialContext(ctx, c.endpoint, http.Header{})
+	header := http.Header{}
+	header.Set("User-Agent", c.userAgent)
+
+	conn, _, err := dialer.DialContext(ctx, c.endpoint, header)
 	if err != nil {
 		return fmt.Errorf("websocket dial %s: %w", c.endpoint, err)
 	}
