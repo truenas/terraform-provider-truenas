@@ -28,7 +28,7 @@ resource "truenas_snmp_config" "config" {
 
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
-- `community` (String) SNMP community string.
+- `community` (String, Sensitive) SNMP community string.
 - `contact` (String) Contact information for the SNMP administrator.
 - `location` (String) Physical location of the system, exposed via SNMP.
 - `loglevel` (Number) SNMP daemon syslog level.

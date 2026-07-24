@@ -36,6 +36,7 @@ func (d *VMDeviceDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 			},
 			"attributes": dschema.StringAttribute{
 				Computed:    true,
+				Sensitive:   true,
 				Description: "JSON document of device attributes.",
 			},
 			"order": dschema.Int64Attribute{

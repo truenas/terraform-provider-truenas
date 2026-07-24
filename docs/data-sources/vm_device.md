@@ -21,6 +21,6 @@ Fetches a TrueNAS VM device by ID.
 
 ### Read-Only
 
-- `attributes` (String) JSON document of device attributes.
+- `attributes` (String, Sensitive) JSON document of device attributes.
 - `order` (Number) Boot/attach order.
 - `vm` (Number) ID of the VM this device belongs to.

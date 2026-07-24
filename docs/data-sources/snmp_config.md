@@ -17,7 +17,7 @@ Reads the current TrueNAS SCALE SNMP service configuration. Takes no arguments: 
 
 ### Read-Only
 
-- `community` (String) SNMP community string.
+- `community` (String, Sensitive) SNMP community string.
 - `contact` (String) Contact information for the SNMP administrator.
 - `id` (String) Fixed identifier for this singleton: always "snmp_config".
 - `location` (String) Physical location of the system, exposed via SNMP.

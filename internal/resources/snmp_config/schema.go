@@ -24,6 +24,7 @@ func resourceSchema() schema.Schema {
 			"community": schema.StringAttribute{
 				Optional:      true,
 				Computed:      true,
+				Sensitive:     true,
 				Description:   "SNMP community string.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},

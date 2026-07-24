@@ -70,13 +70,43 @@ func TestSNMPConfigSchema_SecretsAreSensitiveWriteOnly(t *testing.T) {
 	}
 }
 
+// TestSNMPConfigSchema_CommunityIsSensitive verifies that "community" is
+// Optional+Computed+Sensitive: it is API-echoed (snmp.config returns it), so
+// unlike v3_password/v3_privpassphrase it must stay Computed and persisted in
+// state (not WriteOnly), but it is still a secret and must not print in plan
+// output.
+func TestSNMPConfigSchema_CommunityIsSensitive(t *testing.T) {
+	s := resourceSchema()
+
+	attr, ok := s.Attributes["community"]
+	if !ok {
+		t.Fatal("schema missing 'community' attribute")
+	}
+	strAttr, ok := attr.(schema.StringAttribute)
+	if !ok {
+		t.Fatalf("'community' attribute is %T, want schema.StringAttribute", attr)
+	}
+	if !strAttr.IsOptional() || !strAttr.IsComputed() {
+		t.Error("'community' should be Optional+Computed")
+	}
+	if !strAttr.IsSensitive() {
+		t.Error("'community' should be Sensitive")
+	}
+	if strAttr.IsWriteOnly() {
+		t.Error("'community' should NOT be WriteOnly (it is API-echoed and read back)")
+	}
+	if len(strAttr.PlanModifiers) == 0 {
+		t.Error("'community' should have plan modifiers (UseStateForUnknown)")
+	}
+}
+
 // TestSNMPConfigSchema_OtherFieldsAreOptionalComputed verifies that every
 // non-secret, non-id field is Optional+Computed with UseStateForUnknown plan
 // modifiers, matching the "non-secret fields" contract in the task brief.
 func TestSNMPConfigSchema_OtherFieldsAreOptionalComputed(t *testing.T) {
 	s := resourceSchema()
 
-	for _, name := range []string{"community", "contact", "location", "options", "v3_username", "v3_authtype", "v3_privproto"} {
+	for _, name := range []string{"contact", "location", "options", "v3_username", "v3_authtype", "v3_privproto"} {
 		attr, ok := s.Attributes[name]
 		if !ok {
 			t.Fatalf("schema missing %q attribute", name)

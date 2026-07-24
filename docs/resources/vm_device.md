@@ -37,7 +37,7 @@ resource "truenas_vm_device" "worker_nic" {
 
 ### Required
 
-- `attributes` (String) JSON document of device attributes. Must include "dtype": DISK, NIC, CDROM, DISPLAY, PCI, RAW, or USB.
+- `attributes` (String, Sensitive) JSON document of device attributes. Must include "dtype": DISK, NIC, CDROM, DISPLAY, PCI, RAW, or USB.
 - `vm` (Number) ID of the VM this device belongs to.
 
 ### Optional

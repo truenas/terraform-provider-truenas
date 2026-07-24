@@ -25,7 +25,12 @@ func resourceSchema() schema.Schema {
 				Description: "ID of the VM this device belongs to.",
 			},
 			"attributes": schema.StringAttribute{
-				Required:    true,
+				Required: true,
+				// Marked Sensitive because this opaque JSON blob can carry secrets for some
+				// device types (e.g. the DISPLAY device's VNC password). It is over-broad for
+				// device types with no secret fields, but there is no per-dtype schema to
+				// scope the flag to, so the whole attribute is masked as the pragmatic fix.
+				Sensitive:   true,
 				Description: "JSON document of device attributes. Must include \"dtype\": DISK, NIC, CDROM, DISPLAY, PCI, RAW, or USB.",
 			},
 			"order": schema.Int64Attribute{

@@ -34,6 +34,7 @@ func (d *SNMPConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 			},
 			"community": dschema.StringAttribute{
 				Computed:    true,
+				Sensitive:   true,
 				Description: "SNMP community string.",
 			},
 			"contact": dschema.StringAttribute{
