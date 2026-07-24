@@ -219,6 +219,21 @@ func responseToDataSourceModel(ctx context.Context, api *auditConfigAPI, m *Audi
 // each is only included when known (Optional+Computed), so an unset
 // optional is omitted entirely and the TrueNAS-side current value is left
 // unchanged rather than overwritten with an explicit zero value.
+//
+// CALLERS MUST invoke this on a model populated from req.Config
+// (req.Config.Get), never from req.Plan: "retention", "reservation",
+// "quota", "quota_fill_warning", and "quota_fill_critical" are all
+// Optional+Computed with UseStateForUnknown plan modifiers, so for any of
+// them left unset by the user the *plan* value is not null — the modifier
+// copies the prior state's value into the plan so Terraform can show a
+// stable diff. Building the payload from the plan would therefore resend a
+// field's last-known value on every Create/Update even when the user never
+// configured it, silently reasserting it against whatever the box's
+// current value happens to be (a revert race if that value changed since
+// the last read). req.Config, by contrast, stays null for anything the
+// user did not set in HCL regardless of plan modifiers, so inclusion here
+// is driven strictly by what the user explicitly configured. Mirrors the
+// webshare_config/twofactor_auth precedent.
 func (m *AuditConfigModel) updatePayload() map[string]any {
 	p := map[string]any{}
 

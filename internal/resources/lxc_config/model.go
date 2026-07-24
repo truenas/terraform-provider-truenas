@@ -115,6 +115,41 @@ func responseToDataSourceModel(api *lxcConfigAPI, m *LXCConfigDataSourceModel) {
 // sent as their string value otherwise. v4_network and v6_network use a
 // plain guard (omitted when null/unknown, sent as-is otherwise) since
 // lxc.config never returns null for them.
+//
+// CALLERS MUST invoke this on a model built as follows (resource.go's
+// Create/Update do exactly this): start from req.Plan, then overwrite ONLY
+// V4Network and V6Network with the corresponding req.Config values before
+// calling updatePayload — do NOT overwrite PreferredPool/Bridge, and do NOT
+// call this directly on a plain req.Config-sourced model. This is a
+// deliberate split, not an oversight:
+//
+//   - v4_network/v6_network are plain Optional+Computed fields with no
+//     nullable/clearable state on the wire. Sourcing them from req.Plan
+//     hits the same bug webshare_config/twofactor_auth/audit_config had:
+//     UseStateForUnknown echoes the prior state's value into the plan for
+//     an unconfigured attribute, so Update would resend it on every apply
+//     even when the user never touched it. req.Config stays null for
+//     anything not set in HCL regardless of plan modifiers, so sourcing
+//     these two fields from Config is what fixes that.
+//   - preferred_pool/bridge are three-way nullable (see the guard above):
+//     "leave unchanged" (omit) vs. "explicitly clear" (send JSON nil) are
+//     genuinely different, meaningful outcomes, and Plan is the ONLY of
+//     the two request values that can tell them apart. The Terraform
+//     Plugin Framework gives req.Config no way to distinguish "the
+//     practitioner wrote preferred_pool = null" from "the practitioner
+//     never mentioned preferred_pool at all" — both decode to the same
+//     null Config value. req.Plan does not have this ambiguity:
+//     UseStateForUnknown's PlanModifyString only fires when the
+//     framework's own default planned value is Unknown, which happens
+//     precisely when the attribute is absent from config; an explicit
+//     `= null` in config produces a known (null) default planned value
+//     that the modifier leaves untouched. So an unconfigured
+//     preferred_pool plans to the last known state value (any type of
+//     re-send is a same-value no-op), while an explicitly-null-configured
+//     one plans to null and is correctly sent as a clear. Switching these
+//     two fields to Config-sourcing would silently turn "the user never
+//     mentioned preferred_pool" into "clear preferred_pool" on every
+//     single apply — a correctness regression, not a fix.
 func (m *LXCConfigModel) updatePayload() map[string]any {
 	p := map[string]any{}
 

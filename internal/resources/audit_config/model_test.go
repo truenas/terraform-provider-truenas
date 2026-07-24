@@ -8,6 +8,16 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
 
+// --- updatePayload -------------------------------------------------------
+//
+// updatePayload's CALLERS MUST contract (see model.go) requires callers to
+// invoke it on a model populated from req.Config, never req.Plan: for an
+// Optional+Computed field the user never set in HCL, req.Config leaves it
+// null, while req.Plan (via UseStateForUnknown) echoes the prior state's
+// value. The tests below therefore exercise the config-driven shapes —
+// null-in-config means omitted, explicitly-set means included — mirroring
+// the webshare_config/twofactor_auth precedent.
+
 // TestUpdatePayload_AllFieldsSet verifies that updatePayload includes every
 // field with the exact keys observed in the audit.update probe.
 func TestUpdatePayload_AllFieldsSet(t *testing.T) {
@@ -53,6 +63,40 @@ func TestUpdatePayload_UnsetOptionalsOmitted(t *testing.T) {
 	p := m.updatePayload()
 	if len(p) != 0 {
 		t.Errorf("payload has %d keys (%v), want 0 (all omitted)", len(p), p)
+	}
+}
+
+// TestUpdatePayload_RetentionOnly verifies the shape updatePayload actually
+// sees on the real Create/Update path when the caller passes a model built
+// from req.Config: an HCL config that sets only "retention" leaves
+// "reservation", "quota", "quota_fill_warning", and "quota_fill_critical"
+// null in config — NOT Unknown (Unknown never occurs in req.Config;
+// Terraform resolves config to either a concrete value or null before the
+// provider ever sees it). This is what makes the config-vs-plan sourcing
+// fix meaningful: on Update, a plan-sourced model would carry the prior
+// state's values for the four unconfigured fields (UseStateForUnknown),
+// resending them every apply, while a config-sourced model correctly omits
+// them here.
+func TestUpdatePayload_RetentionOnly(t *testing.T) {
+	m := &AuditConfigModel{
+		Retention:         types.Int64Value(21),
+		Reservation:       types.Int64Null(),
+		Quota:             types.Int64Null(),
+		QuotaFillWarning:  types.Int64Null(),
+		QuotaFillCritical: types.Int64Null(),
+	}
+	p := m.updatePayload()
+
+	if p["retention"] != int64(21) {
+		t.Errorf("payload[%q] = %v, want 21", "retention", p["retention"])
+	}
+	for _, k := range []string{"reservation", "quota", "quota_fill_warning", "quota_fill_critical"} {
+		if _, ok := p[k]; ok {
+			t.Errorf("payload contains %q = %v, want omitted", k, p[k])
+		}
+	}
+	if len(p) != 1 {
+		t.Errorf("payload has %d keys (%v), want 1", len(p), p)
 	}
 }
 

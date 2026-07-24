@@ -79,6 +79,20 @@ func (r *LXCConfigResource) applyUpdate(ctx context.Context, payload map[string]
 	return err
 }
 
+// buildUpdatePayload assembles the model updatePayload's CALLERS MUST
+// contract requires: start from plan (req.Plan-sourced), then overwrite
+// ONLY V4Network/V6Network with the corresponding req.Config values.
+// PreferredPool/Bridge are deliberately left as-is from plan — see
+// updatePayload's doc comment for why their three-way clear/leave-
+// unchanged/set semantics depend on Plan sourcing and would break under
+// Config sourcing.
+func buildUpdatePayload(plan, config *LXCConfigModel) map[string]any {
+	merged := *plan
+	merged.V4Network = config.V4Network
+	merged.V6Network = config.V6Network
+	return merged.updatePayload()
+}
+
 func (r *LXCConfigResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	resp.Diagnostics.Append(r.checkVersion(ctx)...)
 	if resp.Diagnostics.HasError() {
@@ -90,8 +104,13 @@ func (r *LXCConfigResource) Create(ctx context.Context, req resource.CreateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	var config LXCConfigModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	if err := r.applyUpdate(ctx, plan.updatePayload()); err != nil {
+	if err := r.applyUpdate(ctx, buildUpdatePayload(&plan, &config)); err != nil {
 		resp.Diagnostics.AddError("Create LXC configuration failed", err.Error())
 		return
 	}
@@ -142,8 +161,13 @@ func (r *LXCConfigResource) Update(ctx context.Context, req resource.UpdateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	var config LXCConfigModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	if err := r.applyUpdate(ctx, plan.updatePayload()); err != nil {
+	if err := r.applyUpdate(ctx, buildUpdatePayload(&plan, &config)); err != nil {
 		resp.Diagnostics.AddError("Update LXC configuration failed", err.Error())
 		return
 	}

@@ -258,6 +258,109 @@ func TestResponseToDataSourceModel(t *testing.T) {
 	}
 }
 
+// --- buildUpdatePayload (resource.go) ---------------------------------------
+//
+// buildUpdatePayload is what makes updatePayload's split CALLERS MUST
+// contract (see model.go) real: v4_network/v6_network must come from
+// req.Config (fixing the same stale-echo bug webshare_config/twofactor_auth/
+// audit_config had), while preferred_pool/bridge must stay Plan-sourced to
+// preserve their three-way clear/leave-unchanged/set semantics, which
+// req.Config cannot express (see the doc comment for why). These tests pin
+// that split directly, independent of any live client or the Terraform
+// framework's request plumbing.
+
+// TestBuildUpdatePayload_V4V6SourcedFromConfigNotPlan verifies that an
+// unconfigured v4_network/v6_network (null in config) is omitted from the
+// payload even when plan carries a stale non-null value forward via
+// UseStateForUnknown -- the exact scenario that would silently resend a
+// prior value on every apply if these two fields were sourced from plan.
+func TestBuildUpdatePayload_V4V6SourcedFromConfigNotPlan(t *testing.T) {
+	plan := &LXCConfigModel{
+		PreferredPool: types.StringNull(),
+		Bridge:        types.StringNull(),
+		V4Network:     types.StringValue("172.200.0.0/24"), // stale, carried forward by UseStateForUnknown
+		V6Network:     types.StringValue("fd42:4c58:43ae::/64"),
+	}
+	config := &LXCConfigModel{
+		PreferredPool: types.StringNull(),
+		Bridge:        types.StringNull(),
+		V4Network:     types.StringNull(), // user never configured it
+		V6Network:     types.StringNull(),
+	}
+
+	p := buildUpdatePayload(plan, config)
+	if _, ok := p["v4_network"]; ok {
+		t.Errorf(`payload contains "v4_network" = %v, want omitted (config-sourced, unconfigured)`, p["v4_network"])
+	}
+	if _, ok := p["v6_network"]; ok {
+		t.Errorf(`payload contains "v6_network" = %v, want omitted (config-sourced, unconfigured)`, p["v6_network"])
+	}
+}
+
+// TestBuildUpdatePayload_V4V6IncludedWhenExplicitlyConfigured verifies the
+// config-driven guard does not suppress a value the user actually set.
+func TestBuildUpdatePayload_V4V6IncludedWhenExplicitlyConfigured(t *testing.T) {
+	plan := &LXCConfigModel{
+		PreferredPool: types.StringNull(),
+		Bridge:        types.StringNull(),
+		V4Network:     types.StringValue("172.200.0.0/24"),
+		V6Network:     types.StringValue("fd42:4c58:43ae::/64"),
+	}
+	config := &LXCConfigModel{
+		PreferredPool: types.StringNull(),
+		Bridge:        types.StringNull(),
+		V4Network:     types.StringValue("172.200.0.0/24"),
+		V6Network:     types.StringValue("fd42:4c58:43ae::/64"),
+	}
+
+	p := buildUpdatePayload(plan, config)
+	if p["v4_network"] != "172.200.0.0/24" {
+		t.Errorf(`payload["v4_network"] = %v, want "172.200.0.0/24"`, p["v4_network"])
+	}
+	if p["v6_network"] != "fd42:4c58:43ae::/64" {
+		t.Errorf(`payload["v6_network"] = %v, want "fd42:4c58:43ae::/64"`, p["v6_network"])
+	}
+}
+
+// TestBuildUpdatePayload_PreferredPoolBridgeSourcedFromPlanNotConfig
+// verifies that preferred_pool/bridge are read from plan, NOT config: an
+// explicit clear (plan null, e.g. the user wrote preferred_pool = null and
+// Plan's UseStateForUnknown modifier left it as the explicitly-configured
+// null since the framework's own default planned value was already known)
+// must still send JSON nil even though config alone could never distinguish
+// that from "unconfigured" — proving buildUpdatePayload does NOT overwrite
+// these two fields with config's (necessarily ambiguous) value.
+func TestBuildUpdatePayload_PreferredPoolBridgeSourcedFromPlanNotConfig(t *testing.T) {
+	plan := &LXCConfigModel{
+		PreferredPool: types.StringNull(), // explicit clear, per Plan's disambiguation
+		Bridge:        types.StringValue("br0"),
+		V4Network:     types.StringNull(),
+		V6Network:     types.StringNull(),
+	}
+	// config is indistinguishable from "unconfigured" for preferred_pool
+	// (both null) -- if buildUpdatePayload sourced preferred_pool/bridge
+	// from config too, this test would still pass for preferred_pool by
+	// coincidence but fail for bridge, since config never saw "br0" at all.
+	config := &LXCConfigModel{
+		PreferredPool: types.StringNull(),
+		Bridge:        types.StringNull(),
+		V4Network:     types.StringNull(),
+		V6Network:     types.StringNull(),
+	}
+
+	p := buildUpdatePayload(plan, config)
+	v, ok := p["preferred_pool"]
+	if !ok {
+		t.Fatal(`expected "preferred_pool" present (explicit clear), got omitted`)
+	}
+	if v != nil {
+		t.Errorf(`payload["preferred_pool"] = %v, want nil (explicit clear)`, v)
+	}
+	if p["bridge"] != "br0" {
+		t.Errorf(`payload["bridge"] = %v, want "br0" (sourced from plan, not config)`, p["bridge"])
+	}
+}
+
 // --- deleteWarningDiagnostics -----------------------------------------------
 
 // TestDeleteWarningDiagnostics verifies Delete's diagnostic builder returns

@@ -63,7 +63,16 @@ func (r *AuditConfigResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	if _, err := r.client.Call(ctx, "audit.update", plan.updatePayload()); err != nil {
+	// Build the payload from req.Config, NOT plan: see updatePayload's doc
+	// comment for why sourcing from the plan would resend prior-state
+	// echoes for fields the user never configured.
+	var config AuditConfigModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if _, err := r.client.Call(ctx, "audit.update", config.updatePayload()); err != nil {
 		resp.Diagnostics.AddError("Create audit configuration failed", err.Error())
 		return
 	}
@@ -110,7 +119,20 @@ func (r *AuditConfigResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	if _, err := r.client.Call(ctx, "audit.update", plan.updatePayload()); err != nil {
+	// Build the payload from req.Config, NOT plan. See updatePayload's doc
+	// comment: all five writable fields are Optional+Computed with
+	// UseStateForUnknown plan modifiers, so sourcing from req.Plan would
+	// resend a field's last-known value on every Update even when the user
+	// never configured it. req.Config stays null for anything the user did
+	// not set in HCL regardless of plan modifiers, so it is the only
+	// correct source for payload inclusion.
+	var config AuditConfigModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if _, err := r.client.Call(ctx, "audit.update", config.updatePayload()); err != nil {
 		resp.Diagnostics.AddError("Update audit configuration failed", err.Error())
 		return
 	}
