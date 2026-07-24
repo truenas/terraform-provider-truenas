@@ -197,6 +197,15 @@ provider "truenas" {
 }
 ```
 
+> **`insecure = true` also weakens authentication.** Certificate verification
+> is what proves you are talking to the real box. With it off, a machine that
+> intercepts the connection can present any mechanism list it likes, which
+> defeats SCRAM's on-wire key protection: the client will fall back to plain
+> API-key login and send the reusable key (inside TLS, but to an unverified
+> peer). Use `insecure = true` only against a box you trust on a trusted
+> network — for anything else, use `ca_cert` (or a publicly-trusted
+> certificate) so the peer is verified and SCRAM's protection holds.
+
 ### 5. First configuration
 
 A small, safe first step — create a dataset under an existing pool, then read
