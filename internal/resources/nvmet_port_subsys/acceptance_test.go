@@ -29,7 +29,7 @@ func TestAccNVMeTEndToEnd(t *testing.T) {
 	devicePath := fmt.Sprintf("zvol/%s", zvolName)
 	hostNQN := acctest.RandNQN()
 
-	// The host description field exists on the wire only from SCALE 26.0;
+	// The host description field exists on the wire only from TrueNAS 26.0;
 	// on older releases the test omits it.
 	desc, descUpdated := "", ""
 	if acctest.ServerVersionAtLeast(t, 26, 0) {

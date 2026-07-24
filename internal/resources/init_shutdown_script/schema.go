@@ -12,7 +12,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages an init/shutdown script (initshutdownscript) on TrueNAS SCALE: a command or script " +
+		Description: "Manages an init/shutdown script (initshutdownscript) on TrueNAS: a command or script " +
 			"executed at a chosen point in the boot or shutdown sequence.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{

@@ -16,7 +16,7 @@ import (
 
 // testAccAPIKeyUsername returns the local user to own the acceptance-test
 // API key: TRUENAS_USERNAME when set, falling back to truenas_admin (the
-// TrueNAS SCALE default local admin account, confirmed present via a live
+// TrueNAS default local admin account, confirmed present via a live
 // user.query probe).
 func testAccAPIKeyUsername() string {
 	if v := os.Getenv("TRUENAS_USERNAME"); v != "" {
@@ -28,7 +28,7 @@ func testAccAPIKeyUsername() string {
 // TestAccAPIKey_basic creates an API key for the acceptance-test user,
 // proves the created key actually authenticates against the real server
 // (opening a second client.Client and calling system.version_short through
-// it — the SCRAM path on SCALE 26.0+), renames the key in place, imports it
+// it — the SCRAM path on TrueNAS 26.0+), renames the key in place, imports it
 // by numeric id, and verifies destruction.
 func TestAccAPIKey_basic(t *testing.T) {
 	username := testAccAPIKeyUsername()

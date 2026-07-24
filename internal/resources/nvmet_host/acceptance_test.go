@@ -19,7 +19,7 @@ func TestAccNVMetHost_basic(t *testing.T) {
 	hostNQN := acctest.RandNQN()
 	hostNQNRenamed := acctest.RandNQN()
 
-	// The description field exists on the wire only from SCALE 26.0; on
+	// The description field exists on the wire only from TrueNAS 26.0; on
 	// older releases the test omits it and the update step exercises the
 	// hostnqn rename alone.
 	desc, descUpdated := "", ""
@@ -75,7 +75,7 @@ func TestAccNVMetHost_basic(t *testing.T) {
 
 // testAccNVMetHostConfig renders the test resource; description and
 // dhchap_key lines are omitted entirely when empty (description does not
-// exist on the wire before SCALE 26.0).
+// exist on the wire before TrueNAS 26.0).
 func testAccNVMetHostConfig(hostnqn, description, dhchapKey string) string {
 	cfg := fmt.Sprintf("resource \"truenas_nvmet_host\" \"test\" {\n  hostnqn = %q\n", hostnqn)
 	if description != "" {

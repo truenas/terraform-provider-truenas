@@ -13,9 +13,9 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a TrueNAS SCALE reporting exporter (reporting.exporters): a destination that " +
+		Description: "Manages a TrueNAS reporting exporter (reporting.exporters): a destination that " +
 			"periodically receives reporting/metrics data. Only the GRAPHITE exporter type currently exists on " +
-			"TrueNAS (probed via reporting.exporters.exporter_schemas on both SCALE 25.10 and 26.0), so " +
+			"TrueNAS (probed via reporting.exporters.exporter_schemas on both TrueNAS 25.10 and 26.0), so " +
 			"\"attributes\" exposes GRAPHITE's fields directly as a typed nested block rather than a free-form " +
 			"JSON document.",
 		Attributes: map[string]schema.Attribute{

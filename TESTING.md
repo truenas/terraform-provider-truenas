@@ -1,7 +1,7 @@
 # Test Suite
 
 This provider is tested at two levels: **unit tests** (no TrueNAS required)
-and **live tests** that run against a real TrueNAS SCALE box.
+and **live tests** that run against a real TrueNAS box.
 There are no mock servers anywhere — not in the acceptance suite and not
 in the client package. Unit tests are pure-function tests (payload
 builders, response mappers, parsers, error classification); everything
@@ -10,7 +10,7 @@ that talks to a server talks to a real one. Client-level live tests
 mechanisms including SCRAM, error mapping, job polling bailout, and
 reconnect-after-drop — and are gated on the same env vars as the
 acceptance suite, skipping cleanly when unset. The full suite runs green
-against TrueNAS SCALE 25.10 and 26.0.
+against TrueNAS 25.10 and 26.0.
 
 ## Quick start
 
@@ -56,7 +56,7 @@ Helpers in `internal/acctest`: `PreCheck` (TF_ACC + credentials),
 `DisruptiveCheck` (adds `TRUENAS_DISRUPTIVE=1`), `HACheck` (adds
 `TRUENAS_HA=1` + the `TRUENAS_HA_ALLOWED_ENDPOINT` fatal-guard, DSCheck
 pattern, then a live `failover.licensed` probe that **skips** — not
-`t.Fatal`s — when false, since an unlicensed box, e.g. the SCALE 26.0 box,
+`t.Fatal`s — when false, since an unlicensed box, e.g. the TrueNAS 26.0 box,
 is a valid non-HA test target, not a safety violation), `AppsCheck`
 (`TRUENAS_APPS=1`), `Endpoint()`, `TestPool()`, `RandName(prefix)`
 (crypto-random `prefix-xxxxxxxx` names), `RandNQN()` (valid RFC-4122
@@ -120,7 +120,7 @@ Coverage highlights:
   commonly shows SKIP in sweeps; full CRUD was verified manually on 25.10
   (see task report).
 - **Shares**: NFS and SMB shares on own dataset fixtures (SMB exercises the
-  SCALE 26.0 `LEGACY_SHARE` purpose/options mapping)
+  TrueNAS 26.0 `LEGACY_SHARE` purpose/options mapping)
 - **iSCSI end-to-end** (`iscsi_targetextent.TestAccISCSIEndToEnd`): portal →
   initiator → CHAP auth (wired into the target group) → zvol → extent →
   target → LUN-0 association, plus per-resource basics in each package
@@ -176,7 +176,7 @@ Coverage highlights:
   Docker is unconfigured on the target box — `docker.config`'s `pool` is
   null), catalog_config (datasource, includes `catalog.trains`); app_registry
   has no Tier-1 test — see Never-run tier below; lxc_config (datasource-only
-  Tier 1 test — the resource itself is Tier 2, see below; **SCALE 26.0+
+  Tier 1 test — the resource itself is Tier 2, see below; **TrueNAS 26.0+
   only** — self-skips cleanly on 25.10 via a version precheck, the `lxc`
   namespace does not exist there, confirmed live); container
   (`TestAccContainer_basic`: image datasource lookup → create running=false
@@ -188,7 +188,7 @@ Coverage highlights:
   (`TestAccContainerImageDataSource_basic` + `_notFound`: datasource lookup
   of `alpine:3.22:amd64:default`'s `latest_version`/`versions`, plus a clean
   not-found diagnostic for a nonexistent image name — never writes).
-  **container and container_image are SCALE 26.0+ only** — self-skip cleanly
+  **container and container_image are TrueNAS 26.0+ only** — self-skip cleanly
   on 25.10 via a version precheck, the `container` namespace does not exist
   there (0 `container.*` methods, confirmed live via `core.get_methods`).
   container_device (`TestAccContainerDevice_basic`: RandName container +
@@ -196,7 +196,7 @@ Coverage highlights:
   mountpoint, `target` = `/data`) → update `target` in place → ImportState →
   destroy + CheckDestroy that both the device and the container are gone;
   never starts the container, so attach/detach only ever rewrites libvirt
-  domain XML on disk, never a live bind-mount). **SCALE 26.0+ only** —
+  domain XML on disk, never a live bind-mount). **TrueNAS 26.0+ only** —
   self-skips cleanly on 25.10 via a version precheck, the `container.device`
   namespace does not exist there (0 `container.device.*` methods, confirmed
   live via `core.get_methods`). NIC and USB device types were live-tested
@@ -211,14 +211,14 @@ Coverage highlights:
   update field — `sharing.webshare` has no `comment` field at all, confirmed
   live) → ImportState → destroy + CheckDestroy by name); `webshare_config`
   (datasource-only Tier 1 test — the resource itself is Tier 2, see below).
-  **Both are SCALE 26.0+ only** — self-skip cleanly on 25.10 via a version
+  **Both are TrueNAS 26.0+ only** — self-skip cleanly on 25.10 via a version
   precheck, the `webshare`/`sharing.webshare` namespaces do not exist there
   (0 matching methods, confirmed live via `core.get_methods`).
 - **TrueNAS Connect**: `tn_connect_config` (`TestAccTnConnectConfigDataSource_basic`,
   datasource-only Tier 1 test — the resource itself has no Tier 2 test at
   all, see Never-run tier below). Unlike `webshare`/`lxc_config`/
   `container_device`, this namespace needs **no version gate**: probed
-  live, `tn_connect.config`/`tn_connect.update` are present on both SCALE
+  live, `tn_connect.config`/`tn_connect.update` are present on both TrueNAS
   25.10 and 26.0, so the test runs unconditionally on either release.
 - **HA / Enterprise** (`TRUENAS_HA=1`-gated, see HA / Enterprise test
   environment below): `failover_config` (`TestAccFailoverConfigDataSource_basic`
@@ -271,8 +271,8 @@ field and restore it:
 | `twofactor_auth` | `window` — **SAFETY**: the test never toggles `enabled`, only `window`, to avoid locking out password-based logins mid-run |
 | `docker_config` | `enable_image_updates` — **self-skips if Docker is unconfigured** (`docker.config`'s `pool` is null: confirmed on the 25.10 test VM, which has never had Docker set up) |
 | `catalog_config` | `preferred_trains` (removes and restores `"community"`) — probed live to succeed regardless of whether Docker/apps is configured (unlike `docker_config`, `catalog.update` does not require a pool), so this test has no self-skip condition and ran on both boxes |
-| `lxc_config` | `v4_network` — **SCALE 26.0+ only** (self-skips on 25.10, `lxc` namespace absent, confirmed live); **never** sets/reads back `preferred_pool` (same docker-pool safety rule as `docker_config`'s `pool`); additionally self-skips if `lxc.config`'s `preferred_pool` is ever non-null on the target box (LXC in use) — decisive probe against the production 26.0 box found it null, so the test ran there |
-| `webshare_config` | `search` — **SCALE 26.0+ only** (self-skips on 25.10, `webshare` namespace absent, confirmed live); probed live to be a genuine partial update (unlike `mail`/`ups_config`, `webshare.update` does not require other fields on every call), so this test has no unconfigured-service self-skip condition in practice — the self-skip guard is kept anyway as a defensive mirror of the `mail`/`ups_config` precedent |
+| `lxc_config` | `v4_network` — **TrueNAS 26.0+ only** (self-skips on 25.10, `lxc` namespace absent, confirmed live); **never** sets/reads back `preferred_pool` (same docker-pool safety rule as `docker_config`'s `pool`); additionally self-skips if `lxc.config`'s `preferred_pool` is ever non-null on the target box (LXC in use) — decisive probe against the production 26.0 box found it null, so the test ran there |
+| `webshare_config` | `search` — **TrueNAS 26.0+ only** (self-skips on 25.10, `webshare` namespace absent, confirmed live); probed live to be a genuine partial update (unlike `mail`/`ups_config`, `webshare.update` does not require other fields on every call), so this test has no unconfigured-service self-skip condition in practice — the self-skip guard is kept anyway as a defensive mirror of the `mail`/`ups_config` precedent |
 | `failover_config` | `timeout` — **`TRUENAS_HA=1`-gated** (`HACheck` + `DisruptiveCheck`); `disabled`/`master` are never exercised by any committed test (a `master` mismatch on the live master node is a real failover trigger — see the real-failover exercise note below) |
 | `ipmi_lan` | `vlan` — **`TRUENAS_HA=1`-gated**; restore polls `ipmi.lan.query` until the BMC's LAN controller settles (observed real settle-time behavior, not a bug), and is registered via `t.Cleanup` before the mutating apply; `password`/`apply_remote` are never exercised by any committed test |
 | `truecommand_config` | `api_key` — **`TRUENAS_HA=1`-gated**; decisively probed live to round-trip verbatim with `enabled` left `false` and no outbound connection attempted; `enabled` is never set `true` by any committed test (no TrueCommand instance to enroll with) |
@@ -299,7 +299,7 @@ management access or migrate system state:
   enable it against an environment with real cloud storage credentials.
 - `app_registry` — `app.registry.create` validates the supplied
   username/password/uri against the real container registry endpoint
-  synchronously (confirmed live on SCALE 26.0: a throwaway create with
+  synchronously (confirmed live on TrueNAS 26.0: a throwaway create with
   fabricated credentials against an unreachable TEST-NET-1 host was rejected
   with "Invalid credentials for registry" before anything was persisted); no
   live, reachable container registry fixture is available in this
@@ -309,7 +309,7 @@ management access or migrate system state:
   against an environment with a real container registry.
 - `tn_connect_config` Tier 2 set-and-restore — `tn_connect.update`'s own
   `core.get_methods` accepts schema exposes **exactly one** writable
-  property on SCALE 26.0: `enabled`. There is no cosmetic/informational
+  property on TrueNAS 26.0: `enabled`. There is no cosmetic/informational
   field this resource could safely toggle without touching `enabled`
   (starting real TrueNAS Connect cloud enrollment — forbidden
   unconditionally, see the resource's schema description), so
@@ -317,7 +317,7 @@ management access or migrate system state:
   (unconditional `t.Skip`, no `TF_ACC` gate needed), mirroring
   `cloud_backup`/`app_registry` above. Independently decisive: the
   production 26.0 box is already enrolled (`enabled=true`, `tier=FOUNDATION`)
-  — a real account, not a disposable fixture. SCALE 25.10's
+  — a real account, not a disposable fixture. TrueNAS 25.10's
   `tn_connect.update` does accept a richer schema (also `ips`, `interfaces`,
   `use_all_interfaces`), and a supplementary live probe there confirmed an
   `ips`-only update leaves `enabled` untouched, but this resource
@@ -326,7 +326,7 @@ management access or migrate system state:
   which carries the full transcript inline).
 - `vmware` — `vmware.create` validates `hostname`/`username`/`password`
   against the real vCenter/ESXi endpoint synchronously (confirmed live on
-  BOTH the HA pair and the SCALE 26.0 box: a throwaway create with an RFC
+  BOTH the HA pair and the TrueNAS 26.0 box: a throwaway create with an RFC
   5737 TEST-NET-1 hostname and fabricated credentials was rejected —
   `ENETUNREACH` on the HA pair, `ETIMEDOUT` on 26.0 — before `vmware.query`
   ever showed a record on either box); no live, reachable vCenter/ESXi
@@ -342,7 +342,7 @@ Tests gated on `TRUENAS_HA=1` (`failover_config`, `ipmi_lan`, `enclosure`,
 `enclosure_label`; `truecommand_config`/`vmware` are not HA-gated — they run
 on any box) need a licensed Enterprise HA controller pair:
 
-- **Box**: TrueNAS SCALE **25.10.4 Enterprise HA** at
+- **Box**: TrueNAS **25.10.4 Enterprise HA** at
   `wss://10.220.16.188/api/current`, a physical HA controller pair with a
   BROADCOM VirtualSES H10 enclosure and a physical BMC/IPMI channel.
   **FULLY DISPOSABLE** — provided by the user specifically for this plan,
@@ -361,7 +361,7 @@ on any box) need a licensed Enterprise HA controller pair:
   `truecommand_config` `api_key`).
 - **Skip behavior on a non-HA box**: `HACheck` probes `failover.licensed`
   live and `t.Skip`s (not `t.Fatal`s) when false — confirmed running the
-  full HA-gated set against the SCALE 26.0 box (unlicensed) with matching
+  full HA-gated set against the TrueNAS 26.0 box (unlicensed) with matching
   `TRUENAS_HA`/`TRUENAS_HA_ALLOWED_ENDPOINT` env vars: all four packages
   skip cleanly, zero mutating calls made.
 - **Real-failover exercise**: a one-off, scripted (not part of the committed
@@ -501,7 +501,7 @@ before running `dnf` or `ipa-server-install`.
   provider retries rate-limited auth with backoff (5/10/20/30s), but
   parallel suites will still trip it. The make targets and the batch
   scripts sleep between packages.
-  Token caching was prototyped and rejected: on SCALE 26.0,
+  Token caching was prototyped and rejected: on TrueNAS 26.0,
   `auth.login_with_token` draws from the same rate bucket as key login,
   and a generated token authenticates exactly one new session (see
   `cmd/token_probe` for the experiment and results). Fewer, larger applies
@@ -528,7 +528,7 @@ before running `dnf` or `ipa-server-install`.
    CheckDestroy with a real API query that would catch a leak.
 4. Verify wire assumptions against the live box first
    (`go run ./cmd/debug_api/ methods <ns>.create`) — the API's `"job"`
-   flags and field sets differ between SCALE releases, and every mismatch
+   flags and field sets differ between TrueNAS releases, and every mismatch
    this suite found came from trusting stale shapes.
 5. Never reference existing objects on the target box; if the resource is a
    singleton, use `DisruptiveCheck` + set-and-restore, and self-skip when

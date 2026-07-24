@@ -11,10 +11,10 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a Webshare share on TrueNAS SCALE (sharing.webshare.*: create/update/delete/" +
-			"get_instance/query) — a read-only HTTP file browser for a ZFS dataset path. Requires TrueNAS SCALE " +
+		Description: "Manages a Webshare share on TrueNAS (sharing.webshare.*: create/update/delete/" +
+			"get_instance/query) — a read-only HTTP file browser for a ZFS dataset path. Requires TrueNAS " +
 			"26.0 or later: the sharing.webshare namespace does not exist on earlier releases (probed live — " +
-			"SCALE 25.10 exposes 0 webshare.*/sharing.webshare.* methods via core.get_methods). Using this " +
+			"TrueNAS 25.10 exposes 0 webshare.*/sharing.webshare.* methods via core.get_methods). Using this " +
 			"resource against an older server fails with a clean error during Create/Read/Update rather than a " +
 			"raw API error." +
 			"\n\n" +

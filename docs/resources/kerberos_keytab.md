@@ -3,12 +3,12 @@
 page_title: "truenas_kerberos_keytab Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a Kerberos keytab on TrueNAS SCALE (kerberos.keytab). A keytab holds one or more Kerberos principal/key entries that are merged into the system keytab at /etc/krb5.keytab. Keytabs are normally populated automatically during an Active Directory or IPA domain join (under reserved names such as AD_MACHINE_ACCOUNT / IPA_MACHINE_ACCOUNT), but additional entries can also be managed directly.
+  Manages a Kerberos keytab on TrueNAS (kerberos.keytab). A keytab holds one or more Kerberos principal/key entries that are merged into the system keytab at /etc/krb5.keytab. Keytabs are normally populated automatically during an Active Directory or IPA domain join (under reserved names such as AD_MACHINE_ACCOUNT / IPA_MACHINE_ACCOUNT), but additional entries can also be managed directly.
 ---
 
 # truenas_kerberos_keytab (Resource)
 
-Manages a Kerberos keytab on TrueNAS SCALE (kerberos.keytab). A keytab holds one or more Kerberos principal/key entries that are merged into the system keytab at /etc/krb5.keytab. Keytabs are normally populated automatically during an Active Directory or IPA domain join (under reserved names such as AD_MACHINE_ACCOUNT / IPA_MACHINE_ACCOUNT), but additional entries can also be managed directly.
+Manages a Kerberos keytab on TrueNAS (kerberos.keytab). A keytab holds one or more Kerberos principal/key entries that are merged into the system keytab at /etc/krb5.keytab. Keytabs are normally populated automatically during an Active Directory or IPA domain join (under reserved names such as AD_MACHINE_ACCOUNT / IPA_MACHINE_ACCOUNT), but additional entries can also be managed directly.
 
 ## Example Usage
 

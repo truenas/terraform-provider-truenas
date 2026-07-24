@@ -17,7 +17,7 @@ import (
 const dockerConfigResourceID = "docker_config"
 
 // addressPoolAttrTypes describes the attribute types of one entry in the
-// "address_pools" list. Identical shape on SCALE 25.10 and 26.0 (probed
+// "address_pools" list. Identical shape on TrueNAS 25.10 and 26.0 (probed
 // live, see task-1-report.md): no version gating needed here.
 var addressPoolAttrTypes = map[string]attr.Type{
 	"base": types.StringType,
@@ -34,7 +34,7 @@ type AddressPoolModel struct {
 
 // registryMirrorAttrTypes describes the attribute types of one entry in the
 // unified "registry_mirrors" list — the Terraform-facing shape, modeled
-// after SCALE 26.0+'s native wire shape (see dockerConfigAPI doc comment
+// after TrueNAS 26.0+'s native wire shape (see dockerConfigAPI doc comment
 // for why 25.10's two-flat-array shape is translated into this one).
 var registryMirrorAttrTypes = map[string]attr.Type{
 	"url":      types.StringType,
@@ -51,8 +51,8 @@ type RegistryMirrorModel struct {
 // DockerConfigModel is the Terraform state model for truenas_docker_config.
 //
 // Nvidia is readable on both probed releases (docker.config genuinely
-// returns a real boolean for it on SCALE 26.0+, not null — see
-// dockerConfigAPI's doc comment) but is write-restricted: SCALE 26.0+
+// returns a real boolean for it on TrueNAS 26.0+, not null — see
+// dockerConfigAPI's doc comment) but is write-restricted: TrueNAS 26.0+
 // removed "nvidia" from docker.update's accepted fields (probed live, see
 // task-1-report.md), so this resource can display but no longer change it
 // there. Explicitly setting it in HCL against a 26.0+ target is a
@@ -71,7 +71,7 @@ type DockerConfigModel struct {
 	EnableImageUpdates types.Bool   `tfsdk:"enable_image_updates"`
 	Pool               types.String `tfsdk:"pool"` // nullable
 	Dataset            types.String `tfsdk:"dataset"`
-	Nvidia             types.Bool   `tfsdk:"nvidia"` // read-only on SCALE 26.0+ (see doc comment above)
+	Nvidia             types.Bool   `tfsdk:"nvidia"` // read-only on TrueNAS 26.0+ (see doc comment above)
 	AddressPools       types.List   `tfsdk:"address_pools"`
 	CIDRv6             types.String `tfsdk:"cidr_v6"`
 	RegistryMirrors    types.List   `tfsdk:"registry_mirrors"`
@@ -97,7 +97,7 @@ type addressPoolAPI struct {
 	Size int64  `json:"size"`
 }
 
-// registryMirrorAPI mirrors one entry of SCALE 26.0+'s unified
+// registryMirrorAPI mirrors one entry of TrueNAS 26.0+'s unified
 // "registry_mirrors" array.
 type registryMirrorAPI struct {
 	URL      string `json:"url"`
@@ -105,7 +105,7 @@ type registryMirrorAPI struct {
 }
 
 // dockerConfigAPI mirrors the JSON object returned by docker.config and
-// docker.update. Probed live against SCALE 25.10 and 26.0 (see
+// docker.update. Probed live against TrueNAS 25.10 and 26.0 (see
 // task-1-report.md) — the two releases genuinely disagree on two fields:
 //
 //   - "nvidia" (bool): docker.config's response includes a real value for
@@ -145,7 +145,7 @@ type dockerConfigAPI struct {
 	InsecureRegistryMirrors []string            `json:"insecure_registry_mirrors"`
 }
 
-// hasUnifiedRegistryMirrors reports whether this response used SCALE
+// hasUnifiedRegistryMirrors reports whether this response used TrueNAS
 // 26.0+'s single "registry_mirrors" key (present, even if empty).
 func (api *dockerConfigAPI) hasUnifiedRegistryMirrors() bool {
 	return api.RegistryMirrors != nil
@@ -165,8 +165,8 @@ func addressPoolsListValue(ctx context.Context, api []addressPoolAPI) (types.Lis
 }
 
 // registryMirrorsListValue builds the unified "registry_mirrors" list from
-// an API response, translating SCALE 25.10's split string-array shape into
-// the same {url, insecure} shape SCALE 26.0+ returns natively. Secure
+// an API response, translating TrueNAS 25.10's split string-array shape into
+// the same {url, insecure} shape TrueNAS 26.0+ returns natively. Secure
 // entries (insecure=false) are ordered first, matching the order
 // docker.config itself returns the two source arrays in.
 func registryMirrorsListValue(ctx context.Context, api *dockerConfigAPI) (types.List, diag.Diagnostics) {
@@ -277,7 +277,7 @@ func registryMirrorsPayload(ctx context.Context, l types.List) ([]RegistryMirror
 	return mirrors, diags
 }
 
-// unifiedRegistryMirrorsPayload shapes a []RegistryMirrorModel into SCALE
+// unifiedRegistryMirrorsPayload shapes a []RegistryMirrorModel into TrueNAS
 // 26.0+'s native "registry_mirrors" wire value: a list of
 // {url, insecure} maps.
 func unifiedRegistryMirrorsPayload(mirrors []RegistryMirrorModel) []map[string]any {
@@ -291,7 +291,7 @@ func unifiedRegistryMirrorsPayload(mirrors []RegistryMirrorModel) []map[string]a
 	return out
 }
 
-// splitRegistryMirrorsPayload shapes a []RegistryMirrorModel into SCALE
+// splitRegistryMirrorsPayload shapes a []RegistryMirrorModel into TrueNAS
 // 25.10's two-flat-array wire value: "secure_registry_mirrors" (insecure
 // == false entries) and "insecure_registry_mirrors" (insecure == true
 // entries), each a plain list of URL strings.
@@ -318,7 +318,7 @@ func splitRegistryMirrorsPayload(mirrors []RegistryMirrorModel) (secure, insecur
 // pool), distinct from "unset" (omitted, current value unchanged).
 //
 // registryMirrorsUnified selects the wire shape for registry_mirrors: true
-// sends SCALE 26.0+'s native "registry_mirrors" key; false sends SCALE
+// sends TrueNAS 26.0+'s native "registry_mirrors" key; false sends TrueNAS
 // 25.10's "secure_registry_mirrors" + "insecure_registry_mirrors" split.
 // This is a plain parameter (not a live client call) so the translation
 // logic here stays a pure function, independently unit-testable for both
@@ -326,7 +326,7 @@ func splitRegistryMirrorsPayload(mirrors []RegistryMirrorModel) (secure, insecur
 // where the caller determines this via client.VersionAtLeast.
 //
 // nvidia is intentionally NOT handled here: it needs its own version-gated
-// error path (SCALE 26.0+ rejects it outright rather than silently
+// error path (TrueNAS 26.0+ rejects it outright rather than silently
 // ignoring it), which requires diagnostics the resource layer owns — see
 // resource.go's applyNvidiaSupport.
 func (m *DockerConfigModel) updatePayload(ctx context.Context, registryMirrorsUnified bool) (map[string]any, diag.Diagnostics) {

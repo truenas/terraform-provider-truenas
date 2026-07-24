@@ -16,7 +16,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a replication task on TrueNAS SCALE. Supports LOCAL replication (within the " +
+		Description: "Manages a replication task on TrueNAS. Supports LOCAL replication (within the " +
 			"same system) and remote replication over SSH (transport = \"SSH\", authenticating via a " +
 			"truenas_keychain_ssh_connection credential referenced by \"ssh_credentials\").",
 		Attributes: map[string]schema.Attribute{

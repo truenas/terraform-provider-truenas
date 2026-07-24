@@ -3,12 +3,12 @@
 page_title: "truenas_nfs_share Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an NFS share on TrueNAS SCALE.
+  Manages an NFS share on TrueNAS.
 ---
 
 # truenas_nfs_share (Resource)
 
-Manages an NFS share on TrueNAS SCALE.
+Manages an NFS share on TrueNAS.
 
 ## Example Usage
 

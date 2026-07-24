@@ -25,7 +25,7 @@ func (d *NFSConfigDataSource) Metadata(_ context.Context, req datasource.Metadat
 
 func (d *NFSConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE NFS service configuration. Takes no arguments: there is " +
+		Description: "Reads the current TrueNAS NFS service configuration. Takes no arguments: there is " +
 			"exactly one NFS configuration per TrueNAS system.",
 		Attributes: map[string]dschema.Attribute{
 			"id": dschema.StringAttribute{

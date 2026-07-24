@@ -24,7 +24,7 @@ func (d *SNMPConfigDataSource) Metadata(_ context.Context, req datasource.Metada
 
 func (d *SNMPConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE SNMP service configuration. Takes no arguments: there " +
+		Description: "Reads the current TrueNAS SNMP service configuration. Takes no arguments: there " +
 			"is exactly one SNMP configuration per TrueNAS system. Does not expose v3_password or " +
 			"v3_privpassphrase: snmp.config never returns usable values for them.",
 		Attributes: map[string]dschema.Attribute{

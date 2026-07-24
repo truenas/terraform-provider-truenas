@@ -205,7 +205,7 @@ func TestDecodeCredentialsID_Invalid(t *testing.T) {
 
 // TestResponseToModel_FullShape verifies responseToModel against the field
 // shape documented by core.get_methods (cloud_backup.create/get_instance
-// returns, live-probed on TrueNAS SCALE 25.10) and middlewared's
+// returns, live-probed on TrueNAS 25.10) and middlewared's
 // api/v25_10_2/cloud_backup.py CloudBackupEntry model: credentials embedded,
 // nullable cache_path/rate_limit, password returned verbatim.
 func TestResponseToModel_FullShape(t *testing.T) {

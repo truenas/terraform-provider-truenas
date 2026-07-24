@@ -9,7 +9,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE replication configuration (system-wide replication task " +
+		Description: "Manages the TrueNAS replication configuration (system-wide replication task " +
 			"concurrency). This is a singleton resource — there is exactly one replication configuration per " +
 			"TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls " +
 			"replication.config.update, and Terraform delete only removes the resource from state (the " +

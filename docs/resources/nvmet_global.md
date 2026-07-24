@@ -3,12 +3,12 @@
 page_title: "truenas_nvmet_global Resource - truenas"
 subcategory: ""
 description: |-
-  Manages the TrueNAS SCALE global NVMe-oF target configuration. This is a singleton resource — there is exactly one NVMe-oF global configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls nvmet.global.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it serves live storage).
+  Manages the TrueNAS global NVMe-oF target configuration. This is a singleton resource — there is exactly one NVMe-oF global configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls nvmet.global.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it serves live storage).
 ---
 
 # truenas_nvmet_global (Resource)
 
-Manages the TrueNAS SCALE global NVMe-oF target configuration. This is a singleton resource — there is exactly one NVMe-oF global configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls nvmet.global.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it serves live storage).
+Manages the TrueNAS global NVMe-oF target configuration. This is a singleton resource — there is exactly one NVMe-oF global configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls nvmet.global.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it serves live storage).
 
 ## Example Usage
 

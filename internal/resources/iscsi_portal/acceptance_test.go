@@ -12,7 +12,7 @@ import (
 )
 
 // TestAccISCSIPortal_basic creates an iSCSI portal listening on the box IP (0.0.0.0 collides with the live portal on 26.0 — one portal per IP)
-// (port is not settable per-listen on SCALE 26.0+; the global iSCSI
+// (port is not settable per-listen on TrueNAS 26.0+; the global iSCSI
 // listen_port applies), checks its attributes, updates its comment, imports
 // it by id, and verifies destruction.
 func TestAccISCSIPortal_basic(t *testing.T) {

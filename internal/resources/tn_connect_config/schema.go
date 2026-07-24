@@ -12,7 +12,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE TrueNAS Connect service configuration (tn_connect.config/" +
+		Description: "Manages the TrueNAS Connect service configuration (tn_connect.config/" +
 			"tn_connect.update): whether the system is enrolled with the TrueNAS Connect cloud service, plus its " +
 			"read-only enrollment/status metadata. This is a singleton resource — there is exactly one TrueNAS " +
 			"Connect configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform " +
@@ -27,18 +27,18 @@ func resourceSchema() schema.Schema {
 			"\"enabled\" unconfigured to manage this resource purely for its read-only status fields without " +
 			"asserting any particular enrollment state." +
 			"\n\n" +
-			"\"enabled\" is the ONLY field this resource ever writes. Probed live: on SCALE 26.0, " +
+			"\"enabled\" is the ONLY field this resource ever writes. Probed live: on TrueNAS 26.0, " +
 			"tn_connect.update's own accepts schema exposes EXACTLY \"enabled\" — there is no other writable " +
-			"field on that release at all. SCALE 25.10's tn_connect.update additionally accepts \"ips\", " +
+			"field on that release at all. TrueNAS 25.10's tn_connect.update additionally accepts \"ips\", " +
 			"\"interfaces\", and \"use_all_interfaces\", but this resource deliberately does not expose them as " +
 			"writable, keeping one stable schema across releases that matches the narrower (and " +
-			"production-targeted) SCALE 26.0 capability rather than branching resource behavior by release. " +
+			"production-targeted) TrueNAS 26.0 capability rather than branching resource behavior by release. " +
 			"Every other attribute below is Computed-only, sourced from tn_connect.config." +
 			"\n\n" +
 			"Several attributes exist on only one of the two probed releases and read as null on the other " +
 			"(distinct from a present-but-empty value): \"tier\" and \"last_heartbeat_failure_datetime\" exist " +
-			"only on SCALE 26.0; \"ips\", \"interfaces\", \"interfaces_ips\", and \"use_all_interfaces\" exist " +
-			"only on SCALE 25.10.",
+			"only on TrueNAS 26.0; \"ips\", \"interfaces\", \"interfaces_ips\", and \"use_all_interfaces\" exist " +
+			"only on TrueNAS 25.10.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:      true,
@@ -99,15 +99,15 @@ func resourceSchema() schema.Schema {
 			},
 			"tier": schema.StringAttribute{
 				Computed: true,
-				Description: "TrueNAS Connect tier (FOUNDATION, PLUS, or BUSINESS). Only present on SCALE " +
-					"26.0+; reads as null on SCALE 25.10 (probed live: the API response has no \"tier\" key " +
+				Description: "TrueNAS Connect tier (FOUNDATION, PLUS, or BUSINESS). Only present on TrueNAS " +
+					"26.0+; reads as null on TrueNAS 25.10 (probed live: the API response has no \"tier\" key " +
 					"at all on that release).",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"last_heartbeat_failure_datetime": schema.StringAttribute{
 				Computed: true,
 				Description: "Datetime the current heartbeat failure streak began, or null if heartbeat is " +
-					"not currently failing. Only present on SCALE 26.0+; reads as null on SCALE 25.10 (probed " +
+					"not currently failing. Only present on TrueNAS 26.0+; reads as null on TrueNAS 25.10 (probed " +
 					"live: the API response has no \"last_heartbeat_failure_datetime\" key at all on that " +
 					"release).",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
@@ -115,31 +115,31 @@ func resourceSchema() schema.Schema {
 			"ips": schema.ListAttribute{
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "IP addresses TrueNAS Connect binds to and advertises. Only present on SCALE " +
-					"25.10; reads as null on SCALE 26.0 (probed live: the API response has no \"ips\" key at " +
-					"all on that release — SCALE 26.0 selects addresses automatically instead).",
+				Description: "IP addresses TrueNAS Connect binds to and advertises. Only present on TrueNAS " +
+					"25.10; reads as null on TrueNAS 26.0 (probed live: the API response has no \"ips\" key at " +
+					"all on that release — TrueNAS 26.0 selects addresses automatically instead).",
 				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
 			},
 			"interfaces": schema.ListAttribute{
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "Network interface names TrueNAS Connect uses. Only present on SCALE 25.10; " +
-					"reads as null on SCALE 26.0 (probed live: the API response has no \"interfaces\" key at " +
+				Description: "Network interface names TrueNAS Connect uses. Only present on TrueNAS 25.10; " +
+					"reads as null on TrueNAS 26.0 (probed live: the API response has no \"interfaces\" key at " +
 					"all on that release).",
 				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
 			},
 			"interfaces_ips": schema.ListAttribute{
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "IP addresses associated with the selected interfaces. Only present on SCALE " +
-					"25.10; reads as null on SCALE 26.0 (probed live: the API response has no " +
+				Description: "IP addresses associated with the selected interfaces. Only present on TrueNAS " +
+					"25.10; reads as null on TrueNAS 26.0 (probed live: the API response has no " +
 					"\"interfaces_ips\" key at all on that release).",
 				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
 			},
 			"use_all_interfaces": schema.BoolAttribute{
 				Computed: true,
 				Description: "Whether TrueNAS Connect automatically uses all available network interfaces. " +
-					"Only present on SCALE 25.10; reads as null on SCALE 26.0 (probed live: the API response " +
+					"Only present on TrueNAS 25.10; reads as null on TrueNAS 26.0 (probed live: the API response " +
 					"has no \"use_all_interfaces\" key at all on that release).",
 				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},

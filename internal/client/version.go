@@ -30,7 +30,7 @@ func (c *Client) ServerVersion(ctx context.Context) (string, error) {
 }
 
 // VersionAtLeast reports whether the server release is at or above
-// major.minor. It is used to gate fields that exist only on newer SCALE
+// major.minor. It is used to gate fields that exist only on newer TrueNAS
 // releases so the provider can fail with a clear message instead of the
 // API's generic "Extra inputs are not permitted".
 func (c *Client) VersionAtLeast(ctx context.Context, major, minor int) (bool, error) {
@@ -46,7 +46,7 @@ func (c *Client) VersionAtLeast(ctx context.Context, major, minor int) (bool, er
 // whether the string's major.minor prefix is at or above the given floor,
 // with no client or network access. Exported so resources that gate their
 // entire Create/Read/Update behind a version floor (e.g. lxc_config, absent
-// below SCALE 26.0) can build their own diagnostics as pure,
+// below TrueNAS 26.0) can build their own diagnostics as pure,
 // client-independent functions of a probed version string, independently
 // unit-testable without a live TrueNAS connection.
 func VersionAtLeastString(version string, major, minor int) bool {

@@ -25,7 +25,7 @@ func (d *AuditConfigDataSource) Metadata(_ context.Context, req datasource.Metad
 
 func (d *AuditConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE audit configuration. Takes no arguments: there is " +
+		Description: "Reads the current TrueNAS audit configuration. Takes no arguments: there is " +
 			"exactly one audit configuration per TrueNAS system.",
 		Attributes: map[string]dschema.Attribute{
 			"id": dschema.StringAttribute{

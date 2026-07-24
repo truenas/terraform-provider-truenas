@@ -160,9 +160,9 @@ TESTING.md — nothing in the suite is tied to a particular lab.
 
 | Role | Requirements | Used for | Disposable? |
 |---|---|---|---|
-| Primary test box | SCALE on the older supported release line (currently 25.10.x); a scratch pool | Tier 1/Tier 2, full regression, DS-test target | Yes — required (DS joins change box auth) |
-| Cross-release box | SCALE on the newer release line (currently 26.0); a scratch pool | Cross-release verification; newer-release-only features (LXC, containers, webshare) | Safe-tier only if it serves real workloads; never DS joins; never touch its pre-existing objects |
-| Enterprise HA pair | HA-licensed SCALE system | failover/IPMI/enclosure/HA-gated suites; the one-off real-failover exercise | Yes — required for the failover exercise |
+| Primary test box | TrueNAS on the older supported release line (currently 25.10.x); a scratch pool | Tier 1/Tier 2, full regression, DS-test target | Yes — required (DS joins change box auth) |
+| Cross-release box | TrueNAS on the newer release line (currently 26.0); a scratch pool | Cross-release verification; newer-release-only features (LXC, containers, webshare) | Safe-tier only if it serves real workloads; never DS joins; never touch its pre-existing objects |
+| Enterprise HA pair | HA-licensed TrueNAS system | failover/IPMI/enclosure/HA-gated suites; the one-off real-failover exercise | Yes — required for the failover exercise |
 | Samba AD domain controller | Any host running Samba as an AD DC, DNS answering for its realm, reachable from the primary box | ACTIVEDIRECTORY joins, kerberos realm/keytab tests (keytabs exported from the DC) | Yes |
 | OpenLDAP server | slapd with RFC2307 schema, TLS (ldaps + StartTLS), seeded posixAccount/posixGroup entries | LDAP service-type joins and user-visibility checks | Yes |
 | FreeIPA server | FreeIPA with its own DNS for its realm | IPA service-type joins | Yes |

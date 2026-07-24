@@ -3,12 +3,12 @@
 page_title: "truenas_smb_config Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE SMB service configuration. Takes no arguments: there is exactly one SMB configuration per TrueNAS system.
+  Reads the current TrueNAS SMB service configuration. Takes no arguments: there is exactly one SMB configuration per TrueNAS system.
 ---
 
 # truenas_smb_config (Data Source)
 
-Reads the current TrueNAS SCALE SMB service configuration. Takes no arguments: there is exactly one SMB configuration per TrueNAS system.
+Reads the current TrueNAS SMB service configuration. Takes no arguments: there is exactly one SMB configuration per TrueNAS system.
 
 
 
@@ -28,15 +28,15 @@ Reads the current TrueNAS SCALE SMB service configuration. Takes no arguments: t
 - `guest` (String) Account used for guest access.
 - `id` (String) Fixed identifier for this singleton: always "smb_config".
 - `localmaster` (Boolean) Whether the server participates in local master browser elections.
-- `minimum_protocol` (String) Minimum SMB protocol version accepted. One of SMB1, SMB2, SMB3. Reports an empty string on TrueNAS SCALE releases below 26.0 (the field does not exist there); writable (via the truenas_smb_config resource) only on SCALE 26.0 and later.
+- `minimum_protocol` (String) Minimum SMB protocol version accepted. One of SMB1, SMB2, SMB3. Reports an empty string on TrueNAS releases below 26.0 (the field does not exist there); writable (via the truenas_smb_config resource) only on TrueNAS 26.0 and later.
 - `multichannel` (Boolean) Whether SMB multichannel support is enabled.
 - `netbiosalias` (List of String) NetBIOS aliases for the server.
 - `netbiosname` (String) NetBIOS name of the server.
 - `ntlmv1_auth` (Boolean) Whether the insecure NTLMv1 authentication protocol is allowed.
-- `search_protocols` (List of String) Additional network protocols used for server discovery (e.g. WSD, NSD). Reports an empty list on TrueNAS SCALE releases below 26.0 (the field does not exist there); writable (via the truenas_smb_config resource) only on SCALE 26.0 and later.
+- `search_protocols` (List of String) Additional network protocols used for server discovery (e.g. WSD, NSD). Reports an empty list on TrueNAS releases below 26.0 (the field does not exist there); writable (via the truenas_smb_config resource) only on TrueNAS 26.0 and later.
 - `server_sid` (String) Server SID (security identifier). Server-assigned and stable.
 - `smb_options` (String) Additional smb.conf options, appended verbatim.
-- `stateful_failover` (Boolean) Whether stateful SMB failover support is enabled. Reports false on TrueNAS SCALE releases below 26.0 (the field does not exist there); writable (via the truenas_smb_config resource) only on SCALE 26.0 and later.
+- `stateful_failover` (Boolean) Whether stateful SMB failover support is enabled. Reports false on TrueNAS releases below 26.0 (the field does not exist there); writable (via the truenas_smb_config resource) only on TrueNAS 26.0 and later.
 - `syslog` (Boolean) Whether SMB logging is also written to syslog.
 - `unixcharset` (String) UNIX character set.
 - `workgroup` (String) Workgroup name.

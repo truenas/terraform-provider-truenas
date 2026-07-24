@@ -1,5 +1,5 @@
 # Singleton resource: manages the one LXC service configuration on the
-# system (TrueNAS SCALE 26.0+ only). Terraform destroy only removes it from
+# system (TrueNAS 26.0+ only). Terraform destroy only removes it from
 # state; the LXC configuration is left in place as-is.
 #
 # "preferred_pool" selects the ZFS pool LXC uses for instance/image

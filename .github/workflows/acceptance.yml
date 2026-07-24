@@ -1,7 +1,7 @@
 # Acceptance tests against real TrueNAS systems.
 #
 # This provider's testing policy is "no mocks": acceptance tests talk to a
-# live TrueNAS SCALE box. They therefore run on a SELF-HOSTED runner that
+# live TrueNAS box. They therefore run on a SELF-HOSTED runner that
 # has network access to the lab (a scratch pool box; some suites also need
 # directory servers and an HA pair — see TEST-PLAN.md). This workflow is
 # manual (workflow_dispatch) so runs are deliberate and paced against the

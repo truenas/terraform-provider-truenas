@@ -3,12 +3,12 @@
 page_title: "truenas_webshare Data Source - truenas"
 subcategory: ""
 description: |-
-  Fetches a TrueNAS Webshare share by name. Requires TrueNAS SCALE 26.0 or later (see the truenas_webshare resource's schema description for the version-gate details).
+  Fetches a TrueNAS Webshare share by name. Requires TrueNAS 26.0 or later (see the truenas_webshare resource's schema description for the version-gate details).
 ---
 
 # truenas_webshare (Data Source)
 
-Fetches a TrueNAS Webshare share by name. Requires TrueNAS SCALE 26.0 or later (see the truenas_webshare resource's schema description for the version-gate details).
+Fetches a TrueNAS Webshare share by name. Requires TrueNAS 26.0 or later (see the truenas_webshare resource's schema description for the version-gate details).
 
 
 

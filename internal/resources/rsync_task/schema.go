@@ -13,7 +13,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages an rsync task (rsynctask) on TrueNAS SCALE: a scheduled or manually-triggered rsync " +
+		Description: "Manages an rsync task (rsynctask) on TrueNAS: a scheduled or manually-triggered rsync " +
 			"of a local path to/from a remote rsync module (MODULE mode) or a remote host over SSH (SSH mode).",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{

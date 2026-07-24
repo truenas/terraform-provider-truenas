@@ -3,12 +3,12 @@
 page_title: "truenas_nvmet_subsys Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an NVMe-oF subsystem on TrueNAS SCALE.
+  Manages an NVMe-oF subsystem on TrueNAS.
 ---
 
 # truenas_nvmet_subsys (Resource)
 
-Manages an NVMe-oF subsystem on TrueNAS SCALE.
+Manages an NVMe-oF subsystem on TrueNAS.
 
 ## Example Usage
 

@@ -15,7 +15,7 @@ func boolPtr(b bool) *bool    { return &b }
 // --- updatePayload: three-way coverage ---------------------------------
 
 // TestUpdatePayload_AllFieldsSet_Unified25 verifies every non-nvidia field
-// is included with the unified (SCALE 26.0+) registry_mirrors shape when
+// is included with the unified (TrueNAS 26.0+) registry_mirrors shape when
 // registryMirrorsUnified=true.
 func TestUpdatePayload_AllFieldsSet_Unified(t *testing.T) {
 	ctx := context.Background()
@@ -73,7 +73,7 @@ func TestUpdatePayload_AllFieldsSet_Unified(t *testing.T) {
 
 // TestUpdatePayload_AllFieldsSet_Split verifies registry_mirrors is split
 // into secure_registry_mirrors/insecure_registry_mirrors when
-// registryMirrorsUnified=false (SCALE 25.10 wire shape).
+// registryMirrorsUnified=false (TrueNAS 25.10 wire shape).
 func TestUpdatePayload_AllFieldsSet_Split(t *testing.T) {
 	ctx := context.Background()
 	mirrors, _ := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: registryMirrorAttrTypes}, []RegistryMirrorModel{
@@ -221,7 +221,7 @@ func TestResponseToModel_NullablePoolAndDataset(t *testing.T) {
 	}
 }
 
-// TestResponseToModel_RegistryMirrors_UnifiedShape verifies the SCALE
+// TestResponseToModel_RegistryMirrors_UnifiedShape verifies the TrueNAS
 // 26.0+ unified registry_mirrors array decodes directly.
 func TestResponseToModel_RegistryMirrors_UnifiedShape(t *testing.T) {
 	ctx := context.Background()
@@ -255,7 +255,7 @@ func TestResponseToModel_RegistryMirrors_UnifiedShape(t *testing.T) {
 	}
 }
 
-// TestResponseToModel_RegistryMirrors_SplitShape verifies the SCALE 25.10
+// TestResponseToModel_RegistryMirrors_SplitShape verifies the TrueNAS 25.10
 // split secure/insecure string arrays are translated into the unified
 // {url,insecure} shape, secure entries first.
 func TestResponseToModel_RegistryMirrors_SplitShape(t *testing.T) {

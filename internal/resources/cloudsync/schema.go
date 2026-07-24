@@ -12,7 +12,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a cloud sync task on TrueNAS SCALE.",
+		Description: "Manages a cloud sync task on TrueNAS.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{
 				Computed: true,

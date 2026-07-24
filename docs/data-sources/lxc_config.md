@@ -3,12 +3,12 @@
 page_title: "truenas_lxc_config Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE LXC service configuration. Takes no arguments: there is exactly one LXC configuration per TrueNAS system. Requires TrueNAS SCALE 26.0 or later (see the truenas_lxc_config resource's schema description for the version-gate details).
+  Reads the current TrueNAS LXC service configuration. Takes no arguments: there is exactly one LXC configuration per TrueNAS system. Requires TrueNAS 26.0 or later (see the truenas_lxc_config resource's schema description for the version-gate details).
 ---
 
 # truenas_lxc_config (Data Source)
 
-Reads the current TrueNAS SCALE LXC service configuration. Takes no arguments: there is exactly one LXC configuration per TrueNAS system. Requires TrueNAS SCALE 26.0 or later (see the truenas_lxc_config resource's schema description for the version-gate details).
+Reads the current TrueNAS LXC service configuration. Takes no arguments: there is exactly one LXC configuration per TrueNAS system. Requires TrueNAS 26.0 or later (see the truenas_lxc_config resource's schema description for the version-gate details).
 
 
 

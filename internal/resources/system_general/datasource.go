@@ -26,7 +26,7 @@ func (d *SystemGeneralDataSource) Metadata(_ context.Context, req datasource.Met
 
 func (d *SystemGeneralDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE system general configuration (management UI, timezone, " +
+		Description: "Reads the current TrueNAS system general configuration (management UI, timezone, " +
 			"keyboard map, usage collection). Takes no arguments: there is exactly one system general " +
 			"configuration per TrueNAS system.",
 		Attributes: map[string]dschema.Attribute{

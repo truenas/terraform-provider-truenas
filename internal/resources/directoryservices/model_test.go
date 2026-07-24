@@ -225,7 +225,7 @@ func TestUpdatePayload_DisableShape_MinimalWhenAllScalarsUnset(t *testing.T) {
 }
 
 // TestUpdatePayload_DisableIgnoresJoinFields is a regression test for a bug
-// found live against a SCALE 25.10 box: TrueNAS rejects
+// found live against a TrueNAS 25.10 box: TrueNAS rejects
 // directoryservices.update with "[EINVAL]
 // directoryservices.update.configuration: Permitted changes while
 // directory services are enabled are limited to account caching, DNS
@@ -330,7 +330,7 @@ func TestUpdatePayload_EnableRequiresCredentialAndConfiguration(t *testing.T) {
 }
 
 // TestUpdatePayload_ReusesExistingKerberosPrincipal is a regression test
-// for a bug found live against a SCALE 25.10 box: TrueNAS swaps a raw
+// for a bug found live against a TrueNAS 25.10 box: TrueNAS swaps a raw
 // KERBEROS_USER admin credential used for the initial join into a
 // KERBEROS_PRINCIPAL backed by the new machine account's own keytab, and
 // then REJECTS resending the raw KERBEROS_USER credential on a later call
@@ -1207,7 +1207,7 @@ func TestUpdatePayload_AD_IdmapOmittedWhenUnset(t *testing.T) {
 // for them — the state their read-back path always populates (see
 // adIdmapToModel: it decodes them unconditionally via types.BoolValue,
 // never types.BoolNull, regardless of the actual backend). Confirmed live
-// (SCALE 25.10, Task 4 of this plan): sending them alongside
+// (TrueNAS 25.10, Task 4 of this plan): sending them alongside
 // idmap_backend="RID" fails with "[EINVAL] directoryservices_update.
 // configuration.ACTIVEDIRECTORY.idmap.idmap_domain.RID.unix_nss_info: Extra
 // inputs are not permitted" (and the same for unix_primary_group) — this

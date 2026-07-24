@@ -9,7 +9,7 @@ import (
 // resource: there is exactly one TrueCommand configuration per TrueNAS
 // system (truecommand.config always returns a single record), and it is
 // never created or deleted on TrueNAS itself. The API's own numeric "id"
-// (probed live on both SCALE 25.10.4 HA and 26.0: always 1) is an internal
+// (probed live on both TrueNAS 25.10.4 HA and 26.0: always 1) is an internal
 // implementation detail and is intentionally not surfaced in the model,
 // mirroring the tn_connect_config/webshare_config/twofactor_auth singleton
 // pattern.
@@ -19,17 +19,17 @@ const trueCommandConfigResourceID = "truecommand_config"
 // truecommand.update are present, with an IDENTICAL shape, on BOTH probed
 // releases:
 //
-//   - SCALE 25.10.4 HA (wss://10.220.16.188): truecommand.config = {"id": 1,
+//   - TrueNAS 25.10.4 HA (wss://10.220.16.188): truecommand.config = {"id": 1,
 //     "api_key": null, "enabled": false, "remote_ip_address": null,
 //     "remote_url": null, "status": "DISABLED", "status_reason":
 //     "Truecommand service is disabled."}. truecommand.update's accepts
 //     schema (core.get_methods) exposes EXACTLY "enabled" (bool) and
 //     "api_key" (16-character string or null) — nothing else.
-//   - SCALE 26.0 (wss://192.168.1.68): identical truecommand.config shape,
+//   - TrueNAS 26.0 (wss://192.168.1.68): identical truecommand.config shape,
 //     identical truecommand.update accepts schema.
 //
 // DECISIVE PROBE (both releases, live, 2026-07-23): unlike tn_connect.update
-// (whose ONLY writable field on SCALE 26.0 is "enabled" — see
+// (whose ONLY writable field on TrueNAS 26.0 is "enabled" — see
 // tn_connect_config/model.go), truecommand.update's second writable field,
 // "api_key", is genuinely usable without ever touching "enabled". With the
 // box's live config already at enabled=false, sending ONLY
@@ -142,7 +142,7 @@ func responseToDataSourceModel(api *truecommandConfigAPI, m *TrueCommandConfigDa
 //
 // Only "enabled" and "api_key" are ever included, and only when the caller
 // explicitly configured them — truecommand.update's own accepts schema
-// (core.get_methods, probed live and IDENTICAL on both SCALE 25.10.4 HA and
+// (core.get_methods, probed live and IDENTICAL on both TrueNAS 25.10.4 HA and
 // 26.0) exposes exactly these two properties, both optional in the payload
 // (a genuine partial update: an omitted key means "no change", confirmed
 // live by the api_key-only round trip documented in this file's top-level

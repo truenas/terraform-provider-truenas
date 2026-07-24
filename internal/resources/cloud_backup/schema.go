@@ -16,7 +16,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a cloud backup task (cloud_backup.*) on TrueNAS SCALE: a restic-based, " +
+		Description: "Manages a cloud backup task (cloud_backup.*) on TrueNAS: a restic-based, " +
 			"snapshot-and-encrypt backup of a local path to a cloud storage bucket, distinct from " +
 			"truenas_cloudsync_task (an rclone-based file sync). cloud_backup.create validates the " +
 			"credential/bucket against the actual remote endpoint at apply time (probed live: an S3 credential " +

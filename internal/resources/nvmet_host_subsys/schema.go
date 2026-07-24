@@ -8,7 +8,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages an NVMe-oF host/subsystem association (host access-control allowlist entry) on TrueNAS SCALE.",
+		Description: "Manages an NVMe-oF host/subsystem association (host access-control allowlist entry) on TrueNAS.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{
 				Computed:    true,

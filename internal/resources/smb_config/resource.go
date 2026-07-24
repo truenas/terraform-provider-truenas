@@ -59,7 +59,7 @@ func (r *SMBConfigResource) fetchConfig(ctx context.Context) (*smbConfigAPI, err
 // applyPost2600FieldsSupport folds "stateful_failover", "minimum_protocol",
 // and "search_protocols" into payload when the user explicitly set them in
 // HCL, then strips whichever were added (with a clear apply-time error) if
-// the target server is below the SCALE 26.0 floor smb.update requires for
+// the target server is below the TrueNAS 26.0 floor smb.update requires for
 // all three.
 //
 // This gate fails CLOSED: it strips the fields unless the version probe
@@ -86,7 +86,7 @@ func (r *SMBConfigResource) fetchConfig(ctx context.Context) (*smbConfigAPI, err
 // system_advanced's applyNvidiaSupport.
 //
 // smb.update's accepts-schema genuinely does not include any of these three
-// fields below SCALE 26.0 — probed live (go run against a temp probe binary
+// fields below TrueNAS 26.0 — probed live (go run against a temp probe binary
 // calling core.get_methods) against a 25.10.3.1 VM (192.168.1.249) and a
 // 25.10.4 HA pair member (10.220.16.188), neither of which lists any of the
 // three in smb.update's accepts schema, versus a 26.0.0-BETA.2 box
@@ -124,8 +124,8 @@ func (r *SMBConfigResource) applyPost2600FieldsSupport(ctx context.Context, payl
 		delete(payload, attr)
 		diags.AddAttributeError(
 			path.Root(attr),
-			attr+" requires TrueNAS SCALE 26.0 or later",
-			"smb.update on this TrueNAS release does not accept the \""+attr+"\" field (it was added in SCALE 26.0). Remove the attribute from your configuration or target a SCALE 26.0+ server.",
+			attr+" requires TrueNAS 26.0 or later",
+			"smb.update on this TrueNAS release does not accept the \""+attr+"\" field (it was added in TrueNAS 26.0). Remove the attribute from your configuration or target a TrueNAS 26.0+ server.",
 		)
 	}
 }

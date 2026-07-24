@@ -3,12 +3,12 @@
 page_title: "truenas_cronjob Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a cron job (cronjob) on TrueNAS SCALE: a scheduled command executed by the system crontab as a given user.
+  Manages a cron job (cronjob) on TrueNAS: a scheduled command executed by the system crontab as a given user.
 ---
 
 # truenas_cronjob (Resource)
 
-Manages a cron job (cronjob) on TrueNAS SCALE: a scheduled command executed by the system crontab as a given user.
+Manages a cron job (cronjob) on TrueNAS: a scheduled command executed by the system crontab as a given user.
 
 ## Example Usage
 

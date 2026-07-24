@@ -10,7 +10,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE Enterprise HA failover configuration (failover.config/" +
+		Description: "Manages the TrueNAS Enterprise HA failover configuration (failover.config/" +
 			"failover.update): whether failover is administratively disabled, which node in the chassis is " +
 			"currently marked master, and the failover timeout. This is a singleton resource — there is exactly " +
 			"one failover configuration per TrueNAS system, so it is never created or deleted on TrueNAS; " +

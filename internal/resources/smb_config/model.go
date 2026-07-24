@@ -19,7 +19,7 @@ import (
 // comment for the full trail): a 25.10.3.1 VM and a 25.10.4 HA pair member
 // both reject all three fields as unrecognized smb.update fields ("Extra
 // inputs are not permitted"); a 26.0.0-BETA.2 box accepts all three. All
-// three were added to smb.update in SCALE 26.0 -- none of them existed on
+// three were added to smb.update in TrueNAS 26.0 -- none of them existed on
 // any probed 25.10.x release, so this is a floor, not a drop.
 func post2600FieldsSupported(version string) bool {
 	return client.VersionAtLeastString(version, 26, 0)
@@ -246,7 +246,7 @@ func responseToDataSourceModel(ctx context.Context, api *smbConfigAPI, m *SMBCon
 // here: they need their own version-gated handling (resource.go's
 // applyPost2600FieldsSupport, driven by the practitioner's raw Config
 // rather than the resolved Plan) since none of them exist on smb.update
-// below SCALE 26.0 — see post2600FieldsSupported's doc comment for the
+// below TrueNAS 26.0 — see post2600FieldsSupported's doc comment for the
 // live-probed evidence.
 func (m *SMBConfigModel) updatePayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics

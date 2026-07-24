@@ -26,7 +26,7 @@ func (d *SystemAdvancedDataSource) Metadata(_ context.Context, req datasource.Me
 
 func (d *SystemAdvancedDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE system advanced configuration (syslog, console, kernel " +
+		Description: "Reads the current TrueNAS system advanced configuration (syslog, console, kernel " +
 			"debugging, SED, GPU isolation). Takes no arguments: there is exactly one system advanced " +
 			"configuration per TrueNAS system. Has no sed_passwd attribute: TrueNAS never returns a usable " +
 			"value for it.",
@@ -85,9 +85,9 @@ func (d *SystemAdvancedDataSource) Schema(_ context.Context, _ datasource.Schema
 			},
 			"nvidia": dschema.BoolAttribute{
 				Computed: true,
-				Description: "Whether the NVIDIA driver is installed/enabled. Reports false on TrueNAS SCALE " +
+				Description: "Whether the NVIDIA driver is installed/enabled. Reports false on TrueNAS " +
 					"releases below 26.0 (the field does not exist there); writable (via the " +
-					"truenas_system_advanced resource) only on SCALE 26.0 and later.",
+					"truenas_system_advanced resource) only on TrueNAS 26.0 and later.",
 			},
 			"overprovision": dschema.Int64Attribute{
 				Computed:    true,

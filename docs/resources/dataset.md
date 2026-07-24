@@ -3,12 +3,12 @@
 page_title: "truenas_dataset Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a ZFS dataset (filesystem or volume) on TrueNAS SCALE.
+  Manages a ZFS dataset (filesystem or volume) on TrueNAS.
 ---
 
 # truenas_dataset (Resource)
 
-Manages a ZFS dataset (filesystem or volume) on TrueNAS SCALE.
+Manages a ZFS dataset (filesystem or volume) on TrueNAS.
 
 ## Example Usage
 

@@ -9,7 +9,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE global NVMe-oF target configuration. This is a singleton " +
+		Description: "Manages the TrueNAS global NVMe-oF target configuration. This is a singleton " +
 			"resource — there is exactly one NVMe-oF global configuration per TrueNAS system, so it is never " +
 			"created or deleted on TrueNAS; Terraform create/update calls nvmet.global.update, and Terraform " +
 			"delete only removes the resource from state (the configuration is left in place, since it serves " +

@@ -24,7 +24,7 @@ func (d *WebshareDataSource) Metadata(_ context.Context, req datasource.Metadata
 
 func (d *WebshareDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Fetches a TrueNAS Webshare share by name. Requires TrueNAS SCALE 26.0 or later (see the " +
+		Description: "Fetches a TrueNAS Webshare share by name. Requires TrueNAS 26.0 or later (see the " +
 			"truenas_webshare resource's schema description for the version-gate details).",
 		Attributes: map[string]dschema.Attribute{
 			"id":            dschema.Int64Attribute{Computed: true, Description: "Numeric Webshare share ID."},

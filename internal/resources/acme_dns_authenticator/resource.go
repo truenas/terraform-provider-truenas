@@ -42,7 +42,7 @@ func (r *AcmeDnsAuthenticatorResource) Configure(_ context.Context, req resource
 
 // acme.dns.authenticator.create/update/delete/get_instance/query are all
 // job:false (probed live via core.get_methods, confirmed identical on
-// TrueNAS SCALE 25.10/26.0) — plain synchronous calls, no CallJob needed.
+// TrueNAS 25.10/26.0) — plain synchronous calls, no CallJob needed.
 
 func (r *AcmeDnsAuthenticatorResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan AcmeDnsAuthenticatorModel

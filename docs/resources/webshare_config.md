@@ -3,21 +3,21 @@
 page_title: "truenas_webshare_config Resource - truenas"
 subcategory: ""
 description: |-
-  Manages the TrueNAS SCALE Webshare service configuration (webshare.config/webshare.update): the IP addresses the Webshare HTTP server binds to, whether search indexing is enabled, the passkey authentication mode, and the AD/LDAP groups granted access. This is a singleton resource — there is exactly one Webshare configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls webshare.update (probed job:false), and Terraform delete only removes the resource from state (the configuration is left in place).
-  Requires TrueNAS SCALE 26.0 or later: the webshare namespace does not exist on earlier releases (probed live — SCALE 25.10 exposes 0 webshare.* methods via core.get_methods). Using this resource against an older server fails with a clean error during Create/Read/Update rather than a raw API error.
+  Manages the TrueNAS Webshare service configuration (webshare.config/webshare.update): the IP addresses the Webshare HTTP server binds to, whether search indexing is enabled, the passkey authentication mode, and the AD/LDAP groups granted access. This is a singleton resource — there is exactly one Webshare configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls webshare.update (probed job:false), and Terraform delete only removes the resource from state (the configuration is left in place).
+  Requires TrueNAS 26.0 or later: the webshare namespace does not exist on earlier releases (probed live — TrueNAS 25.10 exposes 0 webshare.* methods via core.get_methods). Using this resource against an older server fails with a clean error during Create/Read/Update rather than a raw API error.
 ---
 
 # truenas_webshare_config (Resource)
 
-Manages the TrueNAS SCALE Webshare service configuration (webshare.config/webshare.update): the IP addresses the Webshare HTTP server binds to, whether search indexing is enabled, the passkey authentication mode, and the AD/LDAP groups granted access. This is a singleton resource — there is exactly one Webshare configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls webshare.update (probed job:false), and Terraform delete only removes the resource from state (the configuration is left in place).
+Manages the TrueNAS Webshare service configuration (webshare.config/webshare.update): the IP addresses the Webshare HTTP server binds to, whether search indexing is enabled, the passkey authentication mode, and the AD/LDAP groups granted access. This is a singleton resource — there is exactly one Webshare configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls webshare.update (probed job:false), and Terraform delete only removes the resource from state (the configuration is left in place).
 
-Requires TrueNAS SCALE 26.0 or later: the webshare namespace does not exist on earlier releases (probed live — SCALE 25.10 exposes 0 webshare.* methods via core.get_methods). Using this resource against an older server fails with a clean error during Create/Read/Update rather than a raw API error.
+Requires TrueNAS 26.0 or later: the webshare namespace does not exist on earlier releases (probed live — TrueNAS 25.10 exposes 0 webshare.* methods via core.get_methods). Using this resource against an older server fails with a clean error during Create/Read/Update rather than a raw API error.
 
 ## Example Usage
 
 ```terraform
 # Singleton resource: manages the one Webshare service configuration on the
-# system (TrueNAS SCALE 26.0+ only). Terraform destroy only removes it from
+# system (TrueNAS 26.0+ only). Terraform destroy only removes it from
 # state; the Webshare configuration is left in place as-is.
 resource "truenas_webshare_config" "config" {
   search  = true

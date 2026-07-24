@@ -50,13 +50,13 @@ type TwoFactorAuthDataSourceModel struct {
 
 // servicesAPI mirrors the nested "services" object returned by
 // auth.twofactor.config and auth.twofactor.update. Probed live: identical
-// shape on SCALE 25.10 and 26.0 — a single "ssh" key.
+// shape on TrueNAS 25.10 and 26.0 — a single "ssh" key.
 type servicesAPI struct {
 	SSH bool `json:"ssh"`
 }
 
 // twoFactorAuthAPI mirrors the JSON object returned by auth.twofactor.config
-// and auth.twofactor.update. Probed live against SCALE 25.10 and 26.0:
+// and auth.twofactor.update. Probed live against TrueNAS 25.10 and 26.0:
 // identical shape, no version gating needed.
 type twoFactorAuthAPI struct {
 	ID       int64       `json:"id"`

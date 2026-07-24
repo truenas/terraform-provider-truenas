@@ -3,12 +3,12 @@
 page_title: "truenas_alert_service Resource - truenas"
 subcategory: ""
 description: |-
-  Manages TrueNAS SCALE alert services (notification targets such as Mail, SNMPTrap, Slack, PagerDuty, etc).
+  Manages TrueNAS alert services (notification targets such as Mail, SNMPTrap, Slack, PagerDuty, etc).
 ---
 
 # truenas_alert_service (Resource)
 
-Manages TrueNAS SCALE alert services (notification targets such as Mail, SNMPTrap, Slack, PagerDuty, etc).
+Manages TrueNAS alert services (notification targets such as Mail, SNMPTrap, Slack, PagerDuty, etc).
 
 ## Example Usage
 

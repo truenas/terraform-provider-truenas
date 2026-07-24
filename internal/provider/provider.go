@@ -130,19 +130,19 @@ func (p *TrueNASProvider) Metadata(_ context.Context, _ provider.MetadataRequest
 
 func (p *TrueNASProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages TrueNAS SCALE resources via the WebSocket API.",
+		Description: "Manages TrueNAS resources via the WebSocket API.",
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
 				Description: "TrueNAS WebSocket endpoint, e.g. wss://truenas.example.com/api/current (legacy /websocket paths are rewritten to /api/current automatically). Env: TRUENAS_ENDPOINT",
 				Optional:    true,
 			},
 			"api_key": schema.StringAttribute{
-				Description: "TrueNAS API key. Mutually exclusive with password auth. On SCALE 26.0+, also set username (the key owner) to authenticate via SCRAM-SHA-512 so the raw key never crosses the wire. Env: TRUENAS_API_KEY",
+				Description: "TrueNAS API key. Mutually exclusive with password auth. On TrueNAS 26.0+, also set username (the key owner) to authenticate via SCRAM-SHA-512 so the raw key never crosses the wire. Env: TRUENAS_API_KEY",
 				Optional:    true,
 				Sensitive:   true,
 			},
 			"username": schema.StringAttribute{
-				Description: "TrueNAS username. With password: password authentication. With api_key: names the key owner and enables SCRAM-SHA-512 on SCALE 26.0+. Env: TRUENAS_USERNAME",
+				Description: "TrueNAS username. With password: password authentication. With api_key: names the key owner and enables SCRAM-SHA-512 on TrueNAS 26.0+. Env: TRUENAS_USERNAME",
 				Optional:    true,
 			},
 			"password": schema.StringAttribute{
@@ -222,7 +222,7 @@ func (p *TrueNASProvider) Configure(ctx context.Context, req provider.ConfigureR
 	var authFn func(ctx context.Context) error
 	if hasAPIKey {
 		// AuthAPIKeyAuto upgrades to SCRAM-SHA-512 when the server offers
-		// it (SCALE 26.0+) and username identifies the key owner;
+		// it (TrueNAS 26.0+) and username identifies the key owner;
 		// otherwise (or when username is unset) it uses the plain login.
 		key, u := apiKey, username
 		authFn = func(ctx context.Context) error { return client.AuthAPIKeyAuto(ctx, c, u, key) }

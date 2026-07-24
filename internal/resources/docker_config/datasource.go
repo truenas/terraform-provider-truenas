@@ -24,7 +24,7 @@ func (d *DockerConfigDataSource) Metadata(_ context.Context, req datasource.Meta
 
 func (d *DockerConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE Docker service configuration. Takes no arguments: there " +
+		Description: "Reads the current TrueNAS Docker service configuration. Takes no arguments: there " +
 			"is exactly one Docker configuration per TrueNAS system.",
 		Attributes: map[string]dschema.Attribute{
 			"id": dschema.StringAttribute{
@@ -46,7 +46,7 @@ func (d *DockerConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 			"nvidia": dschema.BoolAttribute{
 				Computed: true,
 				Description: "Whether NVIDIA GPU support is enabled for containers. Readable on every probed " +
-					"release; writable (via the truenas_docker_config resource) only on TrueNAS SCALE 25.10 " +
+					"release; writable (via the truenas_docker_config resource) only on TrueNAS 25.10 " +
 					"and earlier.",
 			},
 			"address_pools": dschema.ListNestedAttribute{
@@ -66,7 +66,7 @@ func (d *DockerConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 			"registry_mirrors": dschema.ListNestedAttribute{
 				Computed: true,
 				Description: "Registry mirror URLs Docker pulls images through, unified across both probed " +
-					"releases (see the resource schema description for the SCALE 25.10 wire-shape translation).",
+					"releases (see the resource schema description for the TrueNAS 25.10 wire-shape translation).",
 				NestedObject: dschema.NestedAttributeObject{
 					Attributes: map[string]dschema.Attribute{
 						"url":      dschema.StringAttribute{Computed: true, Description: "Registry mirror URL."},

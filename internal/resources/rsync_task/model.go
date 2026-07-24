@@ -106,7 +106,7 @@ type scheduleAPI struct {
 
 // rsyncTaskAPI mirrors the JSON object returned by rsynctask.create,
 // rsynctask.update, rsynctask.get_instance, and rsynctask.query. Probed
-// against a live TrueNAS SCALE 25.10 box:
+// against a live TrueNAS 25.10 box:
 //   - remotehost, remotemodule are nullable strings (null when unset, plain
 //     strings otherwise) — never omitted from the response.
 //   - remoteport is a nullable integer (null when unset).

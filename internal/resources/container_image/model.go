@@ -6,9 +6,9 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
 
-// containerImageVersionFloorMajor/Minor is the minimum TrueNAS SCALE
+// containerImageVersionFloorMajor/Minor is the minimum TrueNAS
 // release that exposes the container namespace (and therefore
-// container.image.query_registry) at all. Probed live: SCALE 25.10 returns
+// container.image.query_registry) at all. Probed live: TrueNAS 25.10 returns
 // 0 container.* methods from core.get_methods (namespace genuinely absent).
 // Mirrors the container package's own floor (see
 // internal/resources/container/model.go) — kept as an independent copy
@@ -21,15 +21,15 @@ const (
 )
 
 // versionGateDiagnostics reports whether the given TrueNAS release string
-// is at or above the SCALE 26.0 floor container.image.query_registry
+// is at or above the TrueNAS 26.0 floor container.image.query_registry
 // requires, returning a single clean error diagnostic when it is not. Pure
 // function of an already-probed version string (no live client access).
 func versionGateDiagnostics(version string) diag.Diagnostics {
 	var diags diag.Diagnostics
 	if !client.VersionAtLeastString(version, containerImageVersionFloorMajor, containerImageVersionFloorMinor) {
 		diags.AddError(
-			"TrueNAS SCALE version too old",
-			"truenas_container_image requires TrueNAS SCALE 26.0 or later",
+			"TrueNAS version too old",
+			"truenas_container_image requires TrueNAS 26.0 or later",
 		)
 	}
 	return diags

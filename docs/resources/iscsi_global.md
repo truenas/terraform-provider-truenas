@@ -3,12 +3,12 @@
 page_title: "truenas_iscsi_global Resource - truenas"
 subcategory: ""
 description: |-
-  Manages the TrueNAS SCALE global iSCSI service configuration. This is a singleton resource — there is exactly one iSCSI global configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls iscsi.global.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it serves live storage).
+  Manages the TrueNAS global iSCSI service configuration. This is a singleton resource — there is exactly one iSCSI global configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls iscsi.global.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it serves live storage).
 ---
 
 # truenas_iscsi_global (Resource)
 
-Manages the TrueNAS SCALE global iSCSI service configuration. This is a singleton resource — there is exactly one iSCSI global configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls iscsi.global.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it serves live storage).
+Manages the TrueNAS global iSCSI service configuration. This is a singleton resource — there is exactly one iSCSI global configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls iscsi.global.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it serves live storage).
 
 ## Example Usage
 

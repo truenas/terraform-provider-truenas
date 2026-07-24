@@ -12,7 +12,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE SSH service configuration. This is a singleton resource — " +
+		Description: "Manages the TrueNAS SSH service configuration. This is a singleton resource — " +
 			"there is exactly one SSH configuration per TrueNAS system, so it is never created or deleted on " +
 			"TrueNAS; Terraform create/update calls ssh.update, and Terraform delete only removes the resource " +
 			"from state (the configuration is left in place, since management access to the box may depend on " +

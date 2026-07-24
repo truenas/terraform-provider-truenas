@@ -3,12 +3,12 @@
 page_title: "truenas_ftp_config Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE FTP service configuration. Takes no arguments: there is exactly one FTP configuration per TrueNAS system.
+  Reads the current TrueNAS FTP service configuration. Takes no arguments: there is exactly one FTP configuration per TrueNAS system.
 ---
 
 # truenas_ftp_config (Data Source)
 
-Reads the current TrueNAS SCALE FTP service configuration. Takes no arguments: there is exactly one FTP configuration per TrueNAS system.
+Reads the current TrueNAS FTP service configuration. Takes no arguments: there is exactly one FTP configuration per TrueNAS system.
 
 
 

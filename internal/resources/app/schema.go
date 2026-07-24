@@ -9,7 +9,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages an application (Docker-based) on TrueNAS SCALE 24.10+.",
+		Description: "Manages an application (Docker-based) on TrueNAS 24.10+.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:      true,

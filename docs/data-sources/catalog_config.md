@@ -3,12 +3,12 @@
 page_title: "truenas_catalog_config Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE app catalog configuration. Takes no arguments: there is exactly one app catalog per TrueNAS system.
+  Reads the current TrueNAS app catalog configuration. Takes no arguments: there is exactly one app catalog per TrueNAS system.
 ---
 
 # truenas_catalog_config (Data Source)
 
-Reads the current TrueNAS SCALE app catalog configuration. Takes no arguments: there is exactly one app catalog per TrueNAS system.
+Reads the current TrueNAS app catalog configuration. Takes no arguments: there is exactly one app catalog per TrueNAS system.
 
 
 
@@ -21,4 +21,4 @@ Reads the current TrueNAS SCALE app catalog configuration. Takes no arguments: t
 - `label` (String) The catalog's identifier/label (e.g. "TRUENAS").
 - `location` (String) The git repository URL or local filesystem path backing the catalog.
 - `preferred_trains` (List of String) Train names preferred when browsing and installing applications from this catalog.
-- `trains` (List of String) All train names the catalog currently knows about (catalog.trains), independent of which ones are preferred. Can be empty if the catalog has not yet been synced (probed live: returned empty on a SCALE 25.10 box where Docker/apps had never been configured, versus a full list of trains on a SCALE 26.0 box with apps running — see task-3-report.md).
+- `trains` (List of String) All train names the catalog currently knows about (catalog.trains), independent of which ones are preferred. Can be empty if the catalog has not yet been synced (probed live: returned empty on a TrueNAS 25.10 box where Docker/apps had never been configured, versus a full list of trains on a TrueNAS 26.0 box with apps running — see task-3-report.md).

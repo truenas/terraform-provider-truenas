@@ -8,7 +8,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a Kerberos keytab on TrueNAS SCALE (kerberos.keytab). A keytab holds one or more " +
+		Description: "Manages a Kerberos keytab on TrueNAS (kerberos.keytab). A keytab holds one or more " +
 			"Kerberos principal/key entries that are merged into the system keytab at /etc/krb5.keytab. Keytabs " +
 			"are normally populated automatically during an Active Directory or IPA domain join (under reserved " +
 			"names such as AD_MACHINE_ACCOUNT / IPA_MACHINE_ACCOUNT), but additional entries can also be managed " +

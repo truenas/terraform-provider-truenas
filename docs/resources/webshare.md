@@ -3,13 +3,13 @@
 page_title: "truenas_webshare Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a Webshare share on TrueNAS SCALE (sharing.webshare.: create/update/delete/get_instance/query) — a read-only HTTP file browser for a ZFS dataset path. Requires TrueNAS SCALE 26.0 or later: the sharing.webshare namespace does not exist on earlier releases (probed live — SCALE 25.10 exposes 0 webshare./sharing.webshare.* methods via core.get_methods). Using this resource against an older server fails with a clean error during Create/Read/Update rather than a raw API error.
+  Manages a Webshare share on TrueNAS (sharing.webshare.: create/update/delete/get_instance/query) — a read-only HTTP file browser for a ZFS dataset path. Requires TrueNAS 26.0 or later: the sharing.webshare namespace does not exist on earlier releases (probed live — TrueNAS 25.10 exposes 0 webshare./sharing.webshare.* methods via core.get_methods). Using this resource against an older server fails with a clean error during Create/Read/Update rather than a raw API error.
   Unlike truenas_smb_share/truenas_nfs_share, Webshare shares have no "comment" field (probed live: sharing.webshare.create/update reject an extra "comment" key with a clean EINVAL). See truenas_webshare_config for the service-wide bind address/search/authentication configuration this resource's shares are served under.
 ---
 
 # truenas_webshare (Resource)
 
-Manages a Webshare share on TrueNAS SCALE (sharing.webshare.*: create/update/delete/get_instance/query) — a read-only HTTP file browser for a ZFS dataset path. Requires TrueNAS SCALE 26.0 or later: the sharing.webshare namespace does not exist on earlier releases (probed live — SCALE 25.10 exposes 0 webshare.*/sharing.webshare.* methods via core.get_methods). Using this resource against an older server fails with a clean error during Create/Read/Update rather than a raw API error.
+Manages a Webshare share on TrueNAS (sharing.webshare.*: create/update/delete/get_instance/query) — a read-only HTTP file browser for a ZFS dataset path. Requires TrueNAS 26.0 or later: the sharing.webshare namespace does not exist on earlier releases (probed live — TrueNAS 25.10 exposes 0 webshare.*/sharing.webshare.* methods via core.get_methods). Using this resource against an older server fails with a clean error during Create/Read/Update rather than a raw API error.
 
 Unlike truenas_smb_share/truenas_nfs_share, Webshare shares have no "comment" field (probed live: sharing.webshare.create/update reject an extra "comment" key with a clean EINVAL). See truenas_webshare_config for the service-wide bind address/search/authentication configuration this resource's shares are served under.
 

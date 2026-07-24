@@ -3,12 +3,12 @@
 page_title: "truenas_iscsi_targetextent Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an iSCSI target/extent association (LUN mapping) on TrueNAS SCALE.
+  Manages an iSCSI target/extent association (LUN mapping) on TrueNAS.
 ---
 
 # truenas_iscsi_targetextent (Resource)
 
-Manages an iSCSI target/extent association (LUN mapping) on TrueNAS SCALE.
+Manages an iSCSI target/extent association (LUN mapping) on TrueNAS.
 
 ## Example Usage
 

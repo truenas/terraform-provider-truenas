@@ -11,7 +11,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a group on TrueNAS SCALE.",
+		Description: "Manages a group on TrueNAS.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{
 				Computed:    true,

@@ -45,7 +45,7 @@ func (r *ContainerDeviceResource) Configure(_ context.Context, req resource.Conf
 }
 
 // checkVersion probes the target server's release and returns a clean error
-// diagnostic if it is below the SCALE 26.0 floor the container.device
+// diagnostic if it is below the TrueNAS 26.0 floor the container.device
 // namespace requires, before any container.device.* call is made. Every
 // resource entry point (Create/Read/Update/Delete/ImportState) calls this
 // first — Delete included, since a version gate that only covers

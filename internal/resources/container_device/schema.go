@@ -8,16 +8,16 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Attaches a device to a TrueNAS SCALE LXC container (container.device.*: create/update/" +
-			"delete/query/get_instance). Requires TrueNAS SCALE 26.0 or later: the container.device namespace " +
-			"does not exist on earlier releases (probed live — SCALE 25.10 exposes 0 container.device.* methods " +
+		Description: "Attaches a device to a TrueNAS LXC container (container.device.*: create/update/" +
+			"delete/query/get_instance). Requires TrueNAS 26.0 or later: the container.device namespace " +
+			"does not exist on earlier releases (probed live — TrueNAS 25.10 exposes 0 container.device.* methods " +
 			"via core.get_methods, matching truenas_container's own absence there). Using this resource against " +
 			"an older server fails with a clean error during Create/Read/Update/Delete rather than a raw API " +
 			"error." +
 			"\n\n" +
 			"\"attributes\" is a JSON document (jsonencode(...)) rather than typed nested attributes, mirroring " +
 			"truenas_vm_device: container.device.create's own accepts schema is a \"dtype\"-discriminated union. " +
-			"It must always include a \"dtype\" key. Probed live (SCALE 26.0) field shapes, by dtype:\n" +
+			"It must always include a \"dtype\" key. Probed live (TrueNAS 26.0) field shapes, by dtype:\n" +
 			"  - FILESYSTEM (live-tested, full create/update/delete/query round trip): " +
 			"\"source\" (host path, must resolve under a pool mount point, e.g. \"/mnt/tank/mydata\" — despite " +
 			"the API's own schema marking it optional with a bogus \"/usr/bin/zsh\" default, omitting it is " +

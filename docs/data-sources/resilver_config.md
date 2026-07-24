@@ -3,12 +3,12 @@
 page_title: "truenas_resilver_config Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE pool resilver priority schedule. Takes no arguments: there is exactly one resilver schedule per TrueNAS system.
+  Reads the current TrueNAS pool resilver priority schedule. Takes no arguments: there is exactly one resilver schedule per TrueNAS system.
 ---
 
 # truenas_resilver_config (Data Source)
 
-Reads the current TrueNAS SCALE pool resilver priority schedule. Takes no arguments: there is exactly one resilver schedule per TrueNAS system.
+Reads the current TrueNAS pool resilver priority schedule. Takes no arguments: there is exactly one resilver schedule per TrueNAS system.
 
 
 

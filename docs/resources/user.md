@@ -3,12 +3,12 @@
 page_title: "truenas_user Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a local user on TrueNAS SCALE.
+  Manages a local user on TrueNAS.
 ---
 
 # truenas_user (Resource)
 
-Manages a local user on TrueNAS SCALE.
+Manages a local user on TrueNAS.
 
 ## Example Usage
 

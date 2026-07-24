@@ -12,7 +12,7 @@ func strPtr(s string) *string { return &s }
 
 // TestResponseToDataSourceModel_FullNetwork verifies decoding a real
 // bridge network with ipam.config populated and labels set (probed live
-// shape, "ix-plex_default" on SCALE 26.0 — see task-1-report.md).
+// shape, "ix-plex_default" on TrueNAS 26.0 — see task-1-report.md).
 func TestResponseToDataSourceModel_FullNetwork(t *testing.T) {
 	ctx := context.Background()
 	api := &dockerNetworkAPI{

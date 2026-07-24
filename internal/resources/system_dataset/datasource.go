@@ -25,7 +25,7 @@ func (d *SystemDatasetDataSource) Metadata(_ context.Context, req datasource.Met
 
 func (d *SystemDatasetDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE system dataset configuration (the dataset that holds " +
+		Description: "Reads the current TrueNAS system dataset configuration (the dataset that holds " +
 			"core system state such as logs, reporting, syslog, and samba4 data). Takes no arguments: there is " +
 			"exactly one system dataset configuration per TrueNAS system.",
 		Attributes: map[string]dschema.Attribute{

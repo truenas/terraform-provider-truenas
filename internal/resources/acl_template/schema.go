@@ -11,7 +11,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a filesystem ACL template (filesystem.acltemplate.*) on TrueNAS SCALE: a " +
+		Description: "Manages a filesystem ACL template (filesystem.acltemplate.*) on TrueNAS: a " +
 			"reusable, named set of NFS4 or POSIX1E access control entries that can be applied to a path " +
 			"(e.g. from the UI's \"Manage ACL\" workflow, or as a starting point for truenas_filesystem_acl). " +
 			"TrueNAS ships 9 builtin templates (NFS4_OPEN, NFS4_RESTRICTED, NFS4_HOME, NFS4_DOMAIN_HOME, " +

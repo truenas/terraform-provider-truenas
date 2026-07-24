@@ -3,12 +3,12 @@
 page_title: "truenas_system_advanced Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE system advanced configuration (syslog, console, kernel debugging, SED, GPU isolation). Takes no arguments: there is exactly one system advanced configuration per TrueNAS system. Has no sed_passwd attribute: TrueNAS never returns a usable value for it.
+  Reads the current TrueNAS system advanced configuration (syslog, console, kernel debugging, SED, GPU isolation). Takes no arguments: there is exactly one system advanced configuration per TrueNAS system. Has no sed_passwd attribute: TrueNAS never returns a usable value for it.
 ---
 
 # truenas_system_advanced (Data Source)
 
-Reads the current TrueNAS SCALE system advanced configuration (syslog, console, kernel debugging, SED, GPU isolation). Takes no arguments: there is exactly one system advanced configuration per TrueNAS system. Has no sed_passwd attribute: TrueNAS never returns a usable value for it.
+Reads the current TrueNAS system advanced configuration (syslog, console, kernel debugging, SED, GPU isolation). Takes no arguments: there is exactly one system advanced configuration per TrueNAS system. Has no sed_passwd attribute: TrueNAS never returns a usable value for it.
 
 
 
@@ -32,7 +32,7 @@ Reads the current TrueNAS SCALE system advanced configuration (syslog, console, 
 - `kernel_extra_options` (String) Extra kernel command-line options appended at boot.
 - `login_banner` (String) Text displayed as a login banner before authentication.
 - `motd` (String) Message of the day, displayed after a successful console/SSH login.
-- `nvidia` (Boolean) Whether the NVIDIA driver is installed/enabled. Reports false on TrueNAS SCALE releases below 26.0 (the field does not exist there); writable (via the truenas_system_advanced resource) only on SCALE 26.0 and later.
+- `nvidia` (Boolean) Whether the NVIDIA driver is installed/enabled. Reports false on TrueNAS releases below 26.0 (the field does not exist there); writable (via the truenas_system_advanced resource) only on TrueNAS 26.0 and later.
 - `overprovision` (Number) Amount, in GiB, of swap-on-ZFS overprovisioning.
 - `powerdaemon` (Boolean) Whether the power management daemon (powerd) is enabled.
 - `sed_user` (String) SED user used to unlock drives: one of USER or MASTER.

@@ -44,7 +44,7 @@ func (r *WebshareResource) Configure(_ context.Context, req resource.ConfigureRe
 }
 
 // checkVersion probes the target server's release and returns a clean error
-// diagnostic if it is below the SCALE 26.0 floor the sharing.webshare
+// diagnostic if it is below the TrueNAS 26.0 floor the sharing.webshare
 // namespace requires, before any sharing.webshare.* call is made. Every
 // resource entry point (Create/Read/Update/Delete/ImportState) and the
 // datasource's Read call this first.

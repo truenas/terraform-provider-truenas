@@ -25,7 +25,7 @@ func (d *SMBConfigDataSource) Metadata(_ context.Context, req datasource.Metadat
 
 func (d *SMBConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE SMB service configuration. Takes no arguments: there " +
+		Description: "Reads the current TrueNAS SMB service configuration. Takes no arguments: there " +
 			"is exactly one SMB configuration per TrueNAS system.",
 		Attributes: map[string]dschema.Attribute{
 			"id": dschema.StringAttribute{
@@ -108,22 +108,22 @@ func (d *SMBConfigDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 			},
 			"stateful_failover": dschema.BoolAttribute{
 				Computed: true,
-				Description: "Whether stateful SMB failover support is enabled. Reports false on TrueNAS SCALE " +
+				Description: "Whether stateful SMB failover support is enabled. Reports false on TrueNAS " +
 					"releases below 26.0 (the field does not exist there); writable (via the truenas_smb_config " +
-					"resource) only on SCALE 26.0 and later.",
+					"resource) only on TrueNAS 26.0 and later.",
 			},
 			"minimum_protocol": dschema.StringAttribute{
 				Computed: true,
 				Description: "Minimum SMB protocol version accepted. One of SMB1, SMB2, SMB3. Reports an empty " +
-					"string on TrueNAS SCALE releases below 26.0 (the field does not exist there); writable (via " +
-					"the truenas_smb_config resource) only on SCALE 26.0 and later.",
+					"string on TrueNAS releases below 26.0 (the field does not exist there); writable (via " +
+					"the truenas_smb_config resource) only on TrueNAS 26.0 and later.",
 			},
 			"search_protocols": dschema.ListAttribute{
 				Computed:    true,
 				ElementType: types.StringType,
 				Description: "Additional network protocols used for server discovery (e.g. WSD, NSD). Reports " +
-					"an empty list on TrueNAS SCALE releases below 26.0 (the field does not exist there); " +
-					"writable (via the truenas_smb_config resource) only on SCALE 26.0 and later.",
+					"an empty list on TrueNAS releases below 26.0 (the field does not exist there); " +
+					"writable (via the truenas_smb_config resource) only on TrueNAS 26.0 and later.",
 			},
 			"server_sid": dschema.StringAttribute{
 				Computed:    true,

@@ -20,8 +20,8 @@ disclosure.
 ## Scope
 
 This policy covers the Terraform provider in this repository — the code that
-runs on the operator's machine and connects to TrueNAS SCALE. Vulnerabilities
-in TrueNAS SCALE itself (the middleware/server) should be reported to
+runs on the operator's machine and connects to TrueNAS. Vulnerabilities
+in TrueNAS itself (the middleware/server) should be reported to
 iXsystems through the TrueNAS security process; where such an issue affects
 how this provider should behave, note that in your report.
 

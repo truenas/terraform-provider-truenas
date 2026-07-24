@@ -78,7 +78,7 @@ func (m *ISCSIPortalModel) apiPayload(ctx context.Context) (map[string]any, diag
 		diags.Append(m.Listen.ElementsAs(ctx, &listenItems, false)...)
 	}
 
-	// SCALE 26.0 removed per-listen port from iscsi.portal.create/update: the
+	// TrueNAS 26.0 removed per-listen port from iscsi.portal.create/update: the
 	// global iSCSI service listen_port governs all portals now. Only "ip" is
 	// sent per listen entry; "port" is never included in the payload, even
 	// when set in config (see the "port" schema attribute description). The

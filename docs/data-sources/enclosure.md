@@ -3,19 +3,19 @@
 page_title: "truenas_enclosure Data Source - truenas"
 subcategory: ""
 description: |-
-  Looks up a TrueNAS SCALE storage enclosure (e.g. the head unit's own chassis, or an attached expansion shelf) by id (enclosure2.query). Read-only: describes fixed physical hardware except for "label", which is user-settable but managed by the separate truenas_enclosure_label resource, not here.
+  Looks up a TrueNAS storage enclosure (e.g. the head unit's own chassis, or an attached expansion shelf) by id (enclosure2.query). Read-only: describes fixed physical hardware except for "label", which is user-settable but managed by the separate truenas_enclosure_label resource, not here.
   "id" is the required lookup key, not "name" or "label": both are user-customizable display strings ("label" is directly settable via truenas_enclosure_label) with no uniqueness guarantee on a system with multiple enclosures (e.g. a head unit plus expansion shelves), unlike "id", which is also the same identifier enclosure.label.set itself takes.
-  Probed live on the disposable Enterprise HA test box (SCALE 25.10.4): a single shared H-series chassis is reported ("controller": true — both HA controllers see the same physical enclosure). Cross-release probe (SCALE 26.0): enclosure2.query returns an EMPTY array on a box with no enclosure hardware/license — this datasource surfaces that as a clear "not found" error rather than crashing.
+  Probed live on the disposable Enterprise HA test box (TrueNAS 25.10.4): a single shared H-series chassis is reported ("controller": true — both HA controllers see the same physical enclosure). Cross-release probe (TrueNAS 26.0): enclosure2.query returns an EMPTY array on a box with no enclosure hardware/license — this datasource surfaces that as a clear "not found" error rather than crashing.
   Does NOT expose per-slot/per-component health detail (enclosure2.query's nested "elements" key): out of scope per this provider's design (enclosure slot-level operations are explicitly excluded), and its dynamic, doubly string-keyed map shape (element-type name, then a numeric slot/component index encoded as a JSON object key) does not fit a static Terraform schema without an ad hoc conversion nothing in this provider currently needs.
 ---
 
 # truenas_enclosure (Data Source)
 
-Looks up a TrueNAS SCALE storage enclosure (e.g. the head unit's own chassis, or an attached expansion shelf) by id (enclosure2.query). Read-only: describes fixed physical hardware except for "label", which is user-settable but managed by the separate truenas_enclosure_label resource, not here.
+Looks up a TrueNAS storage enclosure (e.g. the head unit's own chassis, or an attached expansion shelf) by id (enclosure2.query). Read-only: describes fixed physical hardware except for "label", which is user-settable but managed by the separate truenas_enclosure_label resource, not here.
 
 "id" is the required lookup key, not "name" or "label": both are user-customizable display strings ("label" is directly settable via truenas_enclosure_label) with no uniqueness guarantee on a system with multiple enclosures (e.g. a head unit plus expansion shelves), unlike "id", which is also the same identifier enclosure.label.set itself takes.
 
-Probed live on the disposable Enterprise HA test box (SCALE 25.10.4): a single shared H-series chassis is reported ("controller": true — both HA controllers see the same physical enclosure). Cross-release probe (SCALE 26.0): enclosure2.query returns an EMPTY array on a box with no enclosure hardware/license — this datasource surfaces that as a clear "not found" error rather than crashing.
+Probed live on the disposable Enterprise HA test box (TrueNAS 25.10.4): a single shared H-series chassis is reported ("controller": true — both HA controllers see the same physical enclosure). Cross-release probe (TrueNAS 26.0): enclosure2.query returns an EMPTY array on a box with no enclosure hardware/license — this datasource surfaces that as a clear "not found" error rather than crashing.
 
 Does NOT expose per-slot/per-component health detail (enclosure2.query's nested "elements" key): out of scope per this provider's design (enclosure slot-level operations are explicitly excluded), and its dynamic, doubly string-keyed map shape (element-type name, then a numeric slot/component index encoded as a JSON object key) does not fit a static Terraform schema without an ad hoc conversion nothing in this provider currently needs.
 

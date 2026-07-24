@@ -4,7 +4,7 @@
 // session token, then opens fresh connections in a loop authenticating each
 // with the token.
 //
-// RESULTS (TrueNAS SCALE 26.0, 2026-07-07) — token caching is UNWORKABLE:
+// RESULTS (TrueNAS 26.0, 2026-07-07) — token caching is UNWORKABLE:
 //
 //  1. auth.login_with_token draws from the SAME per-IP rate bucket as
 //     auth.login_with_api_key: a 25-iteration loop hit

@@ -13,7 +13,7 @@ import (
 var _ resource.Resource = &AppResource{}
 var _ resource.ResourceWithImportState = &AppResource{}
 
-// AppResource manages a single TrueNAS app (Docker-based, SCALE 24.10+).
+// AppResource manages a single TrueNAS app (Docker-based, TrueNAS 24.10+).
 type AppResource struct{ client *client.Client }
 
 // NewResource returns a new AppResource.

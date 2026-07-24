@@ -116,7 +116,7 @@ func baseLegacyModel() SMBModel {
 	}
 }
 
-// TestSMBApiPayload_TopLevel verifies apiPayload produces the SCALE 26.0
+// TestSMBApiPayload_TopLevel verifies apiPayload produces the TrueNAS 26.0
 // top-level keys: path/name/comment/enabled/browsable/readonly/
 // access_based_share_enumeration/purpose/options, and that the legacy 24.x
 // top-level keys (ro, abe, hostsallow, etc.) are gone from the top level.
@@ -151,7 +151,7 @@ func TestSMBApiPayload_TopLevel(t *testing.T) {
 	forbidden := []string{"ro", "abe", "hostsallow", "hostsdeny", "recyclebin", "guestok", "acl", "durablehandle", "streams", "timemachine", "timemachine_quota", "home", "vuid", "locked", "id"}
 	for _, k := range forbidden {
 		if _, ok := payload[k]; ok {
-			t.Errorf("payload should not contain top-level key %q (SCALE 26.0 nests/renames it)", k)
+			t.Errorf("payload should not contain top-level key %q (TrueNAS 26.0 nests/renames it)", k)
 		}
 	}
 
@@ -308,7 +308,7 @@ func TestSMBApiPayload_LegacyFlagsGuardedByNullUnknown(t *testing.T) {
 }
 
 // TestResponseToModel_LegacyShare verifies that responseToModel decodes the
-// nested SCALE 26.0 response shape (top-level readonly/
+// nested TrueNAS 26.0 response shape (top-level readonly/
 // access_based_share_enumeration, options.* for legacy flags) into the flat
 // SMBModel fields.
 func TestResponseToModel_LegacyShare(t *testing.T) {
@@ -448,7 +448,7 @@ func TestResponseToModel_NonLegacyShare(t *testing.T) {
 
 // TestResponseToModel_LegacyShare_RawJSONFixture decodes a raw JSON payload
 // shaped exactly like the sharing.smb.create / get_instance response on
-// SCALE 26.0 (per the middleware schema dump: top-level readonly/
+// TrueNAS 26.0 (per the middleware schema dump: top-level readonly/
 // access_based_share_enumeration/purpose, and legacy flags nested under
 // options for the LEGACY_SHARE variant). Unlike TestResponseToModel_LegacyShare
 // (which builds the smbAPI struct directly in Go and so can't catch a wrong

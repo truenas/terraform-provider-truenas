@@ -10,11 +10,11 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages TrueNAS SCALE's app catalog preferences (catalog.config): which trains " +
+		Description: "Manages TrueNAS's app catalog preferences (catalog.config): which trains " +
 			"(e.g. \"stable\", \"community\", \"enterprise\") are preferred when browsing and installing " +
 			"applications. This is a singleton resource — there is exactly one app catalog per TrueNAS system, " +
 			"so it is never created or deleted on TrueNAS; Terraform create/update calls catalog.update " +
-			"(probed job:false on both SCALE 25.10 and 26.0 — a plain synchronous call, unlike docker.update), " +
+			"(probed job:false on both TrueNAS 25.10 and 26.0 — a plain synchronous call, unlike docker.update), " +
 			"and Terraform delete only removes the resource from state (the catalog configuration is left in " +
 			"place)." +
 			"\n\n" +

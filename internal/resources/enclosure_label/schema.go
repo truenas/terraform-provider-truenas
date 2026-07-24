@@ -8,14 +8,14 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the user-settable label of a single pre-existing TrueNAS SCALE storage enclosure " +
+		Description: "Manages the user-settable label of a single pre-existing TrueNAS storage enclosure " +
 			"(enclosure.label.set, read back via enclosure2.query). Enclosures themselves are fixed physical (or " +
 			"virtual, e.g. VirtualSES) hardware — never created or destroyed via this API, only relabeled — so " +
 			"\"id\" identifies which existing enclosure this resource manages rather than an assignable " +
 			"property, exactly mirroring the truenas_ipmi_lan resource's \"channel\". Terraform create/update " +
 			"both call enclosure.label.set; see \"RESTORE ON DESTROY\" below for what Terraform delete does." +
 			"\n\n" +
-			"Probed live (SCALE 25.10.4 Enterprise HA): enclosure.label.set is synchronous (job: false) and the " +
+			"Probed live (TrueNAS 25.10.4 Enterprise HA): enclosure.label.set is synchronous (job: false) and the " +
 			"new label is visible in the very next enclosure2.query call — no BMC-style settle-time/polling " +
 			"behavior like truenas_ipmi_lan's \"vlan\". \"label\" is independent of the enclosure's fixed " +
 			"\"name\": a live round trip (set a throwaway label, re-query, restore) left \"name\" completely " +

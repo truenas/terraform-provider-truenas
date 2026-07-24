@@ -3,12 +3,12 @@
 page_title: "truenas_nvmet_port Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an NVMe-oF transport port on TrueNAS SCALE.
+  Manages an NVMe-oF transport port on TrueNAS.
 ---
 
 # truenas_nvmet_port (Resource)
 
-Manages an NVMe-oF transport port on TrueNAS SCALE.
+Manages an NVMe-oF transport port on TrueNAS.
 
 ## Example Usage
 

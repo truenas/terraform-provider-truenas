@@ -147,7 +147,7 @@ func TestUpdatePayload_CSROmitsAddToTrustedStoreAndRenewDays(t *testing.T) {
 
 // TestResponseToModel_ProbedShape verifies responseToModel against the
 // exact shape observed from a live certificate.create (IMPORTED)/
-// get_instance call on TrueNAS SCALE 25.10, including the masked-then-
+// get_instance call on TrueNAS 25.10, including the masked-then-
 // re-read privatekey and pointer-nullable parsed fields.
 func TestResponseToModel_ProbedShape(t *testing.T) {
 	ctx := context.Background()

@@ -3,12 +3,12 @@
 page_title: "truenas_nvmet_host Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an NVMe-oF host (initiator) on TrueNAS SCALE.
+  Manages an NVMe-oF host (initiator) on TrueNAS.
 ---
 
 # truenas_nvmet_host (Resource)
 
-Manages an NVMe-oF host (initiator) on TrueNAS SCALE.
+Manages an NVMe-oF host (initiator) on TrueNAS.
 
 ## Example Usage
 

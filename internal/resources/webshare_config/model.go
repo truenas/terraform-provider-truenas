@@ -12,15 +12,15 @@ import (
 // resource: there is exactly one Webshare service configuration per TrueNAS
 // system (webshare.config always returns a single record), and it is never
 // created or deleted on TrueNAS itself. The API's own numeric "id" (probed
-// live on SCALE 26.0: always 1) is an internal implementation detail and is
+// live on TrueNAS 26.0: always 1) is an internal implementation detail and is
 // intentionally not surfaced in the model, mirroring the
 // lxc_config/docker_config/audit_config singleton pattern.
 const webshareConfigResourceID = "webshare_config"
 
-// webshareConfigVersionFloorMajor/Minor is the minimum TrueNAS SCALE release
+// webshareConfigVersionFloorMajor/Minor is the minimum TrueNAS release
 // that exposes the webshare.config/webshare.update namespace at all. Probed
-// live: SCALE 25.10 returns 0 webshare.* and sharing.webshare.* methods from
-// core.get_methods (namespace genuinely absent); SCALE 26.0 supports it in
+// live: TrueNAS 25.10 returns 0 webshare.* and sharing.webshare.* methods from
+// core.get_methods (namespace genuinely absent); TrueNAS 26.0 supports it in
 // full (webshare.config, webshare.update, webshare.bindip_choices, all
 // job:false). See resource.go/datasource.go for where this gates every
 // Create/Read/Update/datasource-Read before any webshare.* call reaches the
@@ -32,7 +32,7 @@ const (
 
 // versionGateDiagnostics reports whether the given TrueNAS release string
 // (as returned by system.version_short via client.ServerVersion, e.g.
-// "25.10.3.1" or "26.0.0") is at or above the SCALE 26.0 floor
+// "25.10.3.1" or "26.0.0") is at or above the TrueNAS 26.0 floor
 // webshare.config/webshare.update require, returning a single clean error
 // diagnostic when it is not (instead of letting a raw "Method does not
 // exist" JSON-RPC error reach the practitioner). It is a pure function of
@@ -42,8 +42,8 @@ func versionGateDiagnostics(version string) diag.Diagnostics {
 	var diags diag.Diagnostics
 	if !client.VersionAtLeastString(version, webshareConfigVersionFloorMajor, webshareConfigVersionFloorMinor) {
 		diags.AddError(
-			"TrueNAS SCALE version too old",
-			"truenas_webshare_config requires TrueNAS SCALE 26.0 or later",
+			"TrueNAS version too old",
+			"truenas_webshare_config requires TrueNAS 26.0 or later",
 		)
 	}
 	return diags
@@ -77,7 +77,7 @@ type WebshareConfigDataSourceModel struct {
 }
 
 // webshareConfigAPI mirrors the JSON object returned by webshare.config and
-// webshare.update. Probed live against SCALE 26.0 (the only release that
+// webshare.update. Probed live against TrueNAS 26.0 (the only release that
 // exposes this namespace — see versionGateDiagnostics):
 //
 //	{"id": 1, "bindip": [], "search": false, "passkey": "DISABLED", "groups": []}

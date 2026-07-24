@@ -30,7 +30,7 @@ type StateModel struct {
 //
 // "Password" is Required + Sensitive + WriteOnly: vmware.create validates
 // hostname/username/password against the real vCenter/ESXi endpoint before
-// persisting anything (decisive live probe, both SCALE 25.10.4 HA and 26.0
+// persisting anything (decisive live probe, both TrueNAS 25.10.4 HA and 26.0
 // — see schema.go's doc comment), so — exactly like
 // internal/resources/app_registry's identically-situated "password" — no
 // live entry was ever obtainable to directly observe a read-back value.
@@ -64,7 +64,7 @@ type VMwareDataSourceModel struct {
 
 // stateAPI mirrors the nested "state" object returned by every vmware.*
 // method that returns a full record (create/update/get_instance/query).
-// Probed live via core.get_methods against TrueNAS SCALE 26.0
+// Probed live via core.get_methods against TrueNAS 26.0
 // (192.168.1.68): {"state": {"state": <enum>, "error": <string>,
 // "datetime": <string, date-time format>}}, where the inner "state" enum is
 // one of PENDING/SUCCESS/ERROR/BLOCKED and "error"/"datetime" are
@@ -73,7 +73,7 @@ type VMwareDataSourceModel struct {
 // (vmware.create validates against the real endpoint before persisting
 // anything on both probed releases; see schema.go), so both are modeled as
 // nullable pointers, matching the schema's own declared optionality rather
-// than an observed instance. SCALE 25.10.4 HA's core.get_methods
+// than an observed instance. TrueNAS 25.10.4 HA's core.get_methods
 // introspection reported "state" only as an unexpanded `"type": "object"`
 // (with an identical top-level description to 26.0's), consistent with
 // this provider's repeated finding elsewhere (enclosure2.*/ipmi.*/
@@ -87,7 +87,7 @@ type stateAPI struct {
 }
 
 // vmwareAPI is the JSON wire format returned by vmware.create/get_instance/
-// query/update, probed live via core.get_methods against both TrueNAS SCALE
+// query/update, probed live via core.get_methods against both TrueNAS
 // 25.10.4 HA (wss://10.220.16.188) and 26.0 (wss://192.168.1.68): identical
 // field names and required-ness on both releases.
 type vmwareAPI struct {

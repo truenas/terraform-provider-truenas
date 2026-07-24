@@ -25,7 +25,7 @@ type KerberosKeytabDataSourceModel struct {
 // kerberos.keytab.create, kerberos.keytab.update, kerberos.keytab.get_instance,
 // and kerberos.keytab.query.
 //
-// Probed against a live TrueNAS SCALE 25.10 box (`core.get_methods` for
+// Probed against a live TrueNAS 25.10 box (`core.get_methods` for
 // kerberos.keytab.create/update/get_instance/query/delete — all four report
 // "job": false — plus a full create -> get_instance -> query -> update
 // (name-only) -> delete round trip using a real keytab exported from a

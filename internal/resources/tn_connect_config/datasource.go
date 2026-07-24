@@ -26,7 +26,7 @@ func (d *TnConnectConfigDataSource) Metadata(_ context.Context, req datasource.M
 
 func (d *TnConnectConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE TrueNAS Connect service configuration and status. Takes " +
+		Description: "Reads the current TrueNAS Connect service configuration and status. Takes " +
 			"no arguments: there is exactly one TrueNAS Connect configuration per TrueNAS system. Makes no " +
 			"changes — see the truenas_tn_connect_config resource's schema description for the safety notes " +
 			"around the \"enabled\" field and which attributes are release-specific.",
@@ -74,36 +74,36 @@ func (d *TnConnectConfigDataSource) Schema(_ context.Context, _ datasource.Schem
 			},
 			"tier": dschema.StringAttribute{
 				Computed: true,
-				Description: "TrueNAS Connect tier (FOUNDATION, PLUS, or BUSINESS). Only present on SCALE " +
-					"26.0+; reads as null on SCALE 25.10.",
+				Description: "TrueNAS Connect tier (FOUNDATION, PLUS, or BUSINESS). Only present on TrueNAS " +
+					"26.0+; reads as null on TrueNAS 25.10.",
 			},
 			"last_heartbeat_failure_datetime": dschema.StringAttribute{
 				Computed: true,
 				Description: "Datetime the current heartbeat failure streak began, or null if heartbeat is " +
-					"not currently failing. Only present on SCALE 26.0+; reads as null on SCALE 25.10.",
+					"not currently failing. Only present on TrueNAS 26.0+; reads as null on TrueNAS 25.10.",
 			},
 			"ips": dschema.ListAttribute{
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "IP addresses TrueNAS Connect binds to and advertises. Only present on SCALE " +
-					"25.10; reads as null on SCALE 26.0.",
+				Description: "IP addresses TrueNAS Connect binds to and advertises. Only present on TrueNAS " +
+					"25.10; reads as null on TrueNAS 26.0.",
 			},
 			"interfaces": dschema.ListAttribute{
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "Network interface names TrueNAS Connect uses. Only present on SCALE 25.10; " +
-					"reads as null on SCALE 26.0.",
+				Description: "Network interface names TrueNAS Connect uses. Only present on TrueNAS 25.10; " +
+					"reads as null on TrueNAS 26.0.",
 			},
 			"interfaces_ips": dschema.ListAttribute{
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "IP addresses associated with the selected interfaces. Only present on SCALE " +
-					"25.10; reads as null on SCALE 26.0.",
+				Description: "IP addresses associated with the selected interfaces. Only present on TrueNAS " +
+					"25.10; reads as null on TrueNAS 26.0.",
 			},
 			"use_all_interfaces": dschema.BoolAttribute{
 				Computed: true,
 				Description: "Whether TrueNAS Connect automatically uses all available network interfaces. " +
-					"Only present on SCALE 25.10; reads as null on SCALE 26.0.",
+					"Only present on TrueNAS 25.10; reads as null on TrueNAS 26.0.",
 			},
 		},
 	}

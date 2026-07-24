@@ -12,7 +12,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE system general configuration (management UI, timezone, " +
+		Description: "Manages the TrueNAS system general configuration (management UI, timezone, " +
 			"keyboard map, usage collection). This is a singleton resource — there is exactly one system " +
 			"general configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform " +
 			"create/update calls system.general.update, and Terraform delete only removes the resource from " +

@@ -3,12 +3,12 @@
 page_title: "truenas_nvmet_namespace Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an NVMe-oF namespace (the block device behind a subsystem) on TrueNAS SCALE.
+  Manages an NVMe-oF namespace (the block device behind a subsystem) on TrueNAS.
 ---
 
 # truenas_nvmet_namespace (Resource)
 
-Manages an NVMe-oF namespace (the block device behind a subsystem) on TrueNAS SCALE.
+Manages an NVMe-oF namespace (the block device behind a subsystem) on TrueNAS.
 
 ## Example Usage
 

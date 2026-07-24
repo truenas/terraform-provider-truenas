@@ -3,12 +3,12 @@
 page_title: "truenas_snmp_config Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE SNMP service configuration. Takes no arguments: there is exactly one SNMP configuration per TrueNAS system. Does not expose v3_password or v3_privpassphrase: snmp.config never returns usable values for them.
+  Reads the current TrueNAS SNMP service configuration. Takes no arguments: there is exactly one SNMP configuration per TrueNAS system. Does not expose v3_password or v3_privpassphrase: snmp.config never returns usable values for them.
 ---
 
 # truenas_snmp_config (Data Source)
 
-Reads the current TrueNAS SCALE SNMP service configuration. Takes no arguments: there is exactly one SNMP configuration per TrueNAS system. Does not expose v3_password or v3_privpassphrase: snmp.config never returns usable values for them.
+Reads the current TrueNAS SNMP service configuration. Takes no arguments: there is exactly one SNMP configuration per TrueNAS system. Does not expose v3_password or v3_privpassphrase: snmp.config never returns usable values for them.
 
 
 

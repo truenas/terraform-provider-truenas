@@ -45,7 +45,7 @@ func (r *ContainerResource) Configure(_ context.Context, req resource.ConfigureR
 }
 
 // checkVersion probes the target server's release and returns a clean error
-// diagnostic if it is below the SCALE 26.0 floor the container namespace
+// diagnostic if it is below the TrueNAS 26.0 floor the container namespace
 // requires, before any container.* call is made. Every resource entry
 // point (Create/Read/Update) and the datasource's Read call this first.
 func (r *ContainerResource) checkVersion(ctx context.Context) diag.Diagnostics {

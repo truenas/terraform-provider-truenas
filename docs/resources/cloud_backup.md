@@ -3,12 +3,12 @@
 page_title: "truenas_cloud_backup Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a cloud backup task (cloud_backup.*) on TrueNAS SCALE: a restic-based, snapshot-and-encrypt backup of a local path to a cloud storage bucket, distinct from truenas_cloudsync_task (an rclone-based file sync). cloud_backup.create validates the credential/bucket against the actual remote endpoint at apply time (probed live: an S3 credential with a bogus access key was rejected with "InvalidAccessKeyId ... GetBucketLocation" before any local state was created) — a plan that references a non-working credential or a bucket the credential can't reach fails at apply, not silently.
+  Manages a cloud backup task (cloud_backup.*) on TrueNAS: a restic-based, snapshot-and-encrypt backup of a local path to a cloud storage bucket, distinct from truenas_cloudsync_task (an rclone-based file sync). cloud_backup.create validates the credential/bucket against the actual remote endpoint at apply time (probed live: an S3 credential with a bogus access key was rejected with "InvalidAccessKeyId ... GetBucketLocation" before any local state was created) — a plan that references a non-working credential or a bucket the credential can't reach fails at apply, not silently.
 ---
 
 # truenas_cloud_backup (Resource)
 
-Manages a cloud backup task (cloud_backup.*) on TrueNAS SCALE: a restic-based, snapshot-and-encrypt backup of a local path to a cloud storage bucket, distinct from truenas_cloudsync_task (an rclone-based file sync). cloud_backup.create validates the credential/bucket against the actual remote endpoint at apply time (probed live: an S3 credential with a bogus access key was rejected with "InvalidAccessKeyId ... GetBucketLocation" before any local state was created) — a plan that references a non-working credential or a bucket the credential can't reach fails at apply, not silently.
+Manages a cloud backup task (cloud_backup.*) on TrueNAS: a restic-based, snapshot-and-encrypt backup of a local path to a cloud storage bucket, distinct from truenas_cloudsync_task (an rclone-based file sync). cloud_backup.create validates the credential/bucket against the actual remote endpoint at apply time (probed live: an S3 credential with a bogus access key was rejected with "InvalidAccessKeyId ... GetBucketLocation" before any local state was created) — a plan that references a non-working credential or a bucket the credential can't reach fails at apply, not silently.
 
 ## Example Usage
 

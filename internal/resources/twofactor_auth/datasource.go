@@ -25,7 +25,7 @@ func (d *TwoFactorAuthDataSource) Metadata(_ context.Context, req datasource.Met
 
 func (d *TwoFactorAuthDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE two-factor authentication configuration. Takes no " +
+		Description: "Reads the current TrueNAS two-factor authentication configuration. Takes no " +
 			"arguments: there is exactly one two-factor authentication configuration per TrueNAS system.",
 		Attributes: map[string]dschema.Attribute{
 			"id": dschema.StringAttribute{

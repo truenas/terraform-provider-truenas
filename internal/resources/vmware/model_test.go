@@ -66,7 +66,7 @@ func TestApiPayload_UsesConfigPasswordNotModelPassword(t *testing.T) {
 }
 
 // TestResponseToModel_FullShape verifies responseToModel against the field
-// shape probed live via core.get_methods (identical on both SCALE 25.10.4
+// shape probed live via core.get_methods (identical on both TrueNAS 25.10.4
 // HA and 26.0) and does NOT touch Password.
 func TestResponseToModel_FullShape(t *testing.T) {
 	ctx := context.Background()

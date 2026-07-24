@@ -25,7 +25,7 @@ func (d *ContainerDeviceDataSource) Metadata(_ context.Context, req datasource.M
 
 func (d *ContainerDeviceDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Fetches a TrueNAS container device by ID. Requires TrueNAS SCALE 26.0 or later — see the " +
+		Description: "Fetches a TrueNAS container device by ID. Requires TrueNAS 26.0 or later — see the " +
 			"truenas_container_device resource's schema description for the version-gate details.",
 		Attributes: map[string]dschema.Attribute{
 			"id": dschema.Int64Attribute{

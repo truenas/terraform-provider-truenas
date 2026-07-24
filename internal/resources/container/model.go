@@ -12,10 +12,10 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
 
-// containerVersionFloorMajor/Minor is the minimum TrueNAS SCALE release
-// that exposes the container.* namespace at all. Probed live: SCALE 25.10
+// containerVersionFloorMajor/Minor is the minimum TrueNAS release
+// that exposes the container.* namespace at all. Probed live: TrueNAS 25.10
 // returns 0 container.* methods from core.get_methods (namespace genuinely
-// absent, not just empty); SCALE 26.0 supports the full namespace
+// absent, not just empty); TrueNAS 26.0 supports the full namespace
 // (container.create/update/start/stop/delete/get_instance/query, all
 // confirmed live this session — see resource.go's checkVersion for where
 // this gates every entry point before any container.* call reaches the
@@ -27,7 +27,7 @@ const (
 
 // versionGateDiagnostics reports whether the given TrueNAS release string
 // (as returned by system.version_short via client.ServerVersion) is at or
-// above the SCALE 26.0 floor the container namespace requires, returning a
+// above the TrueNAS 26.0 floor the container namespace requires, returning a
 // single clean error diagnostic when it is not. Pure function of an
 // already-probed version string (no live client access), matching the
 // lxc_config precedent so it stays independently unit-testable.
@@ -35,8 +35,8 @@ func versionGateDiagnostics(version string) diag.Diagnostics {
 	var diags diag.Diagnostics
 	if !client.VersionAtLeastString(version, containerVersionFloorMajor, containerVersionFloorMinor) {
 		diags.AddError(
-			"TrueNAS SCALE version too old",
-			"truenas_container requires TrueNAS SCALE 26.0 or later",
+			"TrueNAS version too old",
+			"truenas_container requires TrueNAS 26.0 or later",
 		)
 	}
 	return diags
@@ -149,7 +149,7 @@ type containerStatusAPI struct {
 
 // containerAPI mirrors the JSON object returned by container.create's job
 // result, container.update, container.get_instance, and container.query.
-// Probed live against SCALE 26.0 (the only release with this namespace —
+// Probed live against TrueNAS 26.0 (the only release with this namespace —
 // see versionGateDiagnostics): notably, "pool" and "image" are NEVER
 // present in this shape (see ContainerModel's doc comment) even though
 // both are required/accepted by container.create.

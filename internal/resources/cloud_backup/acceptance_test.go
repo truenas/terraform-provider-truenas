@@ -6,7 +6,7 @@ import (
 
 // TestAccCloudBackup_basic is intentionally skipped unconditionally.
 //
-// DECISIVE PROBE RESULT (TrueNAS SCALE 25.10.3.1, live, 2026-07-22):
+// DECISIVE PROBE RESULT (TrueNAS 25.10.3.1, live, 2026-07-22):
 // unlike truenas_cloudsync_credentials/truenas_cloudsync_task (whose create
 // calls never touch the remote endpoint), cloud_backup.create DOES validate
 // the credential against the real remote bucket at apply time. Probed via a

@@ -11,7 +11,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a Kerberos realm on TrueNAS SCALE (kerberos.realm). Realms are normally populated " +
+		Description: "Manages a Kerberos realm on TrueNAS (kerberos.realm). Realms are normally populated " +
 			"automatically during an Active Directory domain join, but can also be managed directly — e.g. for a " +
 			"realm outside of any AD domain this system joins.",
 		Attributes: map[string]schema.Attribute{

@@ -3,12 +3,12 @@
 page_title: "truenas_app Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an application (Docker-based) on TrueNAS SCALE 24.10+.
+  Manages an application (Docker-based) on TrueNAS 24.10+.
 ---
 
 # truenas_app (Resource)
 
-Manages an application (Docker-based) on TrueNAS SCALE 24.10+.
+Manages an application (Docker-based) on TrueNAS 24.10+.
 
 ## Example Usage
 

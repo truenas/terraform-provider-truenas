@@ -8,7 +8,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE system dataset configuration (the dataset that holds core " +
+		Description: "Manages the TrueNAS system dataset configuration (the dataset that holds core " +
 			"system state such as logs, reporting, syslog, and samba4 data). This is a singleton resource — " +
 			"there is exactly one system dataset configuration per TrueNAS system, so it is never created or " +
 			"deleted on TrueNAS; Terraform create/update calls systemdataset.update (a long-running job that " +

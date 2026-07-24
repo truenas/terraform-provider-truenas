@@ -12,7 +12,7 @@ import (
 // never writes: tn_connect.config governs whether this system is enrolled
 // with the TrueNAS Connect cloud service, and its real settings must not be
 // touched by a plain acceptance test run. No version-gate skip is needed:
-// probed live, tn_connect.config is present on BOTH SCALE 25.10 and 26.0
+// probed live, tn_connect.config is present on BOTH TrueNAS 25.10 and 26.0
 // (unlike webshare/lxc_config/container_device, which are 26.0-only).
 func TestAccTnConnectConfigDataSource_basic(t *testing.T) {
 	resource.Test(t, resource.TestCase{
@@ -42,7 +42,7 @@ data "truenas_tn_connect_config" "test" {}
 // transcript is inline below:
 //
 //  1. tn_connect.update's own "accepts" schema (core.get_methods), probed
-//     against the SCALE 26.0 production box (192.168.1.68, this resource's
+//     against the TrueNAS 26.0 production box (192.168.1.68, this resource's
 //     primary target), exposes EXACTLY ONE writable property: "enabled".
 //     There is no cosmetic/informational field (no "ips", no "interfaces",
 //     nothing) that a Tier 2 set-and-restore test could safely mutate
@@ -57,7 +57,7 @@ data "truenas_tn_connect_config" "test" {}
 //     call of any shape was attempted against it; even a would-be no-op
 //     payload carries unacceptable risk against a live production
 //     enrollment given finding (1) already answers the question.
-//  3. SCALE 25.10's tn_connect.update accepts a richer schema (also "ips",
+//  3. TrueNAS 25.10's tn_connect.update accepts a richer schema (also "ips",
 //     "interfaces", "use_all_interfaces"), and a supplementary live probe
 //     against the disposable 25.10 test box (192.168.1.249, enabled=false)
 //     confirmed sending {"ips": ["127.0.0.1"]} alone leaves "enabled" at
@@ -77,5 +77,5 @@ data "truenas_tn_connect_config" "test" {}
 // one. It is never reachable from resource.Test, so it can never call
 // tn_connect.update with any payload, let alone {"enabled": true}.
 func TestAccTnConnectConfig_setAndRestore(t *testing.T) {
-	t.Skip("tn_connect.update accepts ONLY \"enabled\" on SCALE 26.0 (probed live via core.get_methods against the production box) — there is no cosmetic field this resource could safely mutate in a Tier 2 set-and-restore test without touching \"enabled\", which this resource's safety contract forbids unconditionally. That same 26.0 box is also already enrolled (enabled=true, tier=FOUNDATION) — a real production TrueNAS Connect account, not a disposable fixture. See the doc comment on TestAccTnConnectConfig_setAndRestore above for the full probe transcript across both SCALE 25.10 and 26.0.")
+	t.Skip("tn_connect.update accepts ONLY \"enabled\" on TrueNAS 26.0 (probed live via core.get_methods against the production box) — there is no cosmetic field this resource could safely mutate in a Tier 2 set-and-restore test without touching \"enabled\", which this resource's safety contract forbids unconditionally. That same 26.0 box is also already enrolled (enabled=true, tier=FOUNDATION) — a real production TrueNAS Connect account, not a disposable fixture. See the doc comment on TestAccTnConnectConfig_setAndRestore above for the full probe transcript across both TrueNAS 25.10 and 26.0.")
 }

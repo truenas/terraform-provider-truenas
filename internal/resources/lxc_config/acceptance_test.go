@@ -11,15 +11,15 @@ import (
 
 // TestAccLXCConfigDataSource_basic reads the current TrueNAS LXC
 // configuration through the truenas_lxc_config datasource only. It never
-// writes. Requires TrueNAS SCALE 26.0+: the lxc namespace does not exist on
-// earlier releases (probed live — SCALE 25.10 returns "Method does not
+// writes. Requires TrueNAS 26.0+: the lxc namespace does not exist on
+// earlier releases (probed live — TrueNAS 25.10 returns "Method does not
 // exist" for lxc.config), so this test self-skips cleanly via
 // acctest.ServerVersionAtLeast on any older box, matching this resource's
 // own version-gate diagnostic (see resource.go's checkVersion /
 // model.go's versionGateDiagnostics).
 func TestAccLXCConfigDataSource_basic(t *testing.T) {
 	if !acctest.ServerVersionAtLeast(t, 26, 0) {
-		t.Skip("truenas_lxc_config requires TrueNAS SCALE 26.0 or later (lxc namespace absent on 25.10, confirmed live)")
+		t.Skip("truenas_lxc_config requires TrueNAS 26.0 or later (lxc namespace absent on 25.10, confirmed live)")
 	}
 
 	resource.Test(t, resource.TestCase{
@@ -48,7 +48,7 @@ type lxcConfigOriginal struct {
 }
 
 // readLXCConfigOriginal reads the box's current lxc.config via
-// acctest.RestoreCall (job:false, probed live on SCALE 26.0), so the test
+// acctest.RestoreCall (job:false, probed live on TrueNAS 26.0), so the test
 // can decide whether it is safe to run at all (preferred_pool must be null
 // — see the decisive-probe rationale on TestAccLXCConfig_setAndRestore) and
 // restore the exact original v4_network afterward. Returns ok=false (rather
@@ -68,7 +68,7 @@ func readLXCConfigOriginal(t *testing.T) (lxcConfigOriginal, bool) {
 }
 
 // restoreLXCConfigV4Network sends v4_network back to its original value via
-// lxc.update. lxc.update is job:false (probed live on SCALE 26.0), so the
+// lxc.update. lxc.update is job:false (probed live on TrueNAS 26.0), so the
 // plain acctest.RestoreCall (which wraps a job-unaware CallRead) is
 // sufficient here — no CallJob polling needed. It deliberately sends
 // v4_network ONLY: this resource's docker-pool safety rule means the test
@@ -87,7 +87,7 @@ func restoreLXCConfigV4Network(t *testing.T, v4Network string) {
 // resource's "v4_network" field through one changed CIDR, then back to the
 // value read from the box before the test ran, then imports it. It requires
 // TF_ACC=1, TRUENAS_DISRUPTIVE=1 (acctest.DisruptiveCheck), and TrueNAS
-// SCALE 26.0+ (self-skip via acctest.ServerVersionAtLeast — the lxc
+// TrueNAS 26.0+ (self-skip via acctest.ServerVersionAtLeast — the lxc
 // namespace does not exist on 25.10, confirmed live), since it mutates the
 // box's live LXC network configuration; a t.Cleanup-registered API restore
 // is the safety net if the Terraform steps fail.
@@ -107,7 +107,7 @@ func restoreLXCConfigV4Network(t *testing.T, v4Network string) {
 func TestAccLXCConfig_setAndRestore(t *testing.T) {
 	acctest.DisruptiveCheck(t)
 	if !acctest.ServerVersionAtLeast(t, 26, 0) {
-		t.Skip("truenas_lxc_config requires TrueNAS SCALE 26.0 or later (lxc namespace absent on 25.10, confirmed live)")
+		t.Skip("truenas_lxc_config requires TrueNAS 26.0 or later (lxc namespace absent on 25.10, confirmed live)")
 	}
 
 	orig, ok := readLXCConfigOriginal(t)

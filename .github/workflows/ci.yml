@@ -2,7 +2,7 @@
 #
 # Runs on public GitHub runners. Acceptance tests are NOT run here — this
 # provider's testing policy is "no mocks", so acceptance tests require a
-# live TrueNAS SCALE box (plus, for some suites, directory servers and an
+# live TrueNAS box (plus, for some suites, directory servers and an
 # HA pair). Those run on a self-hosted runner with lab access; see
 # TEST-PLAN.md and the acceptance workflow.
 name: CI

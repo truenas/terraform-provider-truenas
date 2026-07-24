@@ -569,7 +569,7 @@ type directoryServicesCredentialAPI struct {
 
 // directoryServicesAPI mirrors the JSON object returned by
 // directoryservices.config and (as its job result) directoryservices.update.
-// Probed against live TrueNAS SCALE 25.10 and 26.0 boxes (`core.get_methods`
+// Probed against live TrueNAS 25.10 and 26.0 boxes (`core.get_methods`
 // for directoryservices.config/update — see task-1-report.md for the full
 // verbatim diff): "id" and "enable" are always present as non-nullable
 // int/bool; "service_type", "kerberos_realm", "credential", and
@@ -688,7 +688,7 @@ func existingKerberosPrincipal(existing *directoryServicesAPI) *string {
 // returns true: TrueNAS's own directoryservices.update has an internal
 // directoryservices.reset() call meant to handle exactly this situation,
 // but it does not reliably clear kerberos_realm/credential on a live box
-// (confirmed live on SCALE 25.10 — see resetStaleServiceType's doc
+// (confirmed live on TrueNAS 25.10 — see resetStaleServiceType's doc
 // comment), so this provider must not rely on it.
 func needsServiceTypeReset(plan *DirectoryServicesModel, existing *directoryServicesAPI) bool {
 	if existing == nil || existing.ServiceType == nil || *existing.ServiceType == "" {
@@ -1206,7 +1206,7 @@ func buildADConfigPayload(ctx context.Context, ad ActiveDirectoryConfigModel, ex
 			// schema_mode/unix_primary_group/unix_nss_info and sssd_compat
 			// are mutually exclusive, backend-specific fields on the wire's
 			// discriminated union (AD vs. RID — see idmapDomainAttrTypes's
-			// doc comment). Confirmed live (SCALE 25.10, this plan's Task 4
+			// doc comment). Confirmed live (TrueNAS 25.10, this plan's Task 4
 			// AD idmap acceptance run): sending unix_primary_group/
 			// unix_nss_info alongside idmap_backend="RID" is rejected with
 			// "[EINVAL] directoryservices_update.configuration.
@@ -1390,7 +1390,7 @@ func buildIPAConfigPayload(ctx context.Context, ipa IPAConfigModel) (map[string]
 // updatePayload builds the directoryservices.update argument from a plan
 // that has already had its write-only "credential" fields (password/bindpw)
 // sourced from req.Config (see resource.go Create/Update). Its shape is
-// dictated entirely by m.Enable, per live testing against a SCALE 25.10 box
+// dictated entirely by m.Enable, per live testing against a TrueNAS 25.10 box
 // that repeatedly contradicted the JSON schema's own "_required_": false on
 // every top-level field:
 //

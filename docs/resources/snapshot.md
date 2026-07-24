@@ -3,12 +3,12 @@
 page_title: "truenas_snapshot Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a ZFS snapshot on TrueNAS SCALE.
+  Manages a ZFS snapshot on TrueNAS.
 ---
 
 # truenas_snapshot (Resource)
 
-Manages a ZFS snapshot on TrueNAS SCALE.
+Manages a ZFS snapshot on TrueNAS.
 
 ## Example Usage
 

@@ -9,7 +9,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages TrueNAS SCALE alert services (notification targets such as Mail, SNMPTrap, Slack, PagerDuty, etc).",
+		Description: "Manages TrueNAS alert services (notification targets such as Mail, SNMPTrap, Slack, PagerDuty, etc).",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{
 				Computed:    true,

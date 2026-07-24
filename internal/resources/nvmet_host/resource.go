@@ -45,7 +45,7 @@ func (r *NVMetHostResource) Configure(_ context.Context, req resource.ConfigureR
 }
 
 // applyDescriptionSupport handles the description field's version gate:
-// the nvmet_host.create/update schemas gained it in SCALE 26.0, and older
+// the nvmet_host.create/update schemas gained it in TrueNAS 26.0, and older
 // releases fail it with a generic "Extra inputs are not permitted". On a
 // pre-26.0 server a non-empty description errors with a clear message; an
 // empty one is silently stripped from the payload — description is
@@ -64,7 +64,7 @@ func (r *NVMetHostResource) applyDescriptionSupport(ctx context.Context, payload
 	if !plan.Description.IsNull() && !plan.Description.IsUnknown() && plan.Description.ValueString() != "" {
 		diags.AddAttributeError(
 			path.Root("description"),
-			"description requires TrueNAS SCALE 26.0 or later",
+			"description requires TrueNAS 26.0 or later",
 			"The nvmet_host description field does not exist on this TrueNAS release. Remove the attribute or upgrade the server.",
 		)
 		return

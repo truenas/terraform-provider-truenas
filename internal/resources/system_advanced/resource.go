@@ -60,7 +60,7 @@ func (r *SystemAdvancedResource) fetchConfig(ctx context.Context) (*systemAdvanc
 
 // applyNvidiaSupport folds "nvidia" into payload when the user explicitly
 // set it in HCL, then strips it (with a clear apply-time error) if the
-// target server is below the SCALE 26.0 floor system.advanced.update
+// target server is below the TrueNAS 26.0 floor system.advanced.update
 // requires for this field.
 //
 // This gate fails CLOSED: it strips "nvidia" unless the version probe both
@@ -90,7 +90,7 @@ func (r *SystemAdvancedResource) fetchConfig(ctx context.Context) (*systemAdvanc
 // existing).
 //
 // system.advanced.update's accepts-schema genuinely does not include
-// "nvidia" below SCALE 26.0 — probed live (go run against a temp probe
+// "nvidia" below TrueNAS 26.0 — probed live (go run against a temp probe
 // binary calling core.get_methods) against a 25.10.3.1 VM (192.168.1.249)
 // and a 25.10.4 HA pair member (10.220.16.188), neither of which lists
 // "nvidia" in system.advanced.update's accepts schema, versus a
@@ -109,8 +109,8 @@ func (r *SystemAdvancedResource) applyNvidiaSupport(ctx context.Context, payload
 	delete(payload, "nvidia")
 	diags.AddAttributeError(
 		path.Root("nvidia"),
-		"nvidia requires TrueNAS SCALE 26.0 or later",
-		"system.advanced.update on this TrueNAS release does not accept the \"nvidia\" field (it was added in SCALE 26.0). Remove the attribute from your configuration or target a SCALE 26.0+ server.",
+		"nvidia requires TrueNAS 26.0 or later",
+		"system.advanced.update on this TrueNAS release does not accept the \"nvidia\" field (it was added in TrueNAS 26.0). Remove the attribute from your configuration or target a TrueNAS 26.0+ server.",
 	)
 }
 

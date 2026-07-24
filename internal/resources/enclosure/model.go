@@ -8,7 +8,7 @@ import (
 )
 
 // enclosureAPI mirrors the top-level shape of one element of the JSON array
-// enclosure2.query returns. Probed live (SCALE 25.10.4 Enterprise HA,
+// enclosure2.query returns. Probed live (TrueNAS 25.10.4 Enterprise HA,
 // wss://10.220.16.188, the disposable Plan 20 Task 3 test box): a single
 // shared H-series chassis (both HA controllers see the same enclosure,
 // "controller": true):
@@ -52,7 +52,7 @@ import (
 // there is no single-"data"-object quirk here). enclosure.query (v1, no "2")
 // also does not exist on either probed release.
 //
-// Cross-release probe (SCALE 26.0, wss://192.168.1.68): core.get_methods
+// Cross-release probe (TrueNAS 26.0, wss://192.168.1.68): core.get_methods
 // lists enclosure2.query/enclosure2.set_slot_status/enclosure.label.set in
 // full there (confirming the 25.10.4 box's core.get_methods, which lists
 // ONLY enclosure.label.set, under-reports this namespace the same way Task 1

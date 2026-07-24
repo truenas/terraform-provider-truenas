@@ -1,6 +1,6 @@
-# Terraform Provider for TrueNAS SCALE
+# Terraform Provider for TrueNAS
 
-A Terraform provider that manages [TrueNAS SCALE](https://www.truenas.com/truenas-scale/)
+A Terraform provider that manages [TrueNAS](https://www.truenas.com/truenas-scale/)
 through its WebSocket API. Built on the
 [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework);
 no REST calls, no external client dependency — a self-contained JSON-RPC 2.0
@@ -16,7 +16,7 @@ matching data source — see Enterprise & HA):
 | Area | Resources |
 |------|-----------|
 | **Storage** | `truenas_pool`, `truenas_dataset`, `truenas_zvol`, `truenas_snapshot`, `truenas_periodic_snapshot_task`, `truenas_scrub_task`, `truenas_resilver_config` |
-| **File shares** | `truenas_nfs_share`, `truenas_smb_share`, `truenas_webshare` (SCALE 26.0+ only), `truenas_webshare_config` (Webshare service singleton — bind IPs/search/passkey/groups; SCALE 26.0+ only) |
+| **File shares** | `truenas_nfs_share`, `truenas_smb_share`, `truenas_webshare` (TrueNAS 26.0+ only), `truenas_webshare_config` (Webshare service singleton — bind IPs/search/passkey/groups; TrueNAS 26.0+ only) |
 | **Filesystem permissions & ACLs** | `truenas_filesystem_permissions`, `truenas_filesystem_acl`, `truenas_acl_template` |
 | **iSCSI** | `truenas_iscsi_target`, `truenas_iscsi_extent`, `truenas_iscsi_initiator`, `truenas_iscsi_portal`, `truenas_iscsi_targetextent`, `truenas_iscsi_auth`, `truenas_iscsi_global` |
 | **NVMe-oF** | `truenas_nvmet_subsys`, `truenas_nvmet_port`, `truenas_nvmet_namespace`, `truenas_nvmet_host`, `truenas_nvmet_host_subsys`, `truenas_nvmet_port_subsys`, `truenas_nvmet_global` |
@@ -24,7 +24,7 @@ matching data source — see Enterprise & HA):
 | **Access management** | `truenas_api_key`, `truenas_privilege`, `truenas_twofactor_auth` |
 | **Certificates & ACME** | `truenas_certificate`, `truenas_acme_dns_authenticator` |
 | **Directory services & Kerberos** | `truenas_directoryservices` (Active Directory, LDAP, and IPA join; explicit AD idmap configuration), `truenas_kerberos_config`, `truenas_kerberos_realm`, `truenas_kerberos_keytab` |
-| **Apps, containers & VMs** | `truenas_app`, `truenas_vm`, `truenas_vm_device`, `truenas_docker_config` (Docker service singleton), `truenas_app_registry` (private container registry credentials), `truenas_catalog_config` (app catalog trains singleton), `truenas_lxc_config` (LXC service singleton — pool/bridge/network CIDRs; SCALE 26.0+ only), `truenas_container` (LXC container lifecycle — create/start/stop/delete; SCALE 26.0+ only), `truenas_container_device` (per-container device attachment — FILESYSTEM/NIC/USB; SCALE 26.0+ only); `truenas_docker_network` and `truenas_container_image` (LXC image registry lookup) are **data source only** — Docker networks are managed by Docker itself, not by TrueNAS's config surface, and container images live in an upstream registry, not TrueNAS-managed state |
+| **Apps, containers & VMs** | `truenas_app`, `truenas_vm`, `truenas_vm_device`, `truenas_docker_config` (Docker service singleton), `truenas_app_registry` (private container registry credentials), `truenas_catalog_config` (app catalog trains singleton), `truenas_lxc_config` (LXC service singleton — pool/bridge/network CIDRs; TrueNAS 26.0+ only), `truenas_container` (LXC container lifecycle — create/start/stop/delete; TrueNAS 26.0+ only), `truenas_container_device` (per-container device attachment — FILESYSTEM/NIC/USB; TrueNAS 26.0+ only); `truenas_docker_network` and `truenas_container_image` (LXC image registry lookup) are **data source only** — Docker networks are managed by Docker itself, not by TrueNAS's config surface, and container images live in an upstream registry, not TrueNAS-managed state |
 | **Replication & sync** | `truenas_replication_task` (local push and remote SSH transport), `truenas_cloudsync_task`, `truenas_cloudsync_credentials`, `truenas_cloud_backup`, `truenas_rsync_task` |
 | **Keychain** | `truenas_keychain_ssh_keypair`, `truenas_keychain_ssh_connection` |
 | **Scheduled tasks** | `truenas_cronjob`, `truenas_init_shutdown_script` |
@@ -47,7 +47,7 @@ Working examples for every resource are under [`examples/resources/`](examples/r
 
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.11 (write-only secret attributes)
 - [Go](https://go.dev/doc/install) >= 1.25 (to build from source)
-- TrueNAS SCALE 25.04+ (the provider speaks the versioned JSON-RPC 2.0 API
+- TrueNAS 25.04+ (the provider speaks the versioned JSON-RPC 2.0 API
   at `/api/current`, introduced in 25.04; older releases only offer the
   legacy WebSocket endpoint and cannot connect)
 
@@ -55,7 +55,7 @@ Working examples for every resource are under [`examples/resources/`](examples/r
 
 The full acceptance suite runs against live TrueNAS boxes on these releases:
 
-| SCALE release | Status |
+| TrueNAS release | Status |
 |---|---|
 | 26.0 | Fully tested |
 | 25.10 | Fully tested. `truenas_nvmet_host.description` is 26.0+ only; the provider rejects it with a clear error on older releases |
@@ -67,7 +67,7 @@ either release as long as it avoids the newer fields.
 
 The Enterprise & HA resources (`truenas_failover_config`, `truenas_ipmi_lan`,
 `truenas_enclosure`/`truenas_enclosure_label`, `truenas_truecommand_config`,
-`truenas_vmware`) were additionally verified live on a disposable SCALE
+`truenas_vmware`) were additionally verified live on a disposable TrueNAS
 25.10.4 Enterprise HA controller pair, including one real controlled
 failover exercise — see TESTING.md's HA / Enterprise test environment
 section.
@@ -114,7 +114,7 @@ midclt call api_key.create '{"name": "terraform", "username": "root"}'
 Store the key outside your Terraform files (environment variable or a secrets
 manager). Username/password auth also works but an API key is preferred.
 
-On SCALE 26.0+, set `username` (the key owner) alongside `api_key` and the
+On TrueNAS 26.0+, set `username` (the key owner) alongside `api_key` and the
 provider authenticates via SCRAM-SHA-512: a challenge-response exchange
 with mutual verification where the raw key never crosses the wire. Older
 servers, or an api_key without username, use the plain key login.

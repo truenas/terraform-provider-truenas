@@ -136,7 +136,7 @@ func RestoreCall(ctx context.Context, method string, params ...any) (json.RawMes
 }
 
 // ServerVersionAtLeast reports whether the acceptance-test server is at or
-// above major.minor, for gating attributes that exist only on newer SCALE
+// above major.minor, for gating attributes that exist only on newer TrueNAS
 // releases (e.g. nvmet_host description, 26.0+). Unlike most helpers it
 // dials the box, so it enforces the PreCheck env requirements itself:
 // tests call it while building config strings, before resource.Test runs

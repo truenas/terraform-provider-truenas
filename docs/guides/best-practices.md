@@ -9,7 +9,7 @@ description: |-
 # Best Practices
 
 Recommendations for using this provider against a real TrueNAS box. They come
-from live testing against SCALE 25.10 and 26.0 and from how the TrueNAS
+from live testing against TrueNAS 25.10 and 26.0 and from how the TrueNAS
 middleware actually behaves, not from generic Terraform advice.
 
 ## Authentication
@@ -26,7 +26,7 @@ provider "truenas" {
 }
 ```
 
-**Set `username` with your API key.** On SCALE 26.0+ this switches
+**Set `username` with your API key.** On TrueNAS 26.0+ this switches
 authentication to SCRAM-SHA-512: the raw key never crosses the wire (only a
 proof of possession does) and the server proves it knows the key too, so a
 middlebox cannot harvest credentials even if TLS is intercepted. On older
@@ -118,7 +118,7 @@ Apply changes to these from a context where you can reach the box console
 
 ## Version compatibility
 
-The provider works against SCALE 25.10 and 26.0 and detects the server
+The provider works against TrueNAS 25.10 and 26.0 and detects the server
 release at runtime. Fields that exist only on newer releases fail fast with
 a clear error instead of the middleware's generic "Extra inputs are not
 permitted" — for example `truenas_nvmet_host.description` requires 26.0.

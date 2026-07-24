@@ -3,12 +3,12 @@
 page_title: "truenas_rsync_task Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an rsync task (rsynctask) on TrueNAS SCALE: a scheduled or manually-triggered rsync of a local path to/from a remote rsync module (MODULE mode) or a remote host over SSH (SSH mode).
+  Manages an rsync task (rsynctask) on TrueNAS: a scheduled or manually-triggered rsync of a local path to/from a remote rsync module (MODULE mode) or a remote host over SSH (SSH mode).
 ---
 
 # truenas_rsync_task (Resource)
 
-Manages an rsync task (rsynctask) on TrueNAS SCALE: a scheduled or manually-triggered rsync of a local path to/from a remote rsync module (MODULE mode) or a remote host over SSH (SSH mode).
+Manages an rsync task (rsynctask) on TrueNAS: a scheduled or manually-triggered rsync of a local path to/from a remote rsync module (MODULE mode) or a remote host over SSH (SSH mode).
 
 ## Example Usage
 

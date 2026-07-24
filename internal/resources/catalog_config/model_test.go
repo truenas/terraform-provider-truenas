@@ -50,7 +50,7 @@ func TestUpdatePayload_UnsetOptionalOmitted(t *testing.T) {
 }
 
 // TestResponseToModel verifies responseToModel against the shape probed
-// from a live catalog.config call (identical on SCALE 25.10 and 26.0).
+// from a live catalog.config call (identical on TrueNAS 25.10 and 26.0).
 func TestResponseToModel(t *testing.T) {
 	ctx := context.Background()
 	api := &catalogConfigAPI{
@@ -114,7 +114,7 @@ func TestResponseToModel_NilPreferredTrainsBecomesEmptyList(t *testing.T) {
 // TestResponseToDataSourceModel verifies responseToDataSourceModel maps both
 // catalog.config's preferred_trains and the separately-fetched
 // catalog.trains list correctly, including catalog.trains coming back empty
-// (probed live on a SCALE 25.10 box with Docker/apps unconfigured).
+// (probed live on a TrueNAS 25.10 box with Docker/apps unconfigured).
 func TestResponseToDataSourceModel(t *testing.T) {
 	ctx := context.Background()
 	api := &catalogConfigAPI{

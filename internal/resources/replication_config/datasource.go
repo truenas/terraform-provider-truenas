@@ -25,7 +25,7 @@ func (d *ReplicationConfigDataSource) Metadata(_ context.Context, req datasource
 
 func (d *ReplicationConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE replication configuration (system-wide replication " +
+		Description: "Reads the current TrueNAS replication configuration (system-wide replication " +
 			"task concurrency). Takes no arguments: there is exactly one replication configuration per " +
 			"TrueNAS system.",
 		Attributes: map[string]dschema.Attribute{

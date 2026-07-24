@@ -3,12 +3,12 @@
 page_title: "truenas_nfs_config Resource - truenas"
 subcategory: ""
 description: |-
-  Manages the TrueNAS SCALE NFS service configuration. This is a singleton resource — there is exactly one NFS configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls nfs.update, and Terraform delete only removes the resource from state (the configuration is left in place, since existing NFS exports and clients may depend on it).
+  Manages the TrueNAS NFS service configuration. This is a singleton resource — there is exactly one NFS configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls nfs.update, and Terraform delete only removes the resource from state (the configuration is left in place, since existing NFS exports and clients may depend on it).
 ---
 
 # truenas_nfs_config (Resource)
 
-Manages the TrueNAS SCALE NFS service configuration. This is a singleton resource — there is exactly one NFS configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls nfs.update, and Terraform delete only removes the resource from state (the configuration is left in place, since existing NFS exports and clients may depend on it).
+Manages the TrueNAS NFS service configuration. This is a singleton resource — there is exactly one NFS configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls nfs.update, and Terraform delete only removes the resource from state (the configuration is left in place, since existing NFS exports and clients may depend on it).
 
 ## Example Usage
 

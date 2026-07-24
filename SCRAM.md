@@ -208,7 +208,7 @@ box:
 
 - `TestLiveSCRAM` — the positive path: mechanism discovery, full
   exchange, server-signature verification, then an authenticated
-  `system.version_short` call. On **SCALE 26.0.0-BETA.2**
+  `system.version_short` call. On **TrueNAS 26.0.0-BETA.2**
   (`auth.mechanism_choices` = `[API_KEY_PLAIN, TOKEN_PLAIN,
   PASSWORD_PLAIN, SCRAM]`) this passes; on **25.10.3.1** the mechanism
   probe fails pre-auth and the test skips.

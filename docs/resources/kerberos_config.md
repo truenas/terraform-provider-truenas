@@ -3,12 +3,12 @@
 page_title: "truenas_kerberos_config Resource - truenas"
 subcategory: ""
 description: |-
-  Manages the TrueNAS SCALE Kerberos configuration (kerberos.config) — the [appdefaults]/[libdefaults] free-form additions to krb5.conf. This is a singleton resource — there is exactly one Kerberos configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls kerberos.update, and Terraform delete only removes the resource from state (the configuration is left in place).
+  Manages the TrueNAS Kerberos configuration (kerberos.config) — the [appdefaults]/[libdefaults] free-form additions to krb5.conf. This is a singleton resource — there is exactly one Kerberos configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls kerberos.update, and Terraform delete only removes the resource from state (the configuration is left in place).
 ---
 
 # truenas_kerberos_config (Resource)
 
-Manages the TrueNAS SCALE Kerberos configuration (kerberos.config) — the [appdefaults]/[libdefaults] free-form additions to krb5.conf. This is a singleton resource — there is exactly one Kerberos configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls kerberos.update, and Terraform delete only removes the resource from state (the configuration is left in place).
+Manages the TrueNAS Kerberos configuration (kerberos.config) — the [appdefaults]/[libdefaults] free-form additions to krb5.conf. This is a singleton resource — there is exactly one Kerberos configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls kerberos.update, and Terraform delete only removes the resource from state (the configuration is left in place).
 
 ## Example Usage
 

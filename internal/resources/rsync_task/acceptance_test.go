@@ -18,7 +18,7 @@ import (
 //
 // mode=MODULE, remotehost=192.0.2.10 (TEST-NET-1, guaranteed unreachable),
 // remotemodule=tfacc, enabled=false, validate_rpath=false is deliberately
-// unreachable/never-run: probed directly against a live TrueNAS SCALE
+// unreachable/never-run: probed directly against a live TrueNAS
 // 25.10 box (rsynctask.create with this exact payload, then deleted) and
 // confirmed rsynctask.create does NOT validate remote connectivity at
 // create time in MODULE mode — this succeeded even with validate_rpath

@@ -16,7 +16,7 @@ import (
 // dsPreCheckStatusRequiresDisabled fatals unless directoryservices.status
 // reports the service as not currently joined/enabled before a directory
 // services acceptance test starts mutating box state. Confirmed live on the
-// SCALE 25.10 disposable test VM: a box that has never been configured, or
+// TrueNAS 25.10 disposable test VM: a box that has never been configured, or
 // one that has since been disabled after a prior join, reports
 // {"status": null, "status_msg": null, "type": null} — the datasource's own
 // "status" attribute description documents this same "DISABLED, ...; null
@@ -49,7 +49,7 @@ func dsPreCheckStatusRequiresDisabled(t *testing.T) {
 //
 // It does NOT verify DNS is pointed at the domain controller server-side:
 // probing core.get_methods for a dnsclient/dns forward-lookup-or-SRV method
-// (SCALE 25.10, live) found only dns.query, which lists locally configured
+// (TrueNAS 25.10, live) found only dns.query, which lists locally configured
 // resolvers rather than performing a resolver-side SRV lookup — there is no
 // middleware method to drive an on-box "_ldap._tcp.<domain>" SRV check.
 // Per the task-8 brief's documented fallback, this test instead lets the
@@ -173,7 +173,7 @@ func ipaBaseDNFromDomain(domain string) string {
 
 // TestAccDirectoryServices_IPA drives the singleton truenas_directoryservices
 // resource through a full FreeIPA join lifecycle against the disposable
-// TrueNAS SCALE 25.10 test VM and the disposable tftest-ipa FreeIPA VM (212,
+// TrueNAS 25.10 test VM and the disposable tftest-ipa FreeIPA VM (212,
 // realm TFIPA.LAN, domain tfipa.lan, 192.168.1.252): join (enable=true,
 // service_type=IPA, credential_type KERBEROS_USER using the realm's "admin"
 // account, waiting for directoryservices.status to report HEALTHY), update
@@ -256,7 +256,7 @@ resource "truenas_directoryservices" "test" {
 
 // TestAccDirectoryServices_ActiveDirectory drives the singleton
 // truenas_directoryservices resource through a full Active Directory join
-// lifecycle against the disposable TrueNAS SCALE 25.10 test VM: join
+// lifecycle against the disposable TrueNAS 25.10 test VM: join
 // (enable=true, waiting for directoryservices.status to report HEALTHY),
 // update a non-join field (timeout) in place, then destroy — which disables
 // directory services (enable=false) WITHOUT leaving the domain — and
@@ -327,7 +327,7 @@ func TestAccDirectoryServices_ActiveDirectory(t *testing.T) {
 
 // TestAccDirectoryServices_LDAP drives the singleton truenas_directoryservices
 // resource through a full plain-LDAP bind lifecycle against the disposable
-// TrueNAS SCALE 25.10 test VM and the disposable OpenLDAP VM (VM 211,
+// TrueNAS 25.10 test VM and the disposable OpenLDAP VM (VM 211,
 // tftest-ldap): bind (enable=true, service_type=LDAP, credential_type
 // LDAP_PLAIN, waiting for directoryservices.status to report HEALTHY),
 // confirm the seeded LDAP user is visible via user.query, update a

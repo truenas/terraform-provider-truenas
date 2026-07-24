@@ -3,12 +3,12 @@
 page_title: "truenas_webshare_config Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE Webshare service configuration. Takes no arguments: there is exactly one Webshare configuration per TrueNAS system. Requires TrueNAS SCALE 26.0 or later (see the truenas_webshare_config resource's schema description for the version-gate details).
+  Reads the current TrueNAS Webshare service configuration. Takes no arguments: there is exactly one Webshare configuration per TrueNAS system. Requires TrueNAS 26.0 or later (see the truenas_webshare_config resource's schema description for the version-gate details).
 ---
 
 # truenas_webshare_config (Data Source)
 
-Reads the current TrueNAS SCALE Webshare service configuration. Takes no arguments: there is exactly one Webshare configuration per TrueNAS system. Requires TrueNAS SCALE 26.0 or later (see the truenas_webshare_config resource's schema description for the version-gate details).
+Reads the current TrueNAS Webshare service configuration. Takes no arguments: there is exactly one Webshare configuration per TrueNAS system. Requires TrueNAS 26.0 or later (see the truenas_webshare_config resource's schema description for the version-gate details).
 
 
 

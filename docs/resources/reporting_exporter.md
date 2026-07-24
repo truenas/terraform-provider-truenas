@@ -3,12 +3,12 @@
 page_title: "truenas_reporting_exporter Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a TrueNAS SCALE reporting exporter (reporting.exporters): a destination that periodically receives reporting/metrics data. Only the GRAPHITE exporter type currently exists on TrueNAS (probed via reporting.exporters.exporter_schemas on both SCALE 25.10 and 26.0), so "attributes" exposes GRAPHITE's fields directly as a typed nested block rather than a free-form JSON document.
+  Manages a TrueNAS reporting exporter (reporting.exporters): a destination that periodically receives reporting/metrics data. Only the GRAPHITE exporter type currently exists on TrueNAS (probed via reporting.exporters.exporter_schemas on both TrueNAS 25.10 and 26.0), so "attributes" exposes GRAPHITE's fields directly as a typed nested block rather than a free-form JSON document.
 ---
 
 # truenas_reporting_exporter (Resource)
 
-Manages a TrueNAS SCALE reporting exporter (reporting.exporters): a destination that periodically receives reporting/metrics data. Only the GRAPHITE exporter type currently exists on TrueNAS (probed via reporting.exporters.exporter_schemas on both SCALE 25.10 and 26.0), so "attributes" exposes GRAPHITE's fields directly as a typed nested block rather than a free-form JSON document.
+Manages a TrueNAS reporting exporter (reporting.exporters): a destination that periodically receives reporting/metrics data. Only the GRAPHITE exporter type currently exists on TrueNAS (probed via reporting.exporters.exporter_schemas on both TrueNAS 25.10 and 26.0), so "attributes" exposes GRAPHITE's fields directly as a typed nested block rather than a free-form JSON document.
 
 ## Example Usage
 

@@ -3,12 +3,12 @@
 page_title: "truenas_iscsi_global Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE global iSCSI service configuration. Takes no arguments: there is exactly one iSCSI global configuration per TrueNAS system.
+  Reads the current TrueNAS global iSCSI service configuration. Takes no arguments: there is exactly one iSCSI global configuration per TrueNAS system.
 ---
 
 # truenas_iscsi_global (Data Source)
 
-Reads the current TrueNAS SCALE global iSCSI service configuration. Takes no arguments: there is exactly one iSCSI global configuration per TrueNAS system.
+Reads the current TrueNAS global iSCSI service configuration. Takes no arguments: there is exactly one iSCSI global configuration per TrueNAS system.
 
 
 

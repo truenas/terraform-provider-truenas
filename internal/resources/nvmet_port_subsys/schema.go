@@ -8,7 +8,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages an NVMe-oF port/subsystem association (which subsystems are advertised on a port) on TrueNAS SCALE.",
+		Description: "Manages an NVMe-oF port/subsystem association (which subsystems are advertised on a port) on TrueNAS.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{
 				Computed:    true,

@@ -26,8 +26,8 @@ func (d *WebshareConfigDataSource) Metadata(_ context.Context, req datasource.Me
 
 func (d *WebshareConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE Webshare service configuration. Takes no arguments: there " +
-			"is exactly one Webshare configuration per TrueNAS system. Requires TrueNAS SCALE 26.0 or later (see " +
+		Description: "Reads the current TrueNAS Webshare service configuration. Takes no arguments: there " +
+			"is exactly one Webshare configuration per TrueNAS system. Requires TrueNAS 26.0 or later (see " +
 			"the truenas_webshare_config resource's schema description for the version-gate details).",
 		Attributes: map[string]dschema.Attribute{
 			"id": dschema.StringAttribute{

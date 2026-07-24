@@ -171,7 +171,7 @@ func (r *ISCSIExtentResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 
-	// SCALE 26.0: delete takes positional booleans (id, remove, force), not an
+	// TrueNAS 26.0: delete takes positional booleans (id, remove, force), not an
 	// options object (verified live). remove=false keeps file-backed data.
 	_, err := r.client.Call(ctx, "iscsi.extent.delete", state.ID.ValueInt64(), false, false)
 	if err != nil && !client.IsNotFound(err) {

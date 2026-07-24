@@ -22,7 +22,7 @@ func idmapRangeValidators() []validator.Int64 {
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE directory services configuration (directoryservices.config) — " +
+		Description: "Manages the TrueNAS directory services configuration (directoryservices.config) — " +
 			"joining the system to an Active Directory domain, an IPA (FreeIPA) domain, or binding to a plain " +
 			"LDAP directory. This is a singleton resource: there is exactly one directory services configuration " +
 			"per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls " +

@@ -37,7 +37,7 @@ func modeRegexp() *regexp.Regexp {
 
 // fsStatAPI is the subset of filesystem.stat's response this resource
 // cares about (probed live via core.get_methods + a real setperm/stat
-// round trip on TrueNAS SCALE 25.10). filesystem.stat is job:false
+// round trip on TrueNAS 25.10). filesystem.stat is job:false
 // (synchronous plain Call). "mode" is the full stat(2) st_mode integer
 // (file-type bits included, e.g. a directory's mode came back as decimal
 // 16872 for permission bits 0750 = 0o40750) — see permModeString.

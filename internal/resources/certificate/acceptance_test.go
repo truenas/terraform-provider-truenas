@@ -22,7 +22,7 @@ import (
 // genSelfSigned generates an RSA 2048 self-signed certificate + PKCS#8
 // private key entirely in Go (no external tooling), for the
 // CERTIFICATE_CREATE_IMPORTED acceptance path. RSA 2048 was confirmed live
-// against TrueNAS SCALE 25.10 as an accepted import (certificate.create
+// against TrueNAS 25.10 as an accepted import (certificate.create
 // with create_type=CERTIFICATE_CREATE_IMPORTED and this exact PEM shape
 // round-tripped cleanly).
 func genSelfSigned(t *testing.T, cn string) (certPEM, keyPEM string) {

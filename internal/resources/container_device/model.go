@@ -8,11 +8,11 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
 
-// containerDeviceVersionFloorMajor/Minor is the minimum TrueNAS SCALE
+// containerDeviceVersionFloorMajor/Minor is the minimum TrueNAS
 // release that exposes the container.device.* namespace at all. Probed
-// live: SCALE 25.10 returns 0 container.device.* methods from
+// live: TrueNAS 25.10 returns 0 container.device.* methods from
 // core.get_methods (namespace genuinely absent, matching container.* itself
-// — see the container package's own versionGateDiagnostics); SCALE 26.0
+// — see the container package's own versionGateDiagnostics); TrueNAS 26.0
 // supports the full namespace (container.device.create/update/delete/query/
 // get_instance, all job:false, plus the usb_choices/nic_attach_choices/
 // gpu_choices helpers, confirmed live this session — see resource.go's
@@ -25,7 +25,7 @@ const (
 
 // versionGateDiagnostics reports whether the given TrueNAS release string
 // (as returned by system.version_short via client.ServerVersion) is at or
-// above the SCALE 26.0 floor the container.device namespace requires,
+// above the TrueNAS 26.0 floor the container.device namespace requires,
 // returning a single clean error diagnostic when it is not. Pure function
 // of an already-probed version string (no live client access), matching
 // the lxc_config/container/webshare precedent so it stays independently
@@ -34,8 +34,8 @@ func versionGateDiagnostics(version string) diag.Diagnostics {
 	var diags diag.Diagnostics
 	if !client.VersionAtLeastString(version, containerDeviceVersionFloorMajor, containerDeviceVersionFloorMinor) {
 		diags.AddError(
-			"TrueNAS SCALE version too old",
-			"truenas_container_device requires TrueNAS SCALE 26.0 or later",
+			"TrueNAS version too old",
+			"truenas_container_device requires TrueNAS 26.0 or later",
 		)
 	}
 	return diags
@@ -67,7 +67,7 @@ type ContainerDeviceDataSourceModel struct {
 
 // containerDeviceAPI is the JSON wire format for a TrueNAS container device
 // object, as returned by container.device.create/update/get_instance/query.
-// Probed live against SCALE 26.0 (the only release with this namespace —
+// Probed live against TrueNAS 26.0 (the only release with this namespace —
 // see versionGateDiagnostics), e.g.:
 //
 //	{"id": 2, "attributes": {"dtype": "FILESYSTEM", "target": "/data",

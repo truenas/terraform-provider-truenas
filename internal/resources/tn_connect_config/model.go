@@ -12,19 +12,19 @@ import (
 // resource: there is exactly one TrueNAS Connect configuration per TrueNAS
 // system (tn_connect.config always returns a single record), and it is
 // never created or deleted on TrueNAS itself. The API's own numeric "id"
-// (probed live on both SCALE 25.10 and 26.0: always 1) is an internal
+// (probed live on both TrueNAS 25.10 and 26.0: always 1) is an internal
 // implementation detail and is intentionally not surfaced in the model,
 // mirroring the webshare_config/twofactor_auth singleton pattern.
 const tnConnectConfigResourceID = "tn_connect_config"
 
 // No version floor exists for this resource: tn_connect.config/tn_connect.update
 // are present on BOTH probed releases (unlike webshare/lxc_config/
-// container_device, which are absent on SCALE 25.10). Probed live:
+// container_device, which are absent on TrueNAS 25.10). Probed live:
 //
-//   - SCALE 25.10 (wss://192.168.1.249): tn_connect namespace present, 5
+//   - TrueNAS 25.10 (wss://192.168.1.249): tn_connect namespace present, 5
 //     methods (config, generate_claim_token, get_registration_uri,
 //     ip_choices, update).
-//   - SCALE 26.0 (wss://192.168.1.68): tn_connect namespace present, 6
+//   - TrueNAS 26.0 (wss://192.168.1.68): tn_connect namespace present, 6
 //     methods (adds ips_with_hostnames).
 //
 // What DOES differ sharply between the two releases is tn_connect.update's
@@ -38,7 +38,7 @@ const tnConnectConfigResourceID = "tn_connect_config"
 // Terraform null in responseToModel/responseToDataSourceModel below),
 // distinguished from a present-but-empty value:
 //
-//	SCALE 25.10 (192.168.1.249, enabled=false):
+//	TrueNAS 25.10 (192.168.1.249, enabled=false):
 //	{"id": 1, "enabled": false, "registration_details": {}, "ips": [],
 //	 "interfaces": [], "interfaces_ips": [], "use_all_interfaces": true,
 //	 "status": "DISABLED", "status_reason": "TrueNAS Connect is disabled",
@@ -49,7 +49,7 @@ const tnConnectConfigResourceID = "tn_connect_config"
 //	 "heartbeat_url": "https://heartbeat-service.tys1.truenasconnect.net/"}
 //	 -- no "tier", no "last_heartbeat_failure_datetime" keys at all.
 //
-//	SCALE 26.0 (192.168.1.68, enabled=true — real, already-enrolled
+//	TrueNAS 26.0 (192.168.1.68, enabled=true — real, already-enrolled
 //	production TrueNAS Connect account, FOUNDATION tier):
 //	{"id": 1, "enabled": true,
 //	 "registration_details": {"account_id": "...", "iat": ..., "iss": "TrueNAS",
@@ -60,7 +60,7 @@ const tnConnectConfigResourceID = "tn_connect_config"
 //	 "account_service_base_url": "...", "leca_service_base_url": "...",
 //	 "tnc_base_url": "...", "heartbeat_url": "..."}
 //	 -- no "ips", "interfaces", "interfaces_ips", "use_all_interfaces" keys
-//	 at all: SCALE 26.0 dropped the manual IP/interface-selection fields
+//	 at all: TrueNAS 26.0 dropped the manual IP/interface-selection fields
 //	 entirely in favor of automatic selection.
 type tnConnectConfigAPI struct {
 	ID                           int64           `json:"id"`
@@ -243,7 +243,7 @@ func responseToDataSourceModel(ctx context.Context, api *tnConnectConfigAPI, m *
 // No other field is ever writable through this resource, for two combined,
 // probe-confirmed reasons:
 //
-//  1. On SCALE 26.0 (this resource's primary/production target),
+//  1. On TrueNAS 26.0 (this resource's primary/production target),
 //     tn_connect.update's own "accepts" schema (core.get_methods, probed
 //     live against 192.168.1.68) exposes EXACTLY ONE property: "enabled".
 //     There is no cosmetic field to safely toggle there at all — the
@@ -255,7 +255,7 @@ func responseToDataSourceModel(ctx context.Context, api *tnConnectConfigAPI, m *
 //     independent reason no live update probe was attempted there: even a
 //     no-op-payload update call carries unacceptable risk against a
 //     production enrollment, and the schema finding alone is decisive.
-//  2. On SCALE 25.10, tn_connect.update's accepts schema is richer (also
+//  2. On TrueNAS 25.10, tn_connect.update's accepts schema is richer (also
 //     exposes "ips", "interfaces", "use_all_interfaces"), and a supplementary
 //     live probe against the disposable 25.10 test box (192.168.1.249,
 //     enabled=false) confirmed sending {"ips": ["127.0.0.1"]} alone leaves

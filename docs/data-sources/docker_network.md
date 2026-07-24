@@ -3,12 +3,12 @@
 page_title: "truenas_docker_network Data Source - truenas"
 subcategory: ""
 description: |-
-  Looks up a Docker network on TrueNAS SCALE by name (docker.network.query). Read-only: Docker networks are created/destroyed by Docker itself (and by installed applications), not by this provider — there is no corresponding truenas_docker_network resource.
+  Looks up a Docker network on TrueNAS by name (docker.network.query). Read-only: Docker networks are created/destroyed by Docker itself (and by installed applications), not by this provider — there is no corresponding truenas_docker_network resource.
 ---
 
 # truenas_docker_network (Data Source)
 
-Looks up a Docker network on TrueNAS SCALE by name (docker.network.query). Read-only: Docker networks are created/destroyed by Docker itself (and by installed applications), not by this provider — there is no corresponding truenas_docker_network resource.
+Looks up a Docker network on TrueNAS by name (docker.network.query). Read-only: Docker networks are created/destroyed by Docker itself (and by installed applications), not by this provider — there is no corresponding truenas_docker_network resource.
 
 
 

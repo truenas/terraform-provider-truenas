@@ -3,12 +3,12 @@
 page_title: "truenas_replication_task Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a replication task on TrueNAS SCALE. Supports LOCAL replication (within the same system) and remote replication over SSH (transport = "SSH", authenticating via a truenas_keychain_ssh_connection credential referenced by "ssh_credentials").
+  Manages a replication task on TrueNAS. Supports LOCAL replication (within the same system) and remote replication over SSH (transport = "SSH", authenticating via a truenas_keychain_ssh_connection credential referenced by "ssh_credentials").
 ---
 
 # truenas_replication_task (Resource)
 
-Manages a replication task on TrueNAS SCALE. Supports LOCAL replication (within the same system) and remote replication over SSH (transport = "SSH", authenticating via a truenas_keychain_ssh_connection credential referenced by "ssh_credentials").
+Manages a replication task on TrueNAS. Supports LOCAL replication (within the same system) and remote replication over SSH (transport = "SSH", authenticating via a truenas_keychain_ssh_connection credential referenced by "ssh_credentials").
 
 ## Example Usage
 

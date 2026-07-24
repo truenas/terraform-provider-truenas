@@ -20,7 +20,7 @@ import (
 //
 // Safety: this test never references the box's live iSCSI configuration
 // (portal id=1, target id=1 "proxmox", extent id=2, targetextent id=2). The
-// test portal listens on the box IP (port is not settable per-listen on SCALE
+// test portal listens on the box IP (port is not settable per-listen on TrueNAS
 // 26.0+) and the auth group uses tag 999 (distinct from any live tag).
 func TestAccISCSIEndToEnd(t *testing.T) {
 	portalComment := acctest.RandName("tf-acc-portal")

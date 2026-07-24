@@ -2,10 +2,10 @@
 
 Server-side issues found while building and testing
 terraform-provider-truenas. None are provider bugs — each is a behavior in
-the TrueNAS SCALE middleware itself, recorded here so they can be filed
+the TrueNAS middleware itself, recorded here so they can be filed
 upstream with iX. Where the provider carries a workaround, it is noted.
 
-Releases referenced: SCALE 25.10.3.1, 25.10.4 (Enterprise HA), and
+Releases referenced: TrueNAS 25.10.3.1, 25.10.4 (Enterprise HA), and
 26.0.0-BETA.2. Each finding lists the release(s) where it was observed.
 
 ---
@@ -14,7 +14,7 @@ Releases referenced: SCALE 25.10.3.1, 25.10.4 (Enterprise HA), and
 
 **Severity:** functional — an unhandled server-side exception, not a
 validation error.
-**Observed on:** SCALE 25.10.3.1.
+**Observed on:** TrueNAS 25.10.3.1.
 **Namespace/method:** `kerberos.update` (fields `appdefaults_aux`,
 `libdefaults_aux`).
 
@@ -48,7 +48,7 @@ in `internal/resources/kerberos_config/acceptance_test.go`.
 ## 2. Stale `kerberos_realm` survives a directory-services service-type switch
 
 **Severity:** functional — blocks a subsequent directory-services join.
-**Observed on:** SCALE 25.10.3.1 and 26.0.0-BETA.2.
+**Observed on:** TrueNAS 25.10.3.1 and 26.0.0-BETA.2.
 **Namespace/method:** `directoryservices.update` (interaction with
 `kerberos_realm`).
 
@@ -86,7 +86,7 @@ atomic server-side fix would let the workaround be removed.
 ## 3. `core.get_methods` under-reports namespaces on 25.10
 
 **Severity:** correctness — introspection disagrees with what is callable.
-**Observed on:** SCALE 25.10.4.
+**Observed on:** TrueNAS 25.10.4.
 **Namespace/method:** `core.get_methods` (observed for `failover.*`).
 
 ### Summary
@@ -111,7 +111,7 @@ by the listing alone.
 ## 4. `failover.config.master` is unreliable immediately after a failover
 
 **Severity:** correctness — a state field that misreports transiently.
-**Observed on:** SCALE 25.10.4 (Enterprise HA pair).
+**Observed on:** TrueNAS 25.10.4 (Enterprise HA pair).
 **Namespace/method:** `failover.config` (`master` field).
 
 ### Summary
@@ -144,7 +144,7 @@ post-failover. In `internal/resources/failover_config/{schema.go,model.go}`.
 ## 5. `container.image.query_registry` lists pruned image versions
 
 **Severity:** reliability — the listing and actual availability drift apart.
-**Observed on:** SCALE 26.0.0-BETA.2.
+**Observed on:** TrueNAS 26.0.0-BETA.2.
 **Namespace/method:** `container.image.query_registry` →
 `container.create`.
 

@@ -32,7 +32,7 @@ type AclTemplateDataSourceModel struct {
 
 // aclTemplateAPI is the JSON shape returned by filesystem.acltemplate.*
 // (create/query/get_instance/update all share this shape; probed live
-// against TrueNAS SCALE 25.10 via core.get_methods and a real create/query/
+// against TrueNAS 25.10 via core.get_methods and a real create/query/
 // get_instance/update/delete round trip). filesystem.acltemplate.create/
 // query/get_instance/update/delete are all job:false (synchronous, plain
 // Call - no CallJob needed).

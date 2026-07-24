@@ -11,7 +11,7 @@ import (
 // CertificateModel is the Terraform state/plan model for truenas_certificate.
 //
 // certificate.create's "accepts" schema (probed live and identical, field
-// for field, on both TrueNAS SCALE 25.10 and 26.0 — no version gating
+// for field, on both TrueNAS 25.10 and 26.0 — no version gating
 // needed) is a single flat object covering all four create_type variants
 // (CERTIFICATE_CREATE_IMPORTED / _CSR / _IMPORTED_CSR / _ACME); the service
 // validates only the subset relevant to the chosen create_type. This model
@@ -96,7 +96,7 @@ type CertificateDataSourceModel struct {
 
 // certificateAPI mirrors the JSON object returned by certificate.create,
 // certificate.update, certificate.get_instance, and certificate.query.
-// Probed live against TrueNAS SCALE 25.10.
+// Probed live against TrueNAS 25.10.
 //
 // Critical read-back finding: the job *result* returned directly by
 // certificate.create/certificate.update masks "privatekey" as the literal
@@ -393,7 +393,7 @@ const (
 // preflight validates the create_type-specific required fields client-side,
 // ahead of the certificate.create call, so misconfigurations surface as a
 // clear Terraform-level error instead of an opaque job failure. Requirements
-// below were confirmed by live probing against TrueNAS SCALE 25.10:
+// below were confirmed by live probing against TrueNAS 25.10:
 //
 //   - IMPORTED requires "certificate" and "privatekey" (both empty by
 //     default on a bare CERTIFICATE_CREATE_IMPORTED payload).

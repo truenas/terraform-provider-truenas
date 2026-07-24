@@ -3,12 +3,12 @@
 page_title: "truenas_system_dataset Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE system dataset configuration (the dataset that holds core system state such as logs, reporting, syslog, and samba4 data). Takes no arguments: there is exactly one system dataset configuration per TrueNAS system.
+  Reads the current TrueNAS system dataset configuration (the dataset that holds core system state such as logs, reporting, syslog, and samba4 data). Takes no arguments: there is exactly one system dataset configuration per TrueNAS system.
 ---
 
 # truenas_system_dataset (Data Source)
 
-Reads the current TrueNAS SCALE system dataset configuration (the dataset that holds core system state such as logs, reporting, syslog, and samba4 data). Takes no arguments: there is exactly one system dataset configuration per TrueNAS system.
+Reads the current TrueNAS system dataset configuration (the dataset that holds core system state such as logs, reporting, syslog, and samba4 data). Takes no arguments: there is exactly one system dataset configuration per TrueNAS system.
 
 
 

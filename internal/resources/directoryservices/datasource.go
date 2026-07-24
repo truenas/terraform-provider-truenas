@@ -26,7 +26,7 @@ func (d *DirectoryServicesDataSource) Metadata(_ context.Context, req datasource
 
 func (d *DirectoryServicesDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE directory services configuration " +
+		Description: "Reads the current TrueNAS directory services configuration " +
 			"(directoryservices.config) and health (directoryservices.status). Takes no arguments: there is " +
 			"exactly one directory services configuration per TrueNAS system. Does not expose \"credential\": " +
 			"see the truenas_directoryservices resource documentation for why the credential used to join a " +

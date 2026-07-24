@@ -26,7 +26,7 @@ func (d *FailoverConfigDataSource) Metadata(_ context.Context, req datasource.Me
 
 func (d *FailoverConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE Enterprise HA failover configuration and live status. " +
+		Description: "Reads the current TrueNAS Enterprise HA failover configuration and live status. " +
 			"Takes no arguments: there is exactly one failover configuration per TrueNAS system. Makes no " +
 			"changes — see the truenas_failover_config resource's schema description for the safety notes " +
 			"around the \"disabled\" and \"master\" fields. Reads cleanly even on a box that isn't licensed " +

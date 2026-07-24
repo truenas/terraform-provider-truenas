@@ -67,7 +67,7 @@ type CloudBackupDataSourceModel struct {
 }
 
 // cloudBackupAPI is the JSON shape returned by cloud_backup.* methods.
-// Probed against a live TrueNAS SCALE 25.10 box via core.get_methods
+// Probed against a live TrueNAS 25.10 box via core.get_methods
 // (cloud_backup.create/get_instance/query/update all share this shape) and
 // cross-checked against middlewared's
 // middlewared/api/v25_10_2/{cloud,cloud_backup}.py source:

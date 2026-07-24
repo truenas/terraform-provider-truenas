@@ -3,12 +3,12 @@
 page_title: "truenas_system_general Resource - truenas"
 subcategory: ""
 description: |-
-  Manages the TrueNAS SCALE system general configuration (management UI, timezone, keyboard map, usage collection). This is a singleton resource — there is exactly one system general configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls system.general.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it controls management UI access). WARNING: several attributes on this resource control how the management UI is reached over the network (ui_address, ui_allowlist, ui_port, ui_httpsport, ui_v6address); changing them can cut off management access to the system.
+  Manages the TrueNAS system general configuration (management UI, timezone, keyboard map, usage collection). This is a singleton resource — there is exactly one system general configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls system.general.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it controls management UI access). WARNING: several attributes on this resource control how the management UI is reached over the network (ui_address, ui_allowlist, ui_port, ui_httpsport, ui_v6address); changing them can cut off management access to the system.
 ---
 
 # truenas_system_general (Resource)
 
-Manages the TrueNAS SCALE system general configuration (management UI, timezone, keyboard map, usage collection). This is a singleton resource — there is exactly one system general configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls system.general.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it controls management UI access). WARNING: several attributes on this resource control how the management UI is reached over the network (ui_address, ui_allowlist, ui_port, ui_httpsport, ui_v6address); changing them can cut off management access to the system.
+Manages the TrueNAS system general configuration (management UI, timezone, keyboard map, usage collection). This is a singleton resource — there is exactly one system general configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls system.general.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it controls management UI access). WARNING: several attributes on this resource control how the management UI is reached over the network (ui_address, ui_allowlist, ui_port, ui_httpsport, ui_v6address); changing them can cut off management access to the system.
 
 ## Example Usage
 

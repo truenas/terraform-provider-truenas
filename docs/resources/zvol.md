@@ -3,12 +3,12 @@
 page_title: "truenas_zvol Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a ZFS volume (zvol/block device) on TrueNAS SCALE.
+  Manages a ZFS volume (zvol/block device) on TrueNAS.
 ---
 
 # truenas_zvol (Resource)
 
-Manages a ZFS volume (zvol/block device) on TrueNAS SCALE.
+Manages a ZFS volume (zvol/block device) on TrueNAS.
 
 ## Example Usage
 

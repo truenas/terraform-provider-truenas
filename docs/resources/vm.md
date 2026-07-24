@@ -3,12 +3,12 @@
 page_title: "truenas_vm Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a virtual machine on TrueNAS SCALE.
+  Manages a virtual machine on TrueNAS.
 ---
 
 # truenas_vm (Resource)
 
-Manages a virtual machine on TrueNAS SCALE.
+Manages a virtual machine on TrueNAS.
 
 ## Example Usage
 

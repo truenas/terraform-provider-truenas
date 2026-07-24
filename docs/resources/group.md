@@ -3,12 +3,12 @@
 page_title: "truenas_group Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a group on TrueNAS SCALE.
+  Manages a group on TrueNAS.
 ---
 
 # truenas_group (Resource)
 
-Manages a group on TrueNAS SCALE.
+Manages a group on TrueNAS.
 
 ## Example Usage
 

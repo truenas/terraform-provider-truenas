@@ -3,12 +3,12 @@
 page_title: "truenas_app_registry Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a TrueNAS SCALE app container registry (app.registry): credentials used by the Apps (Docker) subsystem to authenticate against a container registry. NOTE: app.registry.create validates the supplied username/password/uri against the real registry endpoint before persisting anything (probed live on TrueNAS SCALE 26.0 with a throwaway create against an unreachable TEST-NET-1 host: rejected with "Invalid credentials for registry"), so this resource's acceptance test is a permanent, documented skip — see acceptance_test.go.
+  Manages a TrueNAS app container registry (app.registry): credentials used by the Apps (Docker) subsystem to authenticate against a container registry. NOTE: app.registry.create validates the supplied username/password/uri against the real registry endpoint before persisting anything (probed live on TrueNAS 26.0 with a throwaway create against an unreachable TEST-NET-1 host: rejected with "Invalid credentials for registry"), so this resource's acceptance test is a permanent, documented skip — see acceptance_test.go.
 ---
 
 # truenas_app_registry (Resource)
 
-Manages a TrueNAS SCALE app container registry (app.registry): credentials used by the Apps (Docker) subsystem to authenticate against a container registry. NOTE: app.registry.create validates the supplied username/password/uri against the real registry endpoint before persisting anything (probed live on TrueNAS SCALE 26.0 with a throwaway create against an unreachable TEST-NET-1 host: rejected with "Invalid credentials for registry"), so this resource's acceptance test is a permanent, documented skip — see acceptance_test.go.
+Manages a TrueNAS app container registry (app.registry): credentials used by the Apps (Docker) subsystem to authenticate against a container registry. NOTE: app.registry.create validates the supplied username/password/uri against the real registry endpoint before persisting anything (probed live on TrueNAS 26.0 with a throwaway create against an unreachable TEST-NET-1 host: rejected with "Invalid credentials for registry"), so this resource's acceptance test is a permanent, documented skip — see acceptance_test.go.
 
 ## Example Usage
 

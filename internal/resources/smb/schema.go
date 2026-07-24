@@ -11,7 +11,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages an SMB share on TrueNAS SCALE.",
+		Description: "Manages an SMB share on TrueNAS.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{
 				Computed:    true,
@@ -32,7 +32,7 @@ func resourceSchema() schema.Schema {
 			"ro": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Export share as read-only. Sent to TrueNAS SCALE 26.0 as the top-level `readonly` field (renamed from `ro` on the wire; the Terraform attribute name is unchanged for backward compatibility).",
+				Description: "Export share as read-only. Sent to TrueNAS 26.0 as the top-level `readonly` field (renamed from `ro` on the wire; the Terraform attribute name is unchanged for backward compatibility).",
 			},
 			"browsable": schema.BoolAttribute{
 				Optional:    true,
@@ -42,54 +42,54 @@ func resourceSchema() schema.Schema {
 			"recyclebin": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Enable Windows Recycle Bin behaviour. On SCALE 26.0 this only applies when the share's `purpose` is (or defaults to) LEGACY_SHARE; it is sent nested under `options` and is not sent (or read back) for any other purpose.",
+				Description: "Enable Windows Recycle Bin behaviour. On TrueNAS 26.0 this only applies when the share's `purpose` is (or defaults to) LEGACY_SHARE; it is sent nested under `options` and is not sent (or read back) for any other purpose.",
 			},
 			"guestok": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Allow unauthenticated (guest) access. LEGACY_SHARE-only on SCALE 26.0; see `recyclebin` for details on the options mapping.",
+				Description: "Allow unauthenticated (guest) access. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.",
 			},
 			"hostsallow": schema.ListAttribute{
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "List of hosts/IPs allowed to connect. LEGACY_SHARE-only on SCALE 26.0; see `recyclebin` for details on the options mapping.",
+				Description: "List of hosts/IPs allowed to connect. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.",
 			},
 			"hostsdeny": schema.ListAttribute{
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "List of hosts/IPs denied from connecting. LEGACY_SHARE-only on SCALE 26.0; see `recyclebin` for details on the options mapping.",
+				Description: "List of hosts/IPs denied from connecting. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.",
 			},
 			"abe": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Enable Access-Based Enumeration. Sent to TrueNAS SCALE 26.0 as the top-level `access_based_share_enumeration` field (renamed from `abe` on the wire; the Terraform attribute name is unchanged for backward compatibility).",
+				Description: "Enable Access-Based Enumeration. Sent to TrueNAS 26.0 as the top-level `access_based_share_enumeration` field (renamed from `abe` on the wire; the Terraform attribute name is unchanged for backward compatibility).",
 			},
 			"acl": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Enable ACL support on this share. LEGACY_SHARE-only on SCALE 26.0; see `recyclebin` for details on the options mapping.",
+				Description: "Enable ACL support on this share. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.",
 			},
 			"durablehandle": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Enable SMB2 durable handles. LEGACY_SHARE-only on SCALE 26.0; see `recyclebin` for details on the options mapping.",
+				Description: "Enable SMB2 durable handles. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.",
 			},
 			"streams": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Enable alternate data streams. LEGACY_SHARE-only on SCALE 26.0; see `recyclebin` for details on the options mapping.",
+				Description: "Enable alternate data streams. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.",
 			},
 			"timemachine": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Advertise share as a Time Machine target. LEGACY_SHARE-only on SCALE 26.0; see `recyclebin` for details on the options mapping.",
+				Description: "Advertise share as a Time Machine target. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.",
 			},
 			"timemachine_quota": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Per-machine Time Machine quota in GiB (0 = unlimited). LEGACY_SHARE-only on SCALE 26.0; see `recyclebin` for details on the options mapping.",
+				Description: "Per-machine Time Machine quota in GiB (0 = unlimited). LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.",
 			},
 			"enabled": schema.BoolAttribute{
 				Optional:    true,
@@ -99,17 +99,17 @@ func resourceSchema() schema.Schema {
 			"home": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Use this share as user home-directory share. LEGACY_SHARE-only on SCALE 26.0; see `recyclebin` for details on the options mapping.",
+				Description: "Use this share as user home-directory share. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.",
 			},
 			"purpose": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Purpose preset. One of: DEFAULT_SHARE, LEGACY_SHARE, TIMEMACHINE_SHARE, MULTIPROTOCOL_SHARE, TIME_LOCKED_SHARE, PRIVATE_DATASETS_SHARE, EXTERNAL_SHARE, VEEAM_REPOSITORY_SHARE, FCP_SHARE. On SCALE 26.0 this drives a discriminated `options` object on the wire. When left unset (or set to an unrecognized value), the provider defaults to LEGACY_SHARE so this resource's flat legacy attributes (recyclebin, hostsallow, hostsdeny, guestok, streams, durablehandle, home, acl, timemachine, timemachine_quota) continue to work as before. Setting purpose to any other enum value switches the share to that purpose's variant defaults server-side and stops sending the legacy attributes.",
+				Description: "Purpose preset. One of: DEFAULT_SHARE, LEGACY_SHARE, TIMEMACHINE_SHARE, MULTIPROTOCOL_SHARE, TIME_LOCKED_SHARE, PRIVATE_DATASETS_SHARE, EXTERNAL_SHARE, VEEAM_REPOSITORY_SHARE, FCP_SHARE. On TrueNAS 26.0 this drives a discriminated `options` object on the wire. When left unset (or set to an unrecognized value), the provider defaults to LEGACY_SHARE so this resource's flat legacy attributes (recyclebin, hostsallow, hostsdeny, guestok, streams, durablehandle, home, acl, timemachine, timemachine_quota) continue to work as before. Setting purpose to any other enum value switches the share to that purpose's variant defaults server-side and stops sending the legacy attributes.",
 			},
 			// Computed-only (server-generated)
 			"vuid": schema.StringAttribute{
 				Computed:    true,
-				Description: "Vendor unique identifier assigned by TrueNAS. On SCALE 26.0 this is only populated (and only meaningful) when `purpose` is LEGACY_SHARE, where it lives nested under `options.vuid` on the wire.",
+				Description: "Vendor unique identifier assigned by TrueNAS. On TrueNAS 26.0 this is only populated (and only meaningful) when `purpose` is LEGACY_SHARE, where it lives nested under `options.vuid` on the wire.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},

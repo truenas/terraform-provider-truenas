@@ -3,12 +3,12 @@
 page_title: "truenas_container_device Data Source - truenas"
 subcategory: ""
 description: |-
-  Fetches a TrueNAS container device by ID. Requires TrueNAS SCALE 26.0 or later — see the truenas_container_device resource's schema description for the version-gate details.
+  Fetches a TrueNAS container device by ID. Requires TrueNAS 26.0 or later — see the truenas_container_device resource's schema description for the version-gate details.
 ---
 
 # truenas_container_device (Data Source)
 
-Fetches a TrueNAS container device by ID. Requires TrueNAS SCALE 26.0 or later — see the truenas_container_device resource's schema description for the version-gate details.
+Fetches a TrueNAS container device by ID. Requires TrueNAS 26.0 or later — see the truenas_container_device resource's schema description for the version-gate details.
 
 
 

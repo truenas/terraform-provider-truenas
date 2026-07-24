@@ -43,7 +43,7 @@ func (r *VMwareResource) Configure(_ context.Context, req resource.ConfigureRequ
 }
 
 // vmware.create/query/get_instance/update/delete are all job:false (sync)
-// methods: probed via core.get_methods on both TrueNAS SCALE 25.10.4 HA and
+// methods: probed via core.get_methods on both TrueNAS 25.10.4 HA and
 // 26.0, every one of them reports "job": false. See schema.go for the full
 // probe writeup, including the decisive vCenter/ESXi endpoint validation
 // result that makes this resource's acceptance test a permanent skip.

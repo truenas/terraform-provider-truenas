@@ -3,12 +3,12 @@
 page_title: "truenas_replication_config Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE replication configuration (system-wide replication task concurrency). Takes no arguments: there is exactly one replication configuration per TrueNAS system.
+  Reads the current TrueNAS replication configuration (system-wide replication task concurrency). Takes no arguments: there is exactly one replication configuration per TrueNAS system.
 ---
 
 # truenas_replication_config (Data Source)
 
-Reads the current TrueNAS SCALE replication configuration (system-wide replication task concurrency). Takes no arguments: there is exactly one replication configuration per TrueNAS system.
+Reads the current TrueNAS replication configuration (system-wide replication task concurrency). Takes no arguments: there is exactly one replication configuration per TrueNAS system.
 
 
 

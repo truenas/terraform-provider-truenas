@@ -11,15 +11,15 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE Webshare service configuration (webshare.config/webshare.update): " +
+		Description: "Manages the TrueNAS Webshare service configuration (webshare.config/webshare.update): " +
 			"the IP addresses the Webshare HTTP server binds to, whether search indexing is enabled, the passkey " +
 			"authentication mode, and the AD/LDAP groups granted access. This is a singleton resource — there is " +
 			"exactly one Webshare configuration per TrueNAS system, so it is never created or deleted on TrueNAS; " +
 			"Terraform create/update calls webshare.update (probed job:false), and Terraform delete only removes " +
 			"the resource from state (the configuration is left in place)." +
 			"\n\n" +
-			"Requires TrueNAS SCALE 26.0 or later: the webshare namespace does not exist on earlier releases " +
-			"(probed live — SCALE 25.10 exposes 0 webshare.* methods via core.get_methods). Using this resource " +
+			"Requires TrueNAS 26.0 or later: the webshare namespace does not exist on earlier releases " +
+			"(probed live — TrueNAS 25.10 exposes 0 webshare.* methods via core.get_methods). Using this resource " +
 			"against an older server fails with a clean error during Create/Read/Update rather than a raw API " +
 			"error.",
 		Attributes: map[string]schema.Attribute{

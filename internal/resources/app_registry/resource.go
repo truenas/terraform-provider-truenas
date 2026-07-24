@@ -43,7 +43,7 @@ func (r *AppRegistryResource) Configure(_ context.Context, req resource.Configur
 }
 
 // app.registry.create/query/get_instance/update/delete are all non-job
-// (sync) methods: probed via core.get_methods on both TrueNAS SCALE 25.10
+// (sync) methods: probed via core.get_methods on both TrueNAS 25.10
 // and 26.0, every one of them reports "job": false. See schema.go for the
 // full probe writeup, including the decisive credential/uri validation
 // result that makes this resource's acceptance test a permanent skip.

@@ -21,13 +21,13 @@ import (
 // SAFETY: uses a RandName-suffixed container name and creates/destroys
 // only its own object — this is a normal Tier-1 acceptance test (not
 // DisruptiveCheck-gated), matching vm's precedent: it never touches any
-// pre-existing container. Requires TrueNAS SCALE 26.0+ (the container
+// pre-existing container. Requires TrueNAS 26.0+ (the container
 // namespace does not exist on 25.10, confirmed live via
 // core.get_methods) — self-skips cleanly via acctest.ServerVersionAtLeast
 // on any older box.
 func TestAccContainer_basic(t *testing.T) {
 	if !acctest.ServerVersionAtLeast(t, 26, 0) {
-		t.Skip("truenas_container requires TrueNAS SCALE 26.0 or later (container namespace absent on 25.10, confirmed live)")
+		t.Skip("truenas_container requires TrueNAS 26.0 or later (container namespace absent on 25.10, confirmed live)")
 	}
 
 	name := "tf-acc-" + acctest.RandName("container")

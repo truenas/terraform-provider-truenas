@@ -18,7 +18,7 @@ func TestVersionGateDiagnostics_BelowFloor(t *testing.T) {
 		if len(diags) != 1 {
 			t.Fatalf("version %q: expected exactly 1 diagnostic, got %d: %v", version, len(diags), diags)
 		}
-		if diags[0].Detail() != "truenas_webshare_config requires TrueNAS SCALE 26.0 or later" {
+		if diags[0].Detail() != "truenas_webshare_config requires TrueNAS 26.0 or later" {
 			t.Errorf("version %q: detail = %q, want the documented message", version, diags[0].Detail())
 		}
 	}

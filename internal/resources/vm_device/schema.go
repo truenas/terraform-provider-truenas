@@ -8,7 +8,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a device attached to a TrueNAS SCALE VM (disk, NIC, CD-ROM, display, PCI passthrough, raw file, or USB).",
+		Description: "Manages a device attached to a TrueNAS VM (disk, NIC, CD-ROM, display, PCI passthrough, raw file, or USB).",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{
 				Computed:    true,

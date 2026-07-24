@@ -82,7 +82,7 @@ type AuditConfigDataSourceModel struct {
 }
 
 // spaceAPI mirrors the nested "space" object returned by audit.config and
-// audit.update. Probed live: identical shape on SCALE 25.10 and 26.0.
+// audit.update. Probed live: identical shape on TrueNAS 25.10 and 26.0.
 type spaceAPI struct {
 	Used              int64 `json:"used"`
 	UsedByDataset     int64 `json:"used_by_dataset"`
@@ -104,7 +104,7 @@ type enabledServicesAPI struct {
 }
 
 // auditConfigAPI mirrors the JSON object returned by audit.config and
-// audit.update. Probed live against SCALE 25.10 and 26.0: identical shape,
+// audit.update. Probed live against TrueNAS 25.10 and 26.0: identical shape,
 // no version gating needed. Note there is no top-level "enable" toggle:
 // auditing is enabled per-service (SMB share audit settings, sudo config,
 // etc), and remote_logging_enabled/space/enabled_services are read-only —

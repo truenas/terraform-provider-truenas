@@ -11,7 +11,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE pool resilver priority schedule (pool.resilver). This is a " +
+		Description: "Manages the TrueNAS pool resilver priority schedule (pool.resilver). This is a " +
 			"singleton resource — there is exactly one resilver schedule per TrueNAS system, so it is never " +
 			"created or deleted on TrueNAS; Terraform create/update calls pool.resilver.update, and Terraform " +
 			"delete only removes the resource from state (the configuration is left in place).",

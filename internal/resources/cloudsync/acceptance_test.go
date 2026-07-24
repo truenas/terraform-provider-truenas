@@ -12,7 +12,7 @@ import (
 // TestAccCloudSync_basic tests create, update, and import of a cloud sync
 // task. It requires:
 //   - TrueNAS_API_KEY set in the environment (checked by acctest.PreCheck)
-//   - A running TrueNAS SCALE instance
+//   - A running TrueNAS instance
 //   - TF_ACC_CLOUDSYNC_CREDENTIALS_ID set to the ID of pre-existing cloud
 //     sync credentials to use
 //   - TF_ACC_CLOUDSYNC_PATH set to a local path to sync (e.g. /mnt/tank/data)

@@ -25,8 +25,8 @@ func (d *ContainerDataSource) Metadata(_ context.Context, req datasource.Metadat
 
 func (d *ContainerDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Looks up an LXC container on TrueNAS SCALE by name (container.query). Requires TrueNAS " +
-			"SCALE 26.0 or later (see the truenas_container resource's schema description for the version-gate " +
+		Description: "Looks up an LXC container on TrueNAS by name (container.query). Requires " +
+			"TrueNAS 26.0 or later (see the truenas_container resource's schema description for the version-gate " +
 			"details). Note \"pool\" is recovered from the container's dataset path rather than returned " +
 			"directly by the API; \"image\" is not exposed here at all — the API never echoes back the image a " +
 			"container was created from (see truenas_container's schema description).",

@@ -19,7 +19,7 @@ var ipamConfigAttrTypes = map[string]attr.Type{
 // IPAMConfigModel maps to one entry of the nested "ipam.config" list: one
 // subnet/gateway/ip_range triple for the network (probed live shape — the
 // method schema itself declares "ipam" generically as an opaque object,
-// but every live response observed on SCALE 26.0 used this concrete shape,
+// but every live response observed on TrueNAS 26.0 used this concrete shape,
 // see task-1-report.md).
 type IPAMConfigModel struct {
 	Subnet  types.String `tfsdk:"subnet"`
@@ -75,7 +75,7 @@ type ipamAPI struct {
 
 // dockerNetworkAPI mirrors one item of the JSON array returned by
 // docker.network.query, and the single object returned by
-// docker.network.get_instance. Probed live against SCALE 26.0 (the only
+// docker.network.get_instance. Probed live against TrueNAS 26.0 (the only
 // release with Docker configured — see task-1-report.md); the method
 // schema itself is version-identical on 25.10, so no gating is needed even
 // though 25.10 had no live networks to sample.

@@ -3,12 +3,12 @@
 page_title: "truenas_pool Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a ZFS pool on TrueNAS SCALE.
+  Manages a ZFS pool on TrueNAS.
 ---
 
 # truenas_pool (Resource)
 
-Manages a ZFS pool on TrueNAS SCALE.
+Manages a ZFS pool on TrueNAS.
 
 ## Example Usage
 

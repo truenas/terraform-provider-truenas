@@ -3,12 +3,12 @@
 page_title: "truenas_directoryservices Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE directory services configuration (directoryservices.config) and health (directoryservices.status). Takes no arguments: there is exactly one directory services configuration per TrueNAS system. Does not expose "credential": see the truenas_directoryservices resource documentation for why the credential used to join a domain is never readable back from TrueNAS.
+  Reads the current TrueNAS directory services configuration (directoryservices.config) and health (directoryservices.status). Takes no arguments: there is exactly one directory services configuration per TrueNAS system. Does not expose "credential": see the truenas_directoryservices resource documentation for why the credential used to join a domain is never readable back from TrueNAS.
 ---
 
 # truenas_directoryservices (Data Source)
 
-Reads the current TrueNAS SCALE directory services configuration (directoryservices.config) and health (directoryservices.status). Takes no arguments: there is exactly one directory services configuration per TrueNAS system. Does not expose "credential": see the truenas_directoryservices resource documentation for why the credential used to join a domain is never readable back from TrueNAS.
+Reads the current TrueNAS directory services configuration (directoryservices.config) and health (directoryservices.status). Takes no arguments: there is exactly one directory services configuration per TrueNAS system. Does not expose "credential": see the truenas_directoryservices resource documentation for why the credential used to join a domain is never readable back from TrueNAS.
 
 
 

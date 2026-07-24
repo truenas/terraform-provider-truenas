@@ -3,12 +3,12 @@
 page_title: "truenas_audit_config Resource - truenas"
 subcategory: ""
 description: |-
-  Manages the TrueNAS SCALE audit configuration (audit.config): retention and dataset quota settings for the local audit databases. This is a singleton resource — there is exactly one audit configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls audit.update, and Terraform delete only removes the resource from state (the configuration is left in place). There is no top-level enable/disable toggle: auditing is enabled per-service (e.g. SMB share audit settings, sudo configuration) and is not managed by this resource.
+  Manages the TrueNAS audit configuration (audit.config): retention and dataset quota settings for the local audit databases. This is a singleton resource — there is exactly one audit configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls audit.update, and Terraform delete only removes the resource from state (the configuration is left in place). There is no top-level enable/disable toggle: auditing is enabled per-service (e.g. SMB share audit settings, sudo configuration) and is not managed by this resource.
 ---
 
 # truenas_audit_config (Resource)
 
-Manages the TrueNAS SCALE audit configuration (audit.config): retention and dataset quota settings for the local audit databases. This is a singleton resource — there is exactly one audit configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls audit.update, and Terraform delete only removes the resource from state (the configuration is left in place). There is no top-level enable/disable toggle: auditing is enabled per-service (e.g. SMB share audit settings, sudo configuration) and is not managed by this resource.
+Manages the TrueNAS audit configuration (audit.config): retention and dataset quota settings for the local audit databases. This is a singleton resource — there is exactly one audit configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls audit.update, and Terraform delete only removes the resource from state (the configuration is left in place). There is no top-level enable/disable toggle: auditing is enabled per-service (e.g. SMB share audit settings, sudo configuration) and is not managed by this resource.
 
 ## Example Usage
 

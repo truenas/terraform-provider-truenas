@@ -34,7 +34,7 @@ type PrivilegeDataSourceModel struct {
 
 // groupRefAPI is the shape of one element of the "local_groups"/"ds_groups"
 // arrays as returned by privilege.create/update/get_instance/query. Probed
-// against a live TrueNAS SCALE 25.10 box: privilege.create accepts (and the
+// against a live TrueNAS 25.10 box: privilege.create accepts (and the
 // brief specifies) a flat list of integer GIDs on write, but every read
 // shape (create's own response included — it echoes back the full created
 // object, not the request payload) embeds the full group object instead:
@@ -83,7 +83,7 @@ func groupRefsToGIDs(raw json.RawMessage) ([]int64, error) {
 
 // privilegeAPI mirrors the JSON object returned by privilege.create,
 // privilege.update, privilege.get_instance, and privilege.query. Probed
-// against a live TrueNAS SCALE 25.10 box (privilege.create/query/update
+// against a live TrueNAS 25.10 box (privilege.create/query/update
 // with a throwaway group + privilege, then deleted):
 //   - local_groups/ds_groups are always arrays of embedded group objects on
 //     read (see groupRefAPI/groupRefsToGIDs), even though create/update

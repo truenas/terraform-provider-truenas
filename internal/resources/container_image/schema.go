@@ -23,7 +23,7 @@ func datasourceSchema() schema.Schema {
 			"(the registry's own last-listed entry, oldest-to-newest by build timestamp, confirmed live) is the " +
 			"safest default to reference; a pinned older version carries this pruning risk." +
 			"\n\n" +
-			"Requires TrueNAS SCALE 26.0 or later (the container namespace does not exist on 25.10, confirmed " +
+			"Requires TrueNAS 26.0 or later (the container namespace does not exist on 25.10, confirmed " +
 			"live — see truenas_container's schema description).",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{

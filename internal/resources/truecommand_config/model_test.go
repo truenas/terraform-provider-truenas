@@ -94,7 +94,7 @@ func TestUpdatePayload_BothSet(t *testing.T) {
 }
 
 // TestResponseToModel_FullShape verifies responseToModel against the field
-// shape probed live (identical on SCALE 25.10.4 HA and 26.0): api_key
+// shape probed live (identical on TrueNAS 25.10.4 HA and 26.0): api_key
 // round-trips verbatim (unmasked), nullable fields decode to true null.
 func TestResponseToModel_FullShape(t *testing.T) {
 	apiKey := "abcd1234abcd1234"
@@ -139,7 +139,7 @@ func TestResponseToModel_FullShape(t *testing.T) {
 // TestResponseToModel_NullableFieldsNull verifies api_key/remote_url/
 // remote_ip_address decode to true Terraform null (not empty string) when
 // the API returns null, matching the probed disabled-state shape (both
-// SCALE 25.10.4 HA and 26.0's live truecommand.config: {"api_key": null,
+// TrueNAS 25.10.4 HA and 26.0's live truecommand.config: {"api_key": null,
 // "enabled": false, "remote_ip_address": null, "remote_url": null, ...}).
 func TestResponseToModel_NullableFieldsNull(t *testing.T) {
 	api := &truecommandConfigAPI{

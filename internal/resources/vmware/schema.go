@@ -11,7 +11,7 @@ import (
 //
 // Field shape (id, datastore, filesystem, hostname, username, password,
 // state) probed live via core.get_methods("vmware") against both TrueNAS
-// SCALE 25.10.4 HA (wss://10.220.16.188/api/current) and 26.0
+// TrueNAS 25.10.4 HA (wss://10.220.16.188/api/current) and 26.0
 // (wss://192.168.1.68/api/current) on 2026-07-23: identical accepts/returns
 // on both releases, all vmware.* methods (create/get_instance/query/update/
 // delete/dataset_has_vms/get_datastores/match_datastores_with_datasets)
@@ -25,10 +25,10 @@ import (
 //	  "hostname": "192.0.2.123",              // RFC 5737 TEST-NET-1, unreachable
 //	  "username": "tfprobeuser", "password": "tf-probe-fake-password-1234",
 //	})
-//	=> SCALE 25.10.4 HA: truenas API error (code 22): [EINVAL]
+//	=> TrueNAS 25.10.4 HA: truenas API error (code 22): [EINVAL]
 //	   vmware_create.datastore: Failed to connect: [ENETUNREACH]
 //	   [Errno 101] Network is unreachable
-//	=> SCALE 26.0: truenas API error (code 22): [EINVAL]
+//	=> TrueNAS 26.0: truenas API error (code 22): [EINVAL]
 //	   vmware_create.datastore: Failed to connect: [ETIMEDOUT]
 //	   [Errno 110] Connection timed out
 //
@@ -44,10 +44,10 @@ import (
 // TestAccCloudBackup_basic precedent.
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a TrueNAS SCALE VMware snapshot integration (vmware.*): coordinates ZFS " +
+		Description: "Manages a TrueNAS VMware snapshot integration (vmware.*): coordinates ZFS " +
 			"snapshots of a local filesystem/dataset with VMware VM snapshots on a vCenter/ESXi host, so backups " +
 			"of running VMs are consistent. NOTE: vmware.create validates the supplied hostname/username/password " +
-			"against the real vCenter/ESXi endpoint before persisting anything (probed live on both TrueNAS SCALE " +
+			"against the real vCenter/ESXi endpoint before persisting anything (probed live on both TrueNAS " +
 			"25.10.4 HA and 26.0 with a throwaway create against an unreachable RFC 5737 TEST-NET-1 host: " +
 			"rejected with a connection error on both releases), so this resource's acceptance test is a " +
 			"permanent, documented skip — see acceptance_test.go.",

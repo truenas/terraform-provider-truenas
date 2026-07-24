@@ -24,7 +24,7 @@ func TestNonNilStrings(t *testing.T) {
 
 func TestStringListOrNull_NilPointerIsNullList(t *testing.T) {
 	// A nil *[]string means the JSON key was entirely absent from this
-	// release's tn_connect.config response (e.g. "ips" on SCALE 26.0) — it
+	// release's tn_connect.config response (e.g. "ips" on TrueNAS 26.0) — it
 	// must map to a null list, distinct from a present-but-empty one.
 	l, diags := stringListOrNull(context.Background(), nil)
 	if diags.HasError() {
@@ -266,7 +266,7 @@ func TestUpdatePayload_ExplicitTrueIncluded(t *testing.T) {
 func TestUpdatePayload_NeverIncludesAnyOtherField(t *testing.T) {
 	// Every field besides "enabled" is Computed-only: updatePayload must
 	// never include them regardless of what the model holds, since
-	// tn_connect.update's own accepts schema on SCALE 26.0 (this resource's
+	// tn_connect.update's own accepts schema on TrueNAS 26.0 (this resource's
 	// primary target — probed live) does not even accept most of them.
 	ips, _ := types.ListValueFrom(context.Background(), types.StringType, []string{"127.0.0.1"})
 	m := &TnConnectConfigModel{

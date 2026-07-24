@@ -11,15 +11,15 @@ import (
 
 // TestAccWebshareConfigDataSource_basic reads the current TrueNAS Webshare
 // configuration through the truenas_webshare_config datasource only. It
-// never writes. Requires TrueNAS SCALE 26.0+: the webshare namespace does
-// not exist on earlier releases (probed live — SCALE 25.10 exposes 0
+// never writes. Requires TrueNAS 26.0+: the webshare namespace does
+// not exist on earlier releases (probed live — TrueNAS 25.10 exposes 0
 // webshare.* methods via core.get_methods), so this test self-skips cleanly
 // via acctest.ServerVersionAtLeast on any older box, matching this
 // resource's own version-gate diagnostic (see resource.go's checkVersion /
 // model.go's versionGateDiagnostics).
 func TestAccWebshareConfigDataSource_basic(t *testing.T) {
 	if !acctest.ServerVersionAtLeast(t, 26, 0) {
-		t.Skip("truenas_webshare_config requires TrueNAS SCALE 26.0 or later (webshare namespace absent on 25.10, confirmed live)")
+		t.Skip("truenas_webshare_config requires TrueNAS 26.0 or later (webshare namespace absent on 25.10, confirmed live)")
 	}
 
 	resource.Test(t, resource.TestCase{
@@ -46,7 +46,7 @@ type webshareConfigOriginal struct {
 }
 
 // readWebshareConfigOriginal reads the box's current webshare.config via
-// acctest.RestoreCall (job:false, probed live on SCALE 26.0), so the test
+// acctest.RestoreCall (job:false, probed live on TrueNAS 26.0), so the test
 // can restore the exact original "search" value afterward. Returns
 // ok=false (rather than failing the test outright) when the read itself
 // errors, so the caller can self-skip — mirroring the mail/ups/lxc_config
@@ -65,7 +65,7 @@ func readWebshareConfigOriginal(t *testing.T) (webshareConfigOriginal, bool) {
 }
 
 // restoreWebshareConfigSearch sends "search" back to its original value via
-// webshare.update. webshare.update is job:false (probed live on SCALE
+// webshare.update. webshare.update is job:false (probed live on TrueNAS
 // 26.0) and accepts a genuine partial update (probed live: sending only
 // "search" leaves bindip/passkey/groups untouched), so the plain
 // acctest.RestoreCall (which wraps a job-unaware CallRead) is sufficient
@@ -85,7 +85,7 @@ func restoreWebshareConfigSearch(t *testing.T, search bool) {
 // no authentication or network-exposure risk) through its opposite value,
 // then back to the value read from the box before the test ran, then
 // imports it. It requires TF_ACC=1, TRUENAS_DISRUPTIVE=1
-// (acctest.DisruptiveCheck), and TrueNAS SCALE 26.0+ (self-skip via
+// (acctest.DisruptiveCheck), and TrueNAS 26.0+ (self-skip via
 // acctest.ServerVersionAtLeast — the webshare namespace does not exist on
 // 25.10, confirmed live), since it mutates the box's live Webshare
 // configuration; a t.Cleanup-registered API restore is the safety net if
@@ -102,7 +102,7 @@ func restoreWebshareConfigSearch(t *testing.T, search bool) {
 func TestAccWebshareConfig_setAndRestore(t *testing.T) {
 	acctest.DisruptiveCheck(t)
 	if !acctest.ServerVersionAtLeast(t, 26, 0) {
-		t.Skip("truenas_webshare_config requires TrueNAS SCALE 26.0 or later (webshare namespace absent on 25.10, confirmed live)")
+		t.Skip("truenas_webshare_config requires TrueNAS 26.0 or later (webshare namespace absent on 25.10, confirmed live)")
 	}
 
 	orig, ok := readWebshareConfigOriginal(t)

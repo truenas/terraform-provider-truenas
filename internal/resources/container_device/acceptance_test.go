@@ -30,14 +30,14 @@ import (
 // only ever rewrites libvirt domain XML on disk — no live bind-mount ever
 // occurs.
 //
-// Requires TrueNAS SCALE 26.0+: the container.device namespace does not
-// exist on earlier releases (probed live — SCALE 25.10 exposes 0
+// Requires TrueNAS 26.0+: the container.device namespace does not
+// exist on earlier releases (probed live — TrueNAS 25.10 exposes 0
 // container.device.* methods via core.get_methods, matching
 // truenas_container's own absence there), so this test self-skips cleanly
 // via acctest.ServerVersionAtLeast on any older box.
 func TestAccContainerDevice_basic(t *testing.T) {
 	if !acctest.ServerVersionAtLeast(t, 26, 0) {
-		t.Skip("truenas_container_device requires TrueNAS SCALE 26.0 or later (container.device namespace absent on 25.10, confirmed live)")
+		t.Skip("truenas_container_device requires TrueNAS 26.0 or later (container.device namespace absent on 25.10, confirmed live)")
 	}
 
 	containerName := "tf-acc-" + acctest.RandName("ctrdev")

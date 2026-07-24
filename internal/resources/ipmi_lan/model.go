@@ -11,7 +11,7 @@ import (
 
 // errMissingStaticFields is returned by updatePayload when the config sets
 // dhcp = false but omits one or more of ipaddress/netmask/gateway. Probed
-// live against ipmi.lan.update's accepts schema (SCALE 25.10.4 Enterprise
+// live against ipmi.lan.update's accepts schema (TrueNAS 25.10.4 Enterprise
 // HA, wss://10.220.16.188): the static-IP variant of the discriminated
 // "dhcp" union (additionalProperties: false) marks ipaddress/netmask/
 // gateway as REQUIRED — sending a static update without all three is
@@ -22,7 +22,7 @@ var errMissingStaticFields = errors.New(
 	"ipaddress, netmask, and gateway are all required when dhcp = false")
 
 // ipmiLanAPI mirrors one element of the JSON array ipmi.lan.query returns.
-// Probed live (SCALE 25.10.4 Enterprise HA, channel 1, static IP):
+// Probed live (TrueNAS 25.10.4 Enterprise HA, channel 1, static IP):
 //
 //	{"channel": 1, "id": 1, "ip_address_source": "static",
 //	 "ip_address": "10.220.2.97", "mac_address": "3c:ec:ef:da:e4:1d",
@@ -45,7 +45,7 @@ var errMissingStaticFields = errors.New(
 // accepts "ipaddress"/"netmask"/"gateway"/"dhcp" (bool). responseToModel
 // below bridges that gap explicitly.
 //
-// Cross-release probe (SCALE 26.0, wss://192.168.1.68): ipmi.lan.channels
+// Cross-release probe (TrueNAS 26.0, wss://192.168.1.68): ipmi.lan.channels
 // reported TWO channels ([1, 8]) rather than the HA box's single channel,
 // confirming "channel" (not a fixed singleton) is the right identity for
 // this resource; ipmi.lan.update's accepts schema is otherwise identical
@@ -131,7 +131,7 @@ func ipmiLanQueryArgs(channel int64) map[string]any {
 // channel; the API doc string for ip_address_source only gives "e.g.,
 // \"DHCP\", \"Static\"" as an example rather than an exhaustive enum, so
 // this compares case-insensitively rather than assuming exact casing.
-// Cross-release probe (SCALE 26.0, wss://192.168.1.68, a second, unused BMC
+// Cross-release probe (TrueNAS 26.0, wss://192.168.1.68, a second, unused BMC
 // channel 8 present on that box): also observed the value "unspecified"
 // for a channel with no configured address at all (ip_address "0.0.0.0",
 // mac_address all-zero) — treated as non-DHCP (false) here, same as any
@@ -206,7 +206,7 @@ func responseToDataSourceModel(api *ipmiLanAPI, m *IPMILanDataSourceModel) diag.
 // configured, regardless of dhcp.
 //
 // "vlan" is NEVER sent as an explicit null, even though the API accepts
-// one and does clear a previously-set tag (re-confirmed live: SCALE
+// one and does clear a previously-set tag (re-confirmed live: TrueNAS
 // 25.10.4 Enterprise HA, wss://10.220.16.188, channel 1 — setting vlan=100
 // then sending an explicit "vlan": null round-tripped to "vlan_id": null,
 // "vlan_id_enable": false on the next ipmi.lan.query, and the box was

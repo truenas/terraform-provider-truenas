@@ -3,12 +3,12 @@
 page_title: "truenas_network_config Resource - truenas"
 subcategory: ""
 description: |-
-  Manages the TrueNAS SCALE global network configuration (hostname, domain, DNS servers, default gateways, service announcement). This is a singleton resource — there is exactly one global network configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls network.configuration.update, and Terraform delete only removes the resource from state (the configuration is left in place). WARNING: hostname affects how the system identifies itself on the network, and ipv4gateway/ipv6gateway affect outbound network connectivity; changing them incorrectly can disrupt access to the system.
+  Manages the TrueNAS global network configuration (hostname, domain, DNS servers, default gateways, service announcement). This is a singleton resource — there is exactly one global network configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls network.configuration.update, and Terraform delete only removes the resource from state (the configuration is left in place). WARNING: hostname affects how the system identifies itself on the network, and ipv4gateway/ipv6gateway affect outbound network connectivity; changing them incorrectly can disrupt access to the system.
 ---
 
 # truenas_network_config (Resource)
 
-Manages the TrueNAS SCALE global network configuration (hostname, domain, DNS servers, default gateways, service announcement). This is a singleton resource — there is exactly one global network configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls network.configuration.update, and Terraform delete only removes the resource from state (the configuration is left in place). WARNING: hostname affects how the system identifies itself on the network, and ipv4gateway/ipv6gateway affect outbound network connectivity; changing them incorrectly can disrupt access to the system.
+Manages the TrueNAS global network configuration (hostname, domain, DNS servers, default gateways, service announcement). This is a singleton resource — there is exactly one global network configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls network.configuration.update, and Terraform delete only removes the resource from state (the configuration is left in place). WARNING: hostname affects how the system identifies itself on the network, and ipv4gateway/ipv6gateway affect outbound network connectivity; changing them incorrectly can disrupt access to the system.
 
 ## Example Usage
 

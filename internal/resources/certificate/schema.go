@@ -16,7 +16,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a certificate on TrueNAS SCALE (certificate.*). \"create_type\" selects one of four " +
+		Description: "Manages a certificate on TrueNAS (certificate.*). \"create_type\" selects one of four " +
 			"immutable creation modes (changing it, like changing any other input field below, replaces the " +
 			"resource — certificate.update only ever accepts \"name\", \"renew_days\", and " +
 			"\"add_to_trusted_store\", confirmed live): CERTIFICATE_CREATE_IMPORTED (import an existing " +

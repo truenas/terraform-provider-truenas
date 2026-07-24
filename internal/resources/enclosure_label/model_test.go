@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 )
 
-// apiShape mirrors the live SCALE 25.10.4 Enterprise HA probe of the single
+// apiShape mirrors the live TrueNAS 25.10.4 Enterprise HA probe of the single
 // shared H-series chassis enclosure (see the sibling internal/resources/
 // enclosure package's model.go for the full probed top-level shape; this
 // resource only decodes "id"/"label"/"name").

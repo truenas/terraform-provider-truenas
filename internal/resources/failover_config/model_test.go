@@ -22,7 +22,7 @@ func TestNonNilStrings(t *testing.T) {
 // --- responseToModel -------------------------------------------------------
 
 func apiShape() *failoverConfigAPI {
-	// Mirrors the live SCALE 25.10.4 Enterprise HA probe:
+	// Mirrors the live TrueNAS 25.10.4 Enterprise HA probe:
 	// {"id": 1, "disabled": false, "master": true, "timeout": 0}.
 	return &failoverConfigAPI{ID: 1, Disabled: false, Master: true, Timeout: 0}
 }

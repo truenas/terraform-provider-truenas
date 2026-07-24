@@ -3,12 +3,12 @@
 page_title: "truenas_ups_config Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE UPS service configuration. Takes no arguments: there is exactly one UPS configuration per TrueNAS system. Does not expose monpwd: ups.config never returns a usable value for it.
+  Reads the current TrueNAS UPS service configuration. Takes no arguments: there is exactly one UPS configuration per TrueNAS system. Does not expose monpwd: ups.config never returns a usable value for it.
 ---
 
 # truenas_ups_config (Data Source)
 
-Reads the current TrueNAS SCALE UPS service configuration. Takes no arguments: there is exactly one UPS configuration per TrueNAS system. Does not expose monpwd: ups.config never returns a usable value for it.
+Reads the current TrueNAS UPS service configuration. Takes no arguments: there is exactly one UPS configuration per TrueNAS system. Does not expose monpwd: ups.config never returns a usable value for it.
 
 
 

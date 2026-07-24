@@ -3,12 +3,12 @@
 page_title: "truenas_iscsi_portal Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an iSCSI portal on TrueNAS SCALE.
+  Manages an iSCSI portal on TrueNAS.
 ---
 
 # truenas_iscsi_portal (Resource)
 
-Manages an iSCSI portal on TrueNAS SCALE.
+Manages an iSCSI portal on TrueNAS.
 
 ## Example Usage
 
@@ -49,4 +49,4 @@ Required:
 
 Optional:
 
-- `port` (Number) Port is reported by TrueNAS but cannot be set per-listen on SCALE 26.0+; the global iSCSI listen_port applies.
+- `port` (Number) Port is reported by TrueNAS but cannot be set per-listen on TrueNAS 26.0+; the global iSCSI listen_port applies.

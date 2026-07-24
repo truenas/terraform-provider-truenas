@@ -3,12 +3,12 @@
 page_title: "truenas_init_shutdown_script Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an init/shutdown script (initshutdownscript) on TrueNAS SCALE: a command or script executed at a chosen point in the boot or shutdown sequence.
+  Manages an init/shutdown script (initshutdownscript) on TrueNAS: a command or script executed at a chosen point in the boot or shutdown sequence.
 ---
 
 # truenas_init_shutdown_script (Resource)
 
-Manages an init/shutdown script (initshutdownscript) on TrueNAS SCALE: a command or script executed at a chosen point in the boot or shutdown sequence.
+Manages an init/shutdown script (initshutdownscript) on TrueNAS: a command or script executed at a chosen point in the boot or shutdown sequence.
 
 ## Example Usage
 

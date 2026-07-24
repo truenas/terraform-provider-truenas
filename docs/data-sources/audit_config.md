@@ -3,12 +3,12 @@
 page_title: "truenas_audit_config Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE audit configuration. Takes no arguments: there is exactly one audit configuration per TrueNAS system.
+  Reads the current TrueNAS audit configuration. Takes no arguments: there is exactly one audit configuration per TrueNAS system.
 ---
 
 # truenas_audit_config (Data Source)
 
-Reads the current TrueNAS SCALE audit configuration. Takes no arguments: there is exactly one audit configuration per TrueNAS system.
+Reads the current TrueNAS audit configuration. Takes no arguments: there is exactly one audit configuration per TrueNAS system.
 
 
 

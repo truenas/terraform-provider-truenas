@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// apiShape mirrors the live SCALE 25.10.4 Enterprise HA probe of the single
+// apiShape mirrors the live TrueNAS 25.10.4 Enterprise HA probe of the single
 // shared H-series chassis enclosure: see model.go's enclosureAPI doc
 // comment.
 func apiShape() *enclosureAPI {

@@ -152,7 +152,7 @@ func (m *ISCSITargetModel) apiPayload(ctx context.Context) (map[string]any, diag
 		"auth_networks": authNetworks,
 	}
 	// alias and mode are Optional+Computed: sending zero values ("") is
-	// rejected by SCALE 26.0 (mode must be ISCSI/FC/BOTH), so include them
+	// rejected by TrueNAS 26.0 (mode must be ISCSI/FC/BOTH), so include them
 	// only when known and non-empty.
 	if !m.Alias.IsNull() && !m.Alias.IsUnknown() && m.Alias.ValueString() != "" {
 		payload["alias"] = m.Alias.ValueString()

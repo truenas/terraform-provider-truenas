@@ -3,12 +3,12 @@
 page_title: "truenas_cloudsync_credentials Resource - truenas"
 subcategory: ""
 description: |-
-  Manages TrueNAS SCALE cloud sync credentials.
+  Manages TrueNAS cloud sync credentials.
 ---
 
 # truenas_cloudsync_credentials (Resource)
 
-Manages TrueNAS SCALE cloud sync credentials.
+Manages TrueNAS cloud sync credentials.
 
 ## Example Usage
 

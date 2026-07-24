@@ -25,7 +25,7 @@ func (d *CatalogConfigDataSource) Metadata(_ context.Context, req datasource.Met
 
 func (d *CatalogConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE app catalog configuration. Takes no arguments: there is " +
+		Description: "Reads the current TrueNAS app catalog configuration. Takes no arguments: there is " +
 			"exactly one app catalog per TrueNAS system.",
 		Attributes: map[string]dschema.Attribute{
 			"id": dschema.StringAttribute{
@@ -50,8 +50,8 @@ func (d *CatalogConfigDataSource) Schema(_ context.Context, _ datasource.SchemaR
 				ElementType: types.StringType,
 				Description: "All train names the catalog currently knows about (catalog.trains), independent " +
 					"of which ones are preferred. Can be empty if the catalog has not yet been synced (probed " +
-					"live: returned empty on a SCALE 25.10 box where Docker/apps had never been configured, " +
-					"versus a full list of trains on a SCALE 26.0 box with apps running — see task-3-report.md).",
+					"live: returned empty on a TrueNAS 25.10 box where Docker/apps had never been configured, " +
+					"versus a full list of trains on a TrueNAS 26.0 box with apps running — see task-3-report.md).",
 			},
 		},
 	}

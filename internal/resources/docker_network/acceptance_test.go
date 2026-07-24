@@ -41,7 +41,7 @@ func isDockerConfigured(t *testing.T) bool {
 // app-specific network name that could disappear if an app is uninstalled.
 //
 // SELF-SKIP: docker.network.query returns an empty list when Docker is
-// unconfigured (probed live on SCALE 25.10, see task-1-report.md) — there
+// unconfigured (probed live on TrueNAS 25.10, see task-1-report.md) — there
 // is no network to look up, and this task's hard rules forbid configuring
 // a pool (docker.update's "pool" field) just to make one exist, so the
 // test self-skips rather than failing on "not found".

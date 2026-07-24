@@ -3,12 +3,12 @@
 page_title: "truenas_periodic_snapshot_task Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a periodic snapshot task on TrueNAS SCALE.
+  Manages a periodic snapshot task on TrueNAS.
 ---
 
 # truenas_periodic_snapshot_task (Resource)
 
-Manages a periodic snapshot task on TrueNAS SCALE.
+Manages a periodic snapshot task on TrueNAS.
 
 ## Example Usage
 

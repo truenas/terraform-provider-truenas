@@ -87,7 +87,7 @@ func restoreKerberosConfig(t *testing.T, orig kerberosConfigOriginal) {
 // appdefaults_aux server-side and (a) crashes with a raw "list index out of
 // range" APIError on any line that doesn't split on "=" (e.g. a bare "#
 // comment"), and (b) cleanly rejects (EINVAL) any key it doesn't recognize.
-// Both were confirmed live against a TrueNAS SCALE 25.10 box — see
+// Both were confirmed live against a TrueNAS 25.10 box — see
 // task-5-report.md. "no_addresses" is a real, harmless appdefaults key
 // (whether Kerberos ignores IP addresses in service principal names), so
 // this test toggles it, mirroring resilver_config's boolean-toggle

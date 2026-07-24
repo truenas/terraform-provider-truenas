@@ -3,12 +3,12 @@
 page_title: "truenas_cloudsync_task Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a cloud sync task on TrueNAS SCALE.
+  Manages a cloud sync task on TrueNAS.
 ---
 
 # truenas_cloudsync_task (Resource)
 
-Manages a cloud sync task on TrueNAS SCALE.
+Manages a cloud sync task on TrueNAS.
 
 ## Example Usage
 

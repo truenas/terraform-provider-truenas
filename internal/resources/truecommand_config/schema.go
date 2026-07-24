@@ -11,7 +11,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE TrueCommand service configuration (truecommand.config/" +
+		Description: "Manages the TrueNAS TrueCommand service configuration (truecommand.config/" +
 			"truecommand.update): whether this system is connected to a TrueCommand instance, plus its " +
 			"read-only connection-status metadata. This is a singleton resource — there is exactly one " +
 			"TrueCommand configuration per TrueNAS system, so it is never created or deleted on TrueNAS; " +
@@ -26,7 +26,7 @@ func resourceSchema() schema.Schema {
 			"without asserting any particular connection state." +
 			"\n\n" +
 			"\"enabled\" and \"api_key\" are the ONLY fields this resource ever writes: probed live and IDENTICAL " +
-			"on both SCALE 25.10.4 and 26.0, truecommand.update's own accepts schema (core.get_methods) exposes " +
+			"on both TrueNAS 25.10.4 and 26.0, truecommand.update's own accepts schema (core.get_methods) exposes " +
 			"EXACTLY these two properties — there is no other writable field on either release. Every other " +
 			"attribute below is Computed-only, sourced from truecommand.config." +
 			"\n\n" +

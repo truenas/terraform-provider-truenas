@@ -14,8 +14,8 @@ same either way and is covered in **[Common setup](#common-setup)** below.
 
 - **Terraform** 1.11 or newer (the provider uses write-only attributes for
   secrets, introduced in 1.11).
-- **TrueNAS SCALE** 25.04 or newer (the provider speaks JSON-RPC over the
-  `/api/current` WebSocket endpoint). Verified against 25.10 and 26.0; SCALE
+- **TrueNAS** 25.04 or newer (the provider speaks JSON-RPC over the
+  `/api/current` WebSocket endpoint). Verified against 25.10 and 26.0; TrueNAS
   26.0+ additionally supports SCRAM-SHA-512 API-key authentication.
 - For building from source (Part A only): **Go 1.25** or newer.
 - Network reachability from where Terraform runs to the TrueNAS box over
@@ -159,7 +159,7 @@ provider "truenas" {
 | Method | Set | Notes |
 |---|---|---|
 | API key (plain) | `api_key` | Works on all supported releases. |
-| API key with SCRAM | `api_key` + `username` (the key's owner) | On SCALE 26.0+, the raw key never crosses the wire — the client proves possession via SCRAM-SHA-512. On 25.10 this transparently falls back to plain API-key login. Recommended on 26.0+. |
+| API key with SCRAM | `api_key` + `username` (the key's owner) | On TrueNAS 26.0+, the raw key never crosses the wire — the client proves possession via SCRAM-SHA-512. On 25.10 this transparently falls back to plain API-key login. Recommended on 26.0+. |
 | Username + password | `username` + `password` | Mutually exclusive with `api_key`. |
 
 Provider arguments (all also available as `TRUENAS_*` env vars):
@@ -238,7 +238,7 @@ terraform destroy
 - **Resource and data-source reference** — the generated docs under `docs/`
   (or the provider's Registry documentation once published).
 - **`examples/`** — runnable configurations, including
-  `examples/hello-lxc/` (a full LXC container on SCALE 26.0+).
+  `examples/hello-lxc/` (a full LXC container on TrueNAS 26.0+).
 - **Best-practices guide** — `docs/guides/best-practices.md`.
 
 ---

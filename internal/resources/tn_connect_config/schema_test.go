@@ -23,7 +23,7 @@ func TestTnConnectConfigSchema_IDIsComputed(t *testing.T) {
 // TestTnConnectConfigSchema_OnlyEnabledIsWritable is the schema-level half
 // of this resource's safety contract: "enabled" must be the ONLY
 // Optional+Computed (i.e. user-writable) attribute. Every other attribute
-// must be Computed-only, matching the probe-confirmed fact that SCALE
+// must be Computed-only, matching the probe-confirmed fact that TrueNAS
 // 26.0's tn_connect.update accepts nothing besides "enabled" (see model.go's
 // updatePayload doc comment).
 func TestTnConnectConfigSchema_OnlyEnabledIsWritable(t *testing.T) {

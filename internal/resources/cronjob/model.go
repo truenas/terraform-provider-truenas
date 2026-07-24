@@ -65,7 +65,7 @@ type scheduleAPI struct {
 
 // cronjobAPI mirrors the JSON object returned by cronjob.create,
 // cronjob.update, cronjob.get_instance, and cronjob.query. Probed against
-// live TrueNAS SCALE 25.10 and 26.0 boxes (identical wire shape on both
+// live TrueNAS 25.10 and 26.0 boxes (identical wire shape on both
 // releases, no version gating needed): the response is exactly these eight
 // fields, no nullable strings/ints and no embedded runtime-status objects
 // (unlike rsynctask's "locked"/"job"). "stdout"/"stderr" are IGNORE flags

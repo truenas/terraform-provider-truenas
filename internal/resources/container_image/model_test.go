@@ -10,7 +10,7 @@ func TestVersionGateDiagnostics_BelowFloor(t *testing.T) {
 		if !diags.HasError() {
 			t.Fatalf("version %q: expected an error diagnostic, got none", version)
 		}
-		if diags[0].Detail() != "truenas_container_image requires TrueNAS SCALE 26.0 or later" {
+		if diags[0].Detail() != "truenas_container_image requires TrueNAS 26.0 or later" {
 			t.Errorf("version %q: detail = %q, want the documented message", version, diags[0].Detail())
 		}
 	}

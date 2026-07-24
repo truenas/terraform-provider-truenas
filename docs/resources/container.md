@@ -3,20 +3,20 @@
 page_title: "truenas_container Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an LXC container on TrueNAS SCALE (container.: create/update/start/stop/delete). Requires TrueNAS SCALE 26.0 or later: the container namespace does not exist on earlier releases (probed live — SCALE 25.10 exposes 0 container. methods). Using this resource against an older server fails with a clean error during Create/Read/Update rather than a raw API error.
+  Manages an LXC container on TrueNAS (container.: create/update/start/stop/delete). Requires TrueNAS 26.0 or later: the container namespace does not exist on earlier releases (probed live — TrueNAS 25.10 exposes 0 container. methods). Using this resource against an older server fails with a clean error during Create/Read/Update rather than a raw API error.
   This is the modern, actively-developed LXC container surface — distinct from the deprecated incus system-container family this provider does not otherwise track. See truenas_container_device for per-container device attachment (filesystem/NIC/USB passthrough), and truenas_lxc_config for the service-wide pool/bridge/network configuration this resource's containers run under.
 ---
 
 # truenas_container (Resource)
 
-Manages an LXC container on TrueNAS SCALE (container.*: create/update/start/stop/delete). Requires TrueNAS SCALE 26.0 or later: the container namespace does not exist on earlier releases (probed live — SCALE 25.10 exposes 0 container.* methods). Using this resource against an older server fails with a clean error during Create/Read/Update rather than a raw API error.
+Manages an LXC container on TrueNAS (container.*: create/update/start/stop/delete). Requires TrueNAS 26.0 or later: the container namespace does not exist on earlier releases (probed live — TrueNAS 25.10 exposes 0 container.* methods). Using this resource against an older server fails with a clean error during Create/Read/Update rather than a raw API error.
 
 This is the modern, actively-developed LXC container surface — distinct from the deprecated incus system-container family this provider does not otherwise track. See truenas_container_device for per-container device attachment (filesystem/NIC/USB passthrough), and truenas_lxc_config for the service-wide pool/bridge/network configuration this resource's containers run under.
 
 ## Example Usage
 
 ```terraform
-# LXC container on TrueNAS SCALE 26.0+. Look up a current image version
+# LXC container on TrueNAS 26.0+. Look up a current image version
 # through truenas_container_image rather than hardcoding one -- the
 # upstream registry (images.linuxcontainers.org) prunes old builds, so a
 # pinned version can 404 on download once pruned.

@@ -24,7 +24,7 @@ func (d *IPMILanDataSource) Metadata(_ context.Context, req datasource.MetadataR
 
 func (d *IPMILanDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current LAN configuration of a TrueNAS SCALE Enterprise BMC/IPMI channel " +
+		Description: "Reads the current LAN configuration of a TrueNAS Enterprise BMC/IPMI channel " +
 			"(ipmi.lan.query). Makes no changes. Has no \"password\" attribute: probed live, ipmi.lan.query's " +
 			"response objects never include a password under any name — see the truenas_ipmi_lan resource's " +
 			"schema description for the full probed shape and safety notes.",

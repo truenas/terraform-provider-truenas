@@ -3,12 +3,12 @@
 page_title: "truenas_nvmet_port_subsys Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an NVMe-oF port/subsystem association (which subsystems are advertised on a port) on TrueNAS SCALE.
+  Manages an NVMe-oF port/subsystem association (which subsystems are advertised on a port) on TrueNAS.
 ---
 
 # truenas_nvmet_port_subsys (Resource)
 
-Manages an NVMe-oF port/subsystem association (which subsystems are advertised on a port) on TrueNAS SCALE.
+Manages an NVMe-oF port/subsystem association (which subsystems are advertised on a port) on TrueNAS.
 
 ## Example Usage
 

@@ -25,7 +25,7 @@ func (d *KerberosConfigDataSource) Metadata(_ context.Context, req datasource.Me
 
 func (d *KerberosConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE Kerberos configuration (kerberos.config). Takes no " +
+		Description: "Reads the current TrueNAS Kerberos configuration (kerberos.config). Takes no " +
 			"arguments: there is exactly one Kerberos configuration per TrueNAS system.",
 		Attributes: map[string]dschema.Attribute{
 			"id": dschema.StringAttribute{

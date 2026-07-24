@@ -11,7 +11,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a scrub schedule for a TrueNAS SCALE pool (pool.scrub). There is at most one scrub " +
+		Description: "Manages a scrub schedule for a TrueNAS pool (pool.scrub). There is at most one scrub " +
 			"schedule per pool; TrueNAS rejects a second pool.scrub.create for the same pool.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{

@@ -9,16 +9,16 @@ import (
 // lxcConfigResourceID is the fixed Terraform ID for this singleton resource:
 // there is exactly one LXC configuration per TrueNAS system (lxc.config
 // always returns a single record), and it is never created or deleted on
-// TrueNAS itself. The API's own numeric "id" (probed live on SCALE 26.0:
+// TrueNAS itself. The API's own numeric "id" (probed live on TrueNAS 26.0:
 // always 1) is an internal implementation detail and is intentionally not
 // surfaced in the model, mirroring the docker_config/catalog_config
 // singleton pattern.
 const lxcConfigResourceID = "lxc_config"
 
-// lxcConfigVersionFloorMajor/Minor is the minimum TrueNAS SCALE release that
-// exposes the lxc.config/lxc.update namespace at all. Probed live: SCALE
+// lxcConfigVersionFloorMajor/Minor is the minimum TrueNAS release that
+// exposes the lxc.config/lxc.update namespace at all. Probed live: TrueNAS
 // 25.10 returns a JSON-RPC "Method does not exist" error for lxc.config;
-// SCALE 26.0 supports it in full (lxc.config, lxc.update, lxc.bridge_choices,
+// TrueNAS 26.0 supports it in full (lxc.config, lxc.update, lxc.bridge_choices,
 // all job:false). See resource.go/datasource.go for where this gates every
 // Create/Read/Update/datasource-Read before any lxc.* call reaches the wire.
 const (
@@ -28,7 +28,7 @@ const (
 
 // versionGateDiagnostics reports whether the given TrueNAS release string
 // (as returned by system.version_short via client.ServerVersion, e.g.
-// "25.10.3.1" or "26.0.0") is at or above the SCALE 26.0 floor
+// "25.10.3.1" or "26.0.0") is at or above the TrueNAS 26.0 floor
 // lxc.config/lxc.update require, returning a single clean error diagnostic
 // when it is not (instead of letting a raw "Method does not exist" JSON-RPC
 // error reach the practitioner). It is a pure function of the already-probed
@@ -40,8 +40,8 @@ func versionGateDiagnostics(version string) diag.Diagnostics {
 	var diags diag.Diagnostics
 	if !client.VersionAtLeastString(version, lxcConfigVersionFloorMajor, lxcConfigVersionFloorMinor) {
 		diags.AddError(
-			"TrueNAS SCALE version too old",
-			"truenas_lxc_config requires TrueNAS SCALE 26.0 or later",
+			"TrueNAS version too old",
+			"truenas_lxc_config requires TrueNAS 26.0 or later",
 		)
 	}
 	return diags
@@ -75,7 +75,7 @@ type LXCConfigDataSourceModel struct {
 }
 
 // lxcConfigAPI mirrors the JSON object returned by lxc.config and
-// lxc.update. Probed live against SCALE 26.0 (the only release that exposes
+// lxc.update. Probed live against TrueNAS 26.0 (the only release that exposes
 // this namespace — see versionGateDiagnostics):
 //
 //	{"id": 1, "preferred_pool": null, "bridge": null,

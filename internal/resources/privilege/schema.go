@@ -11,7 +11,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a privilege on TrueNAS SCALE: a named bundle of roles granted to the members of one " +
+		Description: "Manages a privilege on TrueNAS: a named bundle of roles granted to the members of one " +
 			"or more local/directory-service groups, controlling their administrative access to the web UI and API.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{

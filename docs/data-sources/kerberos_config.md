@@ -3,12 +3,12 @@
 page_title: "truenas_kerberos_config Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE Kerberos configuration (kerberos.config). Takes no arguments: there is exactly one Kerberos configuration per TrueNAS system.
+  Reads the current TrueNAS Kerberos configuration (kerberos.config). Takes no arguments: there is exactly one Kerberos configuration per TrueNAS system.
 ---
 
 # truenas_kerberos_config (Data Source)
 
-Reads the current TrueNAS SCALE Kerberos configuration (kerberos.config). Takes no arguments: there is exactly one Kerberos configuration per TrueNAS system.
+Reads the current TrueNAS Kerberos configuration (kerberos.config). Takes no arguments: there is exactly one Kerberos configuration per TrueNAS system.
 
 
 

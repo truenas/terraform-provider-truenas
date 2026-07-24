@@ -3,12 +3,12 @@
 page_title: "truenas_iscsi_target Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an iSCSI target on TrueNAS SCALE.
+  Manages an iSCSI target on TrueNAS.
 ---
 
 # truenas_iscsi_target (Resource)
 
-Manages an iSCSI target on TrueNAS SCALE.
+Manages an iSCSI target on TrueNAS.
 
 ## Example Usage
 

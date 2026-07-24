@@ -9,7 +9,7 @@ import (
 // --- versionGateDiagnostics ------------------------------------------------
 
 // TestVersionGateDiagnostics_BelowFloor verifies the exact diagnostic
-// emitted for a probed version below SCALE 26.0, including the 25.10 string
+// emitted for a probed version below TrueNAS 26.0, including the 25.10 string
 // actually observed live (see model.go's lxcConfigAPI doc comment).
 func TestVersionGateDiagnostics_BelowFloor(t *testing.T) {
 	for _, version := range []string{"25.10.3.1", "25.10", "24.10.2", "1.0", ""} {
@@ -20,10 +20,10 @@ func TestVersionGateDiagnostics_BelowFloor(t *testing.T) {
 		if len(diags) != 1 {
 			t.Fatalf("version %q: expected exactly 1 diagnostic, got %d: %v", version, len(diags), diags)
 		}
-		if diags[0].Summary() != "TrueNAS SCALE version too old" {
-			t.Errorf("version %q: summary = %q, want %q", version, diags[0].Summary(), "TrueNAS SCALE version too old")
+		if diags[0].Summary() != "TrueNAS version too old" {
+			t.Errorf("version %q: summary = %q, want %q", version, diags[0].Summary(), "TrueNAS version too old")
 		}
-		if diags[0].Detail() != "truenas_lxc_config requires TrueNAS SCALE 26.0 or later" {
+		if diags[0].Detail() != "truenas_lxc_config requires TrueNAS 26.0 or later" {
 			t.Errorf("version %q: detail = %q, want the documented message", version, diags[0].Detail())
 		}
 	}
@@ -175,7 +175,7 @@ func TestUpdatePayload_V4V6NetworkNullOmitted(t *testing.T) {
 // --- responseToModel / responseToDataSourceModel ----------------------------
 
 // TestResponseToModel verifies responseToModel against the shape probed
-// from a live lxc.config call on SCALE 26.0.
+// from a live lxc.config call on TrueNAS 26.0.
 func TestResponseToModel(t *testing.T) {
 	pool := "tank"
 	bridge := "br0"

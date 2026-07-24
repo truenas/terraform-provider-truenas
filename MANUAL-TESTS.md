@@ -133,7 +133,7 @@ Source: `internal/provider/provider.go` (schema, `Configure`),
 
 | # | Case | Steps | Expect |
 |---|---|---|---|
-| 0.4.1 | SCRAM path on SCALE 26.0+ | Against a 26.0+ test box: set `api_key` + `username` (key owner). Apply, and independently capture the exchange — either the middleware auth/audit log or `auth.sessions` — while the provider authenticates. | `auth.mechanism_choices` is called pre-auth and returns a list including `SCRAM`; the client runs the full `auth.login_ex` SCRAM exchange (`CLIENT_FIRST_MESSAGE`/`CLIENT_FINAL_MESSAGE`) rather than `auth.login_with_api_key`. The resulting session in `auth.sessions` (or equivalent audit entry) shows the SCRAM mechanism, not `API_KEY_PLAIN`. Raw key never appears on the wire (verify via packet capture or server-side auth log if available — only nonces/proofs are sent). |
+| 0.4.1 | SCRAM path on TrueNAS 26.0+ | Against a 26.0+ test box: set `api_key` + `username` (key owner). Apply, and independently capture the exchange — either the middleware auth/audit log or `auth.sessions` — while the provider authenticates. | `auth.mechanism_choices` is called pre-auth and returns a list including `SCRAM`; the client runs the full `auth.login_ex` SCRAM exchange (`CLIENT_FIRST_MESSAGE`/`CLIENT_FINAL_MESSAGE`) rather than `auth.login_with_api_key`. The resulting session in `auth.sessions` (or equivalent audit entry) shows the SCRAM mechanism, not `API_KEY_PLAIN`. Raw key never appears on the wire (verify via packet capture or server-side auth log if available — only nonces/proofs are sent). |
 | 0.4.2 | Plain fallback on 25.10 | Against a 25.10.x test box: same config (`api_key` + `username`). Apply. | `auth.mechanism_choices` fails pre-auth (25.10's known `'NoneType' object has no attribute 'may_create_auth_token'` behavior per `SCRAM.md`); the client falls back to `auth.login_with_api_key`. Apply still succeeds. `auth.sessions`/audit log shows a plain API-key login, not SCRAM. |
 | 0.4.3 | SCRAM wrong credentials rejected (mutual auth) | On a 26.0+ box, corrupt the key secret (same key ID, wrong secret) with `username` set. Apply. | SCRAM exchange fails at proof verification server-side; connection fails with an auth error. No fallback to plain login is attempted (no mechanism downgrade — verify via audit log that only one login attempt, SCRAM, was recorded). |
 | 0.4.4 | SCRAM correct key, wrong username | On a 26.0+ box, use a valid key but a `username` that is not the key's actual owner. Apply. | SCRAM identity `<username>:<api_key_id>` doesn't match the key record server-side; exchange rejected; apply fails. |
@@ -660,7 +660,7 @@ target box.
   8. `terraform destroy` — removes the share and the dataset fixture.
   9. Verify in UI the share is gone from Sharing > SMB.
   10. Verify via API: `midclt call sharing.smb.query '[["name","=","tf-acc-manual-smb"]]'` and the dataset query both empty.
-- **Expected results:** share created correctly; comment/abe update in place; import by numeric id matches; note that on SCALE 26.0+, `abe` maps to the wire field `access_based_share_enumeration` and legacy fields like `hostsallow`/`recyclebin`/`guestok` only apply when `purpose` is (or defaults to) `LEGACY_SHARE` — confirm the target release before assuming those fields round-trip. Share and dataset fully removed on destroy.
+- **Expected results:** share created correctly; comment/abe update in place; import by numeric id matches; note that on TrueNAS 26.0+, `abe` maps to the wire field `access_based_share_enumeration` and legacy fields like `hostsallow`/`recyclebin`/`guestok` only apply when `purpose` is (or defaults to) `LEGACY_SHARE` — confirm the target release before assuming those fields round-trip. Share and dataset fully removed on destroy.
 - **Cleanup:** `midclt call sharing.smb.delete '[<id>]'` then delete the dataset fixture. Find leftovers: `midclt call sharing.smb.query '[["name","~","tf-acc-manual"]]'`.
 
 ---
@@ -671,7 +671,7 @@ target box.
 
 - **Resource:** truenas_webshare
 - **Type:** CRUD
-- **Environment:** primary or cross-release box; **requires TrueNAS SCALE 26.0 or later** — the `sharing.webshare` namespace does not exist on 25.10 (confirmed via `core.get_methods` exposing 0 `webshare.*`/`sharing.webshare.*` methods on that release). Before running, confirm the release: `midclt call system.version` (or check UI About) and skip this case entirely on any pre-26.0 box.
+- **Environment:** primary or cross-release box; **requires TrueNAS 26.0 or later** — the `sharing.webshare` namespace does not exist on 25.10 (confirmed via `core.get_methods` exposing 0 `webshare.*`/`sharing.webshare.*` methods on that release). Before running, confirm the release: `midclt call system.version` (or check UI About) and skip this case entirely on any pre-26.0 box.
 - **Preconditions:** creates its own dataset fixture to share. Also note this resource has **no `comment` field** — `sharing.webshare.create`/`update` reject an extra `comment` key with a clean EINVAL, unlike NFS/SMB shares.
 - **Config:**
   ```hcl
@@ -815,7 +815,7 @@ target box.
 
 - **Resource:** truenas_webshare_config (datasource)
 - **Type:** Datasource
-- **Environment:** primary or cross-release box; **requires TrueNAS SCALE 26.0 or later** — the `webshare` namespace does not exist on 25.10 (confirmed via `core.get_methods` exposing 0 `webshare.*` methods on that release).
+- **Environment:** primary or cross-release box; **requires TrueNAS 26.0 or later** — the `webshare` namespace does not exist on 25.10 (confirmed via `core.get_methods` exposing 0 `webshare.*` methods on that release).
 - **Preconditions:** confirm target release via `midclt call system.version`; skip if pre-26.0.
 - **Config:**
   ```hcl
@@ -834,7 +834,7 @@ target box.
 
 - **Resource:** truenas_webshare_config
 - **Type:** Singleton set-and-restore
-- **Environment:** primary test box only; **requires TrueNAS SCALE 26.0 or later** (same version gate as above). This is a 26.0+ probe resource — confirm the release before running. Only `search` is touched here (a cosmetic, low-risk toggle carrying no authentication or network-exposure risk, unlike `passkey`/`groups`/`bindip`); those other fields are never touched by this case.
+- **Environment:** primary test box only; **requires TrueNAS 26.0 or later** (same version gate as above). This is a 26.0+ probe resource — confirm the release before running. Only `search` is touched here (a cosmetic, low-risk toggle carrying no authentication or network-exposure risk, unlike `passkey`/`groups`/`bindip`); those other fields are never touched by this case.
 - **Preconditions:**
   1. Confirm target release is 26.0+.
   2. Record the current value: `midclt call webshare.config`, note `search`. If this read fails on the target box, do not proceed — treat as an environment issue, not a test failure.
@@ -866,7 +866,7 @@ target box.
 
 ## Block Storage (iSCSI and NVMe-oF)
 
-> **Safety note for every case in this section.** On a TrueNAS box that is serving production storage, any pre-existing live iSCSI portal/target/extent (often `id=1`) and any pre-existing live NVMe-oF subsystem/port/namespace/port_subsys (often `id=1`) are attached to real initiators/hosts and MUST NOT be modified, disabled, or deleted by any test in this section. All test fixtures below use `tf-acc-manual-` prefixed names, bind listeners to the box's own IP address (never `0.0.0.0` — SCALE 26.0+ rejects a second portal bound to `0.0.0.0` because it collides with the live portal), and use NVMe-oF test ports on service IDs `14420`/`14421` (distinct from the live port's `4420`) created with `enabled = false` so they never open a live listener. CHAP auth test cases use `tag = 998` or `999`, distinct from any live tag. Before starting, record the box's live iSCSI/NVMe-oF configuration (`midclt call iscsi.global.config`, `midclt call nvmet.global.config`, `midclt call iscsi.target.query`, `midclt call nvmet.subsys.query`) so any accidental drift is detectable.
+> **Safety note for every case in this section.** On a TrueNAS box that is serving production storage, any pre-existing live iSCSI portal/target/extent (often `id=1`) and any pre-existing live NVMe-oF subsystem/port/namespace/port_subsys (often `id=1`) are attached to real initiators/hosts and MUST NOT be modified, disabled, or deleted by any test in this section. All test fixtures below use `tf-acc-manual-` prefixed names, bind listeners to the box's own IP address (never `0.0.0.0` — TrueNAS 26.0+ rejects a second portal bound to `0.0.0.0` because it collides with the live portal), and use NVMe-oF test ports on service IDs `14420`/`14421` (distinct from the live port's `4420`) created with `enabled = false` so they never open a live listener. CHAP auth test cases use `tag = 998` or `999`, distinct from any live tag. Before starting, record the box's live iSCSI/NVMe-oF configuration (`midclt call iscsi.global.config`, `midclt call nvmet.global.config`, `midclt call iscsi.target.query`, `midclt call nvmet.subsys.query`) so any accidental drift is detectable.
 >
 > Environment variables referenced below (`TRUENAS_ENDPOINT`, `TRUENAS_API_KEY` or `TRUENAS_USERNAME`/`TRUENAS_PASSWORD`, `TRUENAS_TEST_POOL`) configure the provider block; substitute your own test box values. All HCL below assumes a `terraform` provider block for `truenas/truenas` is already configured in the working directory (not repeated in every case for brevity) and that a ZFS pool (default `tank`) exists for zvol fixtures.
 
@@ -876,7 +876,7 @@ target box.
 
 **Resource:** `truenas_iscsi_global` (datasource)
 **Type:** Singleton (read-only)
-**Environment:** Any TrueNAS SCALE box, including a production-serving one — this case makes no writes.
+**Environment:** Any TrueNAS box, including a production-serving one — this case makes no writes.
 **Preconditions:** iSCSI service configured (default install has a global config even if the service isn't running).
 
 **Config:**
@@ -943,7 +943,7 @@ resource "truenas_iscsi_global" "test" {
 
 **Resource:** `truenas_iscsi_portal`
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE box. Test portal binds the box's own IP address — never `0.0.0.0`, which collides with the live portal (SCALE 26.0+ allows only one portal per IP, and the live portal on a production box typically already binds `0.0.0.0` or the box IP).
+**Environment:** Any TrueNAS box. Test portal binds the box's own IP address — never `0.0.0.0`, which collides with the live portal (TrueNAS 26.0+ allows only one portal per IP, and the live portal on a production box typically already binds `0.0.0.0` or the box IP).
 **Preconditions:** Know the box's iSCSI-facing IP address (the address you'll connect to it by, e.g. `10.0.0.10`).
 
 **Config (initial):**
@@ -973,7 +973,7 @@ resource "truenas_iscsi_portal" "test" {
 **Steps:**
 1. `terraform init`
 2. `terraform plan` then `terraform apply -auto-approve` with the initial config
-3. Verify: `terraform state show truenas_iscsi_portal.test` — `id` is a positive number, `tag` is set, `listen.0.ip` matches the box IP, `listen.0.port` is populated (read-only; per-listen port is not settable on SCALE 26.0+, the global `iscsi_global.listen_port` governs it). Cross-check: `midclt call iscsi.portal.query '[["comment","=","tf-acc-manual-portal"]]'`. UI: Shares > Block Shares (iSCSI) > Portals.
+3. Verify: `terraform state show truenas_iscsi_portal.test` — `id` is a positive number, `tag` is set, `listen.0.ip` matches the box IP, `listen.0.port` is populated (read-only; per-listen port is not settable on TrueNAS 26.0+, the global `iscsi_global.listen_port` governs it). Cross-check: `midclt call iscsi.portal.query '[["comment","=","tf-acc-manual-portal"]]'`. UI: Shares > Block Shares (iSCSI) > Portals.
 4. Apply the update config: `terraform apply -auto-approve`
 5. Verify `comment` is now `tf-acc-manual-portal-updated` and `id`/`tag` are unchanged (in-place update, no replacement).
 6. `terraform import truenas_iscsi_portal.import_test <id>` (use the numeric `id` from step 3/5)
@@ -993,7 +993,7 @@ resource "truenas_iscsi_portal" "test" {
 
 **Resource:** `truenas_iscsi_initiator`
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE box.
+**Environment:** Any TrueNAS box.
 **Preconditions:** None (no external fixtures required).
 
 **Config (initial — empty initiators list, allows all initiators):**
@@ -1035,7 +1035,7 @@ resource "truenas_iscsi_initiator" "test" {
 
 **Resource:** `truenas_iscsi_auth`
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE box. Uses CHAP group `tag = 998`, distinct from any live tag and from the end-to-end test's tag (999) — do not reuse a tag already referenced by a live target group.
+**Environment:** Any TrueNAS box. Uses CHAP group `tag = 998`, distinct from any live tag and from the end-to-end test's tag (999) — do not reuse a tag already referenced by a live target group.
 **Preconditions:** Confirm tag 998 is not already in use: `midclt call iscsi.auth.query '[["tag","=",998]]'` should return empty.
 
 **Config (initial):**
@@ -1079,7 +1079,7 @@ resource "truenas_iscsi_auth" "test" {
 
 **Resource:** `truenas_iscsi_extent`
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE box with a usable pool.
+**Environment:** Any TrueNAS box with a usable pool.
 **Preconditions:** A pool exists (default `tank`); this case creates its own zvol fixture, so no pre-existing zvol is required. `name` is `RequiresReplace` — changing it destroys and recreates the extent.
 
 **Config (initial):**
@@ -1137,7 +1137,7 @@ resource "truenas_iscsi_extent" "test" {
 
 **Resource:** `truenas_iscsi_target`
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE box. Uses its own portal fixture bound to the box IP (not `0.0.0.0`) — distinct from any pre-existing live portal/target on the box.
+**Environment:** Any TrueNAS box. Uses its own portal fixture bound to the box IP (not `0.0.0.0`) — distinct from any pre-existing live portal/target on the box.
 **Preconditions:** Know the box's iSCSI IP address.
 
 **Config (initial):**
@@ -1211,7 +1211,7 @@ resource "truenas_iscsi_target" "test" {
 
 **Resource:** `truenas_iscsi_targetextent`
 **Type:** CRUD (both `target` and `extent` are `RequiresReplace` — there is no true in-place update path other than `lunid`, which is Optional+Computed and generally left to auto-assign)
-**Environment:** Any TrueNAS SCALE box. This standalone case builds a minimal target+extent pair distinct from the full integration test in MT-BLOCK-009; use MT-BLOCK-009 to exercise the complete wiring chain.
+**Environment:** Any TrueNAS box. This standalone case builds a minimal target+extent pair distinct from the full integration test in MT-BLOCK-009; use MT-BLOCK-009 to exercise the complete wiring chain.
 **Preconditions:** A pool exists; this case creates its own zvol, extent, portal, and target fixtures.
 
 **Config:**
@@ -1272,7 +1272,7 @@ resource "truenas_iscsi_targetextent" "test" {
 
 **Resource:** `truenas_iscsi_portal`, `truenas_iscsi_initiator`, `truenas_iscsi_auth`, `truenas_zvol`, `truenas_iscsi_extent`, `truenas_iscsi_target`, `truenas_iscsi_targetextent`
 **Type:** Integration (multi-resource)
-**Environment:** Any TrueNAS SCALE box, including production-serving ones — this test is entirely self-contained and never references any pre-existing live iSCSI configuration on the box (live portal/target/extent/targetextent, if present). The test portal binds the box's own IP (not `0.0.0.0`), and the CHAP auth group uses `tag = 999`, distinct from any live tag. This reproduces `TestAccISCSIEndToEnd` in `internal/resources/iscsi_targetextent/acceptance_test.go`.
+**Environment:** Any TrueNAS box, including production-serving ones — this test is entirely self-contained and never references any pre-existing live iSCSI configuration on the box (live portal/target/extent/targetextent, if present). The test portal binds the box's own IP (not `0.0.0.0`), and the CHAP auth group uses `tag = 999`, distinct from any live tag. This reproduces `TestAccISCSIEndToEnd` in `internal/resources/iscsi_targetextent/acceptance_test.go`.
 **Preconditions:** A pool exists (default `tank`); confirm tag 999 is free: `midclt call iscsi.auth.query '[["tag","=",999]]'` returns empty.
 
 **Config (initial):**
@@ -1378,7 +1378,7 @@ resource "truenas_iscsi_targetextent" "test" {
 
 **Resource:** `truenas_nvmet_global` (datasource)
 **Type:** Singleton (read-only)
-**Environment:** Any TrueNAS SCALE box, including a production-serving one — this case makes no writes.
+**Environment:** Any TrueNAS box, including a production-serving one — this case makes no writes.
 **Preconditions:** NVMe-oF target service configured (config exists even if the service isn't running).
 
 **Config:**
@@ -1445,7 +1445,7 @@ resource "truenas_nvmet_global" "test" {
 
 **Resource:** `truenas_nvmet_subsys`
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE box. `name` is `RequiresReplace`. Never touches any pre-existing live subsystem on the box.
+**Environment:** Any TrueNAS box. `name` is `RequiresReplace`. Never touches any pre-existing live subsystem on the box.
 **Preconditions:** None.
 
 **Config (initial):**
@@ -1487,7 +1487,7 @@ resource "truenas_nvmet_subsys" "test" {
 
 **Resource:** `truenas_nvmet_port`
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE box. Uses service ID **14421** (distinct from the box's live port, typically `id=1` TCP `4420`, and from the end-to-end test's port on 14420 in MT-BLOCK-014). `addr_trtype` is `RequiresReplace`. Created with `enabled = false` initially so it never opens a live listener during this test.
+**Environment:** Any TrueNAS box. Uses service ID **14421** (distinct from the box's live port, typically `id=1` TCP `4420`, and from the end-to-end test's port on 14420 in MT-BLOCK-014). `addr_trtype` is `RequiresReplace`. Created with `enabled = false` initially so it never opens a live listener during this test.
 **Preconditions:** Know the box's iSCSI/NVMe-facing IP address.
 
 **Config (initial — disabled):**
@@ -1534,7 +1534,7 @@ resource "truenas_nvmet_port" "test" {
 
 **Resource:** `truenas_nvmet_namespace`
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE box with a usable pool. `subsys_id` and `nsid` are both `RequiresReplace`. Never touches the box's live subsystem/namespace (commonly `id=1`).
+**Environment:** Any TrueNAS box with a usable pool. `subsys_id` and `nsid` are both `RequiresReplace`. Never touches the box's live subsystem/namespace (commonly `id=1`).
 **Preconditions:** A pool exists (default `tank`); this case creates its own subsystem and zvol fixtures.
 
 **Config (initial — enabled):**
@@ -1598,14 +1598,14 @@ resource "truenas_nvmet_namespace" "test" {
 
 **Resource:** `truenas_nvmet_host`
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE box. `hostnqn` must be a full RFC-4122 UUID-form NQN (`nqn.2014-08.org.nvmexpress:uuid:<uuid>`) — a short/abbreviated suffix is rejected by TrueNAS ("uuid is incorrect length"). `description` only exists on the wire from SCALE 26.0+; omit it on older releases. `hostnqn` is mutable in place (no `RequiresReplace`).
-**Preconditions:** Generate a valid v4 UUID for the NQN, e.g. via `uuidgen` (lowercase). Confirm the box's SCALE version if testing `description`: `midclt call system.version`.
+**Environment:** Any TrueNAS box. `hostnqn` must be a full RFC-4122 UUID-form NQN (`nqn.2014-08.org.nvmexpress:uuid:<uuid>`) — a short/abbreviated suffix is rejected by TrueNAS ("uuid is incorrect length"). `description` only exists on the wire from TrueNAS 26.0+; omit it on older releases. `hostnqn` is mutable in place (no `RequiresReplace`).
+**Preconditions:** Generate a valid v4 UUID for the NQN, e.g. via `uuidgen` (lowercase). Confirm the box's TrueNAS version if testing `description`: `midclt call system.version`.
 
 **Config (initial):**
 ```hcl
 resource "truenas_nvmet_host" "test" {
   hostnqn     = "nqn.2014-08.org.nvmexpress:uuid:11111111-1111-4111-8111-111111111111"
-  description = "tf-acc-manual host"   # omit this line on SCALE < 26.0
+  description = "tf-acc-manual host"   # omit this line on TrueNAS < 26.0
 }
 ```
 
@@ -1649,7 +1649,7 @@ resource "truenas_nvmet_host" "test" {
 
 **Resource:** `truenas_nvmet_host_subsys`
 **Type:** CRUD (both `host_id` and `subsys_id` are `RequiresReplace` — no in-place update path exists)
-**Environment:** Any TrueNAS SCALE box. Never touches the box's live host_subsys association (commonly `id=1`).
+**Environment:** Any TrueNAS box. Never touches the box's live host_subsys association (commonly `id=1`).
 **Preconditions:** None; this case creates its own host and subsystem fixtures.
 
 **Config:**
@@ -1689,7 +1689,7 @@ resource "truenas_nvmet_host_subsys" "test" {
 
 **Resource:** `truenas_nvmet_port_subsys`
 **Type:** CRUD (both `port_id` and `subsys_id` are `RequiresReplace`)
-**Environment:** Any TrueNAS SCALE box. Uses a disabled test port on service ID 14421 so no live listener opens. Never touches the box's live port_subsys association (commonly `id=1`). This standalone case is a minimal pairing; use MT-BLOCK-018 to exercise the full wiring chain.
+**Environment:** Any TrueNAS box. Uses a disabled test port on service ID 14421 so no live listener opens. Never touches the box's live port_subsys association (commonly `id=1`). This standalone case is a minimal pairing; use MT-BLOCK-018 to exercise the full wiring chain.
 **Preconditions:** None; this case creates its own port and subsystem fixtures.
 
 **Config:**
@@ -1730,8 +1730,8 @@ resource "truenas_nvmet_port_subsys" "test" {
 
 **Resource:** `truenas_nvmet_subsys`, `truenas_nvmet_port`, `truenas_zvol`, `truenas_nvmet_namespace`, `truenas_nvmet_host`, `truenas_nvmet_host_subsys`, `truenas_nvmet_port_subsys`
 **Type:** Integration (multi-resource)
-**Environment:** Any TrueNAS SCALE box, including production-serving ones — this test is entirely self-contained and never references any pre-existing live NVMe-oF configuration on the box (live subsys/port/namespace/port_subsys, if present). The test port listens on the box IP at service ID **14420** (distinct from the live port's 4420) and is created with `enabled = false` throughout so it never opens a live listener. This reproduces `TestAccNVMeTEndToEnd` in `internal/resources/nvmet_port_subsys/acceptance_test.go`. `description` on the host only exists on the wire from SCALE 26.0+; omit it on older releases.
-**Preconditions:** A pool exists (default `tank`). Generate a valid v4 UUID NQN for the host fixture. Confirm SCALE version for the `description` field: `midclt call system.version`.
+**Environment:** Any TrueNAS box, including production-serving ones — this test is entirely self-contained and never references any pre-existing live NVMe-oF configuration on the box (live subsys/port/namespace/port_subsys, if present). The test port listens on the box IP at service ID **14420** (distinct from the live port's 4420) and is created with `enabled = false` throughout so it never opens a live listener. This reproduces `TestAccNVMeTEndToEnd` in `internal/resources/nvmet_port_subsys/acceptance_test.go`. `description` on the host only exists on the wire from TrueNAS 26.0+; omit it on older releases.
+**Preconditions:** A pool exists (default `tank`). Generate a valid v4 UUID NQN for the host fixture. Confirm TrueNAS version for the `description` field: `midclt call system.version`.
 
 **Config (initial — namespace enabled, host description set):**
 ```hcl
@@ -1761,7 +1761,7 @@ resource "truenas_nvmet_namespace" "test" {
 
 resource "truenas_nvmet_host" "test" {
   hostnqn     = "nqn.2014-08.org.nvmexpress:uuid:44444444-4444-4444-8444-444444444444"
-  description = "initial host description"   # omit on SCALE < 26.0
+  description = "initial host description"   # omit on TrueNAS < 26.0
 }
 
 resource "truenas_nvmet_host_subsys" "test" {
@@ -1875,7 +1875,7 @@ same directory (e.g. `case-001.tf`), applies, verifies, and then removes the
 file (or runs `terraform destroy -target=...`) as part of Cleanup. Additional
 `variable` blocks a case needs for secrets are shown in that case's Config.
 
-UI navigation below reflects TrueNAS SCALE 25.10; menu wording can shift a
+UI navigation below reflects TrueNAS 25.10; menu wording can shift a
 little between releases — if a path doesn't match what's on screen, treat the
 `midclt call` output as the source of truth.
 
@@ -1885,7 +1885,7 @@ little between releases — if a path doesn't match what's on screen, treat the
 
 **Resource:** `truenas_user`
 **Type:** Functional — full lifecycle
-**Environment:** Any TrueNAS SCALE system reachable over the management
+**Environment:** Any TrueNAS system reachable over the management
 network; local admin credentials (or an API key with the `FULL_ADMIN`/local
 administrator role).
 **Preconditions:**
@@ -1958,7 +1958,7 @@ auto-created primary group — on destroy.
 
 **Resource:** `truenas_group`
 **Type:** Functional — full lifecycle
-**Environment:** Any TrueNAS SCALE system; local admin credentials.
+**Environment:** Any TrueNAS system; local admin credentials.
 **Preconditions:** No existing group named `tf-acc-manual-grp-01`
 (`Credentials > Local Groups`, or `midclt call group.query
 '[["group","=","tf-acc-manual-grp-01"]]'` returns `[]`).
@@ -2003,7 +2003,7 @@ remove `case-002.tf`.
 
 **Resource:** `truenas_api_key`
 **Type:** Functional — full lifecycle plus credential verification
-**Environment:** Any TrueNAS SCALE system; local admin credentials for the
+**Environment:** Any TrueNAS system; local admin credentials for the
 Terraform provider connection, plus a local user account to own the new key
 (the built-in `truenas_admin` account is a convenient default; substitute
 any local user you have credentials for).
@@ -2081,7 +2081,7 @@ taint truenas_api_key.test` and re-apply to force a destroy+recreate.
 
 **Resource:** `truenas_privilege`
 **Type:** Functional — full lifecycle
-**Environment:** Any TrueNAS SCALE system; local admin credentials.
+**Environment:** Any TrueNAS system; local admin credentials.
 **Preconditions:** No existing privilege named `tf-acc-manual-priv-01` and no
 group named `tf-acc-manual-priv-grp-01` (`Credentials > Privileges` /
 `Credentials > Local Groups` in the UI, or `midclt call privilege.query
@@ -2157,7 +2157,7 @@ enrolled. Treat it with care.
 
 **Resource:** `truenas_twofactor_auth`
 **Type:** Functional — singleton set-and-restore (safe: `window` only)
-**Environment:** Any TrueNAS SCALE system; local admin credentials. Safe to
+**Environment:** Any TrueNAS system; local admin credentials. Safe to
 run against a shared system, since `enabled` and `services` are never
 touched.
 **Preconditions:** None beyond normal access. Read and record the box's
@@ -2311,7 +2311,7 @@ environment's hostname/IP):
 
 **Resource:** `truenas_directoryservices`
 **Type:** Functional — full join lifecycle (disruptive, disposable box only)
-**Environment:** Disposable TrueNAS SCALE system; a reachable AD domain
+**Environment:** Disposable TrueNAS system; a reachable AD domain
 controller as described above; Terraform CLI >= 1.11.0 (`credential.password`
 is WriteOnly). Equivalent of the automated `TRUENAS_DS`/
 `TRUENAS_DS_ALLOWED_ENDPOINT` gate: confirmed disposable box, confirmed
@@ -2434,7 +2434,7 @@ nameserver (step 11) even if earlier steps failed.
 
 **Resource:** `truenas_directoryservices`
 **Type:** Functional — full bind lifecycle (disruptive, disposable box only)
-**Environment:** Disposable TrueNAS SCALE system; a reachable LDAP server as
+**Environment:** Disposable TrueNAS system; a reachable LDAP server as
 described above; Terraform CLI >= 1.11.0 (`credential.bindpw` is
 WriteOnly).
 **Preconditions:**
@@ -2514,7 +2514,7 @@ case.
 
 **Resource:** `truenas_directoryservices`
 **Type:** Functional — full join lifecycle (disruptive, disposable box only)
-**Environment:** Disposable TrueNAS SCALE system; a reachable FreeIPA server
+**Environment:** Disposable TrueNAS system; a reachable FreeIPA server
 as described above; Terraform CLI >= 1.11.0 (`credential.password` is
 WriteOnly).
 **Preconditions:**
@@ -2608,7 +2608,7 @@ untouched (with a warning diagnostic saying so).
 
 **Resource:** `truenas_kerberos_config`
 **Type:** Functional — singleton set-and-restore
-**Environment:** Any TrueNAS SCALE system; local admin credentials.
+**Environment:** Any TrueNAS system; local admin credentials.
 **Preconditions:** Read and record the box's current `appdefaults_aux`
 value — this test restores it.
 
@@ -2649,7 +2649,7 @@ kerberos.update '{"appdefaults_aux": "<ORIG>"}'` directly, then remove
 **Resource:** `truenas_kerberos_config`
 **Type:** Negative / regression caution — documents a known middleware
 defect, not a provider bug
-**Environment:** Any TrueNAS SCALE system; local admin credentials. Prefer a
+**Environment:** Any TrueNAS system; local admin credentials. Prefer a
 disposable/test box for this one, since a failed `kerberos.update` job can
 leave `terraform apply` reporting an error while the box's actual state is
 uncertain until you check it directly.
@@ -2708,7 +2708,7 @@ validation error) if it isn't.**
 
 **Resource:** `truenas_kerberos_realm`
 **Type:** Functional — full lifecycle
-**Environment:** Any TrueNAS SCALE system; local admin credentials. No real
+**Environment:** Any TrueNAS system; local admin credentials. No real
 KDC is required — `kerberos.realm.create` does not validate KDC reachability
 at creation time, so a synthetic realm pointed at an address that will never
 answer is safe to use here.
@@ -2762,7 +2762,7 @@ fails, then remove `case-012.tf`.
 
 **Resource:** `truenas_kerberos_keytab`
 **Type:** Functional — full lifecycle (requires a real domain controller)
-**Environment:** Any TrueNAS SCALE system; local admin credentials; a
+**Environment:** Any TrueNAS system; local admin credentials; a
 reachable Active Directory (or Samba AD) domain controller you can export a
 keytab from.
 **Preconditions:**
@@ -2833,7 +2833,7 @@ though several mirror what that harness automates.
 
 ### Conventions used throughout this section
 
-- **Test box**: examples below use `192.168.1.68` as the TrueNAS SCALE test
+- **Test box**: examples below use `192.168.1.68` as the TrueNAS test
   box's address. Substitute your own test box's hostname/IP everywhere you
   see it if it differs — do not use a shared/production box.
 - **Provider block**: every `Config:` is a complete, standalone `.tf` file.
@@ -2898,7 +2898,7 @@ live one short of `terraform import`, which none of these cases do.
 
 **Resource:** truenas_certificate
 **Type:** Positive — full CRUD (create, rename update, import, destroy)
-**Environment:** TrueNAS SCALE 25.10+ test box at 192.168.1.68; Terraform CLI
+**Environment:** TrueNAS 25.10+ test box at 192.168.1.68; Terraform CLI
 ≥ 1.5; `openssl` on the workstation running Terraform.
 **Preconditions:**
 
@@ -4849,8 +4849,8 @@ Conventions used throughout this section:
   trivially distinguishable from anything else on the box and safe to bulk-search for leftovers
   (`midclt call <namespace>.query '[["name","~","tf-acc-manual"]]'`).
 - Two boxes are referenced by their literal addresses:
-  - **25.10 box** — TrueNAS SCALE 25.10 test VM (VM 110 on `pve`), `192.168.1.249`, pool `tank`.
-  - **26.0 box** — TrueNAS SCALE 26.0+, `192.168.1.68`, pool `tank`.
+  - **25.10 box** — TrueNAS 25.10 test VM (VM 110 on `pve`), `192.168.1.249`, pool `tank`.
+  - **26.0 box** — TrueNAS 26.0+, `192.168.1.68`, pool `tank`.
   Do not substitute placeholders for these; use the literal hostnames/IPs.
 - `midclt call` commands are run over SSH on the TrueNAS box itself, e.g.
   `ssh root@192.168.1.68 midclt call container.query '[["name","=","tf-acc-manual-ctr-01"]]'`.
@@ -4865,7 +4865,7 @@ Conventions used throughout this section:
   Substitute `<BOX_IP>` with the literal box address named in each case's **Environment** field
   (192.168.1.249 or 192.168.1.68) — this is a credential placeholder to fill in, not a host
   placeholder to leave unresolved.
-- "UI" verification steps describe the general TrueNAS SCALE navigation; specific menu wording can
+- "UI" verification steps describe the general TrueNAS navigation; specific menu wording can
   drift slightly between builds. Treat the `midclt call` output as the authoritative check and the
   UI screen as a secondary confirmation that the change is visible where an operator would look
   for it.
@@ -5446,11 +5446,11 @@ test.
 **Cleanup:** step 7's destroy plus step 4-5's restore should already leave the box as
 found. Re-run `midclt call docker.config` one final time to confirm.
 
-**MT-APPS-010 — nvidia writable on SCALE 25.10 (positive)**
+**MT-APPS-010 — nvidia writable on TrueNAS 25.10 (positive)**
 
 **Resource:** truenas_docker_config
 **Type:** Resource
-**Environment:** 25.10 box (192.168.1.249) only — `nvidia` is writable on SCALE 25.10 and earlier.
+**Environment:** 25.10 box (192.168.1.249) only — `nvidia` is writable on TrueNAS 25.10 and earlier.
 Do not run this against the 26.0 box (see MT-APPS-011 for that box's behavior).
 **Preconditions:** Docker configured on the 25.10 box (non-null `pool`).
 
@@ -5475,16 +5475,16 @@ resource "truenas_docker_config" "test" {
 3. Restore `nvidia` to its original value from step 0, `terraform apply`.
 4. `terraform destroy` (state-only; warning expected, same as MT-APPS-009).
 
-**Expected results:** setting `nvidia` explicitly succeeds on SCALE 25.10, confirming it remains
+**Expected results:** setting `nvidia` explicitly succeeds on TrueNAS 25.10, confirming it remains
 writable there per the resource's documented version split.
 
 **Cleanup:** step 3's restore plus step 4's destroy.
 
-**MT-APPS-011 — nvidia apply-time error on SCALE 26.0+ (negative)**
+**MT-APPS-011 — nvidia apply-time error on TrueNAS 26.0+ (negative)**
 
 **Resource:** truenas_docker_config
 **Type:** Resource
-**Environment:** 26.0 box (192.168.1.68) only — SCALE 26.0+ dropped `nvidia` from
+**Environment:** 26.0 box (192.168.1.68) only — TrueNAS 26.0+ dropped `nvidia` from
 `docker.update`'s accepted fields, so setting it explicitly is an apply-time error there, even
 though it is still readable.
 **Preconditions:** Docker configured on the 26.0 box (non-null `pool`).
@@ -5609,7 +5609,7 @@ resource "truenas_catalog_config" "test" {
 
 ### 9. truenas_container
 
-Requires **TrueNAS SCALE 26.0 or later** — the `container.*` namespace does not exist on 25.10.
+Requires **TrueNAS 26.0 or later** — the `container.*` namespace does not exist on 25.10.
 Uses the `truenas_container_image` datasource to resolve a current image version rather than
 hardcoding one: the upstream registry (images.linuxcontainers.org) **prunes old builds**, so a
 version pinned today can 404 on download once pruned. Always resolve `latest_version` fresh at
@@ -5619,8 +5619,8 @@ apply time rather than copy-pasting a version string from a previous run.
 
 **Resource:** truenas_container
 **Type:** Resource
-**Environment:** 26.0 box (192.168.1.68), pool tank. Requires SCALE 26.0+.
-**Preconditions:** none beyond SCALE 26.0+ and a working provider connection. No pre-existing
+**Environment:** 26.0 box (192.168.1.68), pool tank. Requires TrueNAS 26.0+.
+**Preconditions:** none beyond TrueNAS 26.0+ and a working provider connection. No pre-existing
 container named `tf-acc-manual-container`.
 
 **Config:**
@@ -5684,7 +5684,7 @@ than an in-place update, though this is not required for every run of this test)
 
 ### 10. truenas_container_device
 
-Requires **TrueNAS SCALE 26.0 or later**. All three cases attach to a stopped
+Requires **TrueNAS 26.0 or later**. All three cases attach to a stopped
 (`running = false`, `autostart = false`) parent `truenas_container` fixture so that attaching/
 detaching devices only ever rewrites libvirt domain XML on disk — no live bind-mount, NIC
 plug/unplug, or USB passthrough actually occurs while testing. **GPU devices are explicitly out of
@@ -5697,8 +5697,8 @@ test against, treat it as exploratory, not a pass/fail gate for this release.
 
 **Resource:** truenas_container_device
 **Type:** Resource
-**Environment:** 26.0 box (192.168.1.68), pool tank. Requires SCALE 26.0+.
-**Preconditions:** none beyond SCALE 26.0+.
+**Environment:** 26.0 box (192.168.1.68), pool tank. Requires TrueNAS 26.0+.
+**Preconditions:** none beyond TrueNAS 26.0+.
 
 **Config:**
 ```hcl
@@ -5768,7 +5768,7 @@ resource "truenas_container_device" "test" {
 
 **Resource:** truenas_container_device
 **Type:** Resource
-**Environment:** 26.0 box (192.168.1.68), pool tank. Requires SCALE 26.0+.
+**Environment:** 26.0 box (192.168.1.68), pool tank. Requires TrueNAS 26.0+.
 **Preconditions:** run `midclt call container.device.nic_attach_choices` first and pick a real
 bridge/interface name from the result (e.g. `truenasbr0`) — do not fabricate one.
 
@@ -5831,7 +5831,7 @@ main thing this manual case adds beyond the automated coverage — document its 
 
 **Resource:** truenas_container_device
 **Type:** Resource
-**Environment:** 26.0 box (192.168.1.68), pool tank. Requires SCALE 26.0+ **and** at least one
+**Environment:** 26.0 box (192.168.1.68), pool tank. Requires TrueNAS 26.0+ **and** at least one
 real USB device physically attached to the box (the API validates `vendor_id`/`product_id` against
 real host hardware — fabricated values are rejected).
 **Preconditions:** run `midclt call container.device.usb_choices` and pick a real device's
@@ -5896,14 +5896,14 @@ cleanly; step 4's update behavior is new ground for this manual case to document
 
 ### 11. truenas_container_image
 
-Requires **TrueNAS SCALE 26.0 or later**. Datasource-only — the upstream LXC image registry is not
+Requires **TrueNAS 26.0 or later**. Datasource-only — the upstream LXC image registry is not
 managed by this provider.
 
 **MT-APPS-018 — Look up an existing image and resolve latest_version**
 
 **Resource:** truenas_container_image (datasource)
 **Type:** Data Source
-**Environment:** 26.0 box (192.168.1.68). Requires SCALE 26.0+.
+**Environment:** 26.0 box (192.168.1.68). Requires TrueNAS 26.0+.
 **Preconditions:** none.
 
 **Config:**
@@ -5942,7 +5942,7 @@ consistently the newest (last) entry.
 
 **Resource:** truenas_container_image (datasource)
 **Type:** Data Source
-**Environment:** 26.0 box (192.168.1.68). Requires SCALE 26.0+.
+**Environment:** 26.0 box (192.168.1.68). Requires TrueNAS 26.0+.
 **Preconditions:** none.
 
 **Config:**
@@ -5971,7 +5971,7 @@ crash, panic, or raw unhandled API error/stack trace.
 ### 12. truenas_lxc_config
 
 `truenas_lxc_config` is a singleton (like `docker_config`/`catalog_config`), requires **TrueNAS
-SCALE 26.0 or later**, and follows the same `pool`-is-dangerous rule as `docker_config`: changing
+TrueNAS 26.0 or later**, and follows the same `pool`-is-dangerous rule as `docker_config`: changing
 `preferred_pool` selects which ZFS pool LXC uses for instance/image datasets, which is a real
 migration concern on a box already using LXC, not a cosmetic toggle.
 
@@ -5979,7 +5979,7 @@ migration concern on a box already using LXC, not a cosmetic toggle.
 
 **Resource:** truenas_lxc_config
 **Type:** Resource
-**Environment:** 26.0 box (192.168.1.68). Requires SCALE 26.0+.
+**Environment:** 26.0 box (192.168.1.68). Requires TrueNAS 26.0+.
 **Preconditions:** `midclt call lxc.config` shows `preferred_pool: null` on the target box (LXC not
 yet in active use there). If `preferred_pool` is already set, **skip this case** — do not run a
 network-CIDR change against a box with LXC actively configured without separately confirming it's
@@ -6089,7 +6089,7 @@ Conventions used below:
 
 **Resource:** truenas_network_config
 **Type:** Datasource
-**Environment:** Any TrueNAS SCALE box (read-only, safe on production).
+**Environment:** Any TrueNAS box (read-only, safe on production).
 **Preconditions:** TrueNAS reachable over the WebSocket API; API key or username/password available.
 
 **Config:**
@@ -6192,7 +6192,7 @@ resource "truenas_network_config" "test" {
 
 **Resource:** truenas_network_interface
 **Type:** Datasource
-**Environment:** Any TrueNAS SCALE box that has a NIC literally named `enp7s0` (check first — see Preconditions). Safe on production.
+**Environment:** Any TrueNAS box that has a NIC literally named `enp7s0` (check first — see Preconditions). Safe on production.
 **Preconditions:** Run `midclt call interface.query '[["id","=","enp7s0"]]'` first. If it returns an empty array, this specific case does not apply to your box — substitute any `PHYSICAL` interface name returned by `midclt call interface.query '[["type","=","PHYSICAL"]]'` in its place.
 
 **Config:**
@@ -6266,7 +6266,7 @@ resource "truenas_network_interface" "test" {
 
 **Resource:** truenas_static_route
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE box. Safe — the destination uses a non-routable documentation range so nothing in production traffic is affected.
+**Environment:** Any TrueNAS box. Safe — the destination uses a non-routable documentation range so nothing in production traffic is affected.
 **Preconditions:** None beyond API reachability. The `gateway` value below (`192.168.1.1`) must be an address TrueNAS considers reachable/plausible from one of its local interfaces — substitute an address on your own box's LAN subnet if `192.168.1.0/24` isn't in use on your test host. (Unlike `destination`, `gateway` is validated against local reachability by TrueNAS, so a TEST-NET address here will typically be rejected.)
 
 **Config (create):**
@@ -6318,7 +6318,7 @@ resource "truenas_static_route" "test" {
 
 **Resource:** truenas_system_general
 **Type:** Datasource
-**Environment:** Any TrueNAS SCALE box. Safe on production.
+**Environment:** Any TrueNAS box. Safe on production.
 **Preconditions:** None.
 
 **Config:**
@@ -6414,7 +6414,7 @@ resource "truenas_system_general" "test" {
 
 **Resource:** truenas_system_advanced
 **Type:** Datasource
-**Environment:** Any TrueNAS SCALE box. Safe on production.
+**Environment:** Any TrueNAS box. Safe on production.
 **Preconditions:** None.
 
 **Config:**
@@ -6509,7 +6509,7 @@ resource "truenas_system_advanced" "test" {
 
 **Resource:** truenas_tunable
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE box.
+**Environment:** Any TrueNAS box.
 **Preconditions:** Read the current live value of the sysctl BEFORE creating the resource: `midclt call system.info.system_manufacturer` is not it — instead run, at the console/SSH, `sysctl fs.suid_dumpable` (or `midclt call tunable.query '[["var","=","fs.suid_dumpable"]]'` if already managed elsewhere) and record the value. No `truenas_tunable` resource for `fs.suid_dumpable` should already exist (`midclt call tunable.query '[["var","=","fs.suid_dumpable"]]'` returns `[]`).
 
 **Config (use the CURRENT value found in Preconditions as `value`, e.g. `"0"`):**
@@ -6550,7 +6550,7 @@ resource "truenas_tunable" "test" {
 
 **Resource:** truenas_boot_environment
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE box with sufficient boot-pool free space for a BE clone.
+**Environment:** Any TrueNAS box with sufficient boot-pool free space for a BE clone.
 **Preconditions:** Identify the currently-active boot environment: `midclt call boot.environment.query '[["active","=",true]]'` and note its `id` — this is the `source` for the clone. Confirm enough boot-pool space exists (**System > Boot** in the UI shows usage).
 
 **⚠ Safety:** NEVER set `activated = true` in this test, and never call `midclt call boot.environment.activate` against the clone created here. Activating a boot environment changes what the box boots into on next reboot — an unintended activation on a production box could leave it booting into an unexpected, possibly non-functional environment. This resource also has no "deactivate" operation: once activated, the only way to undo it in Terraform is to activate a DIFFERENT boot environment, which is out of scope for this case. Additionally, this resource refuses to destroy any boot environment that is currently active or activated (a provider-side guard, independent of the TrueNAS API) — so if you accidentally activate the clone, `terraform destroy` will hard-fail with an explicit error until you activate a different BE first.
@@ -6598,7 +6598,7 @@ output "clone_dataset" {
 
 **Resource:** truenas_service
 **Type:** CRUD (existing-object toggle — services are never actually created or deleted, only enabled/disabled and started/stopped)
-**Environment:** Any TrueNAS SCALE box where the FTP service is currently stopped and disabled.
+**Environment:** Any TrueNAS box where the FTP service is currently stopped and disabled.
 **Preconditions:** `midclt call service.query '[["service","=","ftp"]]'` and confirm the returned record shows `"state": "STOPPED"` and `"enable": false`. If FTP is already enabled/running on your box, pick a different currently-stopped, currently-disabled service and substitute its name (do not use this specific case against a service you rely on).
 
 **Config (enable at boot; leave running state untouched):**
@@ -6648,7 +6648,7 @@ resource "truenas_service" "test" {
 
 **Resource:** truenas_ntp_server
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE box.
+**Environment:** Any TrueNAS box.
 **Preconditions:** `midclt call system.ntpserver.query` and record the IDs/addresses of the box's existing (stock) NTP servers — typically the three `*.debian.pool.ntp.org` entries. Do not modify or delete any of those in this case.
 
 **⚠ Safety:** `force = true` is required here because the address used (`203.0.113.1`, TEST-NET-3) is intentionally unreachable — `force` bypasses TrueNAS's reachability validation on create/update. It is NOT related to protecting the minimum server count; nothing in this resource stops you from deleting one of the stock servers if you target it by ID, so double-check the `id` you're operating on at every step against the addresses recorded in Preconditions.
@@ -6690,7 +6690,7 @@ resource "truenas_ntp_server" "test" {
 
 **Resource:** truenas_ssh_config
 **Type:** Datasource
-**Environment:** Any TrueNAS SCALE box. Safe on production.
+**Environment:** Any TrueNAS box. Safe on production.
 **Preconditions:** None.
 
 **Config:**
@@ -6786,7 +6786,7 @@ resource "truenas_ssh_config" "test" {
 
 **Resource:** truenas_ftp_config
 **Type:** Datasource
-**Environment:** Any TrueNAS SCALE box. Safe on production.
+**Environment:** Any TrueNAS box. Safe on production.
 **Preconditions:** None.
 
 **Config:**
@@ -6880,7 +6880,7 @@ resource "truenas_ftp_config" "test" {
 
 **Resource:** truenas_snmp_config
 **Type:** Datasource
-**Environment:** Any TrueNAS SCALE box. Safe on production.
+**Environment:** Any TrueNAS box. Safe on production.
 **Preconditions:** None.
 
 **Config:**
@@ -7111,7 +7111,7 @@ resource "truenas_mail" "test" {
 
 **Resource:** truenas_alert_service
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE box. Safe — this creates an independent notification-target object, it does not touch the box-wide mail/SMTP configuration itself.
+**Environment:** Any TrueNAS box. Safe — this creates an independent notification-target object, it does not touch the box-wide mail/SMTP configuration itself.
 **Preconditions:** None beyond API reachability.
 
 **Config (create):**
@@ -7239,7 +7239,7 @@ resource "truenas_alert_policy" "test" {
 
 **Resource:** truenas_reporting_exporter
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE box. Safe — the destination is a non-routable documentation address and the exporter is kept disabled, so no metrics traffic is ever actually sent.
+**Environment:** Any TrueNAS box. Safe — the destination is a non-routable documentation address and the exporter is kept disabled, so no metrics traffic is ever actually sent.
 **Preconditions:** None beyond API reachability.
 
 **Config (create, enabled = false throughout):**
@@ -7298,7 +7298,7 @@ resource "truenas_reporting_exporter" "test" {
 
 **Resource:** truenas_audit_config
 **Type:** Datasource
-**Environment:** Any TrueNAS SCALE box. Safe on production.
+**Environment:** Any TrueNAS box. Safe on production.
 **Preconditions:** None.
 
 **Config:**
@@ -7422,7 +7422,7 @@ Supply `truenas_endpoint`/`truenas_api_key` (and any other variable a case decla
 
 **Resource:** truenas_vm
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE system capable of hosting a VM (Enterprise HA not required for this resource).
+**Environment:** Any TrueNAS system capable of hosting a VM (Enterprise HA not required for this resource).
 **Preconditions:** Terraform >= required provider version installed; box reachable; sufficient free memory (>= 512 MiB) for a throwaway VM.
 **Config:**
 ```hcl
@@ -7453,7 +7453,7 @@ resource "truenas_vm" "manual_test" {
 
 **Resource:** truenas_vm_device
 **Type:** CRUD
-**Environment:** Any TrueNAS SCALE system capable of hosting a VM.
+**Environment:** Any TrueNAS system capable of hosting a VM.
 **Preconditions:** Same as MT-HA-001. Uses its own dedicated fixture VM — never attach to a pre-existing VM.
 **Config:**
 ```hcl
@@ -7503,7 +7503,7 @@ resource "truenas_vm_device" "manual_test" {
 
 **Resource:** truenas_vmware
 **Type:** Manual-only
-**Environment:** Any TrueNAS SCALE system, PLUS a real, reachable vCenter server or ESXi host the tester controls, with a real datastore name that exists on it. This resource's `create` synchronously validates hostname/username/password against that live endpoint — an unreachable or fake host is rejected outright (`ENETUNREACH`/`ETIMEDOUT`) and nothing is persisted, which is why this case cannot be automated in this environment and is documented-skip in the Go harness (`internal/resources/vmware/acceptance_test.go`).
+**Environment:** Any TrueNAS system, PLUS a real, reachable vCenter server or ESXi host the tester controls, with a real datastore name that exists on it. This resource's `create` synchronously validates hostname/username/password against that live endpoint — an unreachable or fake host is rejected outright (`ENETUNREACH`/`ETIMEDOUT`) and nothing is persisted, which is why this case cannot be automated in this environment and is documented-skip in the Go harness (`internal/resources/vmware/acceptance_test.go`).
 **Preconditions:** Real vCenter/ESXi credentials and a real datastore name; a disposable dataset/filesystem path on the TrueNAS box to use as `filesystem` (pre-create it via the UI or `truenas_dataset` if available — `truenas_vmware` does not create it).
 **⚠ Safety:** Use genuine credentials for a host you are authorized to test against. Do not point this at a production vCenter/ESXi environment unless you intend a real, disposable integration.
 **Config:**
@@ -7824,7 +7824,7 @@ resource "truenas_enclosure_label" "manual_test" {
 
 **Resource:** truenas_truecommand_config
 **Type:** Datasource
-**Environment:** Any TrueNAS SCALE system (Enterprise license required for TrueCommand; HA not required).
+**Environment:** Any TrueNAS system (Enterprise license required for TrueCommand; HA not required).
 **Preconditions:** None.
 **Config:**
 ```hcl
@@ -7841,7 +7841,7 @@ data "truenas_truecommand_config" "test" {}
 
 **Resource:** truenas_truecommand_config
 **Type:** Singleton
-**Environment:** Any TrueNAS SCALE system, fully disposable for this box-wide singleton.
+**Environment:** Any TrueNAS system, fully disposable for this box-wide singleton.
 **Preconditions:** MT-HA-013 confirms `enabled=false` beforehand.
 **⚠ Safety:** `enabled` is ALWAYS explicitly `false` in this test — NEVER set it to `true`; doing so starts a real connection attempt to a TrueCommand instance using `api_key`. `api_key` is Sensitive but NOT write-only — it is stored in Terraform state in plaintext-readable form (masked only in CLI output), so treat any state file touched by this test as sensitive.
 **Config:**
@@ -7874,7 +7874,7 @@ resource "truenas_truecommand_config" "manual_test" {
 
 **Resource:** truenas_tn_connect_config
 **Type:** Datasource
-**Environment:** Any TrueNAS SCALE system.
+**Environment:** Any TrueNAS system.
 **Preconditions:** None.
 **Config:**
 ```hcl
@@ -7883,7 +7883,7 @@ data "truenas_tn_connect_config" "test" {}
 **Steps:**
 1. `terraform apply`.
 2. Confirm `id = "tn_connect_config"`, `enabled`, `status`, `status_reason`, `registration_details` (a JSON string, `"{}"` when not enrolled) are set.
-3. Note expected release-specific nulls, NOT bugs: `tier` / `last_heartbeat_failure_datetime` are populated only on SCALE 26.0+ (null on 25.10); `ips` / `interfaces` / `interfaces_ips` / `use_all_interfaces` are populated only on SCALE 25.10 (null on 26.0+).
+3. Note expected release-specific nulls, NOT bugs: `tier` / `last_heartbeat_failure_datetime` are populated only on TrueNAS 26.0+ (null on 25.10); `ips` / `interfaces` / `interfaces_ips` / `use_all_interfaces` are populated only on TrueNAS 25.10 (null on 26.0+).
 4. If `enabled` already reads `true`, this box is genuinely enrolled with TrueNAS Connect — this is expected on some boxes and this read-only case does not disturb it.
 **Expected results:** Fields populate per the box's release; enrollment state is reported accurately without being touched.
 **Cleanup:** None — read-only.
@@ -7892,7 +7892,7 @@ data "truenas_tn_connect_config" "test" {}
 
 **Resource:** truenas_tn_connect_config
 **Type:** Manual-only DANGEROUS
-**Environment:** A fully disposable TrueNAS SCALE system explicitly authorized for TrueNAS Connect cloud-enrollment testing. Never run this against a box that is not already confirmed `enabled=false` (verify via MT-HA-015 first), and never against production.
+**Environment:** A fully disposable TrueNAS system explicitly authorized for TrueNAS Connect cloud-enrollment testing. Never run this against a box that is not already confirmed `enabled=false` (verify via MT-HA-015 first), and never against production.
 **Preconditions:** MT-HA-015 confirms `enabled=false` and `status="DISABLED"` before proceeding. Explicit authorization to enroll this system with the TrueNAS Connect cloud service (iX account/heartbeat infrastructure).
 **⚠ Safety:** Setting `enabled=true` is a REAL, EXTERNAL side effect — this system registers with the TrueNAS Connect account service and begins periodic heartbeat reporting to iX cloud infrastructure. This is not a local configuration toggle. `enabled` is the ONLY writable field on this resource; every other attribute is read-only status.
 **Config:**

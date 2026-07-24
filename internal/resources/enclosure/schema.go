@@ -18,7 +18,7 @@ import (
 // docker_network/container_image).
 func datasourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Looks up a TrueNAS SCALE storage enclosure (e.g. the head unit's own chassis, or an " +
+		Description: "Looks up a TrueNAS storage enclosure (e.g. the head unit's own chassis, or an " +
 			"attached expansion shelf) by id (enclosure2.query). Read-only: describes fixed physical hardware " +
 			"except for \"label\", which is user-settable but managed by the separate truenas_enclosure_label " +
 			"resource, not here." +
@@ -28,9 +28,9 @@ func datasourceSchema() schema.Schema {
 			"on a system with multiple enclosures (e.g. a head unit plus expansion shelves), unlike \"id\", " +
 			"which is also the same identifier enclosure.label.set itself takes." +
 			"\n\n" +
-			"Probed live on the disposable Enterprise HA test box (SCALE 25.10.4): a single shared H-series " +
+			"Probed live on the disposable Enterprise HA test box (TrueNAS 25.10.4): a single shared H-series " +
 			"chassis is reported (\"controller\": true — both HA controllers see the same physical enclosure). " +
-			"Cross-release probe (SCALE 26.0): enclosure2.query returns an EMPTY array on a box with no " +
+			"Cross-release probe (TrueNAS 26.0): enclosure2.query returns an EMPTY array on a box with no " +
 			"enclosure hardware/license — this datasource surfaces that as a clear \"not found\" error rather " +
 			"than crashing." +
 			"\n\n" +

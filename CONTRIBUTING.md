@@ -6,7 +6,7 @@ Thanks for your interest in the TrueNAS Terraform provider.
 
 - Go (see `go.mod` for the required version)
 - Terraform 1.11+
-- For acceptance tests: access to a real TrueNAS SCALE box (this project
+- For acceptance tests: access to a real TrueNAS box (this project
   does not mock the server — see below)
 
 ## Building
@@ -26,7 +26,7 @@ is the operator quick reference.
 
 - **Unit tests** need no TrueNAS box: `make test`. Unit tests are
   pure-function only (payload builders, response mappers, schema shape).
-- **Acceptance tests** run against a **real** TrueNAS SCALE box — there are
+- **Acceptance tests** run against a **real** TrueNAS box — there are
   no mock servers anywhere in this project, by policy. They are gated on
   `TF_ACC=1` plus connection env vars and skip cleanly when unset:
 

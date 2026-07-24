@@ -3,12 +3,12 @@
 page_title: "truenas_tunable Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a sysctl/udev/ZFS tunable on TrueNAS SCALE.
+  Manages a sysctl/udev/ZFS tunable on TrueNAS.
 ---
 
 # truenas_tunable (Resource)
 
-Manages a sysctl/udev/ZFS tunable on TrueNAS SCALE.
+Manages a sysctl/udev/ZFS tunable on TrueNAS.
 
 ## Example Usage
 

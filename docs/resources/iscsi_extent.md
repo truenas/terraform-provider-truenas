@@ -3,12 +3,12 @@
 page_title: "truenas_iscsi_extent Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an iSCSI extent on TrueNAS SCALE.
+  Manages an iSCSI extent on TrueNAS.
 ---
 
 # truenas_iscsi_extent (Resource)
 
-Manages an iSCSI extent on TrueNAS SCALE.
+Manages an iSCSI extent on TrueNAS.
 
 ## Example Usage
 

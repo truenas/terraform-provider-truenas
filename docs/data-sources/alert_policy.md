@@ -3,12 +3,12 @@
 page_title: "truenas_alert_policy Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE global alert policy (per-alert-class notification level and delivery policy overrides). Takes no arguments: there is exactly one alert policy per TrueNAS system.
+  Reads the current TrueNAS global alert policy (per-alert-class notification level and delivery policy overrides). Takes no arguments: there is exactly one alert policy per TrueNAS system.
 ---
 
 # truenas_alert_policy (Data Source)
 
-Reads the current TrueNAS SCALE global alert policy (per-alert-class notification level and delivery policy overrides). Takes no arguments: there is exactly one alert policy per TrueNAS system.
+Reads the current TrueNAS global alert policy (per-alert-class notification level and delivery policy overrides). Takes no arguments: there is exactly one alert policy per TrueNAS system.
 
 
 

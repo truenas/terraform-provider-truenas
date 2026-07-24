@@ -26,7 +26,7 @@ func (d *NetworkConfigDataSource) Metadata(_ context.Context, req datasource.Met
 
 func (d *NetworkConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE global network configuration (hostname, domain, DNS " +
+		Description: "Reads the current TrueNAS global network configuration (hostname, domain, DNS " +
 			"servers, default gateways, service announcement). Takes no arguments: there is exactly one global " +
 			"network configuration per TrueNAS system.",
 		Attributes: map[string]dschema.Attribute{

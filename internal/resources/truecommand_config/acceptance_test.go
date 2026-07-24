@@ -13,7 +13,7 @@ import (
 // TrueCommand configuration through the truenas_truecommand_config
 // datasource only. It never writes. No version-gate skip is needed: probed
 // live, truecommand.config is present, with an identical shape, on BOTH
-// SCALE 25.10.4 HA and 26.0.
+// TrueNAS 25.10.4 HA and 26.0.
 func TestAccTrueCommandConfigDataSource_basic(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
@@ -42,7 +42,7 @@ type trueCommandConfigOriginal struct {
 
 // readTrueCommandConfigOriginal reads the box's current truecommand.config
 // via acctest.RestoreCall (job:false, probed live and identical on both
-// SCALE 25.10.4 HA and 26.0), so the test can restore the exact original
+// TrueNAS 25.10.4 HA and 26.0), so the test can restore the exact original
 // "api_key" value afterward. Returns ok=false (rather than failing the test
 // outright) when the read itself errors, so the caller can self-skip —
 // mirroring the webshare_config/mail/ups/lxc_config precedent.
@@ -93,7 +93,7 @@ func restoreTrueCommandConfigAPIKey(t *testing.T, apiKey *string) {
 // untouched, left "status"/"status_reason" at "DISABLED"/"Truecommand
 // service is disabled." (no outbound connection attempt), and the new value
 // round-tripped verbatim on the next read — confirmed identically on both
-// SCALE 25.10.4 HA and 26.0 before this test was written. Gated behind
+// TrueNAS 25.10.4 HA and 26.0 before this test was written. Gated behind
 // acctest.DisruptiveCheck (TRUENAS_DISRUPTIVE=1) since it mutates the box's
 // live TrueCommand configuration regardless; a t.Cleanup-registered API
 // restore is the safety net if the Terraform steps fail.

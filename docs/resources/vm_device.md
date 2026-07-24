@@ -3,12 +3,12 @@
 page_title: "truenas_vm_device Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a device attached to a TrueNAS SCALE VM (disk, NIC, CD-ROM, display, PCI passthrough, raw file, or USB).
+  Manages a device attached to a TrueNAS VM (disk, NIC, CD-ROM, display, PCI passthrough, raw file, or USB).
 ---
 
 # truenas_vm_device (Resource)
 
-Manages a device attached to a TrueNAS SCALE VM (disk, NIC, CD-ROM, display, PCI passthrough, raw file, or USB).
+Manages a device attached to a TrueNAS VM (disk, NIC, CD-ROM, display, PCI passthrough, raw file, or USB).
 
 ## Example Usage
 

@@ -9,7 +9,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a ZFS volume (zvol/block device) on TrueNAS SCALE.",
+		Description: "Manages a ZFS volume (zvol/block device) on TrueNAS.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:    true,

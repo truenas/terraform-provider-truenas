@@ -219,7 +219,7 @@ func TestISCSIExtentApiPayload_AvailThreshold(t *testing.T) {
 // Optional+Computed fields are null/unknown (the state a Create call sees
 // for attributes the caller never set in config), apiPayload omits them
 // entirely rather than sending Go zero values (0, "", false) that TrueNAS
-// SCALE rejects for enum-constrained fields like blocksize and rpm.
+// TrueNAS rejects for enum-constrained fields like blocksize and rpm.
 func TestISCSIExtentApiPayload_OmitsUnsetOptionalFields(t *testing.T) {
 	ctx := context.Background()
 

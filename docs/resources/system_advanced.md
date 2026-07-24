@@ -3,15 +3,15 @@
 page_title: "truenas_system_advanced Resource - truenas"
 subcategory: ""
 description: |-
-  Manages the TrueNAS SCALE system advanced configuration (syslog, console, kernel debugging, SED, GPU isolation). This is a singleton resource — there is exactly one system advanced configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls system.advanced.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it controls syslog and console access). sed_passwd is write-only: it is never read back from TrueNAS and is not stored in state.
-  nvidia is writable only on TrueNAS SCALE 26.0 and later: it does not exist on system.advanced.update below SCALE 26.0 (probed live) — setting it explicitly in configuration against a pre-26.0 target is an apply-time error.
+  Manages the TrueNAS system advanced configuration (syslog, console, kernel debugging, SED, GPU isolation). This is a singleton resource — there is exactly one system advanced configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls system.advanced.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it controls syslog and console access). sed_passwd is write-only: it is never read back from TrueNAS and is not stored in state.
+  nvidia is writable only on TrueNAS 26.0 and later: it does not exist on system.advanced.update below TrueNAS 26.0 (probed live) — setting it explicitly in configuration against a pre-26.0 target is an apply-time error.
 ---
 
 # truenas_system_advanced (Resource)
 
-Manages the TrueNAS SCALE system advanced configuration (syslog, console, kernel debugging, SED, GPU isolation). This is a singleton resource — there is exactly one system advanced configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls system.advanced.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it controls syslog and console access). sed_passwd is write-only: it is never read back from TrueNAS and is not stored in state.
+Manages the TrueNAS system advanced configuration (syslog, console, kernel debugging, SED, GPU isolation). This is a singleton resource — there is exactly one system advanced configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls system.advanced.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it controls syslog and console access). sed_passwd is write-only: it is never read back from TrueNAS and is not stored in state.
 
-`nvidia` is writable only on TrueNAS SCALE 26.0 and later: it does not exist on system.advanced.update below SCALE 26.0 (probed live) — setting it explicitly in configuration against a pre-26.0 target is an apply-time error.
+`nvidia` is writable only on TrueNAS 26.0 and later: it does not exist on system.advanced.update below TrueNAS 26.0 (probed live) — setting it explicitly in configuration against a pre-26.0 target is an apply-time error.
 
 ## Example Usage
 
@@ -42,7 +42,7 @@ resource "truenas_system_advanced" "config" {
 - `kernel_extra_options` (String) Extra kernel command-line options appended at boot.
 - `login_banner` (String) Text displayed as a login banner before authentication.
 - `motd` (String) Message of the day, displayed after a successful console/SSH login.
-- `nvidia` (Boolean) Whether the NVIDIA driver is installed/enabled. Writable only on TrueNAS SCALE 26.0 and later — it does not exist on system.advanced.update below SCALE 26.0, so explicitly setting it there is an apply-time error.
+- `nvidia` (Boolean) Whether the NVIDIA driver is installed/enabled. Writable only on TrueNAS 26.0 and later — it does not exist on system.advanced.update below TrueNAS 26.0, so explicitly setting it there is an apply-time error.
 - `overprovision` (Number) Amount, in GiB, of swap-on-ZFS overprovisioning. A value of 0 clears the overprovision setting (null on the wire).
 - `powerdaemon` (Boolean) Whether the power management daemon (powerd) is enabled.
 - `sed_passwd` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Global password for Self-Encrypting Drives (SED) (never read back from TrueNAS). Write-only: never stored in Terraform state. Requires Terraform >= 1.11.

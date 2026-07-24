@@ -40,7 +40,7 @@ func TestParseChannel(t *testing.T) {
 
 // --- responseToModel -------------------------------------------------------
 
-// apiShape mirrors the live SCALE 25.10.4 Enterprise HA probe of channel 1
+// apiShape mirrors the live TrueNAS 25.10.4 Enterprise HA probe of channel 1
 // (static IP, no VLAN): see model.go's ipmiLanAPI doc comment.
 func apiShape() *ipmiLanAPI {
 	return &ipmiLanAPI{

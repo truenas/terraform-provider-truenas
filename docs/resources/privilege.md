@@ -3,12 +3,12 @@
 page_title: "truenas_privilege Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a privilege on TrueNAS SCALE: a named bundle of roles granted to the members of one or more local/directory-service groups, controlling their administrative access to the web UI and API.
+  Manages a privilege on TrueNAS: a named bundle of roles granted to the members of one or more local/directory-service groups, controlling their administrative access to the web UI and API.
 ---
 
 # truenas_privilege (Resource)
 
-Manages a privilege on TrueNAS SCALE: a named bundle of roles granted to the members of one or more local/directory-service groups, controlling their administrative access to the web UI and API.
+Manages a privilege on TrueNAS: a named bundle of roles granted to the members of one or more local/directory-service groups, controlling their administrative access to the web UI and API.
 
 ## Example Usage
 

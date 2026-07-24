@@ -60,7 +60,7 @@ func (r *DockerConfigResource) fetchConfig(ctx context.Context) (*dockerConfigAP
 
 // applyNvidiaSupport folds "nvidia" into payload when the user explicitly
 // set it in HCL, then strips it (with a clear apply-time error) if the
-// target server is SCALE 26.0+.
+// target server is TrueNAS 26.0+.
 //
 // configNvidia MUST come from the practitioner's raw Config, not the
 // resolved Plan: "nvidia" is Optional+Computed with UseStateForUnknown, so
@@ -70,12 +70,12 @@ func (r *DockerConfigResource) fetchConfig(ctx context.Context) (*dockerConfigAP
 // explicitly (re-)configured this" from "framework carried the previous
 // known value forward." Config never does this carrying-forward: it is
 // null unless the practitioner actually wrote the attribute, so gating on
-// Config is what keeps this resource usable on a SCALE 26.0+ target that
+// Config is what keeps this resource usable on a TrueNAS 26.0+ target that
 // never sets "nvidia" at all (the overwhelmingly common case) while still
 // catching a practitioner who explicitly tries to set it there.
 //
 // Docker.config's response genuinely includes "nvidia" with a real boolean
-// on BOTH probed releases (probed live, see task-1-report.md) — SCALE
+// on BOTH probed releases (probed live, see task-1-report.md) — TrueNAS
 // 26.0+ only dropped it from docker.update's accepted fields, not from
 // docker.config's response — so this is a write-side-only restriction, not
 // a "field doesn't exist" one; see model.go's dockerConfigAPI doc comment.
@@ -92,8 +92,8 @@ func (r *DockerConfigResource) applyNvidiaSupport(ctx context.Context, payload m
 	delete(payload, "nvidia")
 	diags.AddAttributeError(
 		path.Root("nvidia"),
-		"nvidia is read-only on TrueNAS SCALE 26.0 and later",
-		"docker.update on TrueNAS SCALE 26.0+ no longer accepts the \"nvidia\" field (docker.config still reports its current value, but it can no longer be changed through this API). Remove the attribute from your configuration or target a SCALE 25.10 (or earlier) server.",
+		"nvidia is read-only on TrueNAS 26.0 and later",
+		"docker.update on TrueNAS 26.0+ no longer accepts the \"nvidia\" field (docker.config still reports its current value, but it can no longer be changed through this API). Remove the attribute from your configuration or target a TrueNAS 25.10 (or earlier) server.",
 	)
 }
 

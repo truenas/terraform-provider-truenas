@@ -3,12 +3,12 @@
 page_title: "truenas_nvmet_host_subsys Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an NVMe-oF host/subsystem association (host access-control allowlist entry) on TrueNAS SCALE.
+  Manages an NVMe-oF host/subsystem association (host access-control allowlist entry) on TrueNAS.
 ---
 
 # truenas_nvmet_host_subsys (Resource)
 
-Manages an NVMe-oF host/subsystem association (host access-control allowlist entry) on TrueNAS SCALE.
+Manages an NVMe-oF host/subsystem association (host access-control allowlist entry) on TrueNAS.
 
 ## Example Usage
 

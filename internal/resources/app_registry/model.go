@@ -7,10 +7,10 @@ import (
 
 // AppRegistryModel is the Terraform state model for truenas_app_registry.
 //
-// Password is write-only: probed live against TrueNAS SCALE 26.0
+// Password is write-only: probed live against TrueNAS 26.0
 // (app.registry.create), the API documents both the "password" request and
 // response fields as "masked for security" (identical wording on both
-// SCALE 25.10 and 26.0, via core.get_methods). No pre-existing app.registry
+// TrueNAS 25.10 and 26.0, via core.get_methods). No pre-existing app.registry
 // entry was available on either probed box to directly observe a read-back
 // value (both app.registry.query calls returned an empty list — see
 // model_test.go / schema.go doc comments for the full decisive-probe
@@ -42,7 +42,7 @@ type AppRegistryDataSourceModel struct {
 
 // appRegistryAPI is the JSON wire format returned by app.registry.create,
 // .get_instance, .query, and .update, probed live via core.get_methods
-// against both TrueNAS SCALE 25.10.3.1 and 26.0 (identical shape on both;
+// against both TrueNAS 25.10.3.1 and 26.0 (identical shape on both;
 // no version gating needed). "description" is nullable (defaults to null
 // when omitted on create). "uri" defaults server-side to
 // "https://index.docker.io/v1/" (Docker Hub) when omitted on create, and is

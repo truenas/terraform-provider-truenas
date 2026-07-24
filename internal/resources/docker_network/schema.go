@@ -15,7 +15,7 @@ import (
 // into the provider).
 func datasourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Looks up a Docker network on TrueNAS SCALE by name (docker.network.query). Read-only: " +
+		Description: "Looks up a Docker network on TrueNAS by name (docker.network.query). Read-only: " +
 			"Docker networks are created/destroyed by Docker itself (and by installed applications), not by " +
 			"this provider — there is no corresponding truenas_docker_network resource.",
 		Attributes: map[string]schema.Attribute{

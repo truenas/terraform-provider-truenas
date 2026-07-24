@@ -24,7 +24,7 @@ func (d *NVMeTGlobalDataSource) Metadata(_ context.Context, req datasource.Metad
 
 func (d *NVMeTGlobalDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE global NVMe-oF target configuration. Takes no arguments: " +
+		Description: "Reads the current TrueNAS global NVMe-oF target configuration. Takes no arguments: " +
 			"there is exactly one NVMe-oF global configuration per TrueNAS system.",
 		Attributes: map[string]dschema.Attribute{
 			"id": dschema.StringAttribute{

@@ -14,7 +14,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a ZFS pool on TrueNAS SCALE.",
+		Description: "Manages a ZFS pool on TrueNAS.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{
 				Computed: true,

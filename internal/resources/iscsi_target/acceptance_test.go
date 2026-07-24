@@ -13,7 +13,7 @@ import (
 
 // TestAccISCSITarget_basic creates an own portal fixture (listening on
 // 0.0.0.0, distinct from the box's live portal/target, id=1 "proxmox";
-// port is not settable per-listen on SCALE 26.0+), creates an iSCSI target
+// port is not settable per-listen on TrueNAS 26.0+), creates an iSCSI target
 // referencing it, checks attributes, updates the alias in place, imports by
 // id, and verifies destruction.
 func TestAccISCSITarget_basic(t *testing.T) {

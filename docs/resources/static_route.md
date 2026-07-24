@@ -3,12 +3,12 @@
 page_title: "truenas_static_route Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a static route on TrueNAS SCALE.
+  Manages a static route on TrueNAS.
 ---
 
 # truenas_static_route (Resource)
 
-Manages a static route on TrueNAS SCALE.
+Manages a static route on TrueNAS.
 
 ## Example Usage
 

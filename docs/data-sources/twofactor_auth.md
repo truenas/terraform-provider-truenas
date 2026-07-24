@@ -3,12 +3,12 @@
 page_title: "truenas_twofactor_auth Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE two-factor authentication configuration. Takes no arguments: there is exactly one two-factor authentication configuration per TrueNAS system.
+  Reads the current TrueNAS two-factor authentication configuration. Takes no arguments: there is exactly one two-factor authentication configuration per TrueNAS system.
 ---
 
 # truenas_twofactor_auth (Data Source)
 
-Reads the current TrueNAS SCALE two-factor authentication configuration. Takes no arguments: there is exactly one two-factor authentication configuration per TrueNAS system.
+Reads the current TrueNAS two-factor authentication configuration. Takes no arguments: there is exactly one two-factor authentication configuration per TrueNAS system.
 
 
 

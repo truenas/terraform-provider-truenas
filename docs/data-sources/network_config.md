@@ -3,12 +3,12 @@
 page_title: "truenas_network_config Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE global network configuration (hostname, domain, DNS servers, default gateways, service announcement). Takes no arguments: there is exactly one global network configuration per TrueNAS system.
+  Reads the current TrueNAS global network configuration (hostname, domain, DNS servers, default gateways, service announcement). Takes no arguments: there is exactly one global network configuration per TrueNAS system.
 ---
 
 # truenas_network_config (Data Source)
 
-Reads the current TrueNAS SCALE global network configuration (hostname, domain, DNS servers, default gateways, service announcement). Takes no arguments: there is exactly one global network configuration per TrueNAS system.
+Reads the current TrueNAS global network configuration (hostname, domain, DNS servers, default gateways, service announcement). Takes no arguments: there is exactly one global network configuration per TrueNAS system.
 
 
 

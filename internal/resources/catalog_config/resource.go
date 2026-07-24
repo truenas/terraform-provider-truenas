@@ -56,7 +56,7 @@ func (r *CatalogConfigResource) fetchConfig(ctx context.Context) (*catalogConfig
 	return &api, nil
 }
 
-// applyUpdate calls catalog.update. Probed job:false on both SCALE 25.10
+// applyUpdate calls catalog.update. Probed job:false on both TrueNAS 25.10
 // and 26.0 (see task-3-report.md), so — unlike docker_config's
 // CallJob-based docker.update — a plain synchronous r.client.Call is
 // sufficient here.

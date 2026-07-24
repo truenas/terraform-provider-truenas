@@ -8,7 +8,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE global alert policy: per-alert-class overrides of notification level " +
+		Description: "Manages the TrueNAS global alert policy: per-alert-class overrides of notification level " +
 			"and delivery policy. This is a singleton resource — there is exactly one alert policy per TrueNAS " +
 			"system, so it is never created or deleted on TrueNAS; Terraform create/update calls " +
 			"alertclasses.update, and Terraform delete resets classes back to \"{}\" (TrueNAS defaults).",

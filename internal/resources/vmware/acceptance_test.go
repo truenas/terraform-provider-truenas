@@ -6,7 +6,7 @@ import (
 
 // TestAccVMware_basic is intentionally skipped unconditionally.
 //
-// DECISIVE PROBE RESULT (BOTH TrueNAS SCALE 25.10.4 HA and 26.0, live,
+// DECISIVE PROBE RESULT (BOTH TrueNAS 25.10.4 HA and 26.0, live,
 // 2026-07-23): vmware.create validates the supplied hostname/username/
 // password against the real vCenter/ESXi endpoint before persisting
 // anything. Probed via a throwaway create with fabricated credentials and
@@ -17,10 +17,10 @@ import (
 //	  "hostname": "192.0.2.123",
 //	  "username": "tfprobeuser", "password": "tf-probe-fake-password-1234",
 //	})
-//	=> SCALE 25.10.4 HA (wss://10.220.16.188): truenas API error (code 22):
+//	=> TrueNAS 25.10.4 HA (wss://10.220.16.188): truenas API error (code 22):
 //	   [EINVAL] vmware_create.datastore: Failed to connect: [ENETUNREACH]
 //	   [Errno 101] Network is unreachable
-//	=> SCALE 26.0 (wss://192.168.1.68): truenas API error (code 22):
+//	=> TrueNAS 26.0 (wss://192.168.1.68): truenas API error (code 22):
 //	   [EINVAL] vmware_create.datastore: Failed to connect: [ETIMEDOUT]
 //	   [Errno 110] Connection timed out
 //
@@ -57,7 +57,7 @@ import (
 //     provider.
 func TestAccVMware_basic(t *testing.T) {
 	t.Skip("vmware.create validates hostname/username/password against the real vCenter/ESXi endpoint " +
-		"(live-probe-confirmed on BOTH TrueNAS SCALE 25.10.4 HA and 26.0: a throwaway create with dummy " +
+		"(live-probe-confirmed on BOTH TrueNAS 25.10.4 HA and 26.0: a throwaway create with dummy " +
 		"credentials and an unreachable RFC 5737 TEST-NET-1 hostname was rejected with a connection error on " +
 		"each release); no live, reachable vCenter/ESXi fixture is available in this environment, so this test " +
 		"is permanently skipped. See the doc comment on TestAccVMware_basic for the decisive probe evidence and " +

@@ -63,7 +63,7 @@ type scheduleAPI struct {
 
 // scrubTaskAPI mirrors the JSON object returned by pool.scrub.create,
 // pool.scrub.update, pool.scrub.get_instance, and pool.scrub.query. Probed
-// against a live TrueNAS SCALE 25.10 box: "pool" comes back as a plain
+// against a live TrueNAS 25.10 box: "pool" comes back as a plain
 // integer (the pool id), never an embedded object, and the response always
 // includes a "pool_name" string alongside it.
 type scrubTaskAPI struct {

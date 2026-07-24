@@ -6,10 +6,10 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
 
-// webshareVersionFloorMajor/Minor is the minimum TrueNAS SCALE release that
-// exposes the sharing.webshare.* namespace at all. Probed live: SCALE 25.10
+// webshareVersionFloorMajor/Minor is the minimum TrueNAS release that
+// exposes the sharing.webshare.* namespace at all. Probed live: TrueNAS 25.10
 // returns 0 sharing.webshare.* (and webshare.*) methods from
-// core.get_methods (namespace genuinely absent); SCALE 26.0 supports the
+// core.get_methods (namespace genuinely absent); TrueNAS 26.0 supports the
 // full namespace (sharing.webshare.create/update/delete/get_instance/query,
 // all job:false, confirmed live this session — see resource.go's
 // checkVersion for where this gates every entry point before any
@@ -21,7 +21,7 @@ const (
 
 // versionGateDiagnostics reports whether the given TrueNAS release string
 // (as returned by system.version_short via client.ServerVersion) is at or
-// above the SCALE 26.0 floor the sharing.webshare namespace requires,
+// above the TrueNAS 26.0 floor the sharing.webshare namespace requires,
 // returning a single clean error diagnostic when it is not. Pure function
 // of an already-probed version string (no live client access), matching
 // the lxc_config/container precedent so it stays independently
@@ -30,8 +30,8 @@ func versionGateDiagnostics(version string) diag.Diagnostics {
 	var diags diag.Diagnostics
 	if !client.VersionAtLeastString(version, webshareVersionFloorMajor, webshareVersionFloorMinor) {
 		diags.AddError(
-			"TrueNAS SCALE version too old",
-			"truenas_webshare requires TrueNAS SCALE 26.0 or later",
+			"TrueNAS version too old",
+			"truenas_webshare requires TrueNAS 26.0 or later",
 		)
 	}
 	return diags
@@ -81,7 +81,7 @@ type WebshareDataSourceModel struct {
 
 // webshareAPI mirrors the JSON object returned by sharing.webshare.create,
 // sharing.webshare.update, sharing.webshare.get_instance, and
-// sharing.webshare.query. Probed live against SCALE 26.0 (the only release
+// sharing.webshare.query. Probed live against TrueNAS 26.0 (the only release
 // that exposes this namespace — see versionGateDiagnostics):
 //
 //	{"id": 2, "name": "tf-probe-webshare", "path": "/mnt/tank/tf-probe-webshare-ds",

@@ -11,7 +11,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a cron job (cronjob) on TrueNAS SCALE: a scheduled command executed by the system " +
+		Description: "Manages a cron job (cronjob) on TrueNAS: a scheduled command executed by the system " +
 			"crontab as a given user.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{

@@ -31,7 +31,7 @@ type AcmeDnsAuthenticatorDataSourceModel struct {
 // pattern truenas_alert_service uses, not the single-typed-nested-block
 // pattern truenas_reporting_exporter uses — because
 // acme.dns.authenticator.authenticator_schemas returns FIVE genuinely
-// different discriminated variants (probed live against TrueNAS SCALE
+// different discriminated variants (probed live against TrueNAS
 // 25.10, identical on 26.0 aside from a cosmetic pydantic "enum"-vs-"const"
 // schema detail): cloudflare (cloudflare_email/api_key/api_token, all
 // individually optional), digitalocean (digitalocean_token, required),

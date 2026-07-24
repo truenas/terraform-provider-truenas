@@ -8,7 +8,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE Kerberos configuration (kerberos.config) — the [appdefaults]/" +
+		Description: "Manages the TrueNAS Kerberos configuration (kerberos.config) — the [appdefaults]/" +
 			"[libdefaults] free-form additions to krb5.conf. This is a singleton resource — there is exactly one " +
 			"Kerberos configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform " +
 			"create/update calls kerberos.update, and Terraform delete only removes the resource from state (the " +

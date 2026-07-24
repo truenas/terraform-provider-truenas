@@ -3,24 +3,24 @@
 page_title: "truenas_lxc_config Resource - truenas"
 subcategory: ""
 description: |-
-  Manages the TrueNAS SCALE LXC service configuration (lxc.config): the storage pool backing LXC-based instances, the network bridge interface, and the IPv4/IPv6 network CIDR blocks used for instance networking. This is a singleton resource — there is exactly one LXC configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls lxc.update (probed job:false), and Terraform delete only removes the resource from state (the configuration is left in place).
-  Requires TrueNAS SCALE 26.0 or later: the lxc namespace does not exist on earlier releases (probed live — SCALE 25.10 returns "Method does not exist" for lxc.config). Using this resource against an older server fails with a clean error during Create/Read/Update rather than a raw API error.
-  This is distinct from the deprecated incus system-container family (container, container.device, container.image), which this provider intentionally does not cover — LXC itself remains a fully supported TrueNAS SCALE 26.0+ surface.
+  Manages the TrueNAS LXC service configuration (lxc.config): the storage pool backing LXC-based instances, the network bridge interface, and the IPv4/IPv6 network CIDR blocks used for instance networking. This is a singleton resource — there is exactly one LXC configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls lxc.update (probed job:false), and Terraform delete only removes the resource from state (the configuration is left in place).
+  Requires TrueNAS 26.0 or later: the lxc namespace does not exist on earlier releases (probed live — TrueNAS 25.10 returns "Method does not exist" for lxc.config). Using this resource against an older server fails with a clean error during Create/Read/Update rather than a raw API error.
+  This is distinct from the deprecated incus system-container family (container, container.device, container.image), which this provider intentionally does not cover — LXC itself remains a fully supported TrueNAS 26.0+ surface.
 ---
 
 # truenas_lxc_config (Resource)
 
-Manages the TrueNAS SCALE LXC service configuration (lxc.config): the storage pool backing LXC-based instances, the network bridge interface, and the IPv4/IPv6 network CIDR blocks used for instance networking. This is a singleton resource — there is exactly one LXC configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls lxc.update (probed job:false), and Terraform delete only removes the resource from state (the configuration is left in place).
+Manages the TrueNAS LXC service configuration (lxc.config): the storage pool backing LXC-based instances, the network bridge interface, and the IPv4/IPv6 network CIDR blocks used for instance networking. This is a singleton resource — there is exactly one LXC configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls lxc.update (probed job:false), and Terraform delete only removes the resource from state (the configuration is left in place).
 
-Requires TrueNAS SCALE 26.0 or later: the lxc namespace does not exist on earlier releases (probed live — SCALE 25.10 returns "Method does not exist" for lxc.config). Using this resource against an older server fails with a clean error during Create/Read/Update rather than a raw API error.
+Requires TrueNAS 26.0 or later: the lxc namespace does not exist on earlier releases (probed live — TrueNAS 25.10 returns "Method does not exist" for lxc.config). Using this resource against an older server fails with a clean error during Create/Read/Update rather than a raw API error.
 
-This is distinct from the deprecated incus system-container family (`container`, `container.device`, `container.image`), which this provider intentionally does not cover — LXC itself remains a fully supported TrueNAS SCALE 26.0+ surface.
+This is distinct from the deprecated incus system-container family (`container`, `container.device`, `container.image`), which this provider intentionally does not cover — LXC itself remains a fully supported TrueNAS 26.0+ surface.
 
 ## Example Usage
 
 ```terraform
 # Singleton resource: manages the one LXC service configuration on the
-# system (TrueNAS SCALE 26.0+ only). Terraform destroy only removes it from
+# system (TrueNAS 26.0+ only). Terraform destroy only removes it from
 # state; the LXC configuration is left in place as-is.
 #
 # "preferred_pool" selects the ZFS pool LXC uses for instance/image

@@ -12,7 +12,7 @@ import (
 // (failover.config always returns a single record, even on a box that
 // isn't licensed for Enterprise HA — probed live), and it is never created
 // or deleted on TrueNAS itself. The API's own numeric "id" (probed live on
-// both SCALE 25.10.4 HA and 26.0: always 1) is an internal implementation
+// both TrueNAS 25.10.4 HA and 26.0: always 1) is an internal implementation
 // detail and is intentionally not surfaced in the model, mirroring the
 // tn_connect_config/webshare_config singleton pattern.
 const failoverConfigResourceID = "failover_config"
@@ -20,10 +20,10 @@ const failoverConfigResourceID = "failover_config"
 // failoverConfigAPI mirrors the JSON object returned by failover.config and
 // failover.update. Probed live:
 //
-//   - SCALE 25.10.4 Enterprise HA (wss://10.220.16.188, licensed=true,
+//   - TrueNAS 25.10.4 Enterprise HA (wss://10.220.16.188, licensed=true,
 //     status=MASTER, node=B): {"id": 1, "disabled": false, "master": true,
 //     "timeout": 0}.
-//   - SCALE 26.0 (wss://192.168.1.68, licensed=false, status=SINGLE,
+//   - TrueNAS 26.0 (wss://192.168.1.68, licensed=false, status=SINGLE,
 //     node=MANUAL): {"id": 1, "disabled": false, "master": false,
 //     "timeout": 0} — failover.config reads cleanly even when the box
 //     isn't HA-licensed.

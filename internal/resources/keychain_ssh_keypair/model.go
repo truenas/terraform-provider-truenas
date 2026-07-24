@@ -42,7 +42,7 @@ type KeychainSSHKeyPairDataSourceModel struct {
 
 // keychainSSHKeyPairAttributesAPI mirrors keychaincredential.*'s
 // "attributes" object for type=SSH_KEY_PAIR. Probed live against TrueNAS
-// SCALE 25.10: both fields are nullable on the wire ("at least one of the
+// TrueNAS 25.10: both fields are nullable on the wire ("at least one of the
 // two keys must be provided on creation"), but in every response this
 // provider ever reads back (create/get_instance/query/update, whichever
 // path was taken — user-supplied private_key or a

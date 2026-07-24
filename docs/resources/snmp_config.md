@@ -3,12 +3,12 @@
 page_title: "truenas_snmp_config Resource - truenas"
 subcategory: ""
 description: |-
-  Manages the TrueNAS SCALE SNMP service configuration. This is a singleton resource — there is exactly one SNMP configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls snmp.update, and Terraform delete only removes the resource from state (the configuration is left in place). v3_password and v3_privpassphrase are write-only: they are never read back from TrueNAS and are not stored in state.
+  Manages the TrueNAS SNMP service configuration. This is a singleton resource — there is exactly one SNMP configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls snmp.update, and Terraform delete only removes the resource from state (the configuration is left in place). v3_password and v3_privpassphrase are write-only: they are never read back from TrueNAS and are not stored in state.
 ---
 
 # truenas_snmp_config (Resource)
 
-Manages the TrueNAS SCALE SNMP service configuration. This is a singleton resource — there is exactly one SNMP configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls snmp.update, and Terraform delete only removes the resource from state (the configuration is left in place). v3_password and v3_privpassphrase are write-only: they are never read back from TrueNAS and are not stored in state.
+Manages the TrueNAS SNMP service configuration. This is a singleton resource — there is exactly one SNMP configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls snmp.update, and Terraform delete only removes the resource from state (the configuration is left in place). v3_password and v3_privpassphrase are write-only: they are never read back from TrueNAS and are not stored in state.
 
 ## Example Usage
 

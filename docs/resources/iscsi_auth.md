@@ -3,12 +3,12 @@
 page_title: "truenas_iscsi_auth Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an iSCSI CHAP authentication (auth) credential group on TrueNAS SCALE.
+  Manages an iSCSI CHAP authentication (auth) credential group on TrueNAS.
 ---
 
 # truenas_iscsi_auth (Resource)
 
-Manages an iSCSI CHAP authentication (auth) credential group on TrueNAS SCALE.
+Manages an iSCSI CHAP authentication (auth) credential group on TrueNAS.
 
 ## Example Usage
 

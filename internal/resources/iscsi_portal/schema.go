@@ -9,7 +9,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages an iSCSI portal on TrueNAS SCALE.",
+		Description: "Manages an iSCSI portal on TrueNAS.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{
 				Computed:    true,
@@ -38,7 +38,7 @@ func resourceSchema() schema.Schema {
 						"port": schema.Int64Attribute{
 							Optional:    true,
 							Computed:    true,
-							Description: "Port is reported by TrueNAS but cannot be set per-listen on SCALE 26.0+; the global iSCSI listen_port applies.",
+							Description: "Port is reported by TrueNAS but cannot be set per-listen on TrueNAS 26.0+; the global iSCSI listen_port applies.",
 							PlanModifiers: []planmodifier.Int64{
 								int64planmodifier.UseStateForUnknown(),
 							},

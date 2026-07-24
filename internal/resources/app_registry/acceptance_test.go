@@ -6,7 +6,7 @@ import (
 
 // TestAccAppRegistry_basic is intentionally skipped unconditionally.
 //
-// DECISIVE PROBE RESULT (TrueNAS SCALE 26.0, live, 2026-07-23):
+// DECISIVE PROBE RESULT (TrueNAS 26.0, live, 2026-07-23):
 // app.registry.create validates the supplied username/password/uri against
 // the real container registry endpoint before persisting anything. Probed
 // via a throwaway create with fabricated credentials and an unreachable
@@ -32,7 +32,7 @@ import (
 // itself skipped because cloud_backup.create validates credentials/bucket
 // against a real remote endpoint with no fixture available here).
 //
-// The identical probe against TrueNAS SCALE 25.10.3.1 could not reach this
+// The identical probe against TrueNAS 25.10.3.1 could not reach this
 // validation path: that box has no Docker pool configured, so
 // app.registry.create failed earlier with a distinct apps-unconfigured
 // error (`truenas API error (code 14): [EFAULT] No pool configured for
@@ -60,7 +60,7 @@ import (
 //     1 acceptance test in this provider.
 func TestAccAppRegistry_basic(t *testing.T) {
 	t.Skip("app.registry.create validates username/password/uri against the real container registry endpoint " +
-		"(live-probe-confirmed on TrueNAS SCALE 26.0: a throwaway create with dummy credentials and an unreachable " +
+		"(live-probe-confirmed on TrueNAS 26.0: a throwaway create with dummy credentials and an unreachable " +
 		"TEST-NET-1 uri was rejected with \"Invalid credentials for registry\"); no live, reachable container " +
 		"registry fixture is available in this environment, so this test is permanently skipped. See the doc " +
 		"comment on TestAccAppRegistry_basic for the decisive probe evidence and how to enable this against an " +

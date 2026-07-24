@@ -45,7 +45,7 @@ func (r *WebshareConfigResource) Configure(_ context.Context, req resource.Confi
 }
 
 // checkVersion probes the target server's release and returns a clean error
-// diagnostic if it is below the SCALE 26.0 floor webshare.config/
+// diagnostic if it is below the TrueNAS 26.0 floor webshare.config/
 // webshare.update require, before any webshare.* call is made. Every
 // resource entry point (Create/Read/Update) and the datasource's Read call
 // this first.
@@ -73,7 +73,7 @@ func (r *WebshareConfigResource) fetchConfig(ctx context.Context) (*webshareConf
 	return &api, nil
 }
 
-// applyUpdate calls webshare.update. Probed job:false on SCALE 26.0, so a
+// applyUpdate calls webshare.update. Probed job:false on TrueNAS 26.0, so a
 // plain synchronous r.client.Call is sufficient (no CallJob polling needed).
 func (r *WebshareConfigResource) applyUpdate(ctx context.Context, payload map[string]any) error {
 	_, err := r.client.Call(ctx, "webshare.update", payload)
@@ -137,7 +137,7 @@ func (r *WebshareConfigResource) Read(ctx context.Context, req resource.ReadRequ
 		return
 	}
 
-	// This is a singleton: webshare.config always exists (on SCALE 26.0+,
+	// This is a singleton: webshare.config always exists (on TrueNAS 26.0+,
 	// see checkVersion above), so Read never removes the resource from
 	// state — there is no "not found" case.
 	api, err := r.fetchConfig(ctx)

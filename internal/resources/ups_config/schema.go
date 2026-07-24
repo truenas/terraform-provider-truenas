@@ -10,7 +10,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE UPS service configuration. This is a singleton resource — " +
+		Description: "Manages the TrueNAS UPS service configuration. This is a singleton resource — " +
 			"there is exactly one UPS configuration per TrueNAS system, so it is never created or deleted on " +
 			"TrueNAS; Terraform create/update calls ups.update, and Terraform delete only removes the resource " +
 			"from state (the configuration is left in place). monpwd is write-only: it is never read back from " +

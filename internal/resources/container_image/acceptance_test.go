@@ -10,12 +10,12 @@ import (
 
 // TestAccContainerImageDataSource_basic looks up
 // "alpine:3.22:amd64:default" through the truenas_container_image
-// datasource only. It never writes. Requires TrueNAS SCALE 26.0+ (the
+// datasource only. It never writes. Requires TrueNAS 26.0+ (the
 // container namespace does not exist on 25.10, confirmed live via
 // core.get_methods), so this test self-skips cleanly on any older box.
 func TestAccContainerImageDataSource_basic(t *testing.T) {
 	if !acctest.ServerVersionAtLeast(t, 26, 0) {
-		t.Skip("truenas_container_image requires TrueNAS SCALE 26.0 or later (container namespace absent on 25.10, confirmed live)")
+		t.Skip("truenas_container_image requires TrueNAS 26.0 or later (container namespace absent on 25.10, confirmed live)")
 	}
 
 	resource.Test(t, resource.TestCase{
@@ -43,7 +43,7 @@ data "truenas_container_image" "alpine" {
 // from the registry.
 func TestAccContainerImageDataSource_notFound(t *testing.T) {
 	if !acctest.ServerVersionAtLeast(t, 26, 0) {
-		t.Skip("truenas_container_image requires TrueNAS SCALE 26.0 or later (container namespace absent on 25.10, confirmed live)")
+		t.Skip("truenas_container_image requires TrueNAS 26.0 or later (container namespace absent on 25.10, confirmed live)")
 	}
 
 	resource.Test(t, resource.TestCase{

@@ -45,7 +45,7 @@ type failoverConfigOriginal struct {
 }
 
 // readFailoverConfigOriginal reads the box's current failover.config via
-// acctest.RestoreCall (job:false, probed live on SCALE 25.10.4 HA), so the
+// acctest.RestoreCall (job:false, probed live on TrueNAS 25.10.4 HA), so the
 // test can restore the exact original "timeout" value afterward.
 func readFailoverConfigOriginal(t *testing.T) failoverConfigOriginal {
 	t.Helper()
@@ -88,7 +88,7 @@ func restoreFailoverConfigTimeout(t *testing.T, timeout int64) {
 // t.Cleanup-registered API restore is the safety net if the Terraform
 // steps fail.
 //
-// Probed live against the disposable SCALE 25.10.4 HA box before this test
+// Probed live against the disposable TrueNAS 25.10.4 HA box before this test
 // was written (see .superpowers/sdd/task-1-report.md): failover.update
 // accepts a partial payload — sending {"timeout": N} alone round-tripped
 // cleanly with "disabled"/"master" left exactly as they were, and negative/

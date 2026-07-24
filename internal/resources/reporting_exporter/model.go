@@ -10,7 +10,7 @@ import (
 )
 
 // graphiteExporterType is the only value reporting.exporters.exporter_schemas
-// currently returns on either TrueNAS SCALE 25.10 or 26.0 (probed live
+// currently returns on either TrueNAS 25.10 or 26.0 (probed live
 // against both): a single discriminated variant, "GRAPHITE". Since there is
 // exactly one variant, "attributes" is modeled as a typed nested block with
 // GRAPHITE's own fields hoisted directly into it, rather than the free-form
@@ -68,7 +68,7 @@ type ReportingExporterDataSourceModel struct {
 }
 
 // attributesAPI is the JSON wire format of the "attributes" object, probed
-// live from reporting.exporters.create/get_instance/update on both SCALE
+// live from reporting.exporters.create/get_instance/update on both TrueNAS
 // 25.10 and 26.0 (identical shape, no version gating needed). Only the
 // GRAPHITE variant exists; "exporter_type" is parsed but not surfaced in the
 // Terraform model since it is currently constant.

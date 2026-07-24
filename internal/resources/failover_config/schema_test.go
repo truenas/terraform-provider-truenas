@@ -24,7 +24,7 @@ func TestFailoverConfigSchema_IDIsComputed(t *testing.T) {
 // this resource's safety contract: "disabled", "master", and "timeout"
 // must be Optional+Computed (user-writable), matching failover.update's
 // own accepts schema (probed live: all three are optional on the "data"
-// payload, on both SCALE 25.10.4 HA and 26.0). "id" is the only
+// payload, on both TrueNAS 25.10.4 HA and 26.0). "id" is the only
 // Computed-only attribute.
 func TestFailoverConfigSchema_WritableFields(t *testing.T) {
 	s := resourceSchema()

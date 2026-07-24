@@ -41,7 +41,7 @@ func (r *CertificateResource) Configure(_ context.Context, req resource.Configur
 }
 
 // certificate.create/update/delete are all job:true (probed live and
-// confirmed identical on TrueNAS SCALE 25.10/26.0); certificate.get_instance
+// confirmed identical on TrueNAS 25.10/26.0); certificate.get_instance
 // and certificate.query are plain (job:false) reads. See model.go's
 // certificateAPI doc comment for why Create/Update always re-read via
 // certificate.get_instance rather than trusting the job result directly

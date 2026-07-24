@@ -3,12 +3,12 @@
 page_title: "truenas_ssh_config Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE SSH service configuration. Takes no arguments: there is exactly one SSH configuration per TrueNAS system. SSH host keys are server-managed and are not exposed by this datasource.
+  Reads the current TrueNAS SSH service configuration. Takes no arguments: there is exactly one SSH configuration per TrueNAS system. SSH host keys are server-managed and are not exposed by this datasource.
 ---
 
 # truenas_ssh_config (Data Source)
 
-Reads the current TrueNAS SCALE SSH service configuration. Takes no arguments: there is exactly one SSH configuration per TrueNAS system. SSH host keys are server-managed and are not exposed by this datasource.
+Reads the current TrueNAS SSH service configuration. Takes no arguments: there is exactly one SSH configuration per TrueNAS system. SSH host keys are server-managed and are not exposed by this datasource.
 
 
 

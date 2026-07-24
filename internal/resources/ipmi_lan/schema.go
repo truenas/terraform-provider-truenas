@@ -9,7 +9,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the LAN configuration of a single TrueNAS SCALE Enterprise BMC/IPMI channel " +
+		Description: "Manages the LAN configuration of a single TrueNAS Enterprise BMC/IPMI channel " +
 			"(ipmi.lan.query/ipmi.lan.update). IPMI LAN channels are a fixed set of pre-existing hardware " +
 			"channels enumerated by ipmi.lan.channels (probed live on the disposable Enterprise HA test box: " +
 			"just [1]) — they are never created or destroyed via this API, only configured, so \"channel\" " +

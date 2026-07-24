@@ -3,12 +3,12 @@
 page_title: "truenas_system_dataset Resource - truenas"
 subcategory: ""
 description: |-
-  Manages the TrueNAS SCALE system dataset configuration (the dataset that holds core system state such as logs, reporting, syslog, and samba4 data). This is a singleton resource — there is exactly one system dataset configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls systemdataset.update (a long-running job that may migrate the system dataset between pools), and Terraform delete only removes the resource from state (the configuration is left in place). WARNING: changing pool moves the system dataset to a different pool, which is a disruptive, long-running operation.
+  Manages the TrueNAS system dataset configuration (the dataset that holds core system state such as logs, reporting, syslog, and samba4 data). This is a singleton resource — there is exactly one system dataset configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls systemdataset.update (a long-running job that may migrate the system dataset between pools), and Terraform delete only removes the resource from state (the configuration is left in place). WARNING: changing pool moves the system dataset to a different pool, which is a disruptive, long-running operation.
 ---
 
 # truenas_system_dataset (Resource)
 
-Manages the TrueNAS SCALE system dataset configuration (the dataset that holds core system state such as logs, reporting, syslog, and samba4 data). This is a singleton resource — there is exactly one system dataset configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls systemdataset.update (a long-running job that may migrate the system dataset between pools), and Terraform delete only removes the resource from state (the configuration is left in place). WARNING: changing pool moves the system dataset to a different pool, which is a disruptive, long-running operation.
+Manages the TrueNAS system dataset configuration (the dataset that holds core system state such as logs, reporting, syslog, and samba4 data). This is a singleton resource — there is exactly one system dataset configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls systemdataset.update (a long-running job that may migrate the system dataset between pools), and Terraform delete only removes the resource from state (the configuration is left in place). WARNING: changing pool moves the system dataset to a different pool, which is a disruptive, long-running operation.
 
 ## Example Usage
 

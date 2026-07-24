@@ -3,12 +3,12 @@
 page_title: "truenas_iscsi_initiator Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an iSCSI initiator group on TrueNAS SCALE.
+  Manages an iSCSI initiator group on TrueNAS.
 ---
 
 # truenas_iscsi_initiator (Resource)
 
-Manages an iSCSI initiator group on TrueNAS SCALE.
+Manages an iSCSI initiator group on TrueNAS.
 
 ## Example Usage
 

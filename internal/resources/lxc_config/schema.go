@@ -8,21 +8,21 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE LXC service configuration (lxc.config): the storage pool " +
+		Description: "Manages the TrueNAS LXC service configuration (lxc.config): the storage pool " +
 			"backing LXC-based instances, the network bridge interface, and the IPv4/IPv6 network CIDR blocks " +
 			"used for instance networking. This is a singleton resource — there is exactly one LXC configuration " +
 			"per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls " +
 			"lxc.update (probed job:false), and Terraform delete only removes the resource from state (the " +
 			"configuration is left in place)." +
 			"\n\n" +
-			"Requires TrueNAS SCALE 26.0 or later: the lxc namespace does not exist on earlier releases " +
-			"(probed live — SCALE 25.10 returns \"Method does not exist\" for lxc.config). Using this resource " +
+			"Requires TrueNAS 26.0 or later: the lxc namespace does not exist on earlier releases " +
+			"(probed live — TrueNAS 25.10 returns \"Method does not exist\" for lxc.config). Using this resource " +
 			"against an older server fails with a clean error during Create/Read/Update rather than a raw " +
 			"API error." +
 			"\n\n" +
 			"This is distinct from the deprecated incus system-container family (`container`, " +
 			"`container.device`, `container.image`), which this provider intentionally does not cover — LXC " +
-			"itself remains a fully supported TrueNAS SCALE 26.0+ surface.",
+			"itself remains a fully supported TrueNAS 26.0+ surface.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:      true,

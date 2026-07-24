@@ -12,7 +12,7 @@ import (
 // APIKeyModel is the Terraform state/plan model for truenas_api_key.
 //
 // Key is Computed + Sensitive: api_key.create is the only call that ever
-// returns the plaintext key (probed against a live TrueNAS SCALE box —
+// returns the plaintext key (probed against a live TrueNAS box —
 // api_key.query, api_key.get_instance, and a plain api_key.update all omit
 // it; only api_key.update with reset:true, which this resource never sends,
 // echoes a new one). responseToModel deliberately never touches Key, so
@@ -44,7 +44,7 @@ type APIKeyDataSourceModel struct {
 
 // apiKeyAPI mirrors the JSON object returned by api_key.create,
 // api_key.update, api_key.get_instance, and api_key.query. Probed against a
-// live TrueNAS SCALE 25.10 box:
+// live TrueNAS 25.10 box:
 //   - created_at and expires_at are serialized as extended-JSON datetime
 //     objects, {"$date": <milliseconds-since-epoch>} — never as the ISO
 //     "date-time" strings core.get_methods' schema advertises. An ISO

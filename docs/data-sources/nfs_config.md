@@ -3,12 +3,12 @@
 page_title: "truenas_nfs_config Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE NFS service configuration. Takes no arguments: there is exactly one NFS configuration per TrueNAS system.
+  Reads the current TrueNAS NFS service configuration. Takes no arguments: there is exactly one NFS configuration per TrueNAS system.
 ---
 
 # truenas_nfs_config (Data Source)
 
-Reads the current TrueNAS SCALE NFS service configuration. Takes no arguments: there is exactly one NFS configuration per TrueNAS system.
+Reads the current TrueNAS NFS service configuration. Takes no arguments: there is exactly one NFS configuration per TrueNAS system.
 
 
 

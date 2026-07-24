@@ -12,7 +12,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE audit configuration (audit.config): retention and dataset " +
+		Description: "Manages the TrueNAS audit configuration (audit.config): retention and dataset " +
 			"quota settings for the local audit databases. This is a singleton resource — there is exactly one " +
 			"audit configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform " +
 			"create/update calls audit.update, and Terraform delete only removes the resource from state (the " +

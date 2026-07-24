@@ -8,7 +8,7 @@ import (
 
 // TestSchema_TopLevelRequiredFields verifies "name" and "username" are
 // Required, matching app.registry.create's own "required" list (probed
-// live on both TrueNAS SCALE 25.10 and 26.0).
+// live on both TrueNAS 25.10 and 26.0).
 func TestSchema_TopLevelRequiredFields(t *testing.T) {
 	s := resourceSchema()
 

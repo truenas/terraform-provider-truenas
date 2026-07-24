@@ -13,9 +13,9 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages an LXC container on TrueNAS SCALE (container.*: create/update/start/stop/delete). " +
-			"Requires TrueNAS SCALE 26.0 or later: the container namespace does not exist on earlier releases " +
-			"(probed live — SCALE 25.10 exposes 0 container.* methods). Using this resource against an older " +
+		Description: "Manages an LXC container on TrueNAS (container.*: create/update/start/stop/delete). " +
+			"Requires TrueNAS 26.0 or later: the container namespace does not exist on earlier releases " +
+			"(probed live — TrueNAS 25.10 exposes 0 container.* methods). Using this resource against an older " +
 			"server fails with a clean error during Create/Read/Update rather than a raw API error." +
 			"\n\n" +
 			"This is the modern, actively-developed LXC container surface — distinct from the deprecated incus " +

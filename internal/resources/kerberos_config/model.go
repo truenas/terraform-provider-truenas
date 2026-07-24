@@ -32,7 +32,7 @@ type KerberosConfigDataSourceModel struct {
 }
 
 // kerberosConfigAPI mirrors the JSON object returned by kerberos.config and
-// kerberos.update. Probed against a live TrueNAS SCALE 25.10 box
+// kerberos.update. Probed against a live TrueNAS 25.10 box
 // (`core.get_methods` for kerberos.config/kerberos.update): the response is
 // exactly {"id": <int>, "appdefaults_aux": <string>, "libdefaults_aux":
 // <string>} — both aux fields are plain (non-nullable) strings, defaulting

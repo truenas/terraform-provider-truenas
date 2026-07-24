@@ -24,7 +24,7 @@ func (d *AlertPolicyDataSource) Metadata(_ context.Context, req datasource.Metad
 
 func (d *AlertPolicyDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE global alert policy (per-alert-class notification level and delivery policy overrides). Takes no arguments: there is exactly one alert policy per TrueNAS system.",
+		Description: "Reads the current TrueNAS global alert policy (per-alert-class notification level and delivery policy overrides). Takes no arguments: there is exactly one alert policy per TrueNAS system.",
 		Attributes: map[string]dschema.Attribute{
 			"id": dschema.StringAttribute{
 				Computed:    true,

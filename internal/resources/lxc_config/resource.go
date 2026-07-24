@@ -44,7 +44,7 @@ func (r *LXCConfigResource) Configure(_ context.Context, req resource.ConfigureR
 }
 
 // checkVersion probes the target server's release and returns a clean error
-// diagnostic if it is below the SCALE 26.0 floor lxc.config/lxc.update
+// diagnostic if it is below the TrueNAS 26.0 floor lxc.config/lxc.update
 // require (see versionGateDiagnostics), before any lxc.* call is made. Every
 // resource entry point (Create/Read/Update) and the datasource's Read call
 // this first.
@@ -72,7 +72,7 @@ func (r *LXCConfigResource) fetchConfig(ctx context.Context) (*lxcConfigAPI, err
 	return &api, nil
 }
 
-// applyUpdate calls lxc.update. Probed job:false on SCALE 26.0, so a plain
+// applyUpdate calls lxc.update. Probed job:false on TrueNAS 26.0, so a plain
 // synchronous r.client.Call is sufficient (no CallJob polling needed).
 func (r *LXCConfigResource) applyUpdate(ctx context.Context, payload map[string]any) error {
 	_, err := r.client.Call(ctx, "lxc.update", payload)
@@ -137,7 +137,7 @@ func (r *LXCConfigResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	// This is a singleton: lxc.config always exists (on SCALE 26.0+, see
+	// This is a singleton: lxc.config always exists (on TrueNAS 26.0+, see
 	// checkVersion above), so Read never removes the resource from state —
 	// there is no "not found" case.
 	api, err := r.fetchConfig(ctx)

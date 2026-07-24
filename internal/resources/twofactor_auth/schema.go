@@ -13,7 +13,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE two-factor authentication configuration (auth.twofactor.config): " +
+		Description: "Manages the TrueNAS two-factor authentication configuration (auth.twofactor.config): " +
 			"whether 2FA is required system-wide, the TOTP validation window, and which services additionally " +
 			"require it. This is a singleton resource — there is exactly one two-factor authentication " +
 			"configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform " +

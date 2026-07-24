@@ -9,7 +9,7 @@ import (
 
 // SMBModel is the Terraform state model for truenas_smb_share. The schema
 // stays flat for backward compatibility with existing configs; the wire
-// payload/response mapping to SCALE 26.0's nested purpose/options shape
+// payload/response mapping to TrueNAS 26.0's nested purpose/options shape
 // happens in apiPayload and responseToModel below.
 type SMBModel struct {
 	ID               types.Int64  `tfsdk:"id"`
@@ -37,7 +37,7 @@ type SMBModel struct {
 }
 
 // smbOptionsAPI is the JSON wire format for the discriminated-union `options`
-// object returned/accepted by sharing.smb.create/update/query on SCALE 26.0.
+// object returned/accepted by sharing.smb.create/update/query on TrueNAS 26.0.
 // Only the LEGACY_SHARE variant fields that this provider models are
 // represented here; other purpose variants (DefaultOpt, TimeMachineOpt, etc.)
 // carry fields this resource does not track and are read via Purpose alone.
@@ -56,7 +56,7 @@ type smbOptionsAPI struct {
 	VUID             *string  `json:"vuid"`
 }
 
-// smbAPI is the JSON wire format for a TrueNAS SMB share object on SCALE
+// smbAPI is the JSON wire format for a TrueNAS SMB share object on TrueNAS
 // 26.0: legacy flags that used to live at the top level now live nested
 // under `options` when the share's purpose is LEGACY_SHARE.
 type smbAPI struct {
@@ -106,7 +106,7 @@ func responseToModel(ctx context.Context, api *smbAPI, m *SMBModel) diag.Diagnos
 	// Legacy flags now live nested under options, and only when the share's
 	// purpose is LEGACY_SHARE. NOTE: the discriminator lives at the TOP level
 	// of the response — the options object itself carries no "purpose" key
-	// (verified live on SCALE 26.0) — so branch on api.Purpose, not
+	// (verified live on TrueNAS 26.0) — so branch on api.Purpose, not
 	// opts.Purpose. For any other purpose, the legacy fields this resource
 	// models don't apply server-side; leave them at their zero values.
 	opts := api.Options
@@ -161,7 +161,7 @@ func responseToModel(ctx context.Context, api *smbAPI, m *SMBModel) diag.Diagnos
 }
 
 // apiPayload builds the map[string]any payload for sharing.smb.create /
-// sharing.smb.update, targeting SCALE 26.0's wire format: top-level
+// sharing.smb.update, targeting TrueNAS 26.0's wire format: top-level
 // path/name/comment/enabled/browsable/readonly/access_based_share_enumeration
 // /purpose, plus a nested `options` object. `options` always carries
 // `purpose`; when purpose is (or defaults to) LEGACY_SHARE it also carries
@@ -172,7 +172,7 @@ func responseToModel(ctx context.Context, api *smbAPI, m *SMBModel) diag.Diagnos
 func (m *SMBModel) apiPayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
-	// purpose: SCALE 26.0 requires purpose to be one of validSMBPurposes (or
+	// purpose: TrueNAS 26.0 requires purpose to be one of validSMBPurposes (or
 	// omitted, which defaults server-side to DEFAULT_SHARE). This resource
 	// preserves its historical flat/legacy behavior by defaulting to
 	// LEGACY_SHARE whenever the caller hasn't set a recognized 26.0 purpose.
@@ -245,7 +245,7 @@ func (m *SMBModel) apiPayload(ctx context.Context) (map[string]any, diag.Diagnos
 	return p, diags
 }
 
-// validSMBPurposes is the set of purpose values accepted by TrueNAS SCALE
+// validSMBPurposes is the set of purpose values accepted by TrueNAS
 // 26.0's sharing.smb.create/update. Older 24.x values (NO_PRESET,
 // ENHANCED_TIMEMACHINE, MULTI_PROTOCOL_AFP, MULTI_PROTOCOL_NFS,
 // PRIVATE_DATASETS, WORM_DROPBOX, etc.) no longer exist on 26.0.

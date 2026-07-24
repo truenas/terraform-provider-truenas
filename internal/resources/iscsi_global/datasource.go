@@ -25,7 +25,7 @@ func (d *ISCSIGlobalDataSource) Metadata(_ context.Context, req datasource.Metad
 
 func (d *ISCSIGlobalDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE global iSCSI service configuration. Takes no arguments: " +
+		Description: "Reads the current TrueNAS global iSCSI service configuration. Takes no arguments: " +
 			"there is exactly one iSCSI global configuration per TrueNAS system.",
 		Attributes: map[string]dschema.Attribute{
 			"id": dschema.StringAttribute{

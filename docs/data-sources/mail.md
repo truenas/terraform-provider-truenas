@@ -3,12 +3,12 @@
 page_title: "truenas_mail Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE system mail (email) configuration. Takes no arguments: there is exactly one mail configuration per TrueNAS system. Does not expose the SMTP password: mail.config never returns it.
+  Reads the current TrueNAS system mail (email) configuration. Takes no arguments: there is exactly one mail configuration per TrueNAS system. Does not expose the SMTP password: mail.config never returns it.
 ---
 
 # truenas_mail (Data Source)
 
-Reads the current TrueNAS SCALE system mail (email) configuration. Takes no arguments: there is exactly one mail configuration per TrueNAS system. Does not expose the SMTP password: mail.config never returns it.
+Reads the current TrueNAS system mail (email) configuration. Takes no arguments: there is exactly one mail configuration per TrueNAS system. Does not expose the SMTP password: mail.config never returns it.
 
 
 

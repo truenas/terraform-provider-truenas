@@ -494,7 +494,7 @@ func TestUpdatePayload_AllKnownFieldsSent(t *testing.T) {
 	}
 
 	// nvidia is handled entirely by resource.go's applyNvidiaSupport
-	// (Config-driven, version-gated below SCALE 26.0), never by
+	// (Config-driven, version-gated below TrueNAS 26.0), never by
 	// updatePayload — see updatePayload's doc comment.
 	if _, ok := p["nvidia"]; ok {
 		t.Error("'nvidia' should never be present in updatePayload's output")

@@ -3,12 +3,12 @@
 page_title: "truenas_ntp_server Resource - truenas"
 subcategory: ""
 description: |-
-  Manages an NTP server on TrueNAS SCALE.
+  Manages an NTP server on TrueNAS.
 ---
 
 # truenas_ntp_server (Resource)
 
-Manages an NTP server on TrueNAS SCALE.
+Manages an NTP server on TrueNAS.
 
 ## Example Usage
 

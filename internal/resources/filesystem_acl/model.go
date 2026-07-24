@@ -39,7 +39,7 @@ type FilesystemAclDataSourceModel struct {
 
 // fsGetAclAPI is the subset of filesystem.getacl's response this resource
 // cares about (probed live via core.get_methods + a real getacl/setacl
-// round trip against TrueNAS SCALE 25.10). filesystem.getacl is job:false
+// round trip against TrueNAS 25.10). filesystem.getacl is job:false
 // (plain synchronous Call), accepting (path, simplified=true, resolve_ids
 // =false) - defaults are used here (only "path" is sent). The full
 // response also carries "user"/"group" (nullable name lookups, only

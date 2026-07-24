@@ -3,12 +3,12 @@
 page_title: "truenas_kerberos_realm Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a Kerberos realm on TrueNAS SCALE (kerberos.realm). Realms are normally populated automatically during an Active Directory domain join, but can also be managed directly — e.g. for a realm outside of any AD domain this system joins.
+  Manages a Kerberos realm on TrueNAS (kerberos.realm). Realms are normally populated automatically during an Active Directory domain join, but can also be managed directly — e.g. for a realm outside of any AD domain this system joins.
 ---
 
 # truenas_kerberos_realm (Resource)
 
-Manages a Kerberos realm on TrueNAS SCALE (kerberos.realm). Realms are normally populated automatically during an Active Directory domain join, but can also be managed directly — e.g. for a realm outside of any AD domain this system joins.
+Manages a Kerberos realm on TrueNAS (kerberos.realm). Realms are normally populated automatically during an Active Directory domain join, but can also be managed directly — e.g. for a realm outside of any AD domain this system joins.
 
 ## Example Usage
 

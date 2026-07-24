@@ -24,7 +24,7 @@ func (d *FTPConfigDataSource) Metadata(_ context.Context, req datasource.Metadat
 
 func (d *FTPConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE FTP service configuration. Takes no arguments: there " +
+		Description: "Reads the current TrueNAS FTP service configuration. Takes no arguments: there " +
 			"is exactly one FTP configuration per TrueNAS system.",
 		Attributes: map[string]dschema.Attribute{
 			"id": dschema.StringAttribute{

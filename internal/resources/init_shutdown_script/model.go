@@ -34,7 +34,7 @@ type InitShutdownScriptDataSourceModel struct {
 // initShutdownScriptAPI mirrors the JSON object returned by
 // initshutdownscript.create, initshutdownscript.update,
 // initshutdownscript.get_instance, and initshutdownscript.query. Probed
-// against live TrueNAS SCALE 25.10 and 26.0 boxes (identical wire shape on
+// against live TrueNAS 25.10 and 26.0 boxes (identical wire shape on
 // both releases, no version gating needed): "command" and "script" are each
 // declared nullable in the method schema (anyOf string|null, default ""),
 // but in practice every observed create/query/get_instance response returns

@@ -3,12 +3,12 @@
 page_title: "truenas_vmware Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a TrueNAS SCALE VMware snapshot integration (vmware.*): coordinates ZFS snapshots of a local filesystem/dataset with VMware VM snapshots on a vCenter/ESXi host, so backups of running VMs are consistent. NOTE: vmware.create validates the supplied hostname/username/password against the real vCenter/ESXi endpoint before persisting anything (probed live on both TrueNAS SCALE 25.10.4 HA and 26.0 with a throwaway create against an unreachable RFC 5737 TEST-NET-1 host: rejected with a connection error on both releases), so this resource's acceptance test is a permanent, documented skip — see acceptance_test.go.
+  Manages a TrueNAS VMware snapshot integration (vmware.*): coordinates ZFS snapshots of a local filesystem/dataset with VMware VM snapshots on a vCenter/ESXi host, so backups of running VMs are consistent. NOTE: vmware.create validates the supplied hostname/username/password against the real vCenter/ESXi endpoint before persisting anything (probed live on both TrueNAS 25.10.4 HA and 26.0 with a throwaway create against an unreachable RFC 5737 TEST-NET-1 host: rejected with a connection error on both releases), so this resource's acceptance test is a permanent, documented skip — see acceptance_test.go.
 ---
 
 # truenas_vmware (Resource)
 
-Manages a TrueNAS SCALE VMware snapshot integration (vmware.*): coordinates ZFS snapshots of a local filesystem/dataset with VMware VM snapshots on a vCenter/ESXi host, so backups of running VMs are consistent. NOTE: vmware.create validates the supplied hostname/username/password against the real vCenter/ESXi endpoint before persisting anything (probed live on both TrueNAS SCALE 25.10.4 HA and 26.0 with a throwaway create against an unreachable RFC 5737 TEST-NET-1 host: rejected with a connection error on both releases), so this resource's acceptance test is a permanent, documented skip — see acceptance_test.go.
+Manages a TrueNAS VMware snapshot integration (vmware.*): coordinates ZFS snapshots of a local filesystem/dataset with VMware VM snapshots on a vCenter/ESXi host, so backups of running VMs are consistent. NOTE: vmware.create validates the supplied hostname/username/password against the real vCenter/ESXi endpoint before persisting anything (probed live on both TrueNAS 25.10.4 HA and 26.0 with a throwaway create against an unreachable RFC 5737 TEST-NET-1 host: rejected with a connection error on both releases), so this resource's acceptance test is a permanent, documented skip — see acceptance_test.go.
 
 ## Example Usage
 

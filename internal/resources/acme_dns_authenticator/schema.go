@@ -8,11 +8,11 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a TrueNAS SCALE ACME DNS authenticator (acme.dns.authenticator): stored " +
+		Description: "Manages a TrueNAS ACME DNS authenticator (acme.dns.authenticator): stored " +
 			"credentials/config for a DNS provider, used to satisfy ACME DNS-01 challenges (referenced by ID from " +
 			"a truenas_certificate's \"dns_mapping\" when create_type is CERTIFICATE_CREATE_ACME). " +
 			"acme.dns.authenticator.authenticator_schemas returns five discriminated variants (probed live, " +
-			"identical on TrueNAS SCALE 25.10/26.0): cloudflare, digitalocean, OVH, route53, and shell — see " +
+			"identical on TrueNAS 25.10/26.0): cloudflare, digitalocean, OVH, route53, and shell — see " +
 			"\"attributes\" below for why that variant count means attributes is a free-form JSON document " +
 			"rather than a typed nested block.",
 		Attributes: map[string]schema.Attribute{

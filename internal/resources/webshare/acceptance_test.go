@@ -18,8 +18,8 @@ import (
 // its numeric id, and verifies destruction of both the share and the
 // dataset fixture.
 //
-// Requires TrueNAS SCALE 26.0+: the sharing.webshare namespace does not
-// exist on earlier releases (probed live — SCALE 25.10 exposes 0
+// Requires TrueNAS 26.0+: the sharing.webshare namespace does not
+// exist on earlier releases (probed live — TrueNAS 25.10 exposes 0
 // webshare.*/sharing.webshare.* methods via core.get_methods), so this test
 // self-skips cleanly via acctest.ServerVersionAtLeast on any older box,
 // matching this resource's own version-gate diagnostic (see resource.go's
@@ -30,7 +30,7 @@ import (
 // matching the smb/nfs/container Tier-1 convention.
 func TestAccWebshare_basic(t *testing.T) {
 	if !acctest.ServerVersionAtLeast(t, 26, 0) {
-		t.Skip("truenas_webshare requires TrueNAS SCALE 26.0 or later (sharing.webshare namespace absent on 25.10, confirmed live)")
+		t.Skip("truenas_webshare requires TrueNAS 26.0 or later (sharing.webshare namespace absent on 25.10, confirmed live)")
 	}
 
 	datasetName := fmt.Sprintf("%s/%s", acctest.TestPool(), acctest.RandName("tf-acc-ds-webshare"))

@@ -3,12 +3,12 @@
 page_title: "truenas_tn_connect_config Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE TrueNAS Connect service configuration and status. Takes no arguments: there is exactly one TrueNAS Connect configuration per TrueNAS system. Makes no changes — see the truenas_tn_connect_config resource's schema description for the safety notes around the "enabled" field and which attributes are release-specific.
+  Reads the current TrueNAS Connect service configuration and status. Takes no arguments: there is exactly one TrueNAS Connect configuration per TrueNAS system. Makes no changes — see the truenas_tn_connect_config resource's schema description for the safety notes around the "enabled" field and which attributes are release-specific.
 ---
 
 # truenas_tn_connect_config (Data Source)
 
-Reads the current TrueNAS SCALE TrueNAS Connect service configuration and status. Takes no arguments: there is exactly one TrueNAS Connect configuration per TrueNAS system. Makes no changes — see the truenas_tn_connect_config resource's schema description for the safety notes around the "enabled" field and which attributes are release-specific.
+Reads the current TrueNAS Connect service configuration and status. Takes no arguments: there is exactly one TrueNAS Connect configuration per TrueNAS system. Makes no changes — see the truenas_tn_connect_config resource's schema description for the safety notes around the "enabled" field and which attributes are release-specific.
 
 ## Example Usage
 
@@ -26,14 +26,14 @@ data "truenas_tn_connect_config" "config" {}
 - `enabled` (Boolean) Whether the TrueNAS Connect cloud service is currently enabled.
 - `heartbeat_url` (String) URL endpoint for sending heartbeat signals to maintain connection status.
 - `id` (String) Fixed identifier for this singleton: always "tn_connect_config".
-- `interfaces` (List of String) Network interface names TrueNAS Connect uses. Only present on SCALE 25.10; reads as null on SCALE 26.0.
-- `interfaces_ips` (List of String) IP addresses associated with the selected interfaces. Only present on SCALE 25.10; reads as null on SCALE 26.0.
-- `ips` (List of String) IP addresses TrueNAS Connect binds to and advertises. Only present on SCALE 25.10; reads as null on SCALE 26.0.
-- `last_heartbeat_failure_datetime` (String) Datetime the current heartbeat failure streak began, or null if heartbeat is not currently failing. Only present on SCALE 26.0+; reads as null on SCALE 25.10.
+- `interfaces` (List of String) Network interface names TrueNAS Connect uses. Only present on TrueNAS 25.10; reads as null on TrueNAS 26.0.
+- `interfaces_ips` (List of String) IP addresses associated with the selected interfaces. Only present on TrueNAS 25.10; reads as null on TrueNAS 26.0.
+- `ips` (List of String) IP addresses TrueNAS Connect binds to and advertises. Only present on TrueNAS 25.10; reads as null on TrueNAS 26.0.
+- `last_heartbeat_failure_datetime` (String) Datetime the current heartbeat failure streak began, or null if heartbeat is not currently failing. Only present on TrueNAS 26.0+; reads as null on TrueNAS 25.10.
 - `leca_service_base_url` (String) Base URL for the Let's Encrypt Certificate Authority service used by TrueNAS Connect.
 - `registration_details` (String) Registration information and credentials for TrueNAS Connect, as a JSON-encoded object ("{}" when not enrolled).
 - `status` (String) Current operational status of the TrueNAS Connect service (e.g. DISABLED, CONFIGURED).
 - `status_reason` (String) Human-readable explanation of the current status.
-- `tier` (String) TrueNAS Connect tier (FOUNDATION, PLUS, or BUSINESS). Only present on SCALE 26.0+; reads as null on SCALE 25.10.
+- `tier` (String) TrueNAS Connect tier (FOUNDATION, PLUS, or BUSINESS). Only present on TrueNAS 26.0+; reads as null on TrueNAS 25.10.
 - `tnc_base_url` (String) Base URL for the TrueNAS Connect service.
-- `use_all_interfaces` (Boolean) Whether TrueNAS Connect automatically uses all available network interfaces. Only present on SCALE 25.10; reads as null on SCALE 26.0.
+- `use_all_interfaces` (Boolean) Whether TrueNAS Connect automatically uses all available network interfaces. Only present on TrueNAS 25.10; reads as null on TrueNAS 26.0.

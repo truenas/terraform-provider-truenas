@@ -3,12 +3,12 @@
 page_title: "truenas_nvmet_global Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE global NVMe-oF target configuration. Takes no arguments: there is exactly one NVMe-oF global configuration per TrueNAS system.
+  Reads the current TrueNAS global NVMe-oF target configuration. Takes no arguments: there is exactly one NVMe-oF global configuration per TrueNAS system.
 ---
 
 # truenas_nvmet_global (Data Source)
 
-Reads the current TrueNAS SCALE global NVMe-oF target configuration. Takes no arguments: there is exactly one NVMe-oF global configuration per TrueNAS system.
+Reads the current TrueNAS global NVMe-oF target configuration. Takes no arguments: there is exactly one NVMe-oF global configuration per TrueNAS system.
 
 
 

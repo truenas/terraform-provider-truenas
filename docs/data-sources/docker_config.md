@@ -3,12 +3,12 @@
 page_title: "truenas_docker_config Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE Docker service configuration. Takes no arguments: there is exactly one Docker configuration per TrueNAS system.
+  Reads the current TrueNAS Docker service configuration. Takes no arguments: there is exactly one Docker configuration per TrueNAS system.
 ---
 
 # truenas_docker_config (Data Source)
 
-Reads the current TrueNAS SCALE Docker service configuration. Takes no arguments: there is exactly one Docker configuration per TrueNAS system.
+Reads the current TrueNAS Docker service configuration. Takes no arguments: there is exactly one Docker configuration per TrueNAS system.
 
 
 
@@ -22,9 +22,9 @@ Reads the current TrueNAS SCALE Docker service configuration. Takes no arguments
 - `dataset` (String) ZFS dataset TrueNAS created under "pool" for Docker data storage, or null if Docker is unconfigured.
 - `enable_image_updates` (Boolean) Whether TrueNAS periodically checks for and downloads updates to Docker images used by installed applications.
 - `id` (String) Fixed identifier for this singleton: always "docker_config".
-- `nvidia` (Boolean) Whether NVIDIA GPU support is enabled for containers. Readable on every probed release; writable (via the truenas_docker_config resource) only on TrueNAS SCALE 25.10 and earlier.
+- `nvidia` (Boolean) Whether NVIDIA GPU support is enabled for containers. Readable on every probed release; writable (via the truenas_docker_config resource) only on TrueNAS 25.10 and earlier.
 - `pool` (String) ZFS storage pool backing Docker, or null if Docker has not been configured.
-- `registry_mirrors` (Attributes List) Registry mirror URLs Docker pulls images through, unified across both probed releases (see the resource schema description for the SCALE 25.10 wire-shape translation). (see [below for nested schema](#nestedatt--registry_mirrors))
+- `registry_mirrors` (Attributes List) Registry mirror URLs Docker pulls images through, unified across both probed releases (see the resource schema description for the TrueNAS 25.10 wire-shape translation). (see [below for nested schema](#nestedatt--registry_mirrors))
 
 <a id="nestedatt--address_pools"></a>
 ### Nested Schema for `address_pools`

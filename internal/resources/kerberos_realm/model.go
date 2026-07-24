@@ -31,7 +31,7 @@ type KerberosRealmDataSourceModel struct {
 
 // kerberosRealmAPI mirrors the JSON object returned by
 // kerberos.realm.create, kerberos.realm.update, kerberos.realm.get_instance,
-// and kerberos.realm.query. Probed against a live TrueNAS SCALE 25.10 box
+// and kerberos.realm.query. Probed against a live TrueNAS 25.10 box
 // (`core.get_methods` for kerberos.realm.create/update/get_instance/query,
 // plus a throwaway kerberos.realm.create/delete round trip): kdc,
 // admin_server, and kpasswd_server default to [] (never null) on read;

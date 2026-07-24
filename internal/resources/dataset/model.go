@@ -117,7 +117,7 @@ type apiResponse struct {
 		Parsed int64 `json:"parsed"` // 0 for FILESYSTEM datasets
 	} `json:"volsize"`
 
-	// Comments live under user_properties in SCALE 24+
+	// Comments live under user_properties in TrueNAS 24+
 	UserProperties struct {
 		Comments struct {
 			Value string `json:"value"`

@@ -83,7 +83,7 @@ func TestApiPayload_URIOmittedWhenUnknown(t *testing.T) {
 
 // TestResponseToModel_ProbedShape verifies responseToModel against the
 // field shape probed live from app.registry.create/get_instance/query/update
-// (core.get_methods, both TrueNAS SCALE 25.10 and 26.0): id, name,
+// (core.get_methods, both TrueNAS 25.10 and 26.0): id, name,
 // description (nullable), uri, username. Password is intentionally absent
 // from appRegistryAPI entirely (see model.go's doc comment) and must never
 // be touched by responseToModel.

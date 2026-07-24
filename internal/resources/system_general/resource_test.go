@@ -565,7 +565,7 @@ func TestSystemGeneralDataSourceModel_MatchesSchema(t *testing.T) {
 }
 
 // TestUICertificateDecode_bothShapes verifies uiCertificate decodes both
-// wire shapes of system.general.config's ui_certificate: SCALE 26.0's bare
+// wire shapes of system.general.config's ui_certificate: TrueNAS 26.0's bare
 // integer ID and 25.10's full certificate object (id + name), plus null.
 func TestUICertificateDecode_bothShapes(t *testing.T) {
 	var api systemGeneralAPI

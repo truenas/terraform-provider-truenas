@@ -15,7 +15,7 @@ import (
 // TestAccCatalogConfigDataSource_basic reads the current TrueNAS app catalog
 // configuration through the truenas_catalog_config datasource only. It never
 // writes. Runs regardless of whether Docker/apps are configured —
-// catalog.config and catalog.trains both succeeded live on a SCALE 25.10 box
+// catalog.config and catalog.trains both succeeded live on a TrueNAS 25.10 box
 // with Docker/apps never configured (see task-3-report.md), unlike
 // docker.config's pool/dataset which read back null there.
 func TestAccCatalogConfigDataSource_basic(t *testing.T) {
@@ -50,12 +50,12 @@ type catalogConfigOriginal struct {
 }
 
 // readCatalogConfigOriginal reads the box's current catalog.config via
-// acctest.RestoreCall (job:false, probed live on both SCALE 25.10 and 26.0 —
+// acctest.RestoreCall (job:false, probed live on both TrueNAS 25.10 and 26.0 —
 // see task-3-report.md), so the test can decide which train to toggle and
 // restore the exact original list afterward. Returns ok=false (rather than
 // failing the test outright) when the read itself errors, so the caller can
 // self-skip — mirroring the mail/ups precedent — even though in practice
-// catalog.config succeeded on every probed box, including a SCALE 25.10 VM
+// catalog.config succeeded on every probed box, including a TrueNAS 25.10 VM
 // with Docker/apps completely unconfigured.
 func readCatalogConfigOriginal(t *testing.T) (catalogConfigOriginal, bool) {
 	t.Helper()
@@ -71,7 +71,7 @@ func readCatalogConfigOriginal(t *testing.T) (catalogConfigOriginal, bool) {
 }
 
 // restoreCatalogConfig sends preferred_trains back to its original value via
-// catalog.update. catalog.update is job:false (probed live on both SCALE
+// catalog.update. catalog.update is job:false (probed live on both TrueNAS
 // 25.10 and 26.0 — see task-3-report.md), so — unlike docker_config's
 // CallJob-based restore — the plain acctest.RestoreCall (which wraps a
 // job-unaware CallRead) is sufficient here.
@@ -106,7 +106,7 @@ func containsTrain(trains []string, name string) bool {
 // SELF-SKIP: if catalog.config itself errors when read, this test skips
 // rather than running — mirroring the mail/ups precedent. This is a
 // defensive fallback rather than something either probed box actually hit:
-// catalog.config AND catalog.update both succeeded live on SCALE 25.10 even
+// catalog.config AND catalog.update both succeeded live on TrueNAS 25.10 even
 // with Docker/apps completely unconfigured there (decisive probe — a
 // preferred_trains no-op update round-tripped cleanly; see task-3-report.md
 // for the full transcript), unlike docker.update, which requires a

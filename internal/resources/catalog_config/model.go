@@ -45,7 +45,7 @@ type CatalogConfigDataSourceModel struct {
 }
 
 // catalogConfigAPI mirrors the JSON object returned by catalog.config and
-// catalog.update. Probed live against SCALE 25.10 and 26.0 (see
+// catalog.update. Probed live against TrueNAS 25.10 and 26.0 (see
 // task-3-report.md): byte-identical shape on both releases, no version
 // gating needed anywhere in this resource.
 type catalogConfigAPI struct {

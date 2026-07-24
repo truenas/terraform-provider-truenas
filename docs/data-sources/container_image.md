@@ -4,14 +4,14 @@ page_title: "truenas_container_image Data Source - truenas"
 subcategory: ""
 description: |-
   Looks up available versions of an LXC container image in the upstream registry (container.image.query_registry). Purpose: let HCL reference a current image version for truenas_container's "image" block without hardcoding one — the upstream registry (images.linuxcontainers.org) PRUNES old builds; a version this datasource lists today can 404 on download later once pruned (observed live: a version the registry still listed in query_registry's response 404'd when container.create tried to download it). "latest_version" (the registry's own last-listed entry, oldest-to-newest by build timestamp, confirmed live) is the safest default to reference; a pinned older version carries this pruning risk.
-  Requires TrueNAS SCALE 26.0 or later (the container namespace does not exist on 25.10, confirmed live — see truenas_container's schema description).
+  Requires TrueNAS 26.0 or later (the container namespace does not exist on 25.10, confirmed live — see truenas_container's schema description).
 ---
 
 # truenas_container_image (Data Source)
 
 Looks up available versions of an LXC container image in the upstream registry (container.image.query_registry). Purpose: let HCL reference a current image version for truenas_container's "image" block without hardcoding one — the upstream registry (images.linuxcontainers.org) PRUNES old builds; a version this datasource lists today can 404 on download later once pruned (observed live: a version the registry still listed in query_registry's response 404'd when container.create tried to download it). "latest_version" (the registry's own last-listed entry, oldest-to-newest by build timestamp, confirmed live) is the safest default to reference; a pinned older version carries this pruning risk.
 
-Requires TrueNAS SCALE 26.0 or later (the container namespace does not exist on 25.10, confirmed live — see truenas_container's schema description).
+Requires TrueNAS 26.0 or later (the container namespace does not exist on 25.10, confirmed live — see truenas_container's schema description).
 
 
 

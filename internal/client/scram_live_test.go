@@ -12,7 +12,7 @@ import (
 
 // TestLiveSCRAM authenticates against a real TrueNAS box via SCRAM-SHA-512.
 // Gated on the acceptance-test env vars plus TRUENAS_USERNAME (the API key
-// owner); skipped otherwise. Requires SCALE 26.0+.
+// owner); skipped otherwise. Requires TrueNAS 26.0+.
 func TestLiveSCRAM(t *testing.T) {
 	endpoint := os.Getenv("TRUENAS_ENDPOINT")
 	apiKey := os.Getenv("TRUENAS_API_KEY")

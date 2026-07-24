@@ -133,7 +133,7 @@ func TestUpdatePayload_EnabledExplicitlySet(t *testing.T) {
 }
 
 // TestResponseToModel verifies responseToModel against the shape probed
-// from a live auth.twofactor.config call (identical on SCALE 25.10 and
+// from a live auth.twofactor.config call (identical on TrueNAS 25.10 and
 // 26.0).
 func TestResponseToModel(t *testing.T) {
 	ctx := context.Background()

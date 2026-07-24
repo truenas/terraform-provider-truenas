@@ -3,12 +3,12 @@
 page_title: "truenas_ftp_config Resource - truenas"
 subcategory: ""
 description: |-
-  Manages the TrueNAS SCALE FTP service configuration. This is a singleton resource — there is exactly one FTP configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls ftp.update, and Terraform delete only removes the resource from state (the configuration is left in place).
+  Manages the TrueNAS FTP service configuration. This is a singleton resource — there is exactly one FTP configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls ftp.update, and Terraform delete only removes the resource from state (the configuration is left in place).
 ---
 
 # truenas_ftp_config (Resource)
 
-Manages the TrueNAS SCALE FTP service configuration. This is a singleton resource — there is exactly one FTP configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls ftp.update, and Terraform delete only removes the resource from state (the configuration is left in place).
+Manages the TrueNAS FTP service configuration. This is a singleton resource — there is exactly one FTP configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls ftp.update, and Terraform delete only removes the resource from state (the configuration is left in place).
 
 ## Example Usage
 

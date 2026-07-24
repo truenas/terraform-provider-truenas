@@ -15,7 +15,7 @@ import (
 	"strings"
 )
 
-// SCRAM-SHA-512 authentication for TrueNAS API keys (SCALE 26.0+).
+// SCRAM-SHA-512 authentication for TrueNAS API keys (TrueNAS 26.0+).
 //
 // The exchange runs over auth.login_ex per RFC 5802, with TrueNAS
 // specifics (docs/source/accounts/scram_authentication.rst in the
@@ -208,7 +208,7 @@ func scramStep(ctx context.Context, c *Client, scramType, rfcStr string) (*scram
 	return &resp, nil
 }
 
-// AuthAPIKeySCRAM authenticates an API key via SCRAM-SHA-512 (SCALE
+// AuthAPIKeySCRAM authenticates an API key via SCRAM-SHA-512 (TrueNAS
 // 26.0+). username must be the key owner's account; the raw key secret
 // never leaves the client.
 func AuthAPIKeySCRAM(ctx context.Context, c *Client, username, apiKey string) error {
@@ -253,7 +253,7 @@ func MechanismChoices(ctx context.Context, c *Client) ([]string, error) {
 }
 
 // AuthAPIKeyAuto picks the strongest supported API-key mechanism:
-// SCRAM-SHA-512 when the server offers it (SCALE 26.0+) and the key
+// SCRAM-SHA-512 when the server offers it (TrueNAS 26.0+) and the key
 // owner's username is known, otherwise the legacy plain login. The
 // mechanism probe failing (as it does on 25.10) selects plain.
 func AuthAPIKeyAuto(ctx context.Context, c *Client, username, apiKey string) error {

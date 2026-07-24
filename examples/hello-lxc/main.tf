@@ -1,4 +1,4 @@
-# Hello-world LXC container on TrueNAS SCALE 26.0+ — fully Terraform-native.
+# Hello-world LXC container on TrueNAS 26.0+ — fully Terraform-native.
 #
 # Configures the LXC subsystem, resolves a current image version from the
 # registry (versions are pruned upstream — never hardcode one), creates the
@@ -19,7 +19,7 @@ variable "truenas_api_key" {
 
 variable "truenas_endpoint" {
   type        = string
-  description = "e.g. wss://truenas.example.com/api/current (SCALE 26.0+)"
+  description = "e.g. wss://truenas.example.com/api/current (TrueNAS 26.0+)"
 }
 
 provider "truenas" {

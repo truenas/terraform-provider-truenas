@@ -43,7 +43,7 @@ type KeychainSSHConnectionDataSourceModel struct {
 
 // keychainSSHConnectionAttributesAPI mirrors keychaincredential.*'s
 // "attributes" object for type=SSH_CREDENTIALS. Probed live against
-// TrueNAS SCALE 25.10: "private_key" on the wire is the *numeric id* of a
+// TrueNAS 25.10: "private_key" on the wire is the *numeric id* of a
 // SSH_KEY_PAIR keychaincredential, not key material — renamed PrivateKeyID
 // here (and in the Terraform-facing schema, "private_key_id") to avoid
 // confusion with keychain_ssh_keypair's like-named field, which holds the

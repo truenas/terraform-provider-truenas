@@ -10,7 +10,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages an NFS share on TrueNAS SCALE.",
+		Description: "Manages an NFS share on TrueNAS.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed: true,

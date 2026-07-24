@@ -21,7 +21,7 @@ import (
 //   - TF_ACC=1
 //   - TRUENAS_API_KEY (or TRUENAS_USERNAME+TRUENAS_PASSWORD) set for
 //     acctest.PreCheck
-//   - A running TrueNAS SCALE instance
+//   - A running TrueNAS instance
 func TestAccSMBConfigDataSource_basic(t *testing.T) {
 	if os.Getenv("TF_ACC") == "" {
 		t.Skip("Acceptance tests skipped: set TF_ACC=1 and ensure a TrueNAS instance is available")

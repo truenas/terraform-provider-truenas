@@ -3,12 +3,12 @@
 page_title: "truenas_resilver_config Resource - truenas"
 subcategory: ""
 description: |-
-  Manages the TrueNAS SCALE pool resilver priority schedule (pool.resilver). This is a singleton resource — there is exactly one resilver schedule per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls pool.resilver.update, and Terraform delete only removes the resource from state (the configuration is left in place).
+  Manages the TrueNAS pool resilver priority schedule (pool.resilver). This is a singleton resource — there is exactly one resilver schedule per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls pool.resilver.update, and Terraform delete only removes the resource from state (the configuration is left in place).
 ---
 
 # truenas_resilver_config (Resource)
 
-Manages the TrueNAS SCALE pool resilver priority schedule (pool.resilver). This is a singleton resource — there is exactly one resilver schedule per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls pool.resilver.update, and Terraform delete only removes the resource from state (the configuration is left in place).
+Manages the TrueNAS pool resilver priority schedule (pool.resilver). This is a singleton resource — there is exactly one resilver schedule per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls pool.resilver.update, and Terraform delete only removes the resource from state (the configuration is left in place).
 
 ## Example Usage
 

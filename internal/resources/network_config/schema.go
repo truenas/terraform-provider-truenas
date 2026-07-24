@@ -11,7 +11,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE global network configuration (hostname, domain, DNS servers, " +
+		Description: "Manages the TrueNAS global network configuration (hostname, domain, DNS servers, " +
 			"default gateways, service announcement). This is a singleton resource — there is exactly one " +
 			"global network configuration per TrueNAS system, so it is never created or deleted on TrueNAS; " +
 			"Terraform create/update calls network.configuration.update, and Terraform delete only removes the " +

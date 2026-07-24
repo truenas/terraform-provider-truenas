@@ -63,7 +63,7 @@ type SystemGeneralDataSourceModel struct {
 }
 
 // uiCertificate accepts both wire shapes of ui_certificate in
-// system.general.config: SCALE 26.0 returns the certificate ID as a bare
+// system.general.config: TrueNAS 26.0 returns the certificate ID as a bare
 // integer (with the name in a separate top-level ui_certificate_name
 // field), while 25.10 returns the full certificate object (and has no
 // top-level name field). Both shapes decode to the id/name pair; a JSON

@@ -10,7 +10,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE Docker service configuration (docker.config): the storage " +
+		Description: "Manages the TrueNAS Docker service configuration (docker.config): the storage " +
 			"pool/dataset backing Docker, automatic image update checks, container networking address pools, " +
 			"the IPv6 CIDR block, and registry mirrors. This is a singleton resource — there is exactly one " +
 			"Docker configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform " +
@@ -23,8 +23,8 @@ func resourceSchema() schema.Schema {
 			"this resource's schema. Changing \"pool\" via this resource migrates Docker without moving " +
 			"applications; use the TrueNAS UI/API directly if application migration is required." +
 			"\n\n" +
-			"`nvidia` (NVIDIA GPU support) is readable on every probed release, but writable only on TrueNAS " +
-			"SCALE 25.10 and earlier: SCALE 26.0+ dropped it from docker.update's accepted fields (probed live) " +
+			"`nvidia` (NVIDIA GPU support) is readable on every probed release, but writable only on " +
+			"TrueNAS 25.10 and earlier: TrueNAS 26.0+ dropped it from docker.update's accepted fields (probed live) " +
 			"— docker.config still reports its current value there, this resource can still display it, but " +
 			"setting it explicitly in configuration against a 26.0+ target is an apply-time error.",
 		Attributes: map[string]schema.Attribute{
@@ -60,7 +60,7 @@ func resourceSchema() schema.Schema {
 				Optional: true,
 				Computed: true,
 				Description: "Whether NVIDIA GPU support is enabled for containers. Readable on every probed " +
-					"release; writable only on TrueNAS SCALE 25.10 and earlier — SCALE 26.0+ dropped it from " +
+					"release; writable only on TrueNAS 25.10 and earlier — TrueNAS 26.0+ dropped it from " +
 					"docker.update's accepted fields, so explicitly setting it there is an apply-time error.",
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
@@ -98,7 +98,7 @@ func resourceSchema() schema.Schema {
 				Optional: true,
 				Computed: true,
 				Description: "Registry mirror URLs Docker pulls images through. Unified across both probed " +
-					"releases: on TrueNAS SCALE 25.10 (which has no per-entry insecure flag on the wire — two " +
+					"releases: on TrueNAS 25.10 (which has no per-entry insecure flag on the wire — two " +
 					"separate secure/insecure arrays instead) each entry's \"insecure\" value is translated to " +
 					"and from that split shape transparently.",
 				PlanModifiers: []planmodifier.List{

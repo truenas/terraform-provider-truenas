@@ -26,7 +26,7 @@ func (d *ResilverConfigDataSource) Metadata(_ context.Context, req datasource.Me
 
 func (d *ResilverConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
-		Description: "Reads the current TrueNAS SCALE pool resilver priority schedule. Takes no arguments: " +
+		Description: "Reads the current TrueNAS pool resilver priority schedule. Takes no arguments: " +
 			"there is exactly one resilver schedule per TrueNAS system.",
 		Attributes: map[string]dschema.Attribute{
 			"id": dschema.StringAttribute{

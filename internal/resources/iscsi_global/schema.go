@@ -12,7 +12,7 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages the TrueNAS SCALE global iSCSI service configuration. This is a singleton " +
+		Description: "Manages the TrueNAS global iSCSI service configuration. This is a singleton " +
 			"resource — there is exactly one iSCSI global configuration per TrueNAS system, so it is never " +
 			"created or deleted on TrueNAS; Terraform create/update calls iscsi.global.update, and Terraform " +
 			"delete only removes the resource from state (the configuration is left in place, since it serves " +

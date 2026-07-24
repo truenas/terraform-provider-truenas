@@ -3,12 +3,12 @@
 page_title: "truenas_scrub_task Resource - truenas"
 subcategory: ""
 description: |-
-  Manages a scrub schedule for a TrueNAS SCALE pool (pool.scrub). There is at most one scrub schedule per pool; TrueNAS rejects a second pool.scrub.create for the same pool.
+  Manages a scrub schedule for a TrueNAS pool (pool.scrub). There is at most one scrub schedule per pool; TrueNAS rejects a second pool.scrub.create for the same pool.
 ---
 
 # truenas_scrub_task (Resource)
 
-Manages a scrub schedule for a TrueNAS SCALE pool (pool.scrub). There is at most one scrub schedule per pool; TrueNAS rejects a second pool.scrub.create for the same pool.
+Manages a scrub schedule for a TrueNAS pool (pool.scrub). There is at most one scrub schedule per pool; TrueNAS rejects a second pool.scrub.create for the same pool.
 
 ## Example Usage
 

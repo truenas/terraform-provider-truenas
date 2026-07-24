@@ -3,12 +3,12 @@
 page_title: "truenas_truecommand_config Data Source - truenas"
 subcategory: ""
 description: |-
-  Reads the current TrueNAS SCALE TrueCommand service configuration and connection status. Takes no arguments: there is exactly one TrueCommand configuration per TrueNAS system. Makes no changes — see the truenas_truecommand_config resource's schema description for the safety notes around the "enabled" field and "api_key"'s Sensitive-but-not-write-only treatment.
+  Reads the current TrueNAS TrueCommand service configuration and connection status. Takes no arguments: there is exactly one TrueCommand configuration per TrueNAS system. Makes no changes — see the truenas_truecommand_config resource's schema description for the safety notes around the "enabled" field and "api_key"'s Sensitive-but-not-write-only treatment.
 ---
 
 # truenas_truecommand_config (Data Source)
 
-Reads the current TrueNAS SCALE TrueCommand service configuration and connection status. Takes no arguments: there is exactly one TrueCommand configuration per TrueNAS system. Makes no changes — see the truenas_truecommand_config resource's schema description for the safety notes around the "enabled" field and "api_key"'s Sensitive-but-not-write-only treatment.
+Reads the current TrueNAS TrueCommand service configuration and connection status. Takes no arguments: there is exactly one TrueCommand configuration per TrueNAS system. Makes no changes — see the truenas_truecommand_config resource's schema description for the safety notes around the "enabled" field and "api_key"'s Sensitive-but-not-write-only treatment.
 
 ## Example Usage
 
