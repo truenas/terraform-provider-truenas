@@ -35,6 +35,8 @@ make testacc-disruptive
 | `TRUENAS_API_KEY` | — | Auth (or `TRUENAS_USERNAME` + `TRUENAS_PASSWORD`) |
 | `TRUENAS_TEST_POOL` | `tank` | Pool under which test datasets/zvols are created |
 | `TRUENAS_DISRUPTIVE` | unset | Enables Tier 2 (singleton set-and-restore) |
+| `TRUENAS_HA` | unset | Enables Enterprise HA / failover, IPMI LAN, and enclosure acceptance tests (see HA / Enterprise test environment below) |
+| `TRUENAS_HA_ALLOWED_ENDPOINT` | — | Required whenever `TRUENAS_HA=1`; must equal `TRUENAS_ENDPOINT` exactly, or the HA tests `t.Fatal` instead of running — same DSCheck-pattern guard as `TRUENAS_DS_ALLOWED_ENDPOINT`, against accidentally hitting a non-disposable HA pair |
 | `TRUENAS_APPS` | unset | Enables the app lifecycle test (pulls container images) |
 | `TRUENAS_DS` | unset | Enables directory-services tests against the Samba AD DC (see below) |
 | `TRUENAS_DS_DOMAIN` | — | AD realm, e.g. `TFTEST.LAN` |
@@ -51,7 +53,11 @@ make testacc-disruptive
 | `TRUENAS_DS_IPA_PASSWORD` | — | FreeIPA `admin` password |
 
 Helpers in `internal/acctest`: `PreCheck` (TF_ACC + credentials),
-`DisruptiveCheck` (adds `TRUENAS_DISRUPTIVE=1`), `AppsCheck`
+`DisruptiveCheck` (adds `TRUENAS_DISRUPTIVE=1`), `HACheck` (adds
+`TRUENAS_HA=1` + the `TRUENAS_HA_ALLOWED_ENDPOINT` fatal-guard, DSCheck
+pattern, then a live `failover.licensed` probe that **skips** — not
+`t.Fatal`s — when false, since an unlicensed box, e.g. the SCALE 26.0 box,
+is a valid non-HA test target, not a safety violation), `AppsCheck`
 (`TRUENAS_APPS=1`), `Endpoint()`, `TestPool()`, `RandName(prefix)`
 (crypto-random `prefix-xxxxxxxx` names), `RandNQN()` (valid RFC-4122
 uuid-style NVMe host NQNs), `Client()` (shared live API client for
@@ -67,7 +73,7 @@ a real, observed flake, not a resource defect — so retrying the restore
 across transport drops matters even though the Terraform steps themselves
 already succeeded.
 
-## Unit tests (1070 functions across 85 packages)
+## Unit tests (1103 functions across 90 packages)
 
 Every resource package carries unit tests for:
 
@@ -88,7 +94,7 @@ Every resource package carries unit tests for:
   test server: calls, errors, context cancellation, auth, and the CallJob
   job-polling loop including its no-job bail-out.
 
-## Acceptance suite (119 test functions, 84 packages)
+## Acceptance suite (125 test functions, 88 packages)
 
 ### Tier 1 — safe (`make testacc-safe`)
 
@@ -214,6 +220,20 @@ Coverage highlights:
   `container_device`, this namespace needs **no version gate**: probed
   live, `tn_connect.config`/`tn_connect.update` are present on both SCALE
   25.10 and 26.0, so the test runs unconditionally on either release.
+- **HA / Enterprise** (`TRUENAS_HA=1`-gated, see HA / Enterprise test
+  environment below): `failover_config` (`TestAccFailoverConfigDataSource_basic`
+  — reads `disabled`/`master`/`timeout` plus the datasource's
+  `status`/`node`/`disabled_reasons`), `ipmi_lan`
+  (`TestAccIPMILanDataSource_basic` — reads the physical BMC's channel 1
+  LAN configuration), `enclosure` (`TestAccEnclosureDataSource_basic` +
+  `_notFound` — reads the physical enclosure by id, plus a clean not-found
+  diagnostic for a bogus id), `enclosure_label`
+  (`TestAccEnclosureLabel_setAndRestore` — full lifecycle: set a `RandName`
+  label → import → Terraform's own Destroy → independently re-verified live
+  that the original label was restored; gated by `HACheck` only, no
+  `DisruptiveCheck` — a cosmetic label carries none of the other HA tests'
+  risk), `truecommand_config` (`TestAccTrueCommandConfigDataSource_basic` —
+  Tier 1 read). `vmware` has no Tier 1 test — see Never-run tier below.
 
 Safety rules baked into the tests — they must never touch the box's live
 objects: iSCSI portal/target id=1, extent id=2; NVMe-oF subsys/port/
@@ -253,6 +273,9 @@ field and restore it:
 | `catalog_config` | `preferred_trains` (removes and restores `"community"`) — probed live to succeed regardless of whether Docker/apps is configured (unlike `docker_config`, `catalog.update` does not require a pool), so this test has no self-skip condition and ran on both boxes |
 | `lxc_config` | `v4_network` — **SCALE 26.0+ only** (self-skips on 25.10, `lxc` namespace absent, confirmed live); **never** sets/reads back `preferred_pool` (same docker-pool safety rule as `docker_config`'s `pool`); additionally self-skips if `lxc.config`'s `preferred_pool` is ever non-null on the target box (LXC in use) — decisive probe against the production 26.0 box found it null, so the test ran there |
 | `webshare_config` | `search` — **SCALE 26.0+ only** (self-skips on 25.10, `webshare` namespace absent, confirmed live); probed live to be a genuine partial update (unlike `mail`/`ups_config`, `webshare.update` does not require other fields on every call), so this test has no unconfigured-service self-skip condition in practice — the self-skip guard is kept anyway as a defensive mirror of the `mail`/`ups_config` precedent |
+| `failover_config` | `timeout` — **`TRUENAS_HA=1`-gated** (`HACheck` + `DisruptiveCheck`); `disabled`/`master` are never exercised by any committed test (a `master` mismatch on the live master node is a real failover trigger — see the real-failover exercise note below) |
+| `ipmi_lan` | `vlan` — **`TRUENAS_HA=1`-gated**; restore polls `ipmi.lan.query` until the BMC's LAN controller settles (observed real settle-time behavior, not a bug), and is registered via `t.Cleanup` before the mutating apply; `password`/`apply_remote` are never exercised by any committed test |
+| `truecommand_config` | `api_key` — **`TRUENAS_HA=1`-gated**; decisively probed live to round-trip verbatim with `enabled` left `false` and no outbound connection attempted; `enabled` is never set `true` by any committed test (no TrueCommand instance to enroll with) |
 
 ### Never-run tier
 
@@ -301,6 +324,58 @@ management access or migrate system state:
   deliberately does not expose those fields as writable on any release
   (see the in-file doc comment on `TestAccTnConnectConfig_setAndRestore`
   and `.superpowers/sdd/task-3-report.md` for the full transcript).
+- `vmware` — `vmware.create` validates `hostname`/`username`/`password`
+  against the real vCenter/ESXi endpoint synchronously (confirmed live on
+  BOTH the HA pair and the SCALE 26.0 box: a throwaway create with an RFC
+  5737 TEST-NET-1 hostname and fabricated credentials was rejected —
+  `ENETUNREACH` on the HA pair, `ETIMEDOUT` on 26.0 — before `vmware.query`
+  ever showed a record on either box); no live, reachable vCenter/ESXi
+  fixture is available in this environment, so `TestAccVMware_basic` is a
+  documented, permanent skip (unconditional `t.Skip`, no `TF_ACC` gate
+  needed), mirroring `app_registry`/`cloud_backup` above. See the in-file
+  doc comment for the decisive probe evidence and instructions to enable it
+  against an environment with a real vCenter/ESXi host.
+
+## HA / Enterprise test environment
+
+Tests gated on `TRUENAS_HA=1` (`failover_config`, `ipmi_lan`, `enclosure`,
+`enclosure_label`; `truecommand_config`/`vmware` are not HA-gated — they run
+on any box) need a licensed Enterprise HA controller pair:
+
+- **Box**: TrueNAS SCALE **25.10.4 Enterprise HA** at
+  `wss://10.220.16.188/api/current`, a physical HA controller pair with a
+  BROADCOM VirtualSES H10 enclosure and a physical BMC/IPMI channel.
+  **FULLY DISPOSABLE** — provided by the user specifically for this plan,
+  including real failover events. Not used for anything else; do not treat
+  it as a stable long-lived fixture the way the 25.10 VM or the 26.0 box
+  are.
+- **Credentials**: API key `plan20-ha`, revoked at the end of Plan 20 (see
+  the plan's final task report for revocation evidence — `api_key.query` →
+  find `plan20-ha` → `api_key.delete`, then a fresh auth attempt with the
+  same key confirmed rejected).
+- **Env vars**: `TRUENAS_HA=1` plus `TRUENAS_HA_ALLOWED_ENDPOINT` set to
+  exactly `TRUENAS_ENDPOINT` (`wss://10.220.16.188/api/current`) — enforced
+  by `acctest.HACheck`'s DSCheck-pattern guard, `t.Fatal` on mismatch or
+  omission. `TRUENAS_DISRUPTIVE=1` additionally required for the Tier 2
+  set-and-restore tests (`failover_config` `timeout`, `ipmi_lan` `vlan`,
+  `truecommand_config` `api_key`).
+- **Skip behavior on a non-HA box**: `HACheck` probes `failover.licensed`
+  live and `t.Skip`s (not `t.Fatal`s) when false — confirmed running the
+  full HA-gated set against the SCALE 26.0 box (unlicensed) with matching
+  `TRUENAS_HA`/`TRUENAS_HA_ALLOWED_ENDPOINT` env vars: all four packages
+  skip cleanly, zero mutating calls made.
+- **Real-failover exercise**: a one-off, scripted (not part of the committed
+  test suite) controlled failover was run against this pair during
+  development — `failover.become_passive` called against the live master
+  (node B) to force a real takeover by node A, polled until
+  `failover.status`/`failover.node` stabilized and
+  `failover.disabled.reasons` cleared, then the box was independently
+  reconfirmed healthy and the `truenas_failover_config` datasource
+  acceptance test re-run unchanged against the now-relocated VIP. Full
+  transcript, including the STCNITH transport-error quirk on a *successful*
+  `become_passive` call, is in `.superpowers/sdd/task-1-report.md`. The pair
+  was left with node A as master / node B as backup (swapped from the
+  original assignment) — disposable per the above, no restoration needed.
 
 ## Directory-services test environment
 
@@ -430,7 +505,8 @@ before running `dnf` or `ipa-server-install`.
   `auth.login_with_token` draws from the same rate bucket as key login,
   and a generated token authenticates exactly one new session (see
   `cmd/token_probe` for the experiment and results). Fewer, larger applies
-  and paced test runs are the only real levers.
+  and paced test runs are the only real levers. The auth rate limit applies
+  identically to the HA box — pace HA-gated runs the same way.
 - **Runtimes**: most packages 20–40s; the full safe tier ~25 minutes with
   pauses.
 - **Leftovers**: a failed run can strand `tf-acc-*` objects. Find them with

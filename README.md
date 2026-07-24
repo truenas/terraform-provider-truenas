@@ -8,9 +8,10 @@ client lives inside the provider.
 
 ## What it manages
 
-80 resources (plus two data-source-only namespaces, `truenas_docker_network`
-and `truenas_container_image` — see below), each resource with a matching
-data source:
+85 resources (plus three data-source-only namespaces, `truenas_docker_network`,
+`truenas_container_image`, and `truenas_enclosure` — see below), 84 with a
+matching data source (`truenas_enclosure_label` is the one resource with no
+matching data source — see Enterprise & HA):
 
 | Area | Resources |
 |------|-----------|
@@ -31,6 +32,7 @@ data source:
 | **Services** | `truenas_service`, plus per-service configuration: `truenas_ssh_config`, `truenas_ftp_config`, `truenas_snmp_config`, `truenas_ups_config`, `truenas_smb_config`, `truenas_nfs_config` |
 | **Alerts** | `truenas_alert_service`, `truenas_alert_policy` |
 | **System** | `truenas_boot_environment`, `truenas_tunable`, `truenas_ntp_server`, `truenas_mail`, `truenas_system_general`, `truenas_system_advanced`, `truenas_system_dataset`, `truenas_replication_config`, `truenas_audit_config`, `truenas_reporting_exporter`, `truenas_tn_connect_config` (TrueNAS Connect service singleton — enrollment status only; SAFETY: enabling starts real cloud enrollment, see the resource's own docs) |
+| **Enterprise & HA** | `truenas_failover_config` (HA controller pair singleton — disabled/master/timeout; datasource adds status/node/disabled_reasons), `truenas_ipmi_lan` (per-channel BMC LAN configuration), `truenas_enclosure_label` (the one mutable field an enclosure exposes; `truenas_enclosure` is a **data source only** lookup of enclosure hardware), `truenas_truecommand_config` (TrueCommand connection singleton — enrollment (`enabled=true`) untested, no TC instance available), `truenas_vmware` (VMware snapshot coordination; **create validates against a real vCenter/ESXi endpoint**, so its acceptance test is a documented, permanent skip — schema and units only) |
 
 Both block-storage stacks are expressible end-to-end in HCL: iSCSI
 (portal → target → extent → LUN association → CHAP auth) and NVMe-oF
@@ -62,6 +64,13 @@ The full acceptance suite runs against live TrueNAS boxes on these releases:
 The provider detects the server release at runtime (`system.version_short`)
 and gates version-specific fields, so a single configuration can target
 either release as long as it avoids the newer fields.
+
+The Enterprise & HA resources (`truenas_failover_config`, `truenas_ipmi_lan`,
+`truenas_enclosure`/`truenas_enclosure_label`, `truenas_truecommand_config`,
+`truenas_vmware`) were additionally verified live on a disposable SCALE
+25.10.4 Enterprise HA controller pair, including one real controlled
+failover exercise — see TESTING.md's HA / Enterprise test environment
+section.
 
 ## Initial setup
 
