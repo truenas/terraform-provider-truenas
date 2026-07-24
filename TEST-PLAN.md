@@ -1,0 +1,339 @@
+# terraform-provider-truenas — Project Test Plan
+
+**Audience:** QA and engineering
+**Scope:** the entire provider — 85 resources, 87 data sources, the WebSocket
+JSON-RPC client, and the acceptance-test infrastructure
+**Companion documents:** `TESTING.md` (operator quick reference), `SCRAM.md`
+(authentication implementation + test description), `API-COVERAGE.md`
+(coverage status vs. the middleware API surface)
+
+---
+
+## 1. Purpose
+
+This document is the reference for how the provider is tested: the
+philosophy behind the test design, every test level and gate, the live
+environments and what may run where, the per-domain coverage matrix, safety
+rules that protect production systems, and the runbooks used for routine
+and release verification. TESTING.md tells an operator which commands to
+run; this document explains the whole system and the reasoning, so a new
+engineer or an auditor can evaluate and extend it.
+
+## 2. Test philosophy
+
+1. **No mocks, anywhere.** There are no mock or simulated TrueNAS servers in
+   the repository — not in the acceptance suite and not in the client
+   package. Unit tests are pure-function tests. Every test that talks to a
+   server talks to a real TrueNAS system. This policy is absolute and was a
+   deliberate project decision: middleware behavior (validation quirks,
+   translation layers, job semantics, version drift) is the very thing mocks
+   get wrong.
+2. **Probe before code.** Every wire assumption — field names, job flags,
+   response shapes, secret read-back behavior, error text — is verified
+   against the live API (`go run ./cmd/debug_api/ methods <method>`) before
+   the code that depends on it is written. Probe evidence is recorded in
+   code comments and schema descriptions, not just in reports. Every wire
+   mismatch this project ever hit came from trusting a stale or assumed
+   shape.
+3. **Evidence over assertion.** A test that cannot run in an environment
+   must skip with an explanation, never silently pass. Documented-skip tests
+   carry the decisive probe transcript in the test file itself. Restores are
+   verified by reading the system back, not assumed.
+4. **Secrets are modeled from observed behavior.** Whether a secret field is
+   WriteOnly (never in state) or Sensitive (in state, masked) is decided by
+   probing what the API actually returns — some "secrets" (certificates'
+   private keys, keytabs, SSH private keys) are returned intact and are
+   modeled Sensitive; others (user passwords, bind passwords, registry
+   passwords) never come back and are WriteOnly.
+5. **Singleton payloads are config-driven.** Optional+Computed fields on
+   singleton resources are only sent to the API when the user explicitly
+   configured them (sourced from `req.Config`, never from the plan, which
+   echoes prior state). This prevents silent reverts of out-of-band changes
+   and is enforced by unit tests in every singleton package.
+
+## 3. Test levels
+
+| Level | Count (at time of writing) | Needs a box? | Command |
+|---|---|---|---|
+| Unit | 1103 test functions / 90 packages | No | `make test` / `go test ./...` |
+| Live client tests | `TestLive*` in `internal/client` | Yes (any) | env-gated, run with acceptance env |
+| Acceptance Tier 1 (safe CRUD) | bulk of 125 acceptance functions | Yes | `make testacc-safe` |
+| Acceptance Tier 2 (disruptive-lite singletons) | 24 packages | Yes | `make testacc-disruptive` |
+| Special-gated suites | DS (directory services), HA, Apps | Yes (specific) | env gates below |
+| Documented-skip / manual | 8 packages | n/a | in-file rationale + enable instructions |
+| Scripted one-off verifications | recorded in reports | Yes | not committed as tests |
+
+### 3.1 Unit tests (no TrueNAS required)
+
+Every resource package carries:
+- **Payload builders** — verbatim wire keys; unset optionals omitted;
+  three-way nullable handling (null/unknown → omit, explicit zero → JSON
+  null where applicable); create-only keys absent from updates;
+  conditional-required preflight diagnostics.
+- **Response mappers** — probed response shapes, including dual-shape
+  decoders where releases differ; secrets never populated from responses.
+- **Schema shape** — Required/Optional/Computed per attribute, plan
+  modifiers, Sensitive/WriteOnly flags, validators.
+- **Datasource reflection** — `tfsdk` tags must match, field for field, the
+  datasource schema attribute set (catches a bug class invisible to all
+  other unit tests).
+- **Safety contracts** where applicable — e.g. `twofactor_auth` and
+  `tn_connect_config` unit tests prove `enabled` is never emitted unless
+  explicitly configured.
+
+The `internal/client` package's unit tests are pure functions only (error
+classification, version comparison, SCRAM message construction/validation).
+All client interaction behavior is tested live (`TestLive*`): call
+round-trips, real not-found mapping, context cancellation, auth
+(password, plain API key, SCRAM positive and negative), job-poll bailout,
+reconnect-after-transport-drop.
+
+### 3.2 Acceptance Tier 1 — safe CRUD
+
+Contract for every Tier 1 test:
+1. Create with `tf-acc-`-prefixed randomized names (`acctest.RandName`),
+   fixtures (datasets, users, containers) created in the same config via
+   resource references.
+2. Update in place, verifying the changed attribute.
+3. `ImportState` with `ImportStateVerify` (write-only/non-echoed fields in
+   `ImportStateVerifyIgnore`, each justified by probe evidence).
+4. Destroy plus `CheckDestroy` that queries the live API and fails if the
+   object survived.
+
+Tier 1 never references pre-existing objects on any box.
+
+### 3.3 Acceptance Tier 2 — singleton set-and-restore
+
+Singletons cannot be created/destroyed. The pattern:
+1. Read the current live config via the API before any change.
+2. Register an API-level restore in `t.Cleanup` (via `acctest.RestoreCall`,
+   which retries across transport drops) **before** the first mutation.
+3. Apply a cosmetic change, verify, re-apply the original (update-back is
+   exercised too).
+4. Unconfigured-singleton self-skips where the API cannot restore an
+   unconfigured state (mail, ups).
+
+### 3.4 Special-gated suites
+
+| Gate | Env vars | What it protects |
+|---|---|---|
+| Directory services | `TRUENAS_DS=1` + `TRUENAS_DS_ALLOWED_ENDPOINT` (must equal the endpoint; fatal otherwise) | Domain joins change box authentication; only disposable boxes may join. AD/LDAP/IPA joins, keytabs. |
+| HA / Enterprise | `TRUENAS_HA=1` + `TRUENAS_HA_ALLOWED_ENDPOINT` + live `failover.licensed` probe (clean skip when unlicensed) | failover, IPMI, enclosure tests run only on the designated HA system |
+| Apps | `TRUENAS_APPS=1` | container-image pulls are slow/heavy |
+| Disruptive | `TRUENAS_DISRUPTIVE=1` | enables Tier 2 |
+
+### 3.5 Documented-skip and manual tests
+
+Unconditionally skipped tests each carry the decisive probe transcript and
+re-enable instructions in the test file:
+
+| Package | Why it cannot run here |
+|---|---|
+| `app_registry` | `app.registry.create` validates credentials against the real container registry; no registry fixture |
+| `cloud_backup` | create validates the credential/bucket against real cloud storage |
+| `vmware` | create validates against a live vCenter/ESXi (ENETUNREACH/ETIMEDOUT transcripts on both releases) |
+| `tn_connect_config` (write path) | only writable field is `enabled`; enabling starts cloud enrollment; production box is already enrolled |
+| `twofactor_auth` (enabled flip) | committed test mutates `window` only; the enabled flip was verified once as a scripted one-off |
+| `pool` (creation) | needs dedicated blank disks; datasource + manual creation procedure |
+| `network_interface` (bridge write) | global commit/checkin cycle can cut management access; enp7s0 datasource test runs |
+| `directoryservices` on non-DS boxes | gated as above |
+| Never-run tier (`network_config`, `system_general`, `ssh_config`, `system_dataset` write paths) | can cut management access or migrate system state; each has in-file rationale and manual instructions |
+
+### 3.6 Scripted one-off verifications (not committed)
+
+High-risk behaviors verified once, with full transcripts in task reports:
+- **Real HA failover** — `failover.become_passive` executed on the
+  disposable HA pair; status transitions polled through the event; system
+  verified healthy after; found and documented the "master flag unreliable
+  post-failover" API quirk.
+- **2FA global enable** — proved API-key auth is unaffected by
+  `auth.twofactor` `enabled=true`, then restored.
+- **TrueCommand api_key-only update** — proved side-effect-free with
+  `enabled=false` on both releases before the Tier 2 test was allowed to
+  exist.
+
+## 4. Test environments
+
+| System | Address | Release | Role | Disposable? |
+|---|---|---|---|---|
+| 25.10 VM (`truenas2510`, VM 110 on pve) | 192.168.1.249 | SCALE 25.10.3.1 | Primary Tier 1/Tier 2 + full regression target; DS-test target | Yes |
+| 26.0 box | 192.168.1.68 | SCALE 26.0 | Cross-release verification; 26.0-only features (LXC, containers, webshare); serves live Proxmox storage | **No — production-serving.** Safe-tier only; never DS joins; never touch its existing objects |
+| Enterprise HA pair (H10) | 10.220.16.188 | SCALE 25.10.4 | failover/IPMI/enclosure/HA gates; real failover exercised | Yes |
+| Samba AD DC (`tftest-dc`, VM 210 on pve) | 192.168.1.250 | Debian 13 + Samba AD | Realm TFTEST.LAN for AD joins + keytabs | Yes |
+| OpenLDAP (`tftest-ldap`, VM 211 on pve) | 192.168.1.251 | Debian 13 + slapd | LDAP service-type coverage (RFC2307, TLS, seeded users) | Yes |
+| FreeIPA (`tftest-ipa`, VM 212 on pve) | 192.168.1.252 | Rocky 9 + FreeIPA | Realm TFIPA.LAN for IPA joins | Yes |
+
+Release-coverage rule: every resource is verified on both 25.10 and 26.0
+unless the namespace is release-specific, in which case a version gate
+(`client.VersionAtLeast`) produces a clean diagnostic on the other release
+and the acceptance test skips via a live version probe. Current
+26.0-only surfaces: `lxc_config`, `container`, `container_device`,
+`container_image`, `docker_network`, `webshare`, `webshare_config`.
+HA-only: `failover_config`, `ipmi_lan`, `enclosure`, `enclosure_label`
+(gated by license probe, not version).
+
+Hard-learned environment facts baked into the suite:
+- Auth rate limit ~20 logins/60s/IP → packages run sequentially with
+  30-second sleeps; parallel suites will trip it (observed: burst runs
+  produce `[EBUSY] Rate Limit Exceeded` and `not connected` cascades that
+  read like real failures — always re-run failures individually and paced
+  before believing them).
+- The 25.10 introspection API under-reports some namespaces
+  (`core.get_methods` listed 3 of 13 failover methods); verify by direct
+  call, never by listing alone.
+- BMC (IPMI) settings can transiently read `0.0.0.0` for ~seconds after an
+  update; the resource and tests poll for convergence (bounded).
+- The container image registry prunes old builds; never hardcode image
+  versions (use the `truenas_container_image` datasource).
+
+## 5. Coverage matrix (by domain)
+
+Tier legend: **T1** = full CRUD contract, **T2** = set-and-restore,
+**DS/HA/Apps** = special gate, **doc-skip** = documented skip, **manual** =
+documented manual procedure, **26.0** = version-gated.
+
+| Domain | Resources | Tier / gates | Notes |
+|---|---|---|---|
+| Storage | pool, dataset, zvol, snapshot, periodic_snapshot, scrub_task, resilver_config, system_dataset | T1 (pool: datasource + manual create; system_dataset: never-run write) | scrub_task self-skips when the pool already has a schedule (one per pool) |
+| Shares | nfs, smb, webshare (26.0), nfs_config, smb_config, webshare_config (26.0) | T1 + T2 | SMB exercises 26.0 purpose/options mapping |
+| iSCSI | global, portal, initiator, auth, extent, target, targetextent | T1 + end-to-end wiring test | never touches the 26.0 box's live portal/target/extent (Proxmox storage) |
+| NVMe-oF | global, subsys, port, namespace, host, host_subsys, port_subsys | T1 + end-to-end | test ports 14420/14421 disabled; id=1 objects untouchable |
+| Accounts & access | user, group, api_key, privilege, twofactor_auth | T1 + T2 | api_key test re-authenticates a fresh client with the created key (SCRAM on 26.0); 2FA committed test never flips enabled |
+| Directory services | directoryservices (AD/LDAP/IPA), kerberos_config/realm/keytab, idmap (via AD block) | DS gate; T1/T2 for kerberos | real joins against all three server types; destroy disables (never leaves); keytab tests use a real DC-exported keytab |
+| Certificates | certificate, acme_dns_authenticator | T1 (ACME issuance: schema+unit only) | in-test Go stdlib self-signed certs; ACME live issuance deferred (future: pebble CA) |
+| Keychain & replication | keychain_ssh_keypair, keychain_ssh_connection, replication (+SSH), replication_config | T1 | loopback SSH replication on the 25.10 VM (real SSH transport, single box) |
+| Tasks | cronjob, init_shutdown_script, rsync_task, cloudsync, cloudsync_credentials, cloud_backup | T1 (cloud_backup doc-skip) | task commands are `/usr/bin/true`, enabled=false |
+| Filesystem | filesystem_permissions, filesystem_acl, acl_template | T1 | path-keyed wrap-an-action pattern; destroy semantics documented per probe (permissions persist; ACL strips) |
+| Apps & containers | app (Apps gate), app_registry (doc-skip), docker_config, docker_network (ds-only), catalog_config, container (26.0), container_device (26.0), container_image (ds-only, 26.0), lxc_config (26.0) | T1/T2/26.0 | docker pool never set/changed by tests; container fixtures never autostart; GPU device type deliberately unmodeled (no hardware evidence) |
+| Virtualization | vm, vm_device, vmware (doc-skip) | T1 | VMs created stopped |
+| Network | network_config (never-run write), network_interface (manual write / ds test), static_route | T1/manual | TEST-NET addresses only |
+| System | system_general (never-run write), system_advanced, tunable, boot_environment, service, ntp_server | T1 + T2 | boot_environment clones the active BE, never activates; tunable restores orig_value |
+| Service configs | ssh_config (never-run write), ftp_config, snmp_config, ups_config, mail | T2 | mail/ups self-skip when unconfigured |
+| Alerts & reporting | alert_service, alert_policy, reporting_exporter, audit_config | T1 + T2 | exporter targets TEST-NET, disabled |
+| HA / Enterprise | failover_config, ipmi_lan, enclosure (ds-only), enclosure_label, truecommand_config, tn_connect_config | HA gate + T2 | real failover verified once (scripted); enclosure label restore-on-destroy verified live; truecommand/tn_connect never enable enrollment |
+
+Data-source coverage: every resource has a matching datasource except the
+three datasource-only surfaces (enclosure, docker_network,
+container_image); each carries the reflection test and, where a live read
+is possible, a datasource acceptance test.
+
+## 6. Safety rules (non-negotiable)
+
+1. Production-serving systems (currently the 26.0 box) get safe-tier tests
+   only. Never: DS joins, docker/LXC pool changes, touching pre-existing
+   objects (portal/target/extent id=1, NVMe subsys id=1, enp7s0, existing
+   certificates including the UI cert id=1, builtin ACL templates,
+   builtin privileges, existing registries/containers/shares).
+2. Allowed-endpoint guards (`TRUENAS_DS_ALLOWED_ENDPOINT`,
+   `TRUENAS_HA_ALLOWED_ENDPOINT`) make dangerous suites fail closed: the
+   gate fatals unless the operator explicitly names the endpoint.
+3. Restores are registered before mutations and verified after
+   (`acctest.RestoreCall` retries across transport drops).
+4. Cloud-enrollment toggles (`tn_connect_config.enabled`,
+   `truecommand_config.enabled`) are never set true by committed code paths;
+   unit tests enforce the payload contract.
+5. Every created object is `tf-acc-`-prefixed and randomized; `CheckDestroy`
+   proves cleanup; leftover sweeps use `cmd/debug_api` queries.
+6. Test keys are minted per plan and revoked at plan end, with
+   auth-rejection proof.
+
+## 7. Credentials and secrets policy
+
+- No credentials are ever committed. API keys, passwords, and keytabs live
+  in environment variables at run time; generated infrastructure passwords
+  live root-only on the pve host (`/root/tftest-*-admin.pass`).
+- Scratch/reports (`.superpowers/`, session scratchpads) are git-ignored;
+  keys that appear there are revoked when their plan closes, making stale
+  copies inert.
+- One credential incident occurred and is part of the record: a real
+  domain-admin keytab was committed inside a unit test; caught by the final
+  whole-branch review, replaced with synthetic bytes, and the domain
+  password rotated (old keytab in git history is a dead credential). The
+  lesson is codified: secret-bearing test fixtures must be synthetic, and
+  reviews grep diffs for credential material.
+
+## 8. Runbooks
+
+```sh
+# Unit only (no box)
+make test
+
+# Tier 1 safe suite (box required)
+export TRUENAS_ENDPOINT=wss://<box>/api/current TRUENAS_API_KEY=<key> TRUENAS_TEST_POOL=tank
+make testacc-safe
+
+# Tier 2 singletons
+make testacc-disruptive
+
+# Directory services (disposable box + DS servers; see TESTING.md for env)
+TRUENAS_DS=1 TRUENAS_DS_ALLOWED_ENDPOINT=$TRUENAS_ENDPOINT \
+TRUENAS_DS_DOMAIN=TFTEST.LAN TRUENAS_DS_USER=Administrator TRUENAS_DS_PASSWORD=... \
+go test ./internal/resources/directoryservices/ -run TestAcc -v -count=1 -timeout 30m
+
+# HA suite (licensed HA system only)
+TF_ACC=1 TRUENAS_HA=1 TRUENAS_HA_ALLOWED_ENDPOINT=$TRUENAS_ENDPOINT TRUENAS_DISRUPTIVE=1 \
+go test ./internal/resources/failover_config/ ./internal/resources/ipmi_lan/ \
+        ./internal/resources/enclosure/ ./internal/resources/enclosure_label/ -v -count=1
+
+# Full regression (sequential, paced — ~50 min)
+#   scripts iterate all packages with sleep 30 between; run detached.
+```
+
+Operational rules: sequential packages, 30s pacing; long sweeps detached
+(`setsid`) with log polling; failed packages re-run individually and paced
+before being treated as real failures.
+
+## 9. Regression cadence and release verification
+
+- **Per change:** unit suite + the affected packages live on the primary
+  box; both releases when the change touches shared client/schema code.
+- **Per plan (batch of resources):** full sequential regression on the
+  25.10 VM (zero failures required), new packages verified on both
+  releases, special gates run on their designated systems, docs counts
+  recounted from HEAD.
+- **Per TrueNAS release:** re-probe method schemas for every namespace the
+  provider touches (`cmd/debug_api methods`), diff against recorded shapes,
+  gate or dual-shape as needed, then full regression. History shows each
+  release moves something (legacy endpoint translation, smb purpose rework,
+  cloudsync credential shapes, iscsi field changes, introspection gaps).
+- **Client protocol:** any change to `internal/client` re-runs the
+  `TestLive*` suite against both releases (SCRAM tests exercise 26.0,
+  fallback on 25.10).
+
+## 10. Known middleware findings (upstream)
+
+Documented in reports and worth tracking with iX:
+1. `kerberos.update` crashes server-side (`list index out of range`) on any
+   `appdefaults_aux`/`libdefaults_aux` line not shaped `key = value`.
+2. Stale `kerberos_realm` survives `directoryservices` service-type
+   switches (datastore compress/extend asymmetry); provider carries a
+   two-call reset workaround.
+3. 25.10 `core.get_methods` under-reports namespaces (failover: 3 of 13).
+4. `failover.config.master` is not a reliable live-state indicator
+   immediately after a failover event.
+5. `container.image.query_registry` can list versions whose artifacts the
+   upstream registry has already pruned (404 on use).
+
+## 11. Backlog / future coverage
+
+- FC (`fc`, `fcport`): needs FC-capable hardware (`fc.capable=false` on the
+  available HA system).
+- JBOF: needs a licensed shelf (`jbof.licensed=0`).
+- RDMA: needs capable NICs (namespace empty).
+- ACME live issuance: needs a reachable ACME CA (pebble server is
+  compatible with the no-mocks policy — it is a real ACME implementation).
+- cloud_backup / app_registry / vmware live write paths: need real cloud
+  bucket / container registry / vCenter fixtures respectively.
+- container_device GPU type: needs GPU hardware.
+- Next-gen ZFS namespaces (`zfs.resource*`, `zpool*`): deliberately not
+  adopted while the stable `pool.*` namespaces remain primary; revisit on
+  deprecation signals.
+
+## 12. Maintenance of this plan
+
+Update this document when: a new environment joins or leaves the lab; a new
+gate or tier is added; a release-verification pass changes recorded wire
+shapes; the coverage matrix gains a domain. Counts (test functions,
+packages) live in TESTING.md and are recounted mechanically at each docs
+pass — this plan intentionally describes structure, not counts, except in
+§3's snapshot table.
