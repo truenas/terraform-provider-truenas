@@ -154,14 +154,18 @@ High-risk behaviors verified once, with full transcripts in task reports:
 
 ## 4. Test environments
 
-| System | Address | Release | Role | Disposable? |
-|---|---|---|---|---|
-| 25.10 VM (`truenas2510`, VM 110 on pve) | 192.168.1.249 | SCALE 25.10.3.1 | Primary Tier 1/Tier 2 + full regression target; DS-test target | Yes |
-| 26.0 box | 192.168.1.68 | SCALE 26.0 | Cross-release verification; 26.0-only features (LXC, containers, webshare); serves live Proxmox storage | **No — production-serving.** Safe-tier only; never DS joins; never touch its existing objects |
-| Enterprise HA pair (H10) | 10.220.16.188 | SCALE 25.10.4 | failover/IPMI/enclosure/HA gates; real failover exercised | Yes |
-| Samba AD DC (`tftest-dc`, VM 210 on pve) | 192.168.1.250 | Debian 13 + Samba AD | Realm TFTEST.LAN for AD joins + keytabs | Yes |
-| OpenLDAP (`tftest-ldap`, VM 211 on pve) | 192.168.1.251 | Debian 13 + slapd | LDAP service-type coverage (RFC2307, TLS, seeded users) | Yes |
-| FreeIPA (`tftest-ipa`, VM 212 on pve) | 192.168.1.252 | Rocky 9 + FreeIPA | Realm TFIPA.LAN for IPA joins | Yes |
+The plan requires six environment roles. Addresses, credentials, and realm
+names are supplied at run time through the environment variables in §3.4 and
+TESTING.md — nothing in the suite is tied to a particular lab.
+
+| Role | Requirements | Used for | Disposable? |
+|---|---|---|---|
+| Primary test box | SCALE on the older supported release line (currently 25.10.x); a scratch pool | Tier 1/Tier 2, full regression, DS-test target | Yes — required (DS joins change box auth) |
+| Cross-release box | SCALE on the newer release line (currently 26.0); a scratch pool | Cross-release verification; newer-release-only features (LXC, containers, webshare) | Safe-tier only if it serves real workloads; never DS joins; never touch its pre-existing objects |
+| Enterprise HA pair | HA-licensed SCALE system | failover/IPMI/enclosure/HA-gated suites; the one-off real-failover exercise | Yes — required for the failover exercise |
+| Samba AD domain controller | Any host running Samba as an AD DC, DNS answering for its realm, reachable from the primary box | ACTIVEDIRECTORY joins, kerberos realm/keytab tests (keytabs exported from the DC) | Yes |
+| OpenLDAP server | slapd with RFC2307 schema, TLS (ldaps + StartTLS), seeded posixAccount/posixGroup entries | LDAP service-type joins and user-visibility checks | Yes |
+| FreeIPA server | FreeIPA with its own DNS for its realm | IPA service-type joins | Yes |
 
 Release-coverage rule: every resource is verified on both 25.10 and 26.0
 unless the namespace is release-specific, in which case a version gate
@@ -241,7 +245,7 @@ is possible, a datasource acceptance test.
 
 - No credentials are ever committed. API keys, passwords, and keytabs live
   in environment variables at run time; generated infrastructure passwords
-  live root-only on the pve host (`/root/tftest-*-admin.pass`).
+  live in root-only files on the hypervisor host, outside the repository.
 - Scratch/reports (`.superpowers/`, session scratchpads) are git-ignored;
   keys that appear there are revoked when their plan closes, making stale
   copies inert.
@@ -267,7 +271,7 @@ make testacc-disruptive
 
 # Directory services (disposable box + DS servers; see TESTING.md for env)
 TRUENAS_DS=1 TRUENAS_DS_ALLOWED_ENDPOINT=$TRUENAS_ENDPOINT \
-TRUENAS_DS_DOMAIN=TFTEST.LAN TRUENAS_DS_USER=Administrator TRUENAS_DS_PASSWORD=... \
+TRUENAS_DS_DOMAIN=<realm> TRUENAS_DS_USER=<domain admin> TRUENAS_DS_PASSWORD=... \
 go test ./internal/resources/directoryservices/ -run TestAcc -v -count=1 -timeout 30m
 
 # HA suite (licensed HA system only)
