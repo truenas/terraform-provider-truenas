@@ -190,7 +190,7 @@ acceptance-test skip; `truenas_lxc_config` and
 | `truenas_nfs_share` | `sharing.nfs` |
 | `truenas_smb_share` | `sharing.smb` |
 | `truenas_nfs_config` | `nfs` |
-| `truenas_smb_config` | `smb` |
+| `truenas_smb_config` | `smb` (`stateful_failover`/`minimum_protocol`/`search_protocols` writable on SCALE 26.0+ only — none of the three exist on `smb.update` below 26.0, confirmed live against a 25.10.3.1 VM and a 25.10.4 HA pair member) |
 | `truenas_webshare` | `sharing.webshare` (WebDAV-style web shares: `name`/`path`/`enabled`/`is_home_base`; no `comment` field — confirmed live, rejected as an extra input; **SCALE 26.0+ only**, the `sharing.webshare` namespace does not exist on 25.10, confirmed live via `core.get_methods`) |
 | `truenas_webshare_config` | `webshare` (singleton: bind IPs, search indexing, passkey auth mode, allowed AD/LDAP groups; **SCALE 26.0+ only**, same version gate as `truenas_webshare`) |
 
@@ -249,7 +249,7 @@ acceptance-test skip; `truenas_lxc_config` and
 | Terraform resource | API namespace |
 |---|---|
 | `truenas_system_general` | `system.general` |
-| `truenas_system_advanced` | `system.advanced` |
+| `truenas_system_advanced` | `system.advanced` (`nvidia` writable on SCALE 26.0+ only — does not exist on `system.advanced.update` below 26.0, confirmed live against a 25.10.3.1 VM and a 25.10.4 HA pair member) |
 | `truenas_ntp_server` | `system.ntpserver` |
 | `truenas_tunable` | `tunable` |
 | `truenas_boot_environment` | `boot.environment` |

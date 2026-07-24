@@ -84,8 +84,10 @@ func (d *SystemAdvancedDataSource) Schema(_ context.Context, _ datasource.Schema
 				Description: "Message of the day, displayed after a successful console/SSH login.",
 			},
 			"nvidia": dschema.BoolAttribute{
-				Computed:    true,
-				Description: "Whether the NVIDIA driver is installed/enabled.",
+				Computed: true,
+				Description: "Whether the NVIDIA driver is installed/enabled. Reports false on TrueNAS SCALE " +
+					"releases below 26.0 (the field does not exist there); writable (via the " +
+					"truenas_system_advanced resource) only on SCALE 26.0 and later.",
 			},
 			"overprovision": dschema.Int64Attribute{
 				Computed:    true,

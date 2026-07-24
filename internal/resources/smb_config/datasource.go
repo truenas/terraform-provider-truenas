@@ -107,17 +107,23 @@ func (d *SMBConfigDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 				Description: "Whether verbose SMB debug logging is enabled.",
 			},
 			"stateful_failover": dschema.BoolAttribute{
-				Computed:    true,
-				Description: "Whether stateful SMB failover support is enabled.",
+				Computed: true,
+				Description: "Whether stateful SMB failover support is enabled. Reports false on TrueNAS SCALE " +
+					"releases below 26.0 (the field does not exist there); writable (via the truenas_smb_config " +
+					"resource) only on SCALE 26.0 and later.",
 			},
 			"minimum_protocol": dschema.StringAttribute{
-				Computed:    true,
-				Description: "Minimum SMB protocol version accepted. One of SMB1, SMB2, SMB3.",
+				Computed: true,
+				Description: "Minimum SMB protocol version accepted. One of SMB1, SMB2, SMB3. Reports an empty " +
+					"string on TrueNAS SCALE releases below 26.0 (the field does not exist there); writable (via " +
+					"the truenas_smb_config resource) only on SCALE 26.0 and later.",
 			},
 			"search_protocols": dschema.ListAttribute{
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "Additional network protocols used for server discovery (e.g. WSD, NSD).",
+				Description: "Additional network protocols used for server discovery (e.g. WSD, NSD). Reports " +
+					"an empty list on TrueNAS SCALE releases below 26.0 (the field does not exist there); " +
+					"writable (via the truenas_smb_config resource) only on SCALE 26.0 and later.",
 			},
 			"server_sid": dschema.StringAttribute{
 				Computed:    true,

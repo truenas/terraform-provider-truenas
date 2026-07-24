@@ -381,22 +381,27 @@ func TestUpdatePayload_OnlyKnownFieldsSent(t *testing.T) {
 		"netbiosname", "netbiosalias", "workgroup", "description", "unixcharset",
 		"localmaster", "syslog", "aapl_extensions", "admin_group", "guest",
 		"filemask", "dirmask", "ntlmv1_auth", "multichannel", "encryption",
-		"bindip", "smb_options", "debug", "stateful_failover",
-		"search_protocols", "server_sid",
+		"bindip", "smb_options", "debug", "server_sid",
+		// stateful_failover, minimum_protocol, and search_protocols are
+		// never in updatePayload's output regardless of null/known status:
+		// they are handled entirely by resource.go's
+		// applyPost2600FieldsSupport (see updatePayload's doc comment).
+		// The model here sets minimum_protocol to a known "SMB2" value to
+		// prove that too is still excluded.
+		"stateful_failover", "minimum_protocol", "search_protocols",
 	}
 	for _, k := range omitted {
 		if _, ok := p[k]; ok {
-			t.Errorf("expected %q to be omitted (null/unknown)", k)
+			t.Errorf("expected %q to be omitted from updatePayload's output", k)
 		}
-	}
-	if v, ok := p["minimum_protocol"]; !ok || v != "SMB2" {
-		t.Errorf("expected 'minimum_protocol' = SMB2, got %v (present=%v)", v, ok)
 	}
 }
 
 // TestUpdatePayload_AllKnownFieldsSent verifies that updatePayload includes
-// every guarded field when its model value is known, and that server_sid is
-// excluded even though the model carries a known value for it.
+// every guarded field when its model value is known, and that server_sid
+// and the three post-26.0 fields (handled separately by
+// applyPost2600FieldsSupport) are excluded even though the model carries
+// known values for all of them.
 func TestUpdatePayload_AllKnownFieldsSent(t *testing.T) {
 	ctx := context.Background()
 	m := baseModel(ctx, t)
@@ -407,24 +412,22 @@ func TestUpdatePayload_AllKnownFieldsSent(t *testing.T) {
 	}
 
 	want := map[string]any{
-		"netbiosname":       "truenas",
-		"workgroup":         "WORKGROUP",
-		"description":       "TrueNAS Server",
-		"unixcharset":       "UTF-8",
-		"localmaster":       true,
-		"syslog":            false,
-		"aapl_extensions":   true,
-		"admin_group":       "smb_admins",
-		"guest":             "nobody",
-		"filemask":          "DEFAULT",
-		"dirmask":           "DEFAULT",
-		"ntlmv1_auth":       false,
-		"multichannel":      false,
-		"encryption":        "DEFAULT",
-		"smb_options":       "",
-		"debug":             false,
-		"stateful_failover": false,
-		"minimum_protocol":  "SMB2",
+		"netbiosname":     "truenas",
+		"workgroup":       "WORKGROUP",
+		"description":     "TrueNAS Server",
+		"unixcharset":     "UTF-8",
+		"localmaster":     true,
+		"syslog":          false,
+		"aapl_extensions": true,
+		"admin_group":     "smb_admins",
+		"guest":           "nobody",
+		"filemask":        "DEFAULT",
+		"dirmask":         "DEFAULT",
+		"ntlmv1_auth":     false,
+		"multichannel":    false,
+		"encryption":      "DEFAULT",
+		"smb_options":     "",
+		"debug":           false,
 	}
 	for k, v := range want {
 		if p[k] != v {
@@ -433,9 +436,8 @@ func TestUpdatePayload_AllKnownFieldsSent(t *testing.T) {
 	}
 
 	for name, wantVal := range map[string][]string{
-		"netbiosalias":     {"ALIAS1"},
-		"bindip":           {"192.0.2.10"},
-		"search_protocols": {"WSD"},
+		"netbiosalias": {"ALIAS1"},
+		"bindip":       {"192.0.2.10"},
 	} {
 		got, ok := p[name].([]string)
 		if !ok {
@@ -446,19 +448,22 @@ func TestUpdatePayload_AllKnownFieldsSent(t *testing.T) {
 		}
 	}
 
-	if _, ok := p["server_sid"]; ok {
-		t.Error("'server_sid' should never be present in the update payload")
+	for _, k := range []string{"server_sid", "stateful_failover", "minimum_protocol", "search_protocols"} {
+		if _, ok := p[k]; ok {
+			t.Errorf("%q should never be present in updatePayload's output", k)
+		}
 	}
 
-	// want + 3 lists, server_sid excluded.
-	if len(p) != len(want)+3 {
-		t.Errorf("payload has %d keys (%v), want %d", len(p), p, len(want)+3)
+	// want + 2 lists, server_sid and the three post-26.0 fields excluded.
+	if len(p) != len(want)+2 {
+		t.Errorf("payload has %d keys (%v), want %d", len(p), p, len(want)+2)
 	}
 }
 
 // TestUpdatePayload_ListsKnownEmptyBecomeEmptySlice verifies that a known but
-// empty list is sent as an empty slice, not nil/null, for all three list
-// fields.
+// empty list is sent as an empty slice, not nil/null, for the two list
+// fields updatePayload still handles directly (search_protocols moved to
+// applyPost2600FieldsSupport).
 func TestUpdatePayload_ListsKnownEmptyBecomeEmptySlice(t *testing.T) {
 	ctx := context.Background()
 	emptyList, diags := types.ListValueFrom(ctx, types.StringType, []string{})
@@ -496,13 +501,42 @@ func TestUpdatePayload_ListsKnownEmptyBecomeEmptySlice(t *testing.T) {
 		t.Fatalf("unexpected error: %v", diags)
 	}
 
-	for _, name := range []string{"netbiosalias", "bindip", "search_protocols"} {
+	for _, name := range []string{"netbiosalias", "bindip"} {
 		got, ok := p[name].([]string)
 		if !ok {
 			t.Fatalf("payload[%s] is %T, want []string", name, p[name])
 		}
 		if len(got) != 0 {
 			t.Errorf("payload[%s] = %v, want empty slice", name, got)
+		}
+	}
+	if _, ok := p["search_protocols"]; ok {
+		t.Error("'search_protocols' should never be present in updatePayload's output (handled by applyPost2600FieldsSupport)")
+	}
+}
+
+// TestPost2600FieldsSupported verifies the pure version-comparison gate for
+// smb.update's stateful_failover/minimum_protocol/search_protocols fields,
+// including the exact boundary and malformed-input edge cases.
+func TestPost2600FieldsSupported(t *testing.T) {
+	cases := []struct {
+		version string
+		want    bool
+	}{
+		{"25.10.3.1", false},
+		{"25.10.4", false},
+		{"25.10.4.1", false},
+		{"25.04.0", false},
+		{"26.0.0", true},
+		{"26.0.0-BETA.2", true},
+		{"26.1.0", true},
+		{"27.0.0", true},
+		{"", false},
+		{"not-a-version", false},
+	}
+	for _, c := range cases {
+		if got := post2600FieldsSupported(c.version); got != c.want {
+			t.Errorf("post2600FieldsSupported(%q) = %v, want %v", c.version, got, c.want)
 		}
 	}
 }

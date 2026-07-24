@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
 
@@ -56,6 +58,51 @@ func (r *SystemAdvancedResource) fetchConfig(ctx context.Context) (*systemAdvanc
 	return &api, nil
 }
 
+// applyNvidiaSupport folds "nvidia" into payload when the user explicitly
+// set it in HCL, then strips it (with a clear apply-time error) if the
+// target server is below the SCALE 26.0 floor system.advanced.update
+// requires for this field.
+//
+// configNvidia MUST come from the practitioner's raw Config, not the
+// resolved Plan: "nvidia" is Optional+Computed with UseStateForUnknown, so
+// once it's ever been read from a live system.advanced.config it carries a
+// known (non-null) value in every subsequent plan even when the user never
+// wrote "nvidia = ..." in their .tf file — Plan alone cannot distinguish
+// "user explicitly (re-)configured this" from "framework carried the
+// previous known value forward." Config never does this carrying-forward:
+// it is null unless the practitioner actually wrote the attribute, so
+// gating on Config is what keeps this resource usable on a pre-26.0 target
+// that never sets "nvidia" at all (the overwhelmingly common case) while
+// still catching a practitioner who explicitly tries to set it there. This
+// mirrors docker_config's applyNvidiaSupport, gating in the opposite
+// direction (a field that doesn't exist YET, rather than one that stopped
+// existing).
+//
+// system.advanced.update's accepts-schema genuinely does not include
+// "nvidia" below SCALE 26.0 — probed live (go run against a temp probe
+// binary calling core.get_methods) against a 25.10.3.1 VM (192.168.1.249)
+// and a 25.10.4 HA pair member (10.220.16.188), neither of which lists
+// "nvidia" in system.advanced.update's accepts schema, versus a
+// 26.0.0-BETA.2 box (192.168.1.68) which does. See nvidiaSupported in
+// model.go for the pure version comparison this wraps.
+func (r *SystemAdvancedResource) applyNvidiaSupport(ctx context.Context, payload map[string]any, configNvidia types.Bool, diags *diag.Diagnostics) {
+	if configNvidia.IsNull() || configNvidia.IsUnknown() {
+		return
+	}
+	payload["nvidia"] = configNvidia.ValueBool()
+
+	version, err := r.client.ServerVersion(ctx)
+	if err != nil || nvidiaSupported(version) {
+		return
+	}
+	delete(payload, "nvidia")
+	diags.AddAttributeError(
+		path.Root("nvidia"),
+		"nvidia requires TrueNAS SCALE 26.0 or later",
+		"system.advanced.update on this TrueNAS release does not accept the \"nvidia\" field (it was added in SCALE 26.0). Remove the attribute from your configuration or target a SCALE 26.0+ server.",
+	)
+}
+
 func (r *SystemAdvancedResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan SystemAdvancedModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -74,6 +121,10 @@ func (r *SystemAdvancedResource) Create(ctx context.Context, req resource.Create
 
 	payload, diags := plan.updatePayload(ctx)
 	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	r.applyNvidiaSupport(ctx, payload, cfg.Nvidia, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -135,6 +186,10 @@ func (r *SystemAdvancedResource) Update(ctx context.Context, req resource.Update
 
 	payload, diags := plan.updatePayload(ctx)
 	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	r.applyNvidiaSupport(ctx, payload, cfg.Nvidia, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}

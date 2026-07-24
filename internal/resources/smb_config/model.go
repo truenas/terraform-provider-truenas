@@ -5,7 +5,25 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
+
+// post2600FieldsSupported reports whether smb.update accepts
+// "stateful_failover", "minimum_protocol", and "search_protocols" on the
+// given (already-probed) TrueNAS release string. Pure function of the
+// version string -- no live client access -- so it stays independently
+// unit-testable, matching the webshare_config/lxc_config
+// versionGateDiagnostics precedent.
+//
+// Live-probed evidence (see resource.go's applyPost2600FieldsSupport doc
+// comment for the full trail): a 25.10.3.1 VM and a 25.10.4 HA pair member
+// both reject all three fields as unrecognized smb.update fields ("Extra
+// inputs are not permitted"); a 26.0.0-BETA.2 box accepts all three. All
+// three were added to smb.update in SCALE 26.0 -- none of them existed on
+// any probed 25.10.x release, so this is a floor, not a drop.
+func post2600FieldsSupported(version string) bool {
+	return client.VersionAtLeastString(version, 26, 0)
+}
 
 // smbConfigResourceID is the fixed Terraform ID for this singleton resource:
 // there is exactly one SMB service configuration per TrueNAS system, and it
@@ -219,11 +237,17 @@ func responseToDataSourceModel(ctx context.Context, api *smbConfigAPI, m *SMBCon
 // value, not something smb.update accepts. admin_group is nullable on the
 // wire: it is omitted when null/unknown, sent as JSON nil when the model
 // holds an explicit empty string (clearing the SMB admin group), and sent as
-// its value otherwise. The three list fields (netbiosalias, bindip,
-// search_protocols) are only included when known, with a nil ElementsAs
-// guard so a null/unknown list never panics; each list is normalized to an
-// empty slice when nil so an explicitly-set-but-empty list clears the
-// corresponding value on TrueNAS rather than being omitted.
+// its value otherwise. The two list fields handled here (netbiosalias,
+// bindip) are only included when known, with a nil ElementsAs guard so a
+// null/unknown list never panics; each list is normalized to an empty slice
+// when nil so an explicitly-set-but-empty list clears the corresponding
+// value on TrueNAS rather than being omitted. stateful_failover,
+// minimum_protocol, and search_protocols are intentionally NOT handled
+// here: they need their own version-gated handling (resource.go's
+// applyPost2600FieldsSupport, driven by the practitioner's raw Config
+// rather than the resolved Plan) since none of them exist on smb.update
+// below SCALE 26.0 — see post2600FieldsSupported's doc comment for the
+// live-probed evidence.
 func (m *SMBConfigModel) updatePayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	p := map[string]any{}
@@ -296,20 +320,6 @@ func (m *SMBConfigModel) updatePayload(ctx context.Context) (map[string]any, dia
 	}
 	if !m.Debug.IsNull() && !m.Debug.IsUnknown() {
 		p["debug"] = m.Debug.ValueBool()
-	}
-	if !m.StatefulFailover.IsNull() && !m.StatefulFailover.IsUnknown() {
-		p["stateful_failover"] = m.StatefulFailover.ValueBool()
-	}
-	if !m.MinimumProtocol.IsNull() && !m.MinimumProtocol.IsUnknown() {
-		p["minimum_protocol"] = m.MinimumProtocol.ValueString()
-	}
-	if !m.SearchProtocols.IsNull() && !m.SearchProtocols.IsUnknown() {
-		var v []string
-		diags.Append(m.SearchProtocols.ElementsAs(ctx, &v, false)...)
-		if v == nil {
-			v = []string{}
-		}
-		p["search_protocols"] = v
 	}
 
 	return p, diags

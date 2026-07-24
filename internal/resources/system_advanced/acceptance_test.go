@@ -51,10 +51,11 @@ type systemAdvancedOriginal struct {
 }
 
 // readSystemAdvancedOriginal reads the box's current motd via
-// system.advanced.config, so the test can restore it exactly afterward.
+// acctest.RestoreCall (system.advanced.update is job:false, probed live),
+// so the test can restore it exactly afterward.
 func readSystemAdvancedOriginal(t *testing.T) systemAdvancedOriginal {
 	t.Helper()
-	raw, err := acctest.Client().Call(context.Background(), "system.advanced.config")
+	raw, err := acctest.RestoreCall(context.Background(), "system.advanced.config")
 	if err != nil {
 		t.Fatalf("error reading current system advanced config: %v", err)
 	}
@@ -66,13 +67,16 @@ func readSystemAdvancedOriginal(t *testing.T) systemAdvancedOriginal {
 }
 
 // restoreSystemAdvanced sends only motd back to its original value via
-// system.advanced.update. It runs from t.Cleanup, so it restores the box
+// system.advanced.update, through acctest.RestoreCall so a t.Cleanup-time
+// stale connection on the long-lived acctest.Client() (see RestoreCall's
+// doc comment) is retried and reconnected rather than failing the whole
+// test with "not connected". It runs from t.Cleanup, so it restores the box
 // even if the Terraform steps themselves fail partway through.
 // syslogservers, serialconsole, serialport, serialspeed, consolemenu,
 // sed_user, and sed_passwd are never touched by this test.
 func restoreSystemAdvanced(t *testing.T, orig systemAdvancedOriginal) {
 	t.Helper()
-	if _, err := acctest.Client().Call(context.Background(), "system.advanced.update", map[string]any{
+	if _, err := acctest.RestoreCall(context.Background(), "system.advanced.update", map[string]any{
 		"motd": orig.Motd,
 	}); err != nil {
 		t.Fatalf("error restoring system advanced motd: %v", err)

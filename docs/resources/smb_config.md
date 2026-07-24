@@ -4,11 +4,14 @@ page_title: "truenas_smb_config Resource - truenas"
 subcategory: ""
 description: |-
   Manages the TrueNAS SCALE SMB service configuration. This is a singleton resource — there is exactly one SMB configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls smb.update, and Terraform delete only removes the resource from state (the configuration is left in place, since shares and domain membership may depend on it).
+  stateful_failover, minimum_protocol, and search_protocols are writable only on TrueNAS SCALE 26.0 and later: none of the three exist on smb.update below SCALE 26.0 (probed live) — setting any of them explicitly in configuration against a pre-26.0 target is an apply-time error.
 ---
 
 # truenas_smb_config (Resource)
 
 Manages the TrueNAS SCALE SMB service configuration. This is a singleton resource — there is exactly one SMB configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls smb.update, and Terraform delete only removes the resource from state (the configuration is left in place, since shares and domain membership may depend on it).
+
+`stateful_failover`, `minimum_protocol`, and `search_protocols` are writable only on TrueNAS SCALE 26.0 and later: none of the three exist on smb.update below SCALE 26.0 (probed live) — setting any of them explicitly in configuration against a pre-26.0 target is an apply-time error.
 
 ## Example Usage
 
@@ -36,14 +39,14 @@ resource "truenas_smb_config" "config" {
 - `filemask` (String) Default file creation mask. "DEFAULT" uses the built-in default.
 - `guest` (String) Account used for guest access.
 - `localmaster` (Boolean) Whether the server participates in local master browser elections.
-- `minimum_protocol` (String) Minimum SMB protocol version accepted. One of SMB1, SMB2, SMB3.
+- `minimum_protocol` (String) Minimum SMB protocol version accepted. One of SMB1, SMB2, SMB3. Writable only on TrueNAS SCALE 26.0 and later — it does not exist on smb.update below SCALE 26.0, so explicitly setting it there is an apply-time error.
 - `multichannel` (Boolean) Whether SMB multichannel support is enabled.
 - `netbiosalias` (List of String) NetBIOS aliases for the server.
 - `netbiosname` (String) NetBIOS name of the server.
 - `ntlmv1_auth` (Boolean) Whether the insecure NTLMv1 authentication protocol is allowed.
-- `search_protocols` (List of String) Additional network protocols used for server discovery (e.g. WSD, NSD).
+- `search_protocols` (List of String) Additional network protocols used for server discovery (e.g. WSD, NSD). Writable only on TrueNAS SCALE 26.0 and later — it does not exist on smb.update below SCALE 26.0, so explicitly setting it there is an apply-time error.
 - `smb_options` (String) Additional smb.conf options, appended verbatim.
-- `stateful_failover` (Boolean) Whether stateful SMB failover support is enabled.
+- `stateful_failover` (Boolean) Whether stateful SMB failover support is enabled. Writable only on TrueNAS SCALE 26.0 and later — it does not exist on smb.update below SCALE 26.0, so explicitly setting it there is an apply-time error.
 - `syslog` (Boolean) Whether SMB logging is also written to syslog.
 - `unixcharset` (String) UNIX character set. One of UTF-8, GB2312, HZ-GB-2312, CP1361, and others. Not validated by this provider.
 - `workgroup` (String) Workgroup name.

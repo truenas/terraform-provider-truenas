@@ -17,7 +17,10 @@ func resourceSchema() schema.Schema {
 			"advanced configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform " +
 			"create/update calls system.advanced.update, and Terraform delete only removes the resource from " +
 			"state (the configuration is left in place, since it controls syslog and console access). " +
-			"sed_passwd is write-only: it is never read back from TrueNAS and is not stored in state.",
+			"sed_passwd is write-only: it is never read back from TrueNAS and is not stored in state.\n\n" +
+			"`nvidia` is writable only on TrueNAS SCALE 26.0 and later: it does not exist on " +
+			"system.advanced.update below SCALE 26.0 (probed live) — setting it explicitly in configuration " +
+			"against a pre-26.0 target is an apply-time error.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:      true,
@@ -97,9 +100,11 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"nvidia": schema.BoolAttribute{
-				Optional:      true,
-				Computed:      true,
-				Description:   "Whether the NVIDIA driver is installed/enabled.",
+				Optional: true,
+				Computed: true,
+				Description: "Whether the NVIDIA driver is installed/enabled. Writable only on TrueNAS SCALE " +
+					"26.0 and later — it does not exist on system.advanced.update below SCALE 26.0, so " +
+					"explicitly setting it there is an apply-time error.",
 				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
 			"overprovision": schema.Int64Attribute{

@@ -5,7 +5,25 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
+
+// nvidiaSupported reports whether system.advanced.update accepts the
+// "nvidia" field on the given (already-probed) TrueNAS release string. Pure
+// function of the version string -- no live client access -- so it stays
+// independently unit-testable, matching the webshare_config/lxc_config
+// versionGateDiagnostics precedent.
+//
+// Live-probed evidence (see resource.go's applyNvidiaSupport doc comment
+// for the full trail): a 25.10.3.1 VM and a 25.10.4 HA pair member both
+// reject "nvidia" as an unrecognized system.advanced.update field ("Extra
+// inputs are not permitted"); a 26.0.0-BETA.2 box accepts it. The field was
+// added to system.advanced.update in SCALE 26.0 -- it never existed on any
+// probed 25.10.x release, so this is a floor, not a drop (contrast with
+// docker_config's applyNvidiaSupport, which gates a field 26.0+ removed).
+func nvidiaSupported(version string) bool {
+	return client.VersionAtLeastString(version, 26, 0)
+}
 
 // systemAdvancedResourceID is the fixed Terraform ID for this singleton
 // resource: there is exactly one system advanced configuration per TrueNAS
@@ -255,7 +273,12 @@ func responseToDataSourceModel(ctx context.Context, api *systemAdvancedAPI, m *S
 // nil so an explicitly-set-but-empty list clears the value on TrueNAS rather
 // than being omitted. sed_passwd is a write-only secret: it is included only
 // when known and non-null (a null/unknown value means "leave the current
-// value alone" — never send an empty string or nil for it).
+// value alone" — never send an empty string or nil for it). nvidia is
+// intentionally NOT handled here: it needs its own version-gated handling
+// (resource.go's applyNvidiaSupport, driven by the practitioner's raw
+// Config rather than the resolved Plan) since it does not exist on
+// system.advanced.update below SCALE 26.0 — see nvidiaSupported's doc
+// comment for the live-probed evidence.
 func (m *SystemAdvancedModel) updatePayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	p := map[string]any{}
@@ -295,9 +318,6 @@ func (m *SystemAdvancedModel) updatePayload(ctx context.Context) (map[string]any
 	}
 	if !m.Motd.IsNull() && !m.Motd.IsUnknown() {
 		p["motd"] = m.Motd.ValueString()
-	}
-	if !m.Nvidia.IsNull() && !m.Nvidia.IsUnknown() {
-		p["nvidia"] = m.Nvidia.ValueBool()
 	}
 	if !m.Overprovision.IsNull() && !m.Overprovision.IsUnknown() {
 		if v := m.Overprovision.ValueInt64(); v != 0 {

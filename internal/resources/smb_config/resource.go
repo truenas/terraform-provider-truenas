@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
@@ -55,15 +56,88 @@ func (r *SMBConfigResource) fetchConfig(ctx context.Context) (*smbConfigAPI, err
 	return &api, nil
 }
 
+// applyPost2600FieldsSupport folds "stateful_failover", "minimum_protocol",
+// and "search_protocols" into payload when the user explicitly set them in
+// HCL, then strips whichever were added (with a clear apply-time error) if
+// the target server is below the SCALE 26.0 floor smb.update requires for
+// all three.
+//
+// cfg MUST be the practitioner's raw Config model, not the resolved Plan:
+// all three fields are Optional+Computed with UseStateForUnknown, so once
+// they've ever been read from a live smb.config they carry a known
+// (non-null) value in every subsequent plan even when the user never wrote
+// them in their .tf file — Plan alone cannot distinguish "user explicitly
+// (re-)configured this" from "framework carried the previous known value
+// forward." Config never does this carrying-forward: it is null unless the
+// practitioner actually wrote the attribute, so gating on Config is what
+// keeps this resource usable on a pre-26.0 target that never sets any of
+// the three (the overwhelmingly common case) while still catching a
+// practitioner who explicitly tries to set one. Mirrors
+// system_advanced's applyNvidiaSupport.
+//
+// smb.update's accepts-schema genuinely does not include any of these three
+// fields below SCALE 26.0 — probed live (go run against a temp probe binary
+// calling core.get_methods) against a 25.10.3.1 VM (192.168.1.249) and a
+// 25.10.4 HA pair member (10.220.16.188), neither of which lists any of the
+// three in smb.update's accepts schema, versus a 26.0.0-BETA.2 box
+// (192.168.1.68) which lists all three. See post2600FieldsSupported in
+// model.go for the pure version comparison this wraps.
+func (r *SMBConfigResource) applyPost2600FieldsSupport(ctx context.Context, payload map[string]any, cfg *SMBConfigModel, diags *diag.Diagnostics) {
+	var gated []string
+
+	if !cfg.StatefulFailover.IsNull() && !cfg.StatefulFailover.IsUnknown() {
+		payload["stateful_failover"] = cfg.StatefulFailover.ValueBool()
+		gated = append(gated, "stateful_failover")
+	}
+	if !cfg.MinimumProtocol.IsNull() && !cfg.MinimumProtocol.IsUnknown() {
+		payload["minimum_protocol"] = cfg.MinimumProtocol.ValueString()
+		gated = append(gated, "minimum_protocol")
+	}
+	if !cfg.SearchProtocols.IsNull() && !cfg.SearchProtocols.IsUnknown() {
+		var v []string
+		diags.Append(cfg.SearchProtocols.ElementsAs(ctx, &v, false)...)
+		if v == nil {
+			v = []string{}
+		}
+		payload["search_protocols"] = v
+		gated = append(gated, "search_protocols")
+	}
+	if len(gated) == 0 {
+		return
+	}
+
+	version, err := r.client.ServerVersion(ctx)
+	if err != nil || post2600FieldsSupported(version) {
+		return
+	}
+	for _, attr := range gated {
+		delete(payload, attr)
+		diags.AddAttributeError(
+			path.Root(attr),
+			attr+" requires TrueNAS SCALE 26.0 or later",
+			"smb.update on this TrueNAS release does not accept the \""+attr+"\" field (it was added in SCALE 26.0). Remove the attribute from your configuration or target a SCALE 26.0+ server.",
+		)
+	}
+}
+
 func (r *SMBConfigResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan SMBConfigModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	var cfg SMBConfigModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	payload, diags := plan.updatePayload(ctx)
 	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	r.applyPost2600FieldsSupport(ctx, payload, &cfg, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -114,9 +188,18 @@ func (r *SMBConfigResource) Update(ctx context.Context, req resource.UpdateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	var cfg SMBConfigModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	payload, diags := plan.updatePayload(ctx)
 	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	r.applyPost2600FieldsSupport(ctx, payload, &cfg, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}

@@ -51,11 +51,12 @@ type smbConfigOriginal struct {
 	Description string `json:"description"`
 }
 
-// readSMBConfigOriginal reads the box's current description via smb.config,
-// so the test can restore it exactly afterward.
+// readSMBConfigOriginal reads the box's current description via
+// acctest.RestoreCall (smb.update is job:false, probed live), so the test
+// can restore it exactly afterward.
 func readSMBConfigOriginal(t *testing.T) smbConfigOriginal {
 	t.Helper()
-	raw, err := acctest.Client().Call(context.Background(), "smb.config")
+	raw, err := acctest.RestoreCall(context.Background(), "smb.config")
 	if err != nil {
 		t.Fatalf("error reading current smb config: %v", err)
 	}
@@ -67,12 +68,16 @@ func readSMBConfigOriginal(t *testing.T) smbConfigOriginal {
 }
 
 // restoreSMBConfig sends only description back to its original value via
-// smb.update. It runs from t.Cleanup, so it restores the box even if the
-// Terraform steps themselves fail partway through. workgroup, netbiosname,
-// minimum_protocol, bindip, and admin_group are never touched by this test.
+// smb.update, through acctest.RestoreCall so a t.Cleanup-time stale
+// connection on the long-lived acctest.Client() (see RestoreCall's doc
+// comment) is retried and reconnected rather than failing the whole test
+// with "not connected". It runs from t.Cleanup, so it restores the box
+// even if the Terraform steps themselves fail partway through. workgroup,
+// netbiosname, minimum_protocol, bindip, and admin_group are never touched
+// by this test.
 func restoreSMBConfig(t *testing.T, orig smbConfigOriginal) {
 	t.Helper()
-	if _, err := acctest.Client().Call(context.Background(), "smb.update", map[string]any{
+	if _, err := acctest.RestoreCall(context.Background(), "smb.update", map[string]any{
 		"description": orig.Description,
 	}); err != nil {
 		t.Fatalf("error restoring smb description: %v", err)

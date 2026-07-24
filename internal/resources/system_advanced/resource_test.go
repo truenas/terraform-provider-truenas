@@ -475,7 +475,6 @@ func TestUpdatePayload_AllKnownFieldsSent(t *testing.T) {
 		"kernel_extra_options": "opt1",
 		"login_banner":         "banner",
 		"motd":                 "Welcome",
-		"nvidia":               true,
 		"powerdaemon":          true,
 		"sed_user":             "MASTER",
 		"serialconsole":        true,
@@ -489,6 +488,39 @@ func TestUpdatePayload_AllKnownFieldsSent(t *testing.T) {
 	for k, v := range want {
 		if p[k] != v {
 			t.Errorf("payload[%q] = %v, want %v", k, p[k], v)
+		}
+	}
+
+	// nvidia is handled entirely by resource.go's applyNvidiaSupport
+	// (Config-driven, version-gated below SCALE 26.0), never by
+	// updatePayload — see updatePayload's doc comment.
+	if _, ok := p["nvidia"]; ok {
+		t.Error("'nvidia' should never be present in updatePayload's output")
+	}
+}
+
+// TestNvidiaSupported verifies the pure version-comparison gate for
+// system.advanced.update's "nvidia" field, including the exact boundary and
+// malformed-input edge cases.
+func TestNvidiaSupported(t *testing.T) {
+	cases := []struct {
+		version string
+		want    bool
+	}{
+		{"25.10.3.1", false},
+		{"25.10.4", false},
+		{"25.10.4.1", false},
+		{"25.04.0", false},
+		{"26.0.0", true},
+		{"26.0.0-BETA.2", true},
+		{"26.1.0", true},
+		{"27.0.0", true},
+		{"", false},
+		{"not-a-version", false},
+	}
+	for _, c := range cases {
+		if got := nvidiaSupported(c.version); got != c.want {
+			t.Errorf("nvidiaSupported(%q) = %v, want %v", c.version, got, c.want)
 		}
 	}
 }
