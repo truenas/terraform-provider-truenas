@@ -63,6 +63,17 @@ func (r *SystemAdvancedResource) fetchConfig(ctx context.Context) (*systemAdvanc
 // target server is below the SCALE 26.0 floor system.advanced.update
 // requires for this field.
 //
+// This gate fails CLOSED: it strips "nvidia" unless the version probe both
+// succeeds and reports >= 26.0. "nvidia" exists only on the 26.0+ minority
+// of targets, so treating a probe error as "supported" (docker_config's
+// fail-open approach, correct there because it gates a field valid on the
+// <26.0 majority release) would send "nvidia" to every pre-26.0 box and
+// always fail with system.advanced.update's generic "Extra inputs are not
+// permitted" — reintroducing the bug this gate exists to fix. Fail-closed
+// instead costs a genuinely-26.0 box the field on the one apply that hit a
+// transient probe error (recoverable on retry), which is the safer trade
+// given pre-26.0 is the overwhelming majority of installed targets.
+//
 // configNvidia MUST come from the practitioner's raw Config, not the
 // resolved Plan: "nvidia" is Optional+Computed with UseStateForUnknown, so
 // once it's ever been read from a live system.advanced.config it carries a
@@ -92,7 +103,7 @@ func (r *SystemAdvancedResource) applyNvidiaSupport(ctx context.Context, payload
 	payload["nvidia"] = configNvidia.ValueBool()
 
 	version, err := r.client.ServerVersion(ctx)
-	if err != nil || nvidiaSupported(version) {
+	if err == nil && nvidiaSupported(version) {
 		return
 	}
 	delete(payload, "nvidia")

@@ -7,8 +7,10 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
 
 // stringPtr is a small test helper for building *string API values.
@@ -538,6 +540,47 @@ func TestPost2600FieldsSupported(t *testing.T) {
 		if got := post2600FieldsSupported(c.version); got != c.want {
 			t.Errorf("post2600FieldsSupported(%q) = %v, want %v", c.version, got, c.want)
 		}
+	}
+}
+
+// TestApplyPost2600FieldsSupport_ProbeErrorStripsFields verifies the
+// fail-closed direction of applyPost2600FieldsSupport: when the version
+// probe itself errors (ServerVersion returns err != nil), the gate must
+// strip stateful_failover/minimum_protocol/search_protocols from the
+// payload rather than keep them, since keeping them on an unprobed
+// (majority pre-26.0) target would send fields smb.update rejects with its
+// generic "Extra inputs are not permitted" error. A client that was
+// constructed but never Connect()-ed has a nil underlying connection, so
+// ServerVersion's CallRead fails immediately with "not connected"; the
+// context passed in is pre-cancelled so CallRead's retry loop exits on
+// ctx.Done() instead of sleeping through real backoff delays or attempting
+// a real network dial.
+func TestApplyPost2600FieldsSupport_ProbeErrorStripsFields(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	searchProtocols, diags := types.ListValueFrom(context.Background(), types.StringType, []string{"WSD"})
+	if diags.HasError() {
+		t.Fatalf("unexpected error building list: %v", diags)
+	}
+
+	r := &SMBConfigResource{client: client.New("ws://127.0.0.1:0", nil)}
+	cfg := &SMBConfigModel{
+		StatefulFailover: types.BoolValue(true),
+		MinimumProtocol:  types.StringValue("SMB2"),
+		SearchProtocols:  searchProtocols,
+	}
+	payload := map[string]any{}
+	var applyDiags diag.Diagnostics
+	r.applyPost2600FieldsSupport(ctx, payload, cfg, &applyDiags)
+
+	for _, k := range []string{"stateful_failover", "minimum_protocol", "search_protocols"} {
+		if _, ok := payload[k]; ok {
+			t.Errorf("payload[%q] present after a version-probe error; gate should fail closed and strip it", k)
+		}
+	}
+	if !applyDiags.HasError() {
+		t.Error("expected an apply-time error when the version probe fails, got none")
 	}
 }
 

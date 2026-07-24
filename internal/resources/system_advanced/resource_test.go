@@ -8,8 +8,10 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
 
 // baseModel returns a SystemAdvancedModel with every field null/unknown,
@@ -522,6 +524,34 @@ func TestNvidiaSupported(t *testing.T) {
 		if got := nvidiaSupported(c.version); got != c.want {
 			t.Errorf("nvidiaSupported(%q) = %v, want %v", c.version, got, c.want)
 		}
+	}
+}
+
+// TestApplyNvidiaSupport_ProbeErrorStripsField verifies the fail-closed
+// direction of applyNvidiaSupport: when the version probe itself errors
+// (ServerVersion returns err != nil), the gate must strip "nvidia" from the
+// payload rather than keep it, since keeping it on an unprobed (majority
+// pre-26.0) target would send a field system.advanced.update rejects with
+// its generic "Extra inputs are not permitted" error. A client that was
+// constructed but never Connect()-ed has a nil underlying connection, so
+// ServerVersion's CallRead fails immediately with "not connected"; the
+// context passed in is pre-cancelled so CallRead's retry loop exits on
+// ctx.Done() instead of sleeping through real backoff delays or attempting
+// a real network dial.
+func TestApplyNvidiaSupport_ProbeErrorStripsField(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	r := &SystemAdvancedResource{client: client.New("ws://127.0.0.1:0", nil)}
+	payload := map[string]any{}
+	var applyDiags diag.Diagnostics
+	r.applyNvidiaSupport(ctx, payload, types.BoolValue(true), &applyDiags)
+
+	if _, ok := payload["nvidia"]; ok {
+		t.Error("payload[\"nvidia\"] present after a version-probe error; gate should fail closed and strip it")
+	}
+	if !applyDiags.HasError() {
+		t.Error("expected an apply-time error when the version probe fails, got none")
 	}
 }
 

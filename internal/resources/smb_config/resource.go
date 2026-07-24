@@ -62,6 +62,16 @@ func (r *SMBConfigResource) fetchConfig(ctx context.Context) (*smbConfigAPI, err
 // the target server is below the SCALE 26.0 floor smb.update requires for
 // all three.
 //
+// This gate fails CLOSED: it strips the fields unless the version probe
+// both succeeds and reports >= 26.0. These three fields exist only on the
+// 26.0+ minority of targets, so treating a probe error as "supported"
+// (docker_config's fail-open approach) would send them to every pre-26.0
+// box and always fail with smb.update's generic "Extra inputs are not
+// permitted" — reintroducing the bug this gate exists to fix. Fail-closed
+// instead costs a genuinely-26.0 box the field on the one apply that hit a
+// transient probe error (recoverable on retry), which is the safer trade
+// given pre-26.0 is the overwhelming majority of installed targets.
+//
 // cfg MUST be the practitioner's raw Config model, not the resolved Plan:
 // all three fields are Optional+Computed with UseStateForUnknown, so once
 // they've ever been read from a live smb.config they carry a known
@@ -107,7 +117,7 @@ func (r *SMBConfigResource) applyPost2600FieldsSupport(ctx context.Context, payl
 	}
 
 	version, err := r.client.ServerVersion(ctx)
-	if err != nil || post2600FieldsSupported(version) {
+	if err == nil && post2600FieldsSupported(version) {
 		return
 	}
 	for _, attr := range gated {
