@@ -66,11 +66,23 @@ and additional gates (`TRUENAS_DS`, `TRUENAS_HA`); see TEST-PLAN.md.
 - Run `make fmt lint` and `go build ./... && go vet ./... && go test ./...`
   before opening a pull request.
 
+## Release builds
+
+Releases are produced by [GoReleaser](https://goreleaser.com/) and cut by
+pushing a semver tag (`vX.Y.Z`); see `.github/workflows/release.yml`. To
+exercise the release build locally (GoReleaser must be installed):
+
+```sh
+make release-check     # validate .goreleaser.yml
+make build-snapshot    # build for the current platform only
+make release-snapshot  # full dry run (all platforms, no sign/publish) -> dist/
+```
+
 ## Pull requests
 
 Keep changes focused. Describe what was probed and how the change was
-verified against a live box (which release(s)). CI runs build, vet, gofmt,
-lint, unit tests, and a docs-up-to-date check; acceptance tests run
+verified against a live box (which release(s)). CI runs build, vet, gofmt, lint, unit tests, a docs-up-to-date check, a
+license-header check, and a GoReleaser config check; acceptance tests run
 separately on lab hardware.
 
 ## License

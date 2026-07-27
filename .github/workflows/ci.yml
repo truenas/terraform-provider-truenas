@@ -94,3 +94,16 @@ jobs:
           if [ -n "$missing" ]; then
             echo "Go files missing the SPDX MPL-2.0 header:"; echo "$missing"; exit 1
           fi
+
+  release-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: check
