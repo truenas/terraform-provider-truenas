@@ -46,6 +46,8 @@ changes in a way that would otherwise invalidate existing state, the resource's
 is migrated automatically on the next plan. Users do not need to run manual
 state surgery for supported upgrades.
 
+See `docs-dev/state-upgraders.md` for the developer guide to writing these.
+
 All resources currently ship at `SchemaVersion` 0; the first change that
 requires it will introduce the corresponding upgrader.
 
