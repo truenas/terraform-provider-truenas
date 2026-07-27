@@ -83,6 +83,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: hashicorp/setup-copywrite@v1.1.3
-      - name: Check SPDX license headers
-        run: copywrite headers --plan
+      - name: Check SPDX license headers on Go files
+        # Every Go source file must carry the SPDX MPL-2.0 identifier near the
+        # top. Checked directly (year-agnostic) so it needs no external tool;
+        # `copywrite headers` (see .copywrite.hcl) adds/normalizes them locally.
+        run: |
+          missing=$(git ls-files '*.go' | while read -r f; do
+            head -3 "$f" | grep -q 'SPDX-License-Identifier: MPL-2.0' || echo "$f"
+          done)
+          if [ -n "$missing" ]; then
+            echo "Go files missing the SPDX MPL-2.0 header:"; echo "$missing"; exit 1
+          fi

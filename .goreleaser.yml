@@ -1,3 +1,6 @@
+# Copyright iXsystems, Inc. 2026
+# SPDX-License-Identifier: MPL-2.0
+
 # GoReleaser configuration for terraform-provider-truenas.
 # Produces the cross-platform, checksummed, GPG-signed archives the
 # Terraform Registry ingests. Triggered by the release workflow on a

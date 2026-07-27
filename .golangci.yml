@@ -1,3 +1,6 @@
+# Copyright iXsystems, Inc. 2026
+# SPDX-License-Identifier: MPL-2.0
+
 # golangci-lint v2 configuration.
 # The default linter set (errcheck, govet, ineffassign, staticcheck,
 # unused) applies to the provider itself (internal/, main.go). errcheck is

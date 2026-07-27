@@ -1,4 +1,4 @@
-// Copyright (c) iXsystems, Inc.
+// Copyright iXsystems, Inc. 2026
 // SPDX-License-Identifier: MPL-2.0
 
 package cloud_backup_test

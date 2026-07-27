@@ -1,4 +1,4 @@
-// Copyright (c) iXsystems, Inc.
+// Copyright iXsystems, Inc. 2026
 // SPDX-License-Identifier: MPL-2.0
 
 // Package pool contains unit tests for the truenas_pool datasource.
