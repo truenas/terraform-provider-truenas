@@ -4,6 +4,8 @@
 # secrets:
 #   GPG_PRIVATE_KEY  — the ASCII-armored private signing key
 #   PASSPHRASE       — its passphrase (if any)
+# The signing key must be RSA or DSA (the Registry does not accept the
+# default ECC key type). Generate with: gpg --full-generate-key (choose RSA).
 # The key's public half must be registered on the provider's Terraform
 # Registry publisher settings so the Registry can verify the signature.
 name: Release

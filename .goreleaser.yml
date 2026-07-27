@@ -11,6 +11,11 @@
 #   the private signing key imported into the gpg keyring
 version: 2
 
+# Pin the project name so every artifact is named terraform-provider-truenas_*
+# regardless of the git repository's name. The Terraform Registry requires
+# this exact prefix; without it GoReleaser would derive the name from the repo.
+project_name: terraform-provider-truenas
+
 before:
   hooks:
     - go mod tidy
