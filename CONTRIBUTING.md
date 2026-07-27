@@ -69,5 +69,8 @@ separately on lab hardware.
 
 ## License
 
+See `VERSIONING.md` for the versioning, compatibility, and deprecation
+policy.
+
 By contributing, you agree that your contributions are licensed under the
 Mozilla Public License 2.0 (see `LICENSE`).
