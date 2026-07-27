@@ -29,6 +29,7 @@ testacc-disruptive:
 generate:
 	go generate ./...
 	go tool tfplugindocs generate --provider-name truenas
+	python3 scripts/set-subcategories.py
 
 fmt:
 	gofmt -s -w .
