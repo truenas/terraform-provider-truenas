@@ -1,3 +1,6 @@
+// Copyright (c) iXsystems, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package init_shutdown_script_test
 
 import (

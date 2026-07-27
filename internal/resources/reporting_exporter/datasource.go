@@ -1,3 +1,6 @@
+// Copyright (c) iXsystems, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package reporting_exporter
 
 import (

@@ -1,3 +1,6 @@
+// Copyright (c) iXsystems, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 // Command token_probe tests whether a cached auth.generate_token token
 // could replace per-connection API-key logins (to dodge the middleware's
 // auth rate limit). It authenticates once with an API key, generates a

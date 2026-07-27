@@ -1,3 +1,6 @@
+// Copyright (c) iXsystems, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package boot_environment
 
 import "github.com/hashicorp/terraform-plugin-framework/types"

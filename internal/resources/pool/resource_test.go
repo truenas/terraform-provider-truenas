@@ -1,3 +1,6 @@
+// Copyright (c) iXsystems, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 // Package pool contains unit tests for the truenas_pool resource.
 // Acceptance tests (TF_ACC=1) are not included here because pool
 // create/delete requires spare physical disks on the target TrueNAS.
