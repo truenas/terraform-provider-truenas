@@ -79,7 +79,7 @@ func main() {
 			fmt.Printf("iter %2d: FAIL: %v\n", i, err)
 		} else {
 			ok++
-			cc.Close()
+			_ = cc.Close()
 		}
 	}
 	fmt.Printf("done in %s: %d ok, %d fail\n", time.Since(start).Round(time.Millisecond), ok, fail)

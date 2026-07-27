@@ -51,16 +51,8 @@ func TestSnapshotSchema(t *testing.T) {
 // TestSnapshotIDFormat verifies that responseToModel produces the
 // "dataset@snapname" ID format expected from the TrueNAS API.
 func TestSnapshotIDFormat(t *testing.T) {
-	// The API returns id = "dataset@snapname" directly.
-	// We verify our model stores it verbatim.
-	type snapshotAPIExport struct {
-		ID           string
-		Dataset      string
-		Pool         string
-		SnapshotName string
-		CreateTxg    string
-	}
-
+	// The API returns id = "dataset@snapname" directly; verify the
+	// "dataset@name" ID format is constructed verbatim.
 	dataset := "tank/mydata"
 	name := "snap1"
 	wantID := dataset + "@" + name

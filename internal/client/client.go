@@ -209,7 +209,7 @@ func (c *Client) dial(ctx context.Context) error {
 
 	if authFn != nil {
 		if err := authFn(ctx); err != nil {
-			c.Close()
+			_ = c.Close()
 			return err
 		}
 	}
