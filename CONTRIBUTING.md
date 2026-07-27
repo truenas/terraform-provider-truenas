@@ -19,6 +19,12 @@ make fmt         # gofmt
 make lint        # golangci-lint
 ```
 
+To browse the generated docs locally — grouped by subcategory and rendered
+as the Terraform Registry would show them — run
+`scripts/serve-docs-preview.sh` and open the printed URL. It builds a
+self-contained page into `docs-preview/` (gitignored) from the current
+`docs/`. Requires the `markdown` Python package.
+
 ## Testing
 
 The testing model is documented in full in **TEST-PLAN.md**; **TESTING.md**

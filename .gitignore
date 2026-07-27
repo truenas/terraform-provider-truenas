@@ -7,3 +7,4 @@ terraform-provider-truenas_*
 docs/superpowers/
 docs/PROJECT-STATUS.md
 .dev-override/
+docs-preview/
