@@ -9,3 +9,4 @@ docs/PROJECT-STATUS.md
 .dev-override/
 docs-preview/
 dist/
+debug_api
