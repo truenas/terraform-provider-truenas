@@ -168,6 +168,113 @@ resource "truenas_certificate" "test" {
 `, name)
 }
 
+// genCSR generates an RSA 2048 certificate signing request + its PKCS#8
+// private key entirely in Go (no external tooling), for the
+// CERTIFICATE_CREATE_IMPORTED_CSR acceptance path. Mirrors genSelfSigned's
+// style above, swapping x509.CreateCertificate for x509.CreateCertificateRequest.
+func genCSR(t *testing.T, cn string) (csrPEM, keyPEM string) {
+	t.Helper()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generating RSA key: %v", err)
+	}
+	tmpl := &x509.CertificateRequest{
+		Subject:  pkix.Name{CommonName: cn},
+		DNSNames: []string{cn},
+	}
+	der, err := x509.CreateCertificateRequest(rand.Reader, tmpl, key)
+	if err != nil {
+		t.Fatalf("creating certificate signing request: %v", err)
+	}
+	csrPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: der}))
+
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatalf("marshaling private key: %v", err)
+	}
+	keyPEM = string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}))
+
+	return csrPEM, keyPEM
+}
+
+// TestAccCertificate_importedCSR exercises the full Tier 1 contract for
+// create_type=CERTIFICATE_CREATE_IMPORTED_CSR: import an externally-generated
+// RSA 2048 CSR + its private key (both generated in-test, unlike
+// CERTIFICATE_CREATE_CSR where TrueNAS generates the key pair on-box),
+// verify the read-back fields, rename in place, import by id, and verify
+// destruction via a live certificate.query. Confirmed live against TrueNAS
+// 26.0 (cmd/debug_api csrimportprobe): certificate.create accepts the
+// payload keys "CSR" (uppercase, per the method's own accepts schema) and
+// "privatekey"; "certificate" comes back null (no cert has been signed yet,
+// same as CERTIFICATE_CREATE_CSR); "common"/"san" are parsed back from the
+// CSR's subject/SAN extension; "csr" and "privatekey" both round-trip
+// byte-for-byte through certificate.get_instance (neither masked). Never
+// touches certificate id 1 (the box's live UI certificate) — this test only
+// ever creates new certificates with random tf-acc-* names.
+func TestAccCertificate_importedCSR(t *testing.T) {
+	name := acctest.RandName("tf-acc-cert-importedcsr")
+	renamed := acctest.RandName("tf-acc-cert-importedcsr-renamed")
+	cn := "tf-acc-importedcsr.example.com"
+	csrPEM, keyPEM := genCSR(t, cn)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCertificateDestroyed(name, renamed),
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccCertificateImportedCSRConfig(name, csrPEM, keyPEM),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet("truenas_certificate.test", "id"),
+					resource.TestCheckResourceAttr("truenas_certificate.test", "name", name),
+					resource.TestCheckResourceAttr("truenas_certificate.test", "create_type", "CERTIFICATE_CREATE_IMPORTED_CSR"),
+					resource.TestCheckResourceAttr("truenas_certificate.test", "csr", csrPEM),
+					resource.TestCheckResourceAttr("truenas_certificate.test", "privatekey", keyPEM),
+					resource.TestCheckResourceAttr("truenas_certificate.test", "key_type", "RSA"),
+					resource.TestCheckResourceAttr("truenas_certificate.test", "key_length", "2048"),
+					resource.TestCheckResourceAttr("truenas_certificate.test", "common", cn),
+					resource.TestCheckResourceAttrSet("truenas_certificate.test", "csr_path"),
+					resource.TestCheckResourceAttrSet("truenas_certificate.test", "privatekey_path"),
+				),
+			},
+			// Update in place: rename. CSR/key material is unchanged, and
+			// (unlike CERTIFICATE_CREATE_IMPORTED) add_to_trusted_store is
+			// never sent here since certificate.update rejects it outright
+			// for a CSR-only entry (confirmed by model.go's updatePayload
+			// doc comment); "name" alone is always accepted.
+			{
+				Config: acctest.ProviderConfig() + testAccCertificateImportedCSRConfig(renamed, csrPEM, keyPEM),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_certificate.test", "name", renamed),
+					resource.TestCheckResourceAttr("truenas_certificate.test", "csr", csrPEM),
+				),
+			},
+			{
+				ResourceName:      "truenas_certificate.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				// Same ignore set as TestAccCertificate_imported: "create_type"
+				// is never returned by certificate.query/get_instance and
+				// cannot be recovered on import; "passphrase" is accepted on
+				// create but never echoed back by any read method either.
+				ImportStateVerifyIgnore: []string{"create_type", "passphrase"},
+			},
+		},
+	})
+}
+
+func testAccCertificateImportedCSRConfig(name, csrPEM, keyPEM string) string {
+	return fmt.Sprintf(`
+resource "truenas_certificate" "test" {
+  name        = %q
+  create_type = "CERTIFICATE_CREATE_IMPORTED_CSR"
+  csr         = %q
+  privatekey  = %q
+}
+`, name, csrPEM, keyPEM)
+}
+
 // certificateSummary is the subset of certificate.query fields this test
 // package needs directly (outside of the provider's own resource code).
 type certificateSummary struct {

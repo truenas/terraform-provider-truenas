@@ -2,14 +2,14 @@
 
 Every automated test function in the repository, grouped by package and tagged by tier/gate. Generated from the `*_test.go` sources by `scripts/build-test-inventory.py` (`make test-inventory`) — regenerate after adding or renaming tests. See `TEST-PLAN.md` for the testing strategy and `TESTING.md` for how to run each tier.
 
-**Total: 1252 test functions** across 90 packages.
+**Total: 1253 test functions** across 90 packages.
 
 | Tier / gate | Count |
 |---|---|
 | Acceptance · Apps gate | 2 |
 | Acceptance · DS gate | 3 |
 | Acceptance · HA gate | 7 |
-| Acceptance · Tier 1 | 53 |
+| Acceptance · Tier 1 | 54 |
 | Acceptance · Tier 2 (disruptive) | 39 |
 | Acceptance · conditional skip | 22 |
 | Live (client) | 10 |
@@ -255,13 +255,14 @@ Tier legend: **Unit** needs no server (pure functions). **Acceptance · Tier 1**
 | `TestUpdatePayload_PreferredTrainsSet` | Unit | TestUpdatePayload_PreferredTrainsSet verifies updatePayload includes preferred_trains with the exact key catalog.update accepts (probed live — see task-3-report.md). |
 | `TestUpdatePayload_UnsetOptionalOmitted` | Unit | TestUpdatePayload_UnsetOptionalOmitted verifies preferred_trains is omitted when null/unknown, so the current TrueNAS-side value is left unchanged rather than overwritten with an explicit empty list. |
 
-## `internal/resources/certificate`  (26)
+## `internal/resources/certificate`  (27)
 
 | Test | Tier / gate | Covers |
 |---|---|---|
 | `TestAccCertificate_acmeIssuance` | Acceptance · Tier 1 | TestAccCertificate_acmeIssuance drives a full, live ACME certificate order end to end through Terraform against a real ACME CA (a Pebble test server), using the DNS-01 "shell" authenticator wired to pebble-challtestsrv. |
 | `TestAccCertificate_csr` | Acceptance · Tier 1 | TestAccCertificate_csr exercises the CERTIFICATE_CREATE_CSR path: TrueNAS generates a new RSA 2048 key pair and CSR on-box. |
 | `TestAccCertificate_imported` | Acceptance · Tier 1 | TestAccCertificate_imported exercises the full Tier 1 contract for create_type=CERTIFICATE_CREATE_IMPORTED: import a self-signed RSA 2048 cert+key generated in-test, verify the read-back fields, rename in place (the one field certificate.update accepts besides renew_days/ add_to_trusted_store, confirmed live), import by id, and verify destruction via a live certificate.query. |
+| `TestAccCertificate_importedCSR` | Acceptance · Tier 1 | TestAccCertificate_importedCSR exercises the full Tier 1 contract for create_type=CERTIFICATE_CREATE_IMPORTED_CSR: import an externally-generated RSA 2048 CSR + its private key (both generated in-test, unlike CERTIFICATE_CREATE_CSR where TrueNAS generates the key pair on-box), verify the read-back fields, rename in place, import by id, and verify destruction via a live certificate.query. |
 | `TestCertificateDataSourceModel_MatchesSchema` | Unit | TestCertificateDataSourceModel_MatchesSchema verifies that every tfsdk tag on CertificateDataSourceModel has a corresponding attribute in the datasource schema, and vice versa. |
 | `TestCreatePayload_Imported` | Unit | TestCreatePayload_Imported verifies createPayload includes name, create_type, certificate, and privatekey for the IMPORTED path, and omits unset optionals. |
 | `TestPreflight_AcmeRequiresAllFour` | Unit | TestPreflight_AcmeRequiresAllFour verifies ACME requires acme_directory_uri, csr_id, tos (true), and dns_mapping (non-empty), per the task brief. |
