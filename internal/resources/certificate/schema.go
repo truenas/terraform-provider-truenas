@@ -25,11 +25,12 @@ func resourceSchema() schema.Schema {
 			"\"add_to_trusted_store\", confirmed live): CERTIFICATE_CREATE_IMPORTED (import an existing " +
 			"certificate+private key pair), CERTIFICATE_CREATE_CSR (generate a new key pair and certificate " +
 			"signing request on the box), CERTIFICATE_CREATE_IMPORTED_CSR (import an externally-generated CSR " +
-			"and its private key), and CERTIFICATE_CREATE_ACME (register an ACME-managed certificate). The ACME " +
-			"path is schema-and-preflight only in this provider version: acme_directory_uri/csr_id/tos/" +
-			"dns_mapping are accepted and forwarded to certificate.create, but live ACME issuance (DNS " +
-			"challenge orchestration, renewal polling) is not implemented or exercised by this provider's test " +
-			"suite — treat CERTIFICATE_CREATE_ACME as unverified beyond \"the API accepts the payload shape\". " +
+			"and its private key), and CERTIFICATE_CREATE_ACME (register an ACME-managed certificate). Live " +
+			"end-to-end ACME issuance is tested by this provider (TestAccCertificate_acmeIssuance, gated on " +
+			"TRUENAS_ACME=1): a full DNS-01 order is driven against a real ACME CA — a Pebble test server — " +
+			"using a truenas_acme_dns_authenticator (shell variant) that publishes the challenge, and the issued " +
+			"certificate is verified. Renewal polling (the renew_days-driven auto-renew cycle) is the one ACME " +
+			"behavior still not exercised by the test suite. " +
 			"Never point this resource at certificate id 1 (or any certificate currently serving the TrueNAS " +
 			"UI/API) — certificate.create always creates a new certificate; there is no way to adopt an " +
 			"existing one short of `terraform import`.",
@@ -259,8 +260,9 @@ func resourceSchema() schema.Schema {
 			},
 			"acme_directory_uri": schema.StringAttribute{
 				Optional: true,
-				Description: "ACME directory URI. Required when create_type is CERTIFICATE_CREATE_ACME. See " +
-					"the resource-level description: ACME issuance is schema-only in this provider version. Immutable.",
+				Description: "ACME directory URI. Required when create_type is CERTIFICATE_CREATE_ACME. Live " +
+					"end-to-end issuance against this URI is exercised by the provider's ACME acceptance test " +
+					"(see the resource-level description). Immutable.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},

@@ -38,6 +38,10 @@ make testacc-disruptive
 | `TRUENAS_HA` | unset | Enables Enterprise HA / failover, IPMI LAN, and enclosure acceptance tests (see HA / Enterprise test environment below) |
 | `TRUENAS_HA_ALLOWED_ENDPOINT` | — | Required whenever `TRUENAS_HA=1`; must equal `TRUENAS_ENDPOINT` exactly, or the HA tests `t.Fatal` instead of running — same DSCheck-pattern guard as `TRUENAS_DS_ALLOWED_ENDPOINT`, against accidentally hitting a non-disposable HA pair |
 | `TRUENAS_APPS` | unset | Enables the app lifecycle test (pulls container images) |
+| `TRUENAS_ACME` | unset | Enables the live ACME issuance test `TestAccCertificate_acmeIssuance` (drives a real DNS-01 order against a Pebble ACME CA); skips otherwise |
+| `TRUENAS_ACME_DIRECTORY` | — | Required whenever `TRUENAS_ACME=1`; ACME directory URL, e.g. `https://192.168.1.247:14000/dir` (a trailing slash is added if absent — load-bearing for account reuse across re-runs, see MIDDLEWARE-FINDINGS.md) |
+| `TRUENAS_ACME_CHALLTESTSRV` | — | Required whenever `TRUENAS_ACME=1`; pebble-challtestsrv management HTTP base URL, e.g. `http://192.168.1.247:8055` (the DNS-01 shell script POSTs `/set-txt` and `/clear-txt` here) |
+| `TRUENAS_ACME_CA_PEM` | — | Required whenever `TRUENAS_ACME=1`; path to (or literal content of) the PEM the ACME **directory endpoint's TLS** is signed by — for Pebble's default setup the self-signed directory cert itself (`openssl s_client -connect <pebble>:14000`), NOT the issuance root from `:15000/roots/0`. Imported into the trusted store so the ACME client trusts the directory |
 | `TRUENAS_DS` | unset | Enables directory-services tests against the Samba AD DC (see below) |
 | `TRUENAS_DS_DOMAIN` | — | AD realm, e.g. `TFTEST.LAN` |
 | `TRUENAS_DS_USER` | — | AD admin username, e.g. `Administrator` |
@@ -58,7 +62,10 @@ Helpers in `internal/acctest`: `PreCheck` (TF_ACC + credentials),
 pattern, then a live `failover.licensed` probe that **skips** — not
 `t.Fatal`s — when false, since an unlicensed box, e.g. the TrueNAS 26.0 box,
 is a valid non-HA test target, not a safety violation), `AppsCheck`
-(`TRUENAS_APPS=1`), `Endpoint()`, `TestPool()`, `RandName(prefix)`
+(`TRUENAS_APPS=1`), `ACMECheck` (adds `TRUENAS_ACME=1` plus a `t.Fatal` if any
+of `TRUENAS_ACME_DIRECTORY` / `TRUENAS_ACME_CHALLTESTSRV` / `TRUENAS_ACME_CA_PEM`
+is missing, so the ACME test is portable and self-skips cleanly without the
+Pebble infrastructure), `Endpoint()`, `TestPool()`, `RandName(prefix)`
 (crypto-random `prefix-xxxxxxxx` names), `RandNQN()` (valid RFC-4122
 uuid-style NVMe host NQNs), `Client()` (shared live API client for
 CheckDestroy/fixture queries), `ProviderConfig()` (HCL provider block),

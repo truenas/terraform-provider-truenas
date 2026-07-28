@@ -4,16 +4,22 @@
 package acctest
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
@@ -275,6 +281,187 @@ func HACheck(t *testing.T) {
 	if !licensed {
 		t.Skip("failover.licensed=false on this box: not licensed for Enterprise HA, skipping")
 	}
+}
+
+// ACMECheck gates the live ACME issuance acceptance test
+// (TestAccCertificate_acmeIssuance), which drives a real certificate order
+// end to end against an ACME CA (a Pebble test server) using the DNS-01
+// "shell" authenticator. It runs PreCheck and then skips unless
+// TRUENAS_ACME=1 is set, since the test stands up a real ACME account, an
+// on-box shell script, and a trusted-store CA import, and takes tens of
+// seconds per run.
+//
+// When TRUENAS_ACME=1 it additionally requires the three env vars that make
+// the test portable and self-contained (t.Fatal, mirroring DSCheck/HACheck's
+// loud failure when the gate is on but its environment is not provided):
+//
+//   - TRUENAS_ACME_DIRECTORY   — the ACME directory URL (e.g. the Pebble
+//     directory https://<pebble>:14000/dir). See ACMEDirectory for why a
+//     trailing slash is enforced.
+//   - TRUENAS_ACME_CHALLTESTSRV — the challtestsrv management HTTP base URL
+//     (e.g. http://<pebble>:8055), where the DNS-01 shell script publishes
+//     and clears the challenge TXT records.
+//   - TRUENAS_ACME_CA_PEM      — path to (or literal content of) the PEM the
+//     ACME directory endpoint's TLS is signed by. For Pebble's default setup
+//     that is the self-signed directory-endpoint cert itself (fetchable with
+//     `openssl s_client -connect <pebble>:14000`), NOT the issuance root from
+//     :15000/roots/0 — the two are different certs. The test imports it into
+//     the box's trusted store so the ACME client trusts the directory's TLS.
+func ACMECheck(t *testing.T) {
+	t.Helper()
+	PreCheck(t)
+	if os.Getenv("TRUENAS_ACME") != "1" {
+		t.Skip("Set TRUENAS_ACME=1 to run the live ACME issuance acceptance test")
+	}
+	for _, k := range []string{"TRUENAS_ACME_DIRECTORY", "TRUENAS_ACME_CHALLTESTSRV", "TRUENAS_ACME_CA_PEM"} {
+		if os.Getenv(k) == "" {
+			t.Fatalf("TRUENAS_ACME=1 requires %s to be set (see acctest.ACMECheck) so the ACME "+
+				"issuance test is portable and self-contained", k)
+		}
+	}
+}
+
+// ACMEDirectory returns the ACME directory URL from TRUENAS_ACME_DIRECTORY,
+// normalized to end with a single trailing slash. The trailing slash is
+// load-bearing, not cosmetic: TrueNAS stores an acme.registration keyed by
+// the slash-normalized directory but looks it up for reuse by the raw URI
+// passed to certificate.create. Without the slash the second run fails with
+// "A registration with the specified directory uri already exists"; with it,
+// the one ACME account is reused and issuance is repeatable (see
+// MIDDLEWARE-FINDINGS.md). Returns a .invalid placeholder when unset so
+// config strings build before PreCheck/ACMECheck skips.
+func ACMEDirectory() string {
+	v := os.Getenv("TRUENAS_ACME_DIRECTORY")
+	if v == "" {
+		return "https://acme.invalid/dir/"
+	}
+	if !strings.HasSuffix(v, "/") {
+		v += "/"
+	}
+	return v
+}
+
+// ACMEChalltestsrv returns the challtestsrv management HTTP base URL from
+// TRUENAS_ACME_CHALLTESTSRV, with any trailing slash trimmed. Placeholder
+// when unset (config strings build before the gate skips).
+func ACMEChalltestsrv() string {
+	v := os.Getenv("TRUENAS_ACME_CHALLTESTSRV")
+	if v == "" {
+		return "http://challtestsrv.invalid:8055"
+	}
+	return strings.TrimRight(v, "/")
+}
+
+// ACMECAPEM returns the trusted-store CA PEM from TRUENAS_ACME_CA_PEM,
+// treating the value as a file path when it names a readable file and
+// otherwise as literal PEM content. Fatals if a path is given but unreadable.
+func ACMECAPEM(t *testing.T) string {
+	t.Helper()
+	v := os.Getenv("TRUENAS_ACME_CA_PEM")
+	if v == "" {
+		return ""
+	}
+	if b, err := os.ReadFile(v); err == nil {
+		return string(b)
+	} else if strings.Contains(v, "BEGIN CERTIFICATE") {
+		return v
+	} else {
+		t.Fatalf("TRUENAS_ACME_CA_PEM=%q is neither a readable file nor PEM content: %v", v, err)
+		return ""
+	}
+}
+
+// UploadFile writes content to remotePath on the acceptance-test box via the
+// TrueNAS HTTP upload endpoint (POST /_upload driving filesystem.put),
+// authenticated with the API key, and waits for the resulting job to finish.
+// This is the portable way to place a file on the box (e.g. a DNS-01 shell
+// script) — the JSON-RPC websocket client can't stream filesystem.put's input
+// pipe. mode is the octal-as-decimal Unix mode for the created file (e.g.
+// 0o755 == 493). Requires TRUENAS_API_KEY (fatals otherwise).
+func UploadFile(t *testing.T, remotePath string, content []byte, mode int) {
+	t.Helper()
+	apiKey := os.Getenv("TRUENAS_API_KEY")
+	if apiKey == "" {
+		t.Fatal("acctest.UploadFile requires TRUENAS_API_KEY")
+	}
+	u, err := url.Parse(Endpoint())
+	if err != nil {
+		t.Fatalf("acctest.UploadFile: cannot parse endpoint: %v", err)
+	}
+	uploadURL := "https://" + u.Host + "/_upload"
+
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+	meta := fmt.Sprintf(`{"method":"filesystem.put","params":[%q,{"mode":%d}]}`, remotePath, mode)
+	if err := w.WriteField("data", meta); err != nil {
+		t.Fatalf("acctest.UploadFile: write data field: %v", err)
+	}
+	fw, err := w.CreateFormFile("file", "upload.bin")
+	if err != nil {
+		t.Fatalf("acctest.UploadFile: create file field: %v", err)
+	}
+	if _, err := fw.Write(content); err != nil {
+		t.Fatalf("acctest.UploadFile: write file content: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("acctest.UploadFile: close multipart writer: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, uploadURL, &body)
+	if err != nil {
+		t.Fatalf("acctest.UploadFile: new request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+
+	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		t.Fatalf("acctest.UploadFile: POST %s: %v", uploadURL, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	rb, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("acctest.UploadFile: POST %s returned %d: %s", uploadURL, resp.StatusCode, rb)
+	}
+	var jr struct {
+		JobID int64 `json:"job_id"`
+	}
+	if err := json.Unmarshal(rb, &jr); err != nil || jr.JobID == 0 {
+		t.Fatalf("acctest.UploadFile: unexpected upload response %q (err %v)", rb, err)
+	}
+	waitJob(t, jr.JobID)
+}
+
+// waitJob polls core.get_jobs for the given job id until it reaches a
+// terminal state, fataling on FAILED or timeout. Used by UploadFile to
+// confirm the file is on disk before a test uses it.
+func waitJob(t *testing.T, jobID int64) {
+	t.Helper()
+	c := Client()
+	for i := 0; i < 60; i++ {
+		raw, err := c.CallRead(context.Background(), "core.get_jobs", [][]any{{"id", "=", jobID}})
+		if err != nil {
+			t.Fatalf("acctest.waitJob: core.get_jobs: %v", err)
+		}
+		var jobs []struct {
+			State string `json:"state"`
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(raw, &jobs); err != nil {
+			t.Fatalf("acctest.waitJob: parse jobs: %v", err)
+		}
+		if len(jobs) == 1 {
+			switch jobs[0].State {
+			case "SUCCESS":
+				return
+			case "FAILED", "ABORTED":
+				t.Fatalf("acctest.waitJob: job %d %s: %s", jobID, jobs[0].State, jobs[0].Error)
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	t.Fatalf("acctest.waitJob: job %d did not finish in time", jobID)
 }
 
 // ProviderConfig returns HCL for the provider block used in acceptance tests.

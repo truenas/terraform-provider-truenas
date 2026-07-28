@@ -120,6 +120,7 @@ Singletons cannot be created/destroyed. The pattern:
 | Directory services | `TRUENAS_DS=1` + `TRUENAS_DS_ALLOWED_ENDPOINT` (must equal the endpoint; fatal otherwise) | Domain joins change box authentication; only disposable boxes may join. AD/LDAP/IPA joins, keytabs. |
 | HA / Enterprise | `TRUENAS_HA=1` + `TRUENAS_HA_ALLOWED_ENDPOINT` + live `failover.licensed` probe (clean skip when unlicensed) | failover, IPMI, enclosure tests run only on the designated HA system |
 | Apps | `TRUENAS_APPS=1` | container-image pulls are slow/heavy |
+| ACME | `TRUENAS_ACME=1` + `TRUENAS_ACME_DIRECTORY` + `TRUENAS_ACME_CHALLTESTSRV` + `TRUENAS_ACME_CA_PEM` (all three fatal if missing) | live end-to-end ACME issuance (`TestAccCertificate_acmeIssuance`) drives a real DNS-01 order against a Pebble ACME CA; needs the Pebble + challtestsrv environment |
 | Disruptive | `TRUENAS_DISRUPTIVE=1` | enables Tier 2 |
 
 ### 3.5 Documented-skip and manual tests
@@ -166,6 +167,7 @@ TESTING.md — nothing in the suite is tied to a particular lab.
 | Samba AD domain controller | Any host running Samba as an AD DC, DNS answering for its realm, reachable from the primary box | ACTIVEDIRECTORY joins, kerberos realm/keytab tests (keytabs exported from the DC) | Yes |
 | OpenLDAP server | slapd with RFC2307 schema, TLS (ldaps + StartTLS), seeded posixAccount/posixGroup entries | LDAP service-type joins and user-visibility checks | Yes |
 | FreeIPA server | FreeIPA with its own DNS for its realm | IPA service-type joins | Yes |
+| Pebble ACME CA | letsencrypt/pebble (real ACME server) + pebble-challtestsrv (DNS-01), reachable from the test box on the same subnet | live ACME issuance test (`TRUENAS_ACME` gate): the box orders a cert, runs the DNS-01 shell authenticator that publishes to challtestsrv, Pebble validates + issues | Yes |
 
 Release-coverage rule: every resource is verified on both 25.10 and 26.0
 unless the namespace is release-specific, in which case a version gate
@@ -204,7 +206,7 @@ documented manual procedure, **26.0** = version-gated.
 | NVMe-oF | global, subsys, port, namespace, host, host_subsys, port_subsys | T1 + end-to-end | test ports 14420/14421 disabled; id=1 objects untouchable |
 | Accounts & access | user, group, api_key, privilege, twofactor_auth | T1 + T2 | api_key test re-authenticates a fresh client with the created key (SCRAM on 26.0); 2FA committed test never flips enabled |
 | Directory services | directoryservices (AD/LDAP/IPA), kerberos_config/realm/keytab, idmap (via AD block) | DS gate; T1/T2 for kerberos | real joins against all three server types; destroy disables (never leaves); keytab tests use a real DC-exported keytab |
-| Certificates | certificate, acme_dns_authenticator | T1 (ACME issuance: schema+unit only) | in-test Go stdlib self-signed certs; ACME live issuance deferred (future: pebble CA) |
+| Certificates | certificate, acme_dns_authenticator | T1 + ACME gate | in-test Go stdlib self-signed certs; live end-to-end ACME issuance covered by `TestAccCertificate_acmeIssuance` (DNS-01 shell authenticator against a Pebble CA); only renewal polling still uncovered |
 | Keychain & replication | keychain_ssh_keypair, keychain_ssh_connection, replication (+SSH), replication_config | T1 | loopback SSH replication on the 25.10 VM (real SSH transport, single box) |
 | Tasks | cronjob, init_shutdown_script, rsync_task, cloudsync, cloudsync_credentials, cloud_backup | T1 (cloud_backup doc-skip) | task commands are `/usr/bin/true`, enabled=false |
 | Filesystem | filesystem_permissions, filesystem_acl, acl_template | T1 | path-keyed wrap-an-action pattern; destroy semantics documented per probe (permissions persist; ACL strips) |
@@ -317,6 +319,12 @@ Documented in reports and worth tracking with iX:
    immediately after a failover event.
 5. `container.image.query_registry` can list versions whose artifacts the
    upstream registry has already pruned (404 on use).
+6. ACME registration reuse hinges on a trailing slash: `acme.registration`
+   stores the directory URI slash-normalized but the reuse-lookup matches the
+   raw URI passed to `certificate.create`, so a slash-less directory re-registers
+   and then fails "already exists" on the second issuance; there is no public
+   `acme.registration.delete`. The ACME test normalizes the directory to a
+   trailing slash so the one account is reused (see MIDDLEWARE-FINDINGS.md).
 
 ## 11. Backlog / future coverage
 
@@ -324,8 +332,9 @@ Documented in reports and worth tracking with iX:
   available HA system).
 - JBOF: needs a licensed shelf (`jbof.licensed=0`).
 - RDMA: needs capable NICs (namespace empty).
-- ACME live issuance: needs a reachable ACME CA (pebble server is
-  compatible with the no-mocks policy — it is a real ACME implementation).
+- ACME renewal polling: live end-to-end issuance is now covered
+  (`TestAccCertificate_acmeIssuance`, ACME gate, against a Pebble CA — see §10
+  finding 6); only the `renew_days`-driven auto-renew cycle remains untested.
 - cloud_backup / app_registry / vmware live write paths: need real cloud
   bucket / container registry / vCenter fixtures respectively.
 - container_device GPU type: needs GPU hardware.

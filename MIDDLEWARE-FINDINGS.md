@@ -176,10 +176,61 @@ description documents the prune caveat. In
 
 ---
 
+## 6. ACME registration reuse depends on a trailing slash in the directory URI
+
+**Severity:** correctness — a repeatable operation fails on its second run
+for a cosmetic URI difference; no clean recovery path.
+**Observed on:** TrueNAS 26.0.0-BETA.2.
+**Namespace/method:** `acme.registration.do_create` /
+`acme.get_acme_client_and_key_payload` (via `certificate.create`
+`CERTIFICATE_CREATE_ACME`).
+
+### Summary
+`acme.registration.do_create` normalizes the directory URI it stores by
+appending a trailing slash, and dedups new registrations on that normalized
+value. But the reuse-lookup in `acme_svc.get_acme_client_and_key_payload`
+queries by the **raw** `acme_directory_uri` passed to `certificate.create`.
+So for a directory URI given without a trailing slash:
+
+- Run 1 stores `…/dir/`.
+- Run 2's reuse-query for `…/dir` misses the stored `…/dir/`, so it tries to
+  register again; `do_create`'s own dedup (on the normalized `…/dir/`) then
+  raises `A registration with the specified directory uri already exists`,
+  failing the second issuance.
+
+Given `…/dir/` (trailing slash) both the reuse-query and the stored value
+agree, the one ACME account is reused, and issuance is repeatable (verified:
+two consecutive issuances, one registration row reused, no error).
+
+Compounding it, `acme.registration` has **no public delete** (`do_delete`
+does not exist), so a mismatched/stale registration can only be removed via
+the datastore.
+
+### Reproduction
+1. `certificate.create` `CERTIFICATE_CREATE_ACME` with
+   `acme_directory_uri` = `https://<pebble>:14000/dir` (no slash) → succeeds.
+2. Delete the issued cert, then repeat step 1 → fails
+   `A registration with the specified directory uri already exists`.
+3. Repeat with `.../dir/` (trailing slash) throughout → both runs succeed.
+
+### Expected
+The reuse-lookup should match on the same normalized form `do_create`
+stores, so issuance is idempotent regardless of a trailing slash; and/or a
+public method to remove an ACME registration should exist.
+
+### Provider handling
+`acctest.ACMEDirectory` normalizes `TRUENAS_ACME_DIRECTORY` to a trailing
+slash so `TestAccCertificate_acmeIssuance` reuses one account across re-runs.
+(The registration row itself is not provider-managed and persists after the
+test — reused, not accumulated; a Pebble restart, which wipes accounts,
+would require clearing it out of band.)
+
+---
+
 ## Filing notes
 
 Findings 1 and 2 have functional impact (a server crash and a broken
-re-join) and are the strongest upstream candidates. 3–5 are
+re-join) and are the strongest upstream candidates. 3–6 are
 correctness/reliability gaps. Reproduction transcripts captured during
 development live under `.superpowers/sdd/` (git-ignored) — attach the
 relevant task report when filing. This document is summarized in
