@@ -3288,33 +3288,32 @@ never has a `tf-acc-manual-cert-005a`/`-005b` object created.
 
 ---
 
-**MT-TASKS-006 — CERTIFICATE_CREATE_ACME (documented-skip)**
+**MT-TASKS-006 — CERTIFICATE_CREATE_ACME (automated)**
 
 **Resource:** truenas_certificate
-**Type:** Manual-only, **not runnable** in a normal test environment — documented skip
-**Environment:** N/A without a real ACME account + a domain you can complete
-a DNS-01 challenge for.
-**Preconditions:** N/A.
-**Config:** N/A.
-**Steps:** N/A — do not attempt this against a disposable/throwaway test box.
+**Type:** Automated end-to-end — `TestAccCertificate_acmeIssuance`
+(`internal/resources/certificate/acceptance_test.go`), gated on
+`acctest.ACMECheck` (`TRUENAS_ACME=1` plus the ACME env vars). No manual
+run needed; this entry documents what that test does.
+**Environment:** an ACME CA reachable from the TrueNAS box. The suite uses a
+Pebble ACME test server plus `pebble-challtestsrv` for DNS-01 (see
+TEST-PLAN.md §4); env vars `TRUENAS_ACME_DIRECTORY`,
+`TRUENAS_ACME_CHALLTESTSRV`, `TRUENAS_ACME_CA_PEM` point at it.
+**Flow (what the test drives through Terraform):** a `shell`
+`truenas_acme_dns_authenticator` whose script publishes/clears the
+`_acme-challenge` TXT to the challenge DNS server; the ACME CA's root
+imported and trusted; a `truenas_certificate` `CREATE_CSR`; then a
+`truenas_certificate` `CREATE_ACME` (`acme_directory_uri`/`csr_id`/`tos=true`/
+`dns_mapping`) that orders from the CA, completes the DNS-01 challenge, and
+receives an issued certificate. `CheckDestroy` removes all objects.
 
-**Expected results / rationale:** `create_type = "CERTIFICATE_CREATE_ACME"`
-is schema-and-preflight only in this provider version: `acme_directory_uri`/
-`csr_id`/`tos`/`dns_mapping` are accepted and forwarded to
-`certificate.create`, but live ACME issuance (DNS challenge orchestration
-via a `truenas_acme_dns_authenticator`, renewal polling) is not implemented
-or exercised by this provider — treat it as unverified beyond "the API
-accepts the payload shape." If you must validate this path, you need: (1) a
-real domain you control DNS for, (2) a working
-`truenas_acme_dns_authenticator` with genuine (not dummy) credentials for
-that domain's DNS provider (see section 2), (3) an existing
-`truenas_certificate` with `create_type = CERTIFICATE_CREATE_CSR` whose id
-feeds `csr_id`, (4) `tos = true`, and (5) `dns_mapping = { "<domain>" =
-<authenticator id> }`. Expect the `certificate.create` job to run for
-several minutes while it completes the DNS-01 challenge with the real
-provider — never point this at a shared/production DNS zone.
+**Expected results / rationale:** the ACME order completes and a real
+certificate is issued and readable. Automated renewal polling is the one
+ACME sub-path still not exercised. To run this against your own ACME CA,
+set the `TRUENAS_ACME*` env vars per TEST-PLAN.md and run the acceptance
+suite with `TRUENAS_ACME=1`.
 
-**Cleanup:** N/A.
+**Cleanup:** handled by the test (`CheckDestroy` + `t.Cleanup`).
 
 ---
 

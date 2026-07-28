@@ -388,7 +388,13 @@ func UploadFile(t *testing.T, remotePath string, content []byte, mode int) {
 	if err != nil {
 		t.Fatalf("acctest.UploadFile: cannot parse endpoint: %v", err)
 	}
-	uploadURL := "https://" + u.Host + "/_upload"
+	// The upload endpoint mirrors the WebSocket endpoint's transport:
+	// wss:// -> https://, ws:// -> http:// (test/local boxes).
+	scheme := "https"
+	if u.Scheme == "ws" {
+		scheme = "http"
+	}
+	uploadURL := scheme + "://" + u.Host + "/_upload"
 
 	var body bytes.Buffer
 	w := multipart.NewWriter(&body)

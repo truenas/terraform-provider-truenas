@@ -269,7 +269,7 @@ acceptance-test skip; `truenas_lxc_config` and
 
 | Terraform resource | API namespace |
 |---|---|
-| `truenas_certificate` | `certificate` (four immutable creation modes: imported cert+key, on-box CSR generation, imported CSR+key, ACME. ACME issuance — DNS challenge orchestration, renewal polling — is schema-and-preflight only: `acme_directory_uri`/`csr_id`/`tos`/`dns_mapping` are accepted and forwarded to `certificate.create`, but live issuance is deferred and not exercised by the acceptance suite) |
+| `truenas_certificate` | `certificate` (four immutable creation modes: imported cert+key, on-box CSR generation, imported CSR+key, ACME. ACME issuance is live-tested end to end — a full DNS-01 order (`acme_directory_uri`/`csr_id`/`tos`/`dns_mapping`) is driven against a real ACME CA in the acceptance suite; automated renewal polling is not yet exercised) |
 | `truenas_acme_dns_authenticator` | `acme.dns.authenticator` (cloudflare, digitalocean, OVH, route53, shell — five discriminated variants, so `attributes` is a free-form JSON document) |
 
 ### Keychain & remote replication

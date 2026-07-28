@@ -228,9 +228,9 @@ terraform apply
   explicitly imported.
 - **Certificates and remote replication over SSH.** `truenas_certificate`
   supports importing a cert+key pair, generating a CSR on-box, importing an
-  externally-generated CSR, or ACME — though ACME issuance itself (DNS
-  challenge orchestration, renewal polling) is schema-and-preflight only in
-  this provider version, not live-exercised. `truenas_keychain_ssh_keypair`
+  externally-generated CSR, or ACME. ACME issuance is live-tested end to end
+  (a full DNS-01 order against a real ACME CA); automated renewal polling is
+  not yet exercised. `truenas_keychain_ssh_keypair`
   and `truenas_keychain_ssh_connection` store SSH credentials in the
   TrueNAS keychain; wiring a connection's ID into `truenas_replication_task`'s
   `ssh_credentials` unblocks its SSH transport for remote (not just local
