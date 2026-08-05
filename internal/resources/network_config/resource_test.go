@@ -122,7 +122,7 @@ func TestNetworkConfigSchema_WritableFieldsOptionalComputed(t *testing.T) {
 func TestResponseToModel_NullableStringFieldsMapToEmpty(t *testing.T) {
 	api := &networkConfigAPI{
 		Hostname:    "logrus",
-		Domain:      "wmoh.net",
+		Domain:      "example.com",
 		Domains:     []string{},
 		Hosts:       []string{},
 		HTTPProxy:   "",
@@ -258,7 +258,7 @@ func TestResponseToModel_MapsPlainFields(t *testing.T) {
 	api := &networkConfigAPI{
 		ID:        1,
 		Hostname:  "logrus",
-		Domain:    "wmoh.net",
+		Domain:    "example.com",
 		Domains:   []string{"example.com"},
 		Hosts:     []string{"192.168.1.1 foo"},
 		HTTPProxy: "http://proxy.example.com:3128",
@@ -289,7 +289,7 @@ func TestResponseToModel_MapsPlainFields(t *testing.T) {
 func TestUpdatePayload_OnlyKnownFieldsSent(t *testing.T) {
 	m := &NetworkConfigModel{
 		Hostname:            types.StringNull(),
-		Domain:              types.StringValue("wmoh.net"),
+		Domain:              types.StringValue("example.com"),
 		Domains:             types.ListNull(types.StringType),
 		Hosts:               types.ListUnknown(types.StringType),
 		HTTPProxy:           types.StringUnknown(),
@@ -315,8 +315,8 @@ func TestUpdatePayload_OnlyKnownFieldsSent(t *testing.T) {
 			t.Errorf("expected %q to be omitted (null/unknown)", key)
 		}
 	}
-	if v, ok := p["domain"]; !ok || v != "wmoh.net" {
-		t.Errorf("expected 'domain' = wmoh.net, got %v (present=%v)", v, ok)
+	if v, ok := p["domain"]; !ok || v != "example.com" {
+		t.Errorf("expected 'domain' = example.com, got %v (present=%v)", v, ok)
 	}
 	if len(p) != 1 {
 		t.Errorf("payload has %d keys (%v), want 1", len(p), p)
@@ -337,7 +337,7 @@ func TestUpdatePayload_AllKnownFieldsSent(t *testing.T) {
 
 	m := &NetworkConfigModel{
 		Hostname:            types.StringValue("logrus"),
-		Domain:              types.StringValue("wmoh.net"),
+		Domain:              types.StringValue("example.com"),
 		Domains:             domains,
 		Hosts:               hosts,
 		HTTPProxy:           types.StringValue("http://proxy.example.com:3128"),
@@ -356,7 +356,7 @@ func TestUpdatePayload_AllKnownFieldsSent(t *testing.T) {
 
 	want := map[string]any{
 		"hostname":    "logrus",
-		"domain":      "wmoh.net",
+		"domain":      "example.com",
 		"httpproxy":   "http://proxy.example.com:3128",
 		"ipv4gateway": "192.168.1.254",
 		"ipv6gateway": "fe80::1",
