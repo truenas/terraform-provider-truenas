@@ -4,7 +4,7 @@ OS_ARCH       = $(shell go env GOOS)_$(shell go env GOARCH)
 INSTALL_DIR   = ~/.terraform.d/plugins/registry.terraform.io/truenas/truenas/$(VERSION)/$(OS_ARCH)
 
 .PHONY: default build install test testacc testacc-safe testacc-disruptive generate fmt lint \
-        test-inventory api-calls go-deps \
+        test-inventory api-calls go-deps sbom \
         release-check build-snapshot release-snapshot
 
 default: build
@@ -70,3 +70,8 @@ api-calls:
 # which ship in the provider binary (Runtime) vs tooling-only.
 go-deps:
 	python3 scripts/list-go-deps.py
+
+# Generate SBOMs (SPDX + CycloneDX) from the compiled binary into sbom/.
+# Requires syft. Release artifacts get equivalent SBOMs via GoReleaser.
+sbom:
+	bash scripts/gen-sbom.sh
