@@ -4,7 +4,7 @@ OS_ARCH       = $(shell go env GOOS)_$(shell go env GOARCH)
 INSTALL_DIR   = ~/.terraform.d/plugins/registry.terraform.io/truenas/truenas/$(VERSION)/$(OS_ARCH)
 
 .PHONY: default build install test testacc testacc-safe testacc-disruptive generate fmt lint \
-        test-inventory api-calls \
+        test-inventory api-calls go-deps \
         release-check build-snapshot release-snapshot
 
 default: build
@@ -65,3 +65,8 @@ test-inventory:
 # Diff it against a new TrueNAS release to catch API changes affecting drivers.
 api-calls:
 	python3 scripts/list-api-calls.py
+
+# Regenerate DEPENDENCIES.md — inventory of every external Go module, marking
+# which ship in the provider binary (Runtime) vs tooling-only.
+go-deps:
+	python3 scripts/list-go-deps.py
