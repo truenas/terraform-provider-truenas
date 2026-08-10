@@ -62,6 +62,24 @@ jobs:
         # TF_ACC is unset, so acceptance tests skip and only pure-function
         # unit tests run.
 
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - name: govulncheck
+        # Reachability-aware vulnerability scan: fails the build only when a
+        # known-vulnerable symbol is actually reachable from this code. Catches
+        # a dependency bump or new advisory that reintroduces a vulnerability.
+        # The go.mod `go` directive also pins the toolchain setup-go installs,
+        # so stdlib advisories fixed by a newer Go are covered here too.
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
   docs:
     runs-on: ubuntu-latest
     steps:
