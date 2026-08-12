@@ -370,19 +370,33 @@ shares, NFS shares, users, groups, and cronjobs prefixed `tf-load-`.
 
 **Running the suite:**
 
+Use `scripts/run-loadtest.sh`. It reads `TRUENAS_ENDPOINT` / `TRUENAS_API_KEY`
+/ `TRUENAS_USERNAME` (/ `TRUENAS_TEST_POOL`) from the environment — or from a
+git-ignored `.load-test.env` at the repo root that it sources — and sets the
+`TRUENAS_LOAD` gate with the allowed-endpoint guard pointed at your box, so a
+run can never target anything but the configured disposable box.
+
 ```sh
-# Set the gate and allowed endpoint
-export TRUENAS_LOAD=1 TRUENAS_LOAD_ALLOWED_ENDPOINT=$TRUENAS_ENDPOINT
+# One-time: create a git-ignored .load-test.env at the repo root:
+#   TRUENAS_ENDPOINT=wss://<disposable-box>/api/current
+#   TRUENAS_API_KEY=<id>-<secret>
+#   TRUENAS_USERNAME=<key owner>
+#   TRUENAS_TEST_POOL=tank
 
-# Run all load tests (client + Terraform)
-make loadtest
+scripts/run-loadtest.sh all         # everything (client + Terraform)
+scripts/run-loadtest.sh client      # auth-burst + call-saturation + job-saturation
+scripts/run-loadtest.sh tf          # Terraform apply / concurrent / sustained / mixed
+scripts/run-loadtest.sh jobsat      # just TestLoad_JobSaturation
+scripts/run-loadtest.sh mixed       # just TestLoad_MixedResources (needs terraform)
+scripts/run-loadtest.sh sweep       # delete stranded tf-load- objects
 
-# Run only client-level stress tests
-make loadtest-client
-
-# Run only Terraform end-to-end tests
-make loadtest-tf
+# Scale knobs are env overrides, e.g.:
+LOAD_MIXED_PER_TYPE=5 LOAD_PARALLELISM=25 scripts/run-loadtest.sh mixed
 ```
+
+The underlying `make` targets (`loadtest`, `loadtest-client`, `loadtest-tf`,
+`loadtest-sweep`) still work if you set `TRUENAS_LOAD=1` and
+`TRUENAS_LOAD_ALLOWED_ENDPOINT=$TRUENAS_ENDPOINT` yourself.
 
 ## 10. Regression cadence and release verification
 

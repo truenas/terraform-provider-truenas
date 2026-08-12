@@ -12,3 +12,4 @@ dist/
 debug_api
 sbom/
 results/
+.load-test.env
