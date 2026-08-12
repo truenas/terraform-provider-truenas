@@ -5,7 +5,8 @@ INSTALL_DIR   = ~/.terraform.d/plugins/registry.terraform.io/truenas/truenas/$(V
 
 .PHONY: default build install test testacc testacc-safe testacc-disruptive generate fmt lint \
         test-inventory api-calls go-deps sbom \
-        release-check build-snapshot release-snapshot
+        release-check build-snapshot release-snapshot \
+        loadtest loadtest-client loadtest-tf
 
 default: build
 
@@ -75,3 +76,13 @@ go-deps:
 # Requires syft. Release artifacts get equivalent SBOMs via GoReleaser.
 sbom:
 	bash scripts/gen-sbom.sh
+
+# Load testing (needs a DISPOSABLE box: TRUENAS_LOAD=1 +
+# TRUENAS_LOAD_ALLOWED_ENDPOINT == TRUENAS_ENDPOINT). Reports land in results/.
+loadtest: loadtest-client loadtest-tf
+
+loadtest-client:
+	TF_ACC=1 go test ./internal/client/ -run TestLoad_ -v -count=1 -timeout 30m
+
+loadtest-tf:
+	TF_ACC=1 go test ./test/load/ -run TestLoad_ -v -count=1 -timeout 60m

@@ -289,7 +289,89 @@ Operational rules: sequential packages, 30s pacing; long sweeps detached
 (`setsid`) with log polling; failed packages re-run individually and paced
 before being treated as real failures.
 
-## 9. Regression cadence and release verification
+## 9. Load testing
+
+Load tests verify the provider degrades gracefully under TrueNAS API rate
+limiting — across authentication, read, and mutating calls, under realistic
+Terraform parallelism and concurrent runs — and characterize the observed
+limits. Tests run only against a designated disposable box and require
+explicit opt-in.
+
+**Safety gate:** All load tests check `TRUENAS_LOAD=1` **and**
+`TRUENAS_LOAD_ALLOWED_ENDPOINT` exactly equal `TRUENAS_ENDPOINT`, else they
+fatal. This mirrors the `HACheck`/`DSCheck` pattern and prevents accidental
+hammering of shared or production boxes. Tests self-skip without the gate set,
+so the default suite stays green.
+
+**Environment configuration:**
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `TRUENAS_LOAD` | unset | Master gate; must be set to enable load tests |
+| `TRUENAS_LOAD_ALLOWED_ENDPOINT` | — | Must equal `TRUENAS_ENDPOINT`; test fatals if mismatch |
+| `LOAD_AUTH_CONNS` | 40 | Concurrent login attempts in `TestLoad_AuthBurst` |
+| `LOAD_CALL_CONCURRENCY` | 50 | Concurrent API calls in `TestLoad_CallSaturation` |
+| `LOAD_RESOURCES` | 150 | Number of datasets in `TestLoad_TerraformApply` |
+| `LOAD_PARALLELISM` | 20 | terraform apply `-parallelism` value |
+| `LOAD_CONCURRENT_APPLIES` | 6 | Simultaneous independent applies in `TestLoad_ConcurrentApplies` |
+| `LOAD_DURATION` | 10m | Loop duration for `TestLoad_Sustained` |
+| `TRUENAS_TEST_POOL` | `tank` | Pool where load-test objects are created |
+
+**Five tests:**
+
+- **`TestLoad_AuthBurst`** — launches `LOAD_AUTH_CONNS` concurrent `Connect()`
+  calls to prove that the client's `WithRetry` backoff (5s, 10s, 20s, 30s)
+  absorbs the ~20 login/minute authentication ceiling. Asserts all logins
+  eventually succeed; reports observed login rate and aggregate backoff
+  absorbed.
+
+- **`TestLoad_CallSaturation`** — fires `LOAD_CALL_CONCURRENCY` concurrent
+  operations across read (`CallRead`), write (`Call`), and job-backed
+  (`CallJob`) paths against a shared connection. Reads self-heal via retry;
+  writes and jobs may surface rate-limits. The test records surfaced errors as
+  findings (a characterization output, not a failure) to inform whether
+  write/job-path retry needs to be added; it only fails on genuine errors or
+  cleanup issues.
+
+- **`TestLoad_TerraformApply`** — applies and destroys a `LOAD_RESOURCES`
+  dataset config at `LOAD_PARALLELISM` parallelism. Asserts the apply
+  converges (exit 0), all datasets are created and queryable, destroy
+  succeeds, and no `Rate Limit Exceeded` message reaches the user.
+
+- **`TestLoad_ConcurrentApplies`** — runs `LOAD_CONCURRENT_APPLIES` independent
+  applies in separate workspaces simultaneously, stacking authentication
+  pressure as if multiple CI pipelines were running. Asserts all runs converge
+  and destroy cleanly.
+
+- **`TestLoad_Sustained`** — runs apply/destroy in a loop for `LOAD_DURATION`,
+  proving the provider sustains repeated cycles without cumulative
+  degradation, object leaks, or per-iteration slowdown.
+
+**Reports and cleanup:**
+
+Every test creates objects prefixed `tf-load-`. Characterization reports
+(Markdown + JSON) land in `results/` (gitignored), showing login ceiling,
+per-call throttle onset, backoff totals, throughput, and the count of
+surfaced rate-limit errors in write/job paths. A standalone cleanup target
+(e.g. via `make loadtest-sweep`) removes any `tf-load-` leftovers.
+
+**Running the suite:**
+
+```sh
+# Set the gate and allowed endpoint
+export TRUENAS_LOAD=1 TRUENAS_LOAD_ALLOWED_ENDPOINT=$TRUENAS_ENDPOINT
+
+# Run all load tests (client + Terraform)
+make loadtest
+
+# Run only client-level stress tests
+make loadtest-client
+
+# Run only Terraform end-to-end tests
+make loadtest-tf
+```
+
+## 10. Regression cadence and release verification
 
 - **Per change:** unit suite + the affected packages live on the primary
   box; both releases when the change touches shared client/schema code.
