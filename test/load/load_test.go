@@ -26,30 +26,33 @@ func envInt(key string, def int) int {
 	return def
 }
 
-// applyDestroy generates a config of n datasets, applies at the given
-// parallelism, then destroys. Fails on any error surfaced to the user, and
-// on any "Rate Limit Exceeded" in Terraform's output. Returns the apply log.
+// applyDestroy generates a config of n uniquely-named datasets, applies at the
+// given parallelism, then destroys them synchronously before returning — so a
+// sustained loop does not accumulate datasets and concurrent callers never
+// collide on names. It marks the test failed with t.Errorf (safe to call from
+// a goroutine) on any surfaced error or rate-limit; it never calls t.Fatalf.
 func applyDestroy(t *testing.T, cliCfg string, n, parallelism int) {
 	t.Helper()
 	r := run{dir: t.TempDir()}
-	cfg := GenerateConfig(acctest.TestPool(), n, false)
+	prefix := acctest.RandName("tf-load")
+	cfg := GenerateConfig(acctest.TestPool(), prefix, n, false)
 	if err := os.WriteFile(filepath.Join(r.dir, "main.tf"), []byte(cfg), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
+		t.Errorf("write config: %v", err)
+		return
 	}
-	// dev_overrides: no init needed.
-	out, err := r.terraform(t, cliCfg, "apply", "-auto-approve",
-		"-parallelism="+strconv.Itoa(parallelism))
-	t.Cleanup(func() {
+	// Destroy exactly this run's own Terraform state before returning. Scoped
+	// to this call, so it never touches another goroutine's datasets (unlike
+	// the broad tf-load- Sweep, which is a test-level backstop only).
+	defer func() {
 		_, _ = r.terraform(t, cliCfg, "destroy", "-auto-approve", "-parallelism="+strconv.Itoa(parallelism))
-		if c := acctest.Client(); c != nil {
-			_, _ = loadtest.Sweep(context.Background(), c, acctest.TestPool())
-		}
-	})
+	}()
+	out, err := r.terraform(t, cliCfg, "apply", "-auto-approve", "-parallelism="+strconv.Itoa(parallelism))
 	if err != nil {
-		t.Fatalf("apply failed: %v\n%s", err, out)
+		t.Errorf("apply failed: %v\n%s", err, out)
+		return
 	}
 	if strings.Contains(out, "Rate Limit Exceeded") {
-		t.Fatalf("rate-limit surfaced to user during apply:\n%s", out)
+		t.Errorf("rate-limit surfaced to user during apply:\n%s", out)
 	}
 }
 
@@ -57,6 +60,11 @@ func TestLoad_TerraformApply(t *testing.T) {
 	loadtest.LoadCheck(t)
 	binDir := buildProvider(t)
 	cliCfg := writeDevOverrides(t, binDir)
+	t.Cleanup(func() {
+		if c := acctest.Client(); c != nil {
+			_, _ = loadtest.Sweep(context.Background(), c, acctest.TestPool())
+		}
+	})
 	applyDestroy(t, cliCfg, envInt("LOAD_RESOURCES", 150), envInt("LOAD_PARALLELISM", 20))
 }
 
@@ -81,6 +89,9 @@ func TestLoad_ConcurrentApplies(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+	if c := acctest.Client(); c != nil {
+		_, _ = loadtest.Sweep(context.Background(), c, acctest.TestPool())
+	}
 }
 
 // TestLoad_Sustained loops apply/destroy for LOAD_DURATION and asserts no
