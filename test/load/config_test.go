@@ -23,3 +23,26 @@ func TestGenerateConfig(t *testing.T) {
 		t.Errorf("want 2 snapshot resources:\n%s", withSnap)
 	}
 }
+
+func TestGenerateMixedConfig(t *testing.T) {
+	cfg := GenerateMixedConfig("tank", 2, 7)
+	for _, res := range []string{
+		"truenas_dataset", "truenas_zvol", "truenas_snapshot", "truenas_smb_share",
+		"truenas_nfs_share", "truenas_user", "truenas_group", "truenas_cronjob",
+	} {
+		if strings.Count(cfg, `resource "`+res+`"`) != 2 {
+			t.Errorf("want 2 %s resources", res)
+		}
+	}
+	for _, want := range []string{
+		`name = "tank/tf-load-ds-0"`,
+		`username  = "tf-load-usr-1"`,
+		"v7",                             // the variant marker
+		"truenas_dataset.ds0.mountpoint", // share depends on dataset
+		"truenas_dataset.ds1.name",       // snapshot depends on dataset
+	} {
+		if !strings.Contains(cfg, want) {
+			t.Errorf("config missing %q", want)
+		}
+	}
+}
