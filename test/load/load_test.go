@@ -9,7 +9,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/truenas/terraform-provider-truenas/internal/acctest"
 	"github.com/truenas/terraform-provider-truenas/internal/loadtest"
@@ -56,4 +58,54 @@ func TestLoad_TerraformApply(t *testing.T) {
 	binDir := buildProvider(t)
 	cliCfg := writeDevOverrides(t, binDir)
 	applyDestroy(t, cliCfg, envInt("LOAD_RESOURCES", 150), envInt("LOAD_PARALLELISM", 20))
+}
+
+// TestLoad_ConcurrentApplies runs LOAD_CONCURRENT_APPLIES independent applies
+// at once, stacking auth pressure like multiple CI pipelines. Every run must
+// converge and destroy cleanly.
+func TestLoad_ConcurrentApplies(t *testing.T) {
+	loadtest.LoadCheck(t)
+	binDir := buildProvider(t)
+	cliCfg := writeDevOverrides(t, binDir)
+	k := envInt("LOAD_CONCURRENT_APPLIES", 6)
+	perRun := envInt("LOAD_RESOURCES", 150) / k
+	if perRun < 1 {
+		perRun = 1
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < k; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			applyDestroy(t, cliCfg, perRun, envInt("LOAD_PARALLELISM", 20))
+		}()
+	}
+	wg.Wait()
+}
+
+// TestLoad_Sustained loops apply/destroy for LOAD_DURATION and asserts no
+// leaked tf-load- objects remain at the end.
+func TestLoad_Sustained(t *testing.T) {
+	loadtest.LoadCheck(t)
+	binDir := buildProvider(t)
+	cliCfg := writeDevOverrides(t, binDir)
+	dur, err := time.ParseDuration(os.Getenv("LOAD_DURATION"))
+	if err != nil {
+		dur = 10 * time.Minute
+	}
+	deadline := time.Now().Add(dur)
+	iter := 0
+	for time.Now().Before(deadline) {
+		iter++
+		applyDestroy(t, cliCfg, 20, envInt("LOAD_PARALLELISM", 20))
+	}
+	t.Logf("sustained: completed %d apply/destroy iterations over %s", iter, dur)
+	c := acctest.Client()
+	left, err := loadtest.Sweep(context.Background(), c, acctest.TestPool())
+	if err != nil {
+		t.Fatalf("final sweep: %v", err)
+	}
+	if left > 0 {
+		t.Fatalf("%d tf-load- objects leaked after sustained run", left)
+	}
 }
