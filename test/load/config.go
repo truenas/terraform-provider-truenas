@@ -104,6 +104,9 @@ resource "truenas_user" "usr%d" {
   full_name = "load v%d"
   password = "Tf-Load-Passw0rd!"
   shell = "/usr/sbin/nologin"
+  home = "/var/empty"
+  smb = false
+  group_create = true
 }
 
 resource "truenas_group" "grp%d" {
