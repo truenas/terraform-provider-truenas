@@ -6,7 +6,7 @@ INSTALL_DIR   = ~/.terraform.d/plugins/registry.terraform.io/truenas/truenas/$(V
 .PHONY: default build install test testacc testacc-safe testacc-disruptive generate fmt lint \
         test-inventory api-calls go-deps sbom \
         release-check build-snapshot release-snapshot \
-        loadtest loadtest-client loadtest-tf
+        loadtest loadtest-client loadtest-tf loadtest-sweep
 
 default: build
 
@@ -86,3 +86,7 @@ loadtest-client:
 
 loadtest-tf:
 	TF_ACC=1 go test ./test/load/ -run TestLoad_ -v -count=1 -timeout 60m
+
+# Delete stranded tf-load- datasets after a crashed/killed load run.
+loadtest-sweep:
+	TF_ACC=1 go test ./internal/client/ -run '^TestLoadSweep$$' -v -count=1 -timeout 10m

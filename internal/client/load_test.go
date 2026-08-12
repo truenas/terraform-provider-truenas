@@ -171,3 +171,25 @@ func TestLoad_CallSaturation(t *testing.T) {
 	t.Logf("call/calljob surfaced failures: call=%d calljob=%d (recorded finding, see results/)",
 		snap.Failures["call"], snap.Failures["calljob"])
 }
+
+// TestLoadSweep is the standalone entry point behind `make loadtest-sweep`: it
+// connects and deletes any tf-load- datasets left behind by a crashed or
+// killed load run. Its name deliberately lacks the TestLoad_ prefix so the
+// `-run TestLoad_` make targets do not sweep as a side effect.
+func TestLoadSweep(t *testing.T) {
+	loadtest.LoadCheck(t)
+	ctx := context.Background()
+	tlsCfg, _ := client.BuildTLSConfig(true, "")
+	c := client.New(acctest.Endpoint(), tlsCfg)
+	if err := c.Connect(ctx, func(ctx context.Context) error {
+		return client.AuthAPIKeyAuto(ctx, c, os.Getenv("TRUENAS_USERNAME"), os.Getenv("TRUENAS_API_KEY"))
+	}); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer c.Close()
+	n, err := loadtest.Sweep(ctx, c, acctest.TestPool())
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	t.Logf("swept %d tf-load- datasets", n)
+}
