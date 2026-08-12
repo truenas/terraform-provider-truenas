@@ -120,3 +120,58 @@ func TestLoad_Sustained(t *testing.T) {
 		t.Fatalf("%d tf-load- objects leaked after sustained run", left)
 	}
 }
+
+// applyMixed writes a mixed config of n-per-type resources, applies it, then
+// re-applies a variant (an in-place update), then destroys — exercising
+// Create, Read, and Update across many resource types under load. Failures use
+// t.Errorf (never t.Fatalf) to stay goroutine-safe if a caller parallelises.
+func applyMixed(t *testing.T, cliCfg string, n, parallelism int) {
+	t.Helper()
+	r := run{dir: t.TempDir()}
+	write := func(variant int) error {
+		cfg := GenerateMixedConfig(acctest.TestPool(), n, variant)
+		return os.WriteFile(filepath.Join(r.dir, "main.tf"), []byte(cfg), 0o644)
+	}
+	if err := write(0); err != nil {
+		t.Errorf("write config: %v", err)
+		return
+	}
+	defer func() {
+		_, _ = r.terraform(t, cliCfg, "destroy", "-auto-approve", "-parallelism="+strconv.Itoa(parallelism))
+	}()
+	out, err := r.terraform(t, cliCfg, "apply", "-auto-approve", "-parallelism="+strconv.Itoa(parallelism))
+	if err != nil {
+		t.Errorf("apply(create) failed: %v\n%s", err, out)
+		return
+	}
+	if strings.Contains(out, "Rate Limit Exceeded") || strings.Contains(out, "concurrent calls") {
+		t.Errorf("rate/concurrency limit surfaced on create:\n%s", out)
+		return
+	}
+	if err := write(1); err != nil {
+		t.Errorf("write update config: %v", err)
+		return
+	}
+	out, err = r.terraform(t, cliCfg, "apply", "-auto-approve", "-parallelism="+strconv.Itoa(parallelism))
+	if err != nil {
+		t.Errorf("apply(update) failed: %v\n%s", err, out)
+		return
+	}
+	if strings.Contains(out, "Rate Limit Exceeded") || strings.Contains(out, "concurrent calls") {
+		t.Errorf("rate/concurrency limit surfaced on update:\n%s", out)
+	}
+}
+
+// TestLoad_MixedResources drives a spread of eight resource types through
+// apply -> in-place update -> destroy at high parallelism.
+func TestLoad_MixedResources(t *testing.T) {
+	loadtest.LoadCheck(t)
+	binDir := buildProvider(t)
+	cliCfg := writeDevOverrides(t, binDir)
+	t.Cleanup(func() {
+		if c := acctest.Client(); c != nil {
+			_, _ = loadtest.Sweep(context.Background(), c, acctest.TestPool())
+		}
+	})
+	applyMixed(t, cliCfg, envInt("LOAD_MIXED_PER_TYPE", 10), envInt("LOAD_PARALLELISM", 20))
+}
