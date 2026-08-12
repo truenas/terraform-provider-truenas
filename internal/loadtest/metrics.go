@@ -19,6 +19,7 @@ type Metrics struct {
 	retries      int
 	totalBackoff time.Duration
 	failures     map[string]int
+	samples      map[string]string
 }
 
 // Snapshot is an immutable copy of a Metrics state for reporting.
@@ -28,9 +29,14 @@ type Snapshot struct {
 	Retries       int
 	TotalBackoff  time.Duration
 	Failures      map[string]int
+	// FailureSamples holds one representative error string per failure class,
+	// so a report shows WHAT failed, not just how many.
+	FailureSamples map[string]string
 }
 
-func NewMetrics() *Metrics { return &Metrics{failures: map[string]int{}} }
+func NewMetrics() *Metrics {
+	return &Metrics{failures: map[string]int{}, samples: map[string]string{}}
+}
 
 func (m *Metrics) RecordAttempt()   { m.mu.Lock(); m.attempts++; m.mu.Unlock() }
 func (m *Metrics) RecordRateLimit() { m.mu.Lock(); m.rateLimits++; m.mu.Unlock() }
@@ -48,6 +54,17 @@ func (m *Metrics) RecordFailure(class string) {
 	m.mu.Unlock()
 }
 
+// RecordFailureSample records both a failure in class and, if none is stored
+// yet for that class, keeps msg as the representative error string.
+func (m *Metrics) RecordFailureSample(class, msg string) {
+	m.mu.Lock()
+	m.failures[class]++
+	if _, ok := m.samples[class]; !ok {
+		m.samples[class] = msg
+	}
+	m.mu.Unlock()
+}
+
 func (m *Metrics) Snapshot() Snapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -55,11 +72,16 @@ func (m *Metrics) Snapshot() Snapshot {
 	for k, v := range m.failures {
 		f[k] = v
 	}
+	s := make(map[string]string, len(m.samples))
+	for k, v := range m.samples {
+		s[k] = v
+	}
 	return Snapshot{
-		Attempts:      m.attempts,
-		RateLimitHits: m.rateLimits,
-		Retries:       m.retries,
-		TotalBackoff:  m.totalBackoff,
-		Failures:      f,
+		Attempts:       m.attempts,
+		RateLimitHits:  m.rateLimits,
+		Retries:        m.retries,
+		TotalBackoff:   m.totalBackoff,
+		Failures:       f,
+		FailureSamples: s,
 	}
 }

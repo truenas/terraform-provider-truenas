@@ -58,6 +58,18 @@ func Report(dir string, in ReportInput) (string, string, error) {
 		}
 		b.WriteString("\n")
 	}
+	if len(in.Snap.FailureSamples) > 0 {
+		b.WriteString("## Sample error per failure class\n\n")
+		keys := make([]string, 0, len(in.Snap.FailureSamples))
+		for k := range in.Snap.FailureSamples {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			fmt.Fprintf(&b, "- %s: %s\n", k, in.Snap.FailureSamples[k])
+		}
+		b.WriteString("\n")
+	}
 	if len(in.Notes) > 0 {
 		b.WriteString("## Notes\n\n")
 		keys := make([]string, 0, len(in.Notes))
@@ -77,7 +89,8 @@ func Report(dir string, in ReportInput) (string, string, error) {
 		"name": in.Name, "stamp": in.Stamp, "wall_seconds": in.Wall.Seconds(),
 		"attempts": in.Snap.Attempts, "rate_limit_hits": in.Snap.RateLimitHits,
 		"retries": in.Snap.Retries, "total_backoff_seconds": in.Snap.TotalBackoff.Seconds(),
-		"throughput_ops_s": tps, "failures": in.Snap.Failures, "notes": in.Notes,
+		"throughput_ops_s": tps, "failures": in.Snap.Failures,
+		"failure_samples": in.Snap.FailureSamples, "notes": in.Notes,
 	}
 	jb, err := json.MarshalIndent(j, "", "  ")
 	if err != nil {

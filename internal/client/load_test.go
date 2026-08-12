@@ -149,7 +149,7 @@ func TestLoad_CallSaturation(t *testing.T) {
 				if client.IsRateLimited(err) {
 					m.RecordRateLimit()
 				}
-				m.RecordFailure(class)
+				m.RecordFailureSample(class, err.Error())
 			}
 		}(i)
 	}
