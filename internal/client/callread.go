@@ -32,6 +32,11 @@ var readRetryDelays = []time.Duration{2 * time.Second, 5 * time.Second, 10 * tim
 //     genuine API response.
 //   - a TrueNAS rate-limit rejection (*APIError with Code == 16, or whose
 //     Message contains "Rate Limit", case-insensitively).
+//   - a concurrent-call-cap rejection (*APIError with Code == -32000, or
+//     whose Message contains "concurrent calls"). The client's own
+//     concurrency limiter (see Client.sem) keeps this from occurring for our
+//     calls, but retrying it defends against a transient overflow (e.g.
+//     another client sharing the box, or a burst during reconnect).
 //
 // Any other *APIError (EINVAL, ENOENT/code 2, ...) is a real API response,
 // not a transient condition, and must NOT be retried — retrying those would
@@ -42,7 +47,9 @@ func isTransient(err error) bool {
 	}
 	var apiErr *APIError
 	if errors.As(err, &apiErr) {
-		return apiErr.Code == 0 || apiErr.Code == 16 || strings.Contains(strings.ToLower(apiErr.Message), "rate limit")
+		msg := strings.ToLower(apiErr.Message)
+		return apiErr.Code == 0 || apiErr.Code == 16 || apiErr.Code == -32000 ||
+			strings.Contains(msg, "rate limit") || strings.Contains(msg, "concurrent calls")
 	}
 	return true
 }

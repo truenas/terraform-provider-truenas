@@ -116,6 +116,13 @@ type Client struct {
 
 	writeMu sync.Mutex
 
+	// sem bounds the number of in-flight concurrent RPCs. TrueNAS rejects
+	// calls beyond a per-connection cap (~20) with JSON-RPC error -32000
+	// ("Maximum number of concurrent calls exceeded"); acquiring a slot in
+	// Call makes excess calls queue instead of failing. Sized below the
+	// server cap for headroom; override with WithMaxConcurrentCalls.
+	sem chan struct{}
+
 	pendingMu sync.Mutex
 	pending   map[uint64]*pendingCall
 
@@ -139,8 +146,25 @@ const (
 	userAgentURL  = "https://github.com/truenas/terraform-provider-truenas"
 )
 
+// defaultMaxConcurrentCalls is the in-flight RPC ceiling used when
+// WithMaxConcurrentCalls is not given. It sits below TrueNAS's per-connection
+// cap of 20 so a little headroom remains for any out-of-band call.
+const defaultMaxConcurrentCalls = 16
+
 // Option configures optional Client behavior at construction time.
 type Option func(*Client)
+
+// WithMaxConcurrentCalls caps the number of in-flight concurrent RPCs the
+// client will have outstanding at once. Calls beyond the cap block until a
+// slot frees, rather than being rejected by TrueNAS with error -32000. A
+// value < 1 is ignored (the default is kept).
+func WithMaxConcurrentCalls(n int) Option {
+	return func(c *Client) {
+		if n >= 1 {
+			c.sem = make(chan struct{}, n)
+		}
+	}
+}
 
 // WithUserAgent sets the User-Agent header sent on the WebSocket handshake
 // to identify this provider (and its version) to the TrueNAS middleware.
@@ -167,6 +191,9 @@ func New(endpoint string, tlsCfg *tls.Config, opts ...Option) *Client {
 	}
 	for _, opt := range opts {
 		opt(c)
+	}
+	if c.sem == nil {
+		c.sem = make(chan struct{}, defaultMaxConcurrentCalls)
 	}
 	return c
 }
@@ -289,6 +316,16 @@ func (c *Client) failPending(err error) {
 
 // Call invokes a TrueNAS method and returns the raw JSON result.
 func (c *Client) Call(ctx context.Context, method string, params ...any) (json.RawMessage, error) {
+	// Bound in-flight concurrent RPCs (see the sem field): acquire a slot or
+	// wait, so calls beyond the server's per-connection cap queue instead of
+	// failing with -32000. Released on every return path via defer.
+	select {
+	case c.sem <- struct{}{}:
+		defer func() { <-c.sem }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
 	id := c.seq.Add(1)
 	p := &pendingCall{ch: make(chan callResult, 1)}
 

@@ -22,6 +22,8 @@ func TestIsTransient(t *testing.T) {
 		{"plain transport error", fmt.Errorf("connection closed: websocket: close 1006"), true},
 		{"not connected", fmt.Errorf("not connected"), true},
 		{"failPending-wrapped connection-closed (Code 0 APIError)", &APIError{Code: 0, Message: "connection closed: websocket: close 1006 (abnormal closure): unexpected EOF"}, true},
+		{"concurrent-call cap APIError code -32000", &APIError{Code: -32000, Message: "Maximum number of concurrent calls (20) has exceeded"}, true},
+		{"concurrent-call cap by message only", &APIError{Code: 22, Message: "Maximum number of concurrent calls (20) has exceeded"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
