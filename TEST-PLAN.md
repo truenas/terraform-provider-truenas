@@ -315,9 +315,11 @@ so the default suite stays green.
 | `LOAD_PARALLELISM` | 20 | terraform apply `-parallelism` value |
 | `LOAD_CONCURRENT_APPLIES` | 6 | Simultaneous independent applies in `TestLoad_ConcurrentApplies` |
 | `LOAD_DURATION` | 10m | Loop duration for `TestLoad_Sustained` |
+| `LOAD_JOB_COUNT` | 30 | Datasets pre-created for job-saturation stress in `TestLoad_JobSaturation` |
+| `LOAD_MIXED_PER_TYPE` | 10 | Number of each resource type in `TestLoad_MixedResources` |
 | `TRUENAS_TEST_POOL` | `tank` | Pool where load-test objects are created |
 
-**Five tests:**
+**Seven tests:**
 
 - **`TestLoad_AuthBurst`** — launches `LOAD_AUTH_CONNS` concurrent `Connect()`
   calls to prove that the client's `WithRetry` backoff (5s, 10s, 20s, 30s)
@@ -347,13 +349,24 @@ so the default suite stays green.
   proving the provider sustains repeated cycles without cumulative
   degradation, object leaks, or per-iteration slowdown.
 
+- **`TestLoad_JobSaturation`** — pre-creates `LOAD_JOB_COUNT` (default 30)
+  datasets, then deletes them all concurrently via `CallJob` (each submits a
+  job and polls `core.get_jobs`), stressing the job and poll path against the
+  client's concurrency limiter. Passes when no errors surface.
+
+- **`TestLoad_MixedResources`** — drives eight resource types (dataset, zvol,
+  snapshot, smb_share, nfs_share, user, group, cronjob), `LOAD_MIXED_PER_TYPE`
+  (default 10) each, through apply → in-place update → destroy at
+  `LOAD_PARALLELISM`.
+
 **Reports and cleanup:**
 
 Every test creates objects prefixed `tf-load-`. Characterization reports
 (Markdown + JSON) land in `results/` (gitignored), showing login ceiling,
 per-call throttle onset, backoff totals, throughput, and the count of
 surfaced rate-limit errors in write/job paths. A standalone cleanup target
-(e.g. via `make loadtest-sweep`) removes any `tf-load-` leftovers.
+(e.g. via `make loadtest-sweep`) removes datasets, zvols, snapshots, SMB
+shares, NFS shares, users, groups, and cronjobs prefixed `tf-load-`.
 
 **Running the suite:**
 
