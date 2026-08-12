@@ -38,6 +38,9 @@ fi
 : "${TRUENAS_API_KEY:?set TRUENAS_API_KEY (or add it to .load-test.env)}"
 : "${TRUENAS_USERNAME:?set TRUENAS_USERNAME (or add it to .load-test.env)}"
 
+# Export so the make / go test child processes inherit them, whether they
+# came from the environment or from a sourced .load-test.env without `export`.
+export TRUENAS_ENDPOINT TRUENAS_API_KEY TRUENAS_USERNAME
 export TF_ACC=1
 export TRUENAS_LOAD=1
 export TRUENAS_LOAD_ALLOWED_ENDPOINT="$TRUENAS_ENDPOINT"
