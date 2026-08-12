@@ -172,6 +172,73 @@ func TestLoad_CallSaturation(t *testing.T) {
 		snap.Failures["call"], snap.Failures["calljob"])
 }
 
+// TestLoad_JobSaturation pre-creates LOAD_JOB_COUNT datasets, then deletes
+// them all concurrently via CallJob — each submits a delete job and polls
+// core.get_jobs, so this holds many jobs open at once and stresses the
+// job+poll path against the client's concurrency semaphore. Any surfaced
+// error (especially -32000) is a failure.
+func TestLoad_JobSaturation(t *testing.T) {
+	loadtest.LoadCheck(t)
+	ctx := context.Background()
+	count := envInt("LOAD_JOB_COUNT", 30)
+	pool := acctest.TestPool()
+
+	tlsCfg, _ := client.BuildTLSConfig(true, "")
+	c := client.New(acctest.Endpoint(), tlsCfg)
+	if err := c.Connect(ctx, func(ctx context.Context) error {
+		return client.AuthAPIKeyAuto(ctx, c, os.Getenv("TRUENAS_USERNAME"), os.Getenv("TRUENAS_API_KEY"))
+	}); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() {
+		if n, err := loadtest.Sweep(context.Background(), c, pool); err != nil {
+			t.Logf("sweep: %v (deleted %d)", err, n)
+		}
+		c.Close()
+	})
+
+	// Pre-create the datasets to delete. dataset id == its name, so we delete
+	// by the name we created.
+	names := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		name := fmt.Sprintf("%s/%s", pool, acctest.RandName("tf-load"))
+		if _, err := c.Call(ctx, "pool.dataset.create", map[string]any{"name": name}); err != nil {
+			t.Fatalf("precreate dataset %d: %v", i, err)
+		}
+		names = append(names, name)
+	}
+
+	m := loadtest.NewMetrics()
+	start := time.Now()
+	var wg sync.WaitGroup
+	for _, name := range names {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			m.RecordAttempt()
+			if _, err := c.CallJob(ctx, "pool.dataset.delete", name,
+				map[string]any{"recursive": true, "force": true}); err != nil {
+				if client.IsRateLimited(err) {
+					m.RecordRateLimit()
+				}
+				m.RecordFailureSample("calljob", err.Error())
+			}
+		}(name)
+	}
+	wg.Wait()
+	wall := time.Since(start)
+
+	snap := m.Snapshot()
+	_, _, _ = loadtest.Report("results", loadtest.ReportInput{
+		Name: "jobsaturation", Stamp: stamp(), Wall: wall, Snap: snap,
+		Notes: map[string]string{"jobs": strconv.Itoa(count)},
+	})
+	if snap.Failures["calljob"] > 0 {
+		t.Fatalf("%d/%d concurrent delete jobs surfaced errors (see results/) — sample: %s",
+			snap.Failures["calljob"], count, snap.FailureSamples["calljob"])
+	}
+}
+
 // TestLoadSweep is the standalone entry point behind `make loadtest-sweep`: it
 // connects and deletes any tf-load- datasets left behind by a crashed or
 // killed load run. Its name deliberately lacks the TestLoad_ prefix so the
