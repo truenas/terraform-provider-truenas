@@ -51,8 +51,6 @@ type run struct{ dir string }
 // TF_LOG=INFO captured into r.dir/tf.log. Returns combined stdout+stderr.
 func (r run) terraform(t *testing.T, cliCfg string, args ...string) (string, error) {
 	t.Helper()
-	logf, _ := os.Create(filepath.Join(r.dir, "tf.log"))
-	defer logf.Close()
 	cmd := exec.Command("terraform", args...)
 	cmd.Dir = r.dir
 	cmd.Env = append(os.Environ(),
