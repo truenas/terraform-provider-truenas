@@ -106,11 +106,11 @@ func TestLoad_CallSaturation(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer c.Close()
 	t.Cleanup(func() {
 		if n, err := loadtest.Sweep(context.Background(), c, pool); err != nil {
 			t.Logf("sweep: %v (deleted %d)", err, n)
 		}
+		c.Close()
 	})
 
 	// Pre-create one dataset for the snapshot (Call) path.
