@@ -1,0 +1,7 @@
+# Default owners for everything in this repository. All pull requests
+# request a review from these owners.
+#
+# Replace the placeholder team below with the real GitHub team or
+# usernames that maintain this provider before enabling branch protection
+# that requires code-owner review.
+* @truenas/terraform-provider-maintainers

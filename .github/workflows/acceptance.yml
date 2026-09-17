@@ -1,0 +1,46 @@
+# Acceptance tests against real TrueNAS systems.
+#
+# This provider's testing policy is "no mocks": acceptance tests talk to a
+# live TrueNAS box. They therefore run on a SELF-HOSTED runner that
+# has network access to the lab (a scratch pool box; some suites also need
+# directory servers and an HA pair — see TEST-PLAN.md). This workflow is
+# manual (workflow_dispatch) so runs are deliberate and paced against the
+# auth rate limit.
+#
+# Configure as repository secrets on the self-hosted environment:
+#   TRUENAS_ENDPOINT, TRUENAS_API_KEY (and, per suite, TRUENAS_USERNAME,
+#   TRUENAS_DS_*, TRUENAS_HA_* — see TEST-PLAN.md §3.4 and §4).
+name: Acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: 'Which tier to run'
+        required: true
+        default: 'safe'
+        type: choice
+        options:
+          - safe
+          - disruptive
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: [self-hosted, truenas-lab]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - name: Run acceptance tests (${{ inputs.tier }})
+        env:
+          TRUENAS_ENDPOINT: ${{ secrets.TRUENAS_ENDPOINT }}
+          TRUENAS_API_KEY: ${{ secrets.TRUENAS_API_KEY }}
+          TRUENAS_USERNAME: ${{ secrets.TRUENAS_USERNAME }}
+          TRUENAS_TEST_POOL: ${{ vars.TRUENAS_TEST_POOL }}
+        run: make testacc-${{ inputs.tier }}
