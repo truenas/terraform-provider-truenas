@@ -1,0 +1,49 @@
+name: Bug report
+description: Report a problem with the TrueNAS Terraform provider
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please do not include API keys, passwords, or
+        other secrets in this issue — redact them from any logs or config.
+  - type: input
+    id: provider_version
+    attributes:
+      label: Provider version
+      placeholder: "e.g. 1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: terraform_version
+    attributes:
+      label: Terraform version
+      placeholder: "e.g. 1.11.0"
+    validations:
+      required: true
+  - type: input
+    id: truenas_version
+    attributes:
+      label: TrueNAS version
+      placeholder: "e.g. 25.10.3.1 or 26.0"
+    validations:
+      required: true
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened
+      description: What you expected, and what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Terraform configuration
+      description: A minimal configuration that reproduces the problem (secrets redacted).
+      render: hcl
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output / logs
+      description: Relevant plan/apply output or provider logs (secrets redacted).
+      render: shell
