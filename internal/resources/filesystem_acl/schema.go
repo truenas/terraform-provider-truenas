@@ -1,0 +1,122 @@
+// Copyright TrueNAS 2026
+// SPDX-License-Identifier: MPL-2.0
+
+package filesystem_acl
+
+import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+)
+
+func resourceSchema() schema.Schema {
+	return schema.Schema{
+		Description: "Declaratively sets the Access Control List (ACL) on an existing filesystem path via " +
+			"filesystem.setacl (probed live: job:true), keyed by path rather than a TrueNAS-assigned id - " +
+			"the sibling of truenas_filesystem_permissions for ACL entries instead of mode bits. " +
+			"filesystem.getacl/setacl entry shapes match truenas_acl_template's NFS4ACE/POSIXACE union " +
+			"(BASIC shorthand perms/flags vs. a bag of individual booleans), re-probed live here directly " +
+			"against getacl/setacl rather than importing acl_template's package (its types are unexported " +
+			"by design). One POSIX1E-specific rule was discovered live and is NOT present in acl_template's " +
+			"probe: a POSIX1E ACL with any named USER/GROUP entry requires exactly one MASK entry to be " +
+			"present, or filesystem.setacl fails with EINVAL (\"Named (user or group) POSIX ACL entries " +
+			"require a mask entry to be present in the ACL\"). " +
+			"\n\nNOTE on acltype: a dataset's acltype is inherited from its parent unless set explicitly " +
+			"(truenas_dataset's \"acltype\" attribute, e.g. \"nfsv4\"); on this provider's probe pool the " +
+			"\"tank\" root has acltype=POSIX set LOCAL, so child datasets default to POSIX1E entries unless " +
+			"created with an explicit NFS4 override - this resource does not itself set acltype (filesystem." +
+			"setacl auto-detects it from the underlying path when omitted), it only exposes the detected " +
+			"value as Computed \"acltype\".\n\n" +
+			"Delete semantics (decisive, probed live on both NFS4 and POSIX1E - see the task report for " +
+			"verbatim before/after evidence): `terraform destroy` calls filesystem.setacl with " +
+			"options.stripacl=true, which cleanly converts the path's ACL to a trivial one fully expressible " +
+			"as a UNIX mode (filesystem.getacl reports \"trivial\": true afterward; filesystem.stat's \"acl\" " +
+			"field becomes false). This was a clean strip in both probed brands, so - per this task's " +
+			"documented decision rule (\"strip if clean else state-only+warning\") - Delete strips rather " +
+			"than leaving the ACL in place. A warning diagnostic is still emitted, since this does mutate " +
+			"the path outside of Terraform's usual \"just forget state\" convention; the path's mode/uid/gid " +
+			"themselves are untouched.",
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				Computed:    true,
+				Description: "Same as \"path\" - this resource is keyed by filesystem path, not a TrueNAS-assigned id.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"path": schema.StringAttribute{
+				Required:    true,
+				Description: "Absolute filesystem path (e.g. \"/mnt/tank/mydata\") to set the ACL on. Changing this forces a new resource.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"acltype": schema.StringAttribute{
+				Computed: true,
+				Description: "ACL type in effect on this path: \"NFS4\" or \"POSIX1E\" (probed live via " +
+					"filesystem.getacl's \"acltype\" field). This resource never sets acltype itself - it is " +
+					"determined by the underlying dataset/filesystem (see truenas_dataset's \"acltype\") and " +
+					"only exposed here so \"entries\" can be validated against the right shape. Changing the " +
+					"underlying dataset's acltype out-of-band while entries are still shaped for the old " +
+					"acltype will surface as a filesystem.setacl error on the next apply, not silently.",
+			},
+			"entries": schema.StringAttribute{
+				Required: true,
+				Description: "JSON array of Access Control Entries, in the exact shape filesystem.setacl's " +
+					"\"dacl\" parameter accepts (probed live via core.get_methods + a real getacl/setacl round " +
+					"trip; identical union shape to truenas_acl_template's \"acl\" field). For acltype \"NFS4\", " +
+					"each entry is {\"tag\": \"owner@\"|\"group@\"|\"everyone@\"|\"USER\"|\"GROUP\", \"type\": " +
+					"\"ALLOW\"|\"DENY\", \"perms\": {\"BASIC\": \"FULL_CONTROL\"|\"MODIFY\"|\"READ\"|\"TRAVERSE\"} " +
+					"or an object of individual boolean permission flags (READ_DATA, WRITE_DATA, ..., " +
+					"SYNCHRONIZE), \"flags\": {\"BASIC\": \"INHERIT\"|\"NOINHERIT\"} or an object of individual " +
+					"boolean inheritance flags (FILE_INHERIT, DIRECTORY_INHERIT, NO_PROPAGATE_INHERIT, " +
+					"INHERIT_ONLY, INHERITED), plus optional \"id\" (uid/gid, required when tag is USER/GROUP) " +
+					"and \"who\" (username/group name, alternative to id). For acltype \"POSIX1E\", each entry " +
+					"is {\"tag\": \"USER_OBJ\"|\"GROUP_OBJ\"|\"OTHER\"|\"MASK\"|\"USER\"|\"GROUP\", \"perms\": " +
+					"{\"READ\": bool, \"WRITE\": bool, \"EXECUTE\": bool}, \"default\": bool (whether this ACE " +
+					"applies to newly created child objects), plus optional \"id\"/\"who\" - probed live and " +
+					"decisive: a POSIX1E ACL containing any named USER or GROUP entry MUST also include exactly " +
+					"one MASK entry, or filesystem.setacl rejects the whole ACL with EINVAL. On read, an \"id\" " +
+					"of -1 or null (both observed live for entries where tag isn't USER/GROUP - a real uid/gid " +
+					"is never -1) is normalized away rather than causing perpetual drift; the exact JSON text " +
+					"is otherwise preserved as configured (write-what-you-said) unless the server-side content " +
+					"genuinely changes. TrueNAS may reorder ACL entries server-side on write (observed live with " +
+					"POSIX1E ACLs, e.g. USER_OBJ, USER, GROUP_OBJ, MASK, OTHER ordering); if the configured entry " +
+					"order differs from the server's canonical order, the provider reports drift — write POSIX1E " +
+					"entries in the server's canonical order. NFS4 ACLs were not observed to reorder.",
+			},
+			"uid": schema.Int64Attribute{
+				Optional: true,
+				Computed: true,
+				Description: "Numeric user ID to set as the path's owner via filesystem.setacl's \"uid\" " +
+					"parameter (probed live). Read back from filesystem.getacl's \"uid\" field. Omit to leave " +
+					"the path's existing owner unchanged.",
+				Validators: []validator.Int64{int64validator.Between(-1, 2147483647)},
+			},
+			"gid": schema.Int64Attribute{
+				Optional: true,
+				Computed: true,
+				Description: "Numeric group ID to set as the path's group owner via filesystem.setacl's " +
+					"\"gid\" parameter (probed live). Read back from filesystem.getacl's \"gid\" field. Omit " +
+					"to leave the path's existing group owner unchanged.",
+				Validators: []validator.Int64{int64validator.Between(-1, 2147483647)},
+			},
+			"recursive": schema.BoolAttribute{
+				Optional: true,
+				Description: "Apply the ACL recursively to everything under \"path\" (filesystem.setacl's " +
+					"\"options.recursive\"). This is an apply-time instruction, not a queryable property of " +
+					"the path - TrueNAS has nothing to read it back from, so it is not Computed, is never " +
+					"echoed into state, and must be ignored on import (ImportStateVerifyIgnore). Defaults to " +
+					"false. Never used by Delete, which only ever strips the exact managed path.",
+			},
+			"traverse": schema.BoolAttribute{
+				Optional: true,
+				Description: "When \"recursive\" is set, also cross into child dataset boundaries " +
+					"(filesystem.setacl's \"options.traverse\"). Same apply-time-only caveats as \"recursive\" " +
+					"apply here. Defaults to false.",
+			},
+		},
+	}
+}
