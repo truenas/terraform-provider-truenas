@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/truenas/terraform-provider-truenas/security/advisories/new
+    about: Report security issues privately — do not open a public issue. See SECURITY.md.
+  - name: TrueNAS community
+    url: https://www.truenas.com/community/
+    about: Questions about TrueNAS itself (not the Terraform provider).

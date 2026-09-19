@@ -1,0 +1,1 @@
+terraform import truenas_alert_policy.default alert_policy
