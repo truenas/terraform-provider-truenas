@@ -1,0 +1,22 @@
+name: Feature request
+description: Suggest a new resource, data source, or capability
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve
+      description: The use case or workflow you are trying to support.
+    validations:
+      required: true
+  - type: input
+    id: api_surface
+    attributes:
+      label: Relevant TrueNAS API namespace
+      description: If known, the middleware namespace/method this would wrap (e.g. `certificate`, `pool.scrub`).
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed configuration
+      description: A sketch of the Terraform configuration you would like to write.
+      render: hcl
