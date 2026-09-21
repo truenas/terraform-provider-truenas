@@ -1,0 +1,21 @@
+# Copyright TrueNAS 2026
+# SPDX-License-Identifier: MPL-2.0
+
+# golangci-lint v2 configuration.
+# The default linter set (errcheck, govet, ineffassign, staticcheck,
+# unused) applies to the provider itself (internal/, main.go). errcheck is
+# relaxed in two places where guarding every return adds noise without
+# value: test files (Close/Remove/WriteString in setup and t.Cleanup), and
+# the cmd/ probe/diagnostic tooling (throwaway programs that print-and-exit,
+# not part of the shipped provider).
+version: "2"
+
+linters:
+  exclusions:
+    rules:
+      - path: '_test\.go'
+        linters:
+          - errcheck
+      - path: '^cmd/'
+        linters:
+          - errcheck

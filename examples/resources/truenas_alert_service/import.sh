@@ -1,0 +1,1 @@
+terraform import truenas_alert_service.ops_mail 1
