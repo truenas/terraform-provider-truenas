@@ -1,0 +1,82 @@
+# Copyright TrueNAS 2026
+# SPDX-License-Identifier: MPL-2.0
+
+# GoReleaser configuration for terraform-provider-truenas.
+# Produces the cross-platform, checksummed, GPG-signed archives the
+# Terraform Registry ingests. Triggered by the release workflow on a
+# semver tag (vX.Y.Z).
+#
+# Requires (set in the release workflow / environment):
+#   GPG_FINGERPRINT  — fingerprint of the signing key
+#   the private signing key imported into the gpg keyring
+version: 2
+
+# Pin the project name so every artifact is named terraform-provider-truenas_*
+# regardless of the git repository's name. The Terraform Registry requires
+# this exact prefix; without it GoReleaser would derive the name from the repo.
+project_name: terraform-provider-truenas
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    flags:
+      - -trimpath
+    ldflags:
+      - '-s -w -X main.version={{ .Version }} -X main.commit={{ .Commit }}'
+    goos:
+      - freebsd
+      - windows
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - '386'
+      - arm
+      - arm64
+    ignore:
+      - goos: darwin
+        goarch: '386'
+    binary: '{{ .ProjectName }}_v{{ .Version }}'
+
+archives:
+  - formats: ['zip']
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+
+checksum:
+  extra_files:
+    - glob: 'terraform-registry-manifest.json'
+      name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
+  name_template: '{{ .ProjectName }}_{{ .Version }}_SHA256SUMS'
+  algorithm: sha256
+
+# NOTE: per-binary SBOMs are intentionally NOT generated here. GoReleaser's
+# `sboms:` pipe adds every SBOM to SHA256SUMS, and the Terraform Registry
+# rejects a checksums file that lists SBOMs ("missing files in request body").
+# Instead the release workflow generates the SBOMs from the built binaries and
+# uploads them as extra release assets AFTER GoReleaser, so they land on the
+# GitHub release but stay out of SHA256SUMS. See scripts/gen-release-sboms.sh.
+# Local equivalent for a source SBOM: `make sbom`.
+
+signs:
+  - artifacts: checksum
+    args:
+      - "--batch"
+      - "--local-user"
+      - "{{ .Env.GPG_FINGERPRINT }}"
+      - "--output"
+      - "${signature}"
+      - "--detach-sign"
+      - "${artifact}"
+
+release:
+  extra_files:
+    - glob: 'terraform-registry-manifest.json'
+      name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
+
+changelog:
+  disable: true

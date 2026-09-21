@@ -1,0 +1,8 @@
+# Default owners for everything in this repository. All pull requests
+# request a review from these owners.
+#
+# Contact for the provider maintainers. GitHub maps an email owner to a user
+# account only when that address is a verified email on an account with write
+# access to this repo; otherwise this serves as the documented maintainer
+# contact.
+* terraform-provider-truenas@truenas.com
