@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -54,6 +55,96 @@ func TestAccDataset_basic(t *testing.T) {
 	})
 }
 
+// TestAccDataset_specialSmallBlockSize exercises special_small_block_size
+// over a full lifecycle: set on create, changed in place, imported, and
+// then an attempt to revert it by writing "inherit" must fail at plan
+// time (see keepLocalSpecialSmallBlockSize). The last
+// step drops the attribute from the configuration to pin the documented
+// behaviour - an Optional+Computed attribute that is removed from config
+// keeps its last applied value, so the step must plan empty.
+//
+// The values are written as HCL numbers, which Terraform converts to the
+// attribute's string type.
+//
+// 16384 and 32768 are both powers of two below the 128K default record
+// size, which is what ZFS requires of special_small_blocks.
+func TestAccDataset_specialSmallBlockSize(t *testing.T) {
+	name := fmt.Sprintf("%s/%s", acctest.TestPool(), acctest.RandName("tf-acc-ds-ssbs"))
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckDatasetDestroyed(name),
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccDatasetSSBSConfig(name, "16384"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_dataset.test", "special_small_block_size", "16384"),
+				),
+			},
+			{
+				Config: acctest.ProviderConfig() + testAccDatasetSSBSConfig(name, "32768"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_dataset.test", "special_small_block_size", "32768"),
+				),
+			},
+			{
+				ResourceName:      "truenas_dataset.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config:      acctest.ProviderConfig() + testAccDatasetSSBSConfig(name, `"inherit"`),
+				ExpectError: regexp.MustCompile(`cannot be changed from a size to INHERIT`),
+			},
+			{
+				Config: acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_dataset" "test" {
+  name = %q
+}
+`, name),
+				PlanOnly: true,
+			},
+		},
+	})
+}
+
+// TestAccDataset_specialSmallBlockSizeInherited is the live counterpart to
+// TestDatasetResponseToModelInheritsSpecialSmallBlockSize: a dataset that
+// never sets the property must read back as INHERIT, not as the effective
+// value get_instance reports, and must therefore plan empty on a second
+// run.
+func TestAccDataset_specialSmallBlockSizeInherited(t *testing.T) {
+	name := fmt.Sprintf("%s/%s", acctest.TestPool(), acctest.RandName("tf-acc-ds-inh"))
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckDatasetDestroyed(name),
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccDatasetConfig(name, "lz4", "inherited ssbs"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_dataset.test", "special_small_block_size", "INHERIT"),
+				),
+			},
+			{
+				Config:   acctest.ProviderConfig() + testAccDatasetConfig(name, "lz4", "inherited ssbs"),
+				PlanOnly: true,
+			},
+		},
+	})
+}
+
+func testAccDatasetSSBSConfig(name, size string) string {
+	return fmt.Sprintf(`
+resource "truenas_dataset" "test" {
+  name                     = %q
+  special_small_block_size = %s
+}
+`, name, size)
+}
+
 func testAccDatasetConfig(name, compression, comments string) string {
 	return fmt.Sprintf(`
 resource "truenas_dataset" "test" {
@@ -73,7 +164,17 @@ type datasetSummary struct {
 func testAccCheckDatasetDestroyed(name string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		c := acctest.Client()
-		raw, err := c.Call(context.Background(), "pool.dataset.query", [][]any{{"id", "=", name}})
+		// CallRead, not Call: acctest.Client() is a process-wide singleton
+		// connected once, and it sits idle for the whole of a test's
+		// Terraform steps. With more than one acceptance test in this
+		// package that idle stretch is long enough for the connection to
+		// drop, and Call does not re-dial - a dead connection fails the
+		// destroy check with "not connected" even though the dataset really
+		// is gone. CallRead retries transient failures and reconnects
+		// between attempts, which is what acctest.RestoreCall already
+		// documents for the same reason. pool.dataset.query is a read, so
+		// retrying it is safe.
+		raw, err := c.CallRead(context.Background(), "pool.dataset.query", [][]any{{"id", "=", name}})
 		if err != nil {
 			return fmt.Errorf("error checking dataset %s: %v", name, err)
 		}

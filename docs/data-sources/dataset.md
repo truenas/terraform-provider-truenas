@@ -32,5 +32,6 @@ Fetches a TrueNAS dataset by name.
 - `refquota` (Number)
 - `reservation` (Number)
 - `share_type` (String)
+- `special_small_block_size` (String) Special allocation class small-block threshold in bytes, as a decimal string. INHERIT when the property is not set on this dataset itself (inherited, default or received), and null when the dataset's type does not carry the property.
 - `type` (String)
 - `volsize` (Number)

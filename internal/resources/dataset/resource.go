@@ -123,7 +123,14 @@ func (r *DatasetResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
+	var state DatasetModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	payload := plan.updateAPIPayload()
+	dropUnchangedInherit(payload, &plan, &state)
 
 	_, err := r.client.Call(ctx, "pool.dataset.update", plan.Name.ValueString(), payload)
 	if err != nil {
@@ -225,6 +232,26 @@ func (r *DatasetResource) responseToModel(api *apiResponse, m *DatasetModel) dia
 		m.Reservation = types.Int64Value(0)
 	}
 	m.VolSize = types.Int64Value(api.VolSize.Parsed)
+
+	// special_small_block_size is only ever carried in state as a number
+	// when it is set on this dataset itself. pool.dataset.get_instance
+	// reports the effective value for an inherited or default property just
+	// as it does for a local one, so the value alone would make every
+	// dataset look as though it had the property set - and, because the
+	// attribute is Optional+Computed, that value would then be written back
+	// on the next update and silently turn an inherited property into a
+	// local one. "source" is what distinguishes the two; anything other than
+	// LOCAL is recorded as "INHERIT", which, sent back, keeps the property
+	// inherited. (Same failure mode as the volsize regression above, but 0
+	// is a real value here, so a zero check cannot substitute.) The property
+	// being absent altogether - a dataset type that does not carry it -
+	// stays null; see sourcedString.
+	ssbs := api.SpecialSmallBlockSize
+	m.SpecialSmallBlockSize = sourcedString(m.SpecialSmallBlockSize,
+		ssbs.Source == "" && !ssbs.Parsed.Set,
+		ssbs.Source == "LOCAL" && ssbs.Parsed.Set,
+		ssbs.Source == "LOCAL",
+		func() types.String { return integerString(m.SpecialSmallBlockSize, ssbs.Parsed.Value) })
 	return nil
 }
 

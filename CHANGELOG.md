@@ -6,6 +6,30 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+- `truenas_dataset`: new optional `special_small_block_size` attribute, wrapping
+  the ZFS `special_small_blocks` property on `pool.dataset.create`/`update`. It
+  sets the threshold in bytes below which blocks are written to a pool's special
+  allocation class vdev; `0` disables the behaviour. The attribute is a string
+  holding a decimal integer or the literal `INHERIT` (case-insensitive), which
+  `pool.dataset.create`/`update` take to mean "inherit from the parent"; a
+  number is sent to the API as an integer, `0` included, and an HCL number such
+  as `special_small_block_size = 16384` converts automatically (state holds
+  `"16384"`). Omitting the attribute leaves the property inherited from the
+  parent dataset, and `INHERIT` says so explicitly: it is for creating a dataset
+  that inherits, or declaring one that already does. A size set on the dataset
+  cannot be changed to `INHERIT`: the plan fails, since that one-word edit would
+  silently move where the dataset's future small blocks are written. Removing
+  the attribute keeps the last applied value. The read path keys off the
+  property's `source` from `pool.dataset.get_instance` and records the value in
+  state only when that source is `LOCAL`; anything else (inherited, default or
+  received) is recorded as `INHERIT`, so an inherited or default value is never
+  written back and an apply cannot silently convert an inherited property into a
+  local one. It is null only when `get_instance` does not report the property at
+  all, for a dataset type that does not carry it. An update sends `INHERIT` only
+  when the property is not already `INHERIT` in state. Also exposed as a
+  computed attribute on the `truenas_dataset` data source, with the same values.
+
 ## [1.1.0] - 2026-09-23
 
 ### Added

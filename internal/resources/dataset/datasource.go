@@ -15,6 +15,12 @@ import (
 
 var _ datasource.DataSource = &DatasetDataSource{}
 
+// dsInherit ends the description of every source-aware property on the
+// data source; see sourcedString.
+const dsInherit = ". INHERIT when the property is not set on this dataset itself " +
+	"(inherited, default or received), and null when the dataset's type does not " +
+	"carry the property."
+
 type DatasetDataSource struct {
 	client *client.Client
 }
@@ -40,9 +46,13 @@ func (d *DatasetDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 			"refquota":    dschema.Int64Attribute{Computed: true},
 			"reservation": dschema.Int64Attribute{Computed: true},
 			"volsize":     dschema.Int64Attribute{Computed: true},
-			"mountpoint":  dschema.StringAttribute{Computed: true},
-			"encrypted":   dschema.BoolAttribute{Computed: true},
-			"pool":        dschema.StringAttribute{Computed: true},
+			"special_small_block_size": dschema.StringAttribute{
+				Computed:    true,
+				Description: "Special allocation class small-block threshold in bytes, as a decimal string" + dsInherit,
+			},
+			"mountpoint": dschema.StringAttribute{Computed: true},
+			"encrypted":  dschema.BoolAttribute{Computed: true},
+			"pool":       dschema.StringAttribute{Computed: true},
 		},
 	}
 }
