@@ -20,6 +20,7 @@ type UserModel struct {
 	FullName             types.String `tfsdk:"full_name"`
 	Email                types.String `tfsdk:"email"`
 	Home                 types.String `tfsdk:"home"`
+	HomeMode             types.String `tfsdk:"home_mode"`
 	Shell                types.String `tfsdk:"shell"`
 	Locked               types.Bool   `tfsdk:"locked"`
 	PasswordDisabled     types.Bool   `tfsdk:"password_disabled"`
