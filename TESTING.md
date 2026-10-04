@@ -176,7 +176,11 @@ Coverage highlights:
   service (toggles the stopped `ftp` service and restores), VM (stopped,
   alphanumeric name) and VM DISPLAY device (SPICE + password + distinct
   ports)
-- **App** (`TRUENAS_APPS=1` only): syncthing catalog app lifecycle
+- **App** (`TRUENAS_APPS=1` only): syncthing catalog app lifecycle and custom
+  Compose read-back, import, drift, and sensitive-plan rendering.
+  `TestAccApp_composeSensitivePlan` requires Terraform on `PATH` or
+  `TF_ACC_TERRAFORM_PATH`; it checks human-readable plan output, not JSON
+  plans or state (which contain unredacted values).
 - **Virtualization and apps, continued**: docker_config (datasource-only Tier
   1 test — the resource itself is Tier 2, see below), docker_network
   (datasource lookup of the built-in `"bridge"` network; self-skips when

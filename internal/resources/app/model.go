@@ -27,10 +27,9 @@ type AppModel struct {
 }
 
 // AppDatasourceModel is the read-only lookup model for the truenas_app
-// datasource. It intentionally excludes write-only fields (values,
-// custom_compose_config_string, catalog_app) and the desired-state field
-// (running), since those are never echoed back by the API or don't apply to
-// a read-only lookup.
+// datasource. It excludes configuration fields (values,
+// custom_compose_config_string, catalog_app), which app.get_instance does
+// not return, and the desired-state field (running).
 type AppDatasourceModel struct {
 	ID               types.String `tfsdk:"id"`
 	Name             types.String `tfsdk:"name"`
@@ -56,7 +55,7 @@ type appAPI struct {
 }
 
 // responseToModel maps appAPI into AppModel. Does NOT touch CatalogApp,
-// Values, ComposeYAML (write-only-ish: API does not echo them back in query).
+// Values, ComposeYAML (app.get_instance does not include configuration).
 func responseToModel(api *appAPI, m *AppModel) {
 	m.ID = types.StringValue(api.Name)
 	m.Name = types.StringValue(api.Name)

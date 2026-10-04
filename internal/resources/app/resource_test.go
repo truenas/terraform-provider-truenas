@@ -193,10 +193,10 @@ func TestCreatePayload_InvalidValuesJSONProducesDiagnostic(t *testing.T) {
 	}
 }
 
-// TestResponseToModel_NeverTouchesWriteOnlyFields verifies that
+// TestResponseToModel_PreservesConfiguration verifies that
 // responseToModel does not modify Values, ComposeYAML, or CatalogApp, since
-// the API never echoes these back (write-only pattern).
-func TestResponseToModel_NeverTouchesWriteOnlyFields(t *testing.T) {
+// app.get_instance does not include configuration.
+func TestResponseToModel_PreservesConfiguration(t *testing.T) {
 	m := &AppModel{
 		Values:      types.StringValue(`{"kept":true}`),
 		ComposeYAML: types.StringValue("version: '3'\n"),

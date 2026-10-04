@@ -50,9 +50,8 @@ func (r *AppResource) Configure(_ context.Context, req resource.ConfigureRequest
 	r.client = c
 }
 
-// getConfig fetches the live, fully-resolved app configuration via app.config.
-// It is the merged result (user values + chart defaults + server-managed ix_*),
-// decoded as a generic object for projection onto the user's key shape.
+// getConfig fetches app.config: the Compose document for custom apps, or
+// merged user values, chart defaults, and server-managed ix_* for catalog apps.
 func (r *AppResource) getConfig(ctx context.Context, name string) (map[string]any, error) {
 	raw, err := r.client.CallRead(ctx, "app.config", name)
 	if err != nil {
@@ -156,9 +155,8 @@ func (r *AppResource) Create(ctx context.Context, req resource.CreateRequest, re
 		}
 	}
 
-	// values/custom_compose_config_string/catalog_app are never echoed back
-	// by the API (write-only). responseToModel does not touch them, so the
-	// plan's values are preserved in state as-is.
+	// app.get_instance does not include configuration. Preserve the exact
+	// planned strings after apply; Read reconciles them using app.config.
 	responseToModel(api, &plan)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueString())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -184,9 +182,27 @@ func (r *AppResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		return
 	}
 
-	// ComposeYAML/CatalogApp are not echoed back by the API; responseToModel
-	// preserves them. Values IS reconciled below for drift detection.
+	// app.get_instance does not include configuration; reconcile it below.
 	responseToModel(api, &state)
+
+	if state.CustomApp.ValueBool() {
+		// Probed on TrueNAS 25.10.6: app.config returns the custom Compose
+		// document as an object, including environment values, not a YAML
+		// string or catalog-style values wrapper.
+		cfg, err := r.client.CallRead(ctx, "app.config", state.Name.ValueString())
+		if err != nil {
+			// API errors can contain configuration, including credentials.
+			resp.Diagnostics.AddError("Read custom app configuration failed",
+				"Could not retrieve app.config; the previous Compose state has been preserved.")
+			return
+		}
+		compose, err := reconcileCompose(state.ComposeYAML.ValueString(), cfg)
+		if err != nil {
+			resp.Diagnostics.AddError("Read custom app configuration failed", err.Error())
+			return
+		}
+		state.ComposeYAML = types.StringValue(compose)
+	}
 
 	// Reconcile `values` from the live config, projected onto the keys the user
 	// set, so drift in those keys is detected without chart defaults / ix_*

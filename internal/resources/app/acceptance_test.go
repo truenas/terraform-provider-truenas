@@ -94,7 +94,7 @@ resource "truenas_app" "test" {
 func testAccCheckAppDestroyed(name string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		c := acctest.Client()
-		raw, err := c.Call(context.Background(), "app.query", [][]any{{"name", "=", name}})
+		raw, err := c.CallRead(context.Background(), "app.query", [][]any{{"name", "=", name}})
 		if err != nil {
 			return fmt.Errorf("error checking app %s: %v", name, err)
 		}
