@@ -56,7 +56,7 @@ func resourceSchema() schema.Schema {
 			},
 			"custom_compose_config_string": schema.StringAttribute{
 				Optional:    true,
-				Description: "Docker compose YAML for custom apps (write-only; not read back).",
+				Description: "Docker Compose YAML for custom apps. Refreshed from app.config to detect drift, including after import. Equivalent YAML formatting is preserved in state; changed or imported configuration is stored as JSON (valid YAML). May contain secrets; protect your state and mark secret inputs sensitive.",
 			},
 			"running": schema.BoolAttribute{
 				Optional:      true,

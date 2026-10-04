@@ -70,20 +70,20 @@ resource "truenas_dataset" "keyed" {
 - `compression` (String) Compression algorithm. Case-insensitive: lz4, zstd, off, etc.
 - `copies` (Number) Number of copies of each block (1-3). Null (unset) inherits from the parent.
 - `dedup` (String) Deduplication (the ZFS `deduplication` property): ON, VERIFY, or OFF. Null inherits. Named `dedup` to match truenas_zvol.
-- `encryption` (Boolean) Enable ZFS encryption on this dataset at creation. Create-only: changing it recreates the dataset.
+- `encryption` (Boolean) Enable ZFS encryption on this dataset at creation. Create-only: changing it recreates the dataset. Cannot be combined with inherit_encryption = true (the parent determines encryption).
 - `encryption_algorithm` (String) Encryption algorithm, e.g. "AES-256-GCM". Create-only.
 - `encryption_generate_key` (Boolean) Automatically generate the encryption key (key-based encryption). Create-only.
 - `encryption_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) 64-character hex key for key-based encryption. Write-only: never stored in state. Create-only.
 - `encryption_passphrase` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Passphrase for passphrase-based encryption (minimum 8 characters). Write-only: never stored in state. Create-only.
 - `exec` (String) Allow executing files: ON or OFF. Null inherits.
-- `inherit_encryption` (Boolean) Inherit encryption settings from the parent dataset. Create-only.
+- `inherit_encryption` (Boolean) Whether this dataset inherits its encryption from the parent dataset rather than owning its own key. Create-only. Computed: reconciled from the dataset's encryption root on read, so it reflects reality even when left unset.
 - `quota` (Number) Quota in bytes (0 = unlimited).
 - `readonly` (String) Mount read-only: ON or OFF. Null inherits.
 - `recordsize` (String) Suggested block size for files, e.g. "128K" or "1M". Null (unset) inherits from the parent. Use the ZFS form (uppercase suffix) to avoid drift.
 - `refquota` (Number) Referenced quota in bytes (0 = unlimited).
 - `refreservation` (Number) Referenced reservation in bytes (space guaranteed to this dataset, excluding descendants/snapshots). Null (unset) inherits.
 - `reservation` (Number) Reserved space in bytes.
-- `share_type` (String) Optimised share type: UNIX or WINDOWS (write-only, not returned by API).
+- `share_type` (String) Optimised share-type preset applied at creation: GENERIC, SMB, MULTIPROTOCOL, NFS, or APPS (write-only, not returned by the API). Create-only.
 - `snapdir` (String) Visibility of the .zfs/snapshot directory: VISIBLE, HIDDEN, or DISABLED. Null inherits.
 - `special_small_block_size` (Number) Threshold in bytes below which blocks are written to a pool's special allocation-class vdev; 0 disables it. Null (unset) inherits from the parent.
 - `sync` (String) Sync write behaviour: STANDARD, ALWAYS, or DISABLED. Null inherits.
