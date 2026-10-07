@@ -207,6 +207,7 @@ type apiResponse struct {
 
 	AClType struct {
 		Parsed string `json:"parsed"` // lowercase: "posix", "nfsv4", "off"
+		Source string `json:"source"` // LOCAL, INHERITED, DEFAULT, RECEIVED
 	} `json:"acltype"`
 
 	Quota struct {

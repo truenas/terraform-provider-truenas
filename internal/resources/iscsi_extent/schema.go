@@ -4,11 +4,13 @@
 package iscsi_extent
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 func resourceSchema() schema.Schema {
@@ -28,6 +30,7 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"type": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("DISK", "FILE")},
 				Required:    true,
 				Description: "Extent type: DISK or FILE.",
 			},
@@ -91,6 +94,7 @@ func resourceSchema() schema.Schema {
 				Description: "Export extent as read-only.",
 			},
 			"rpm": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("10000", "15000", "5400", "7200", "SSD", "UNKNOWN")},
 				Optional:    true,
 				Computed:    true,
 				Description: "Reported disk RPM: SSD, 5400, 7200, 10000, or 15000.",

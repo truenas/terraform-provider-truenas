@@ -4,12 +4,14 @@
 package cloudsync
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -36,10 +38,12 @@ func resourceSchema() schema.Schema {
 				Description: "ID of the cloud sync credentials to use.",
 			},
 			"direction": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("PULL", "PUSH")},
 				Required:    true,
 				Description: "PUSH or PULL.",
 			},
 			"transfer_mode": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("COPY", "MOVE", "SYNC")},
 				Required:    true,
 				Description: "SYNC, COPY, or MOVE.",
 			},

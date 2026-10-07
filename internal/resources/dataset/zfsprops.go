@@ -52,6 +52,18 @@ func (z zfsSourced) parsedInt() (int64, bool) {
 // locally-set property to inherited cannot be expressed by removing it from
 // the configuration (the last value is kept) — revert it out of band and
 // refresh.
+// localStringOrInherit is localString for inheritable ENUM properties that
+// expose an explicit "INHERIT" member (sync, checksum, aclmode, ...): a LOCAL
+// value is reported verbatim; a non-LOCAL (inherited/default/received) property
+// reads back as "INHERIT" so that value round-trips instead of failing with an
+// inconsistent result. (#38 class; see enum conformance auditor)
+func localStringOrInherit(z zfsSourced) types.String {
+	if z.isLocal() && z.Value != nil {
+		return types.StringValue(*z.Value)
+	}
+	return types.StringValue("INHERIT")
+}
+
 func localString(z zfsSourced) types.String {
 	if z.isLocal() && z.Value != nil {
 		return types.StringValue(*z.Value)

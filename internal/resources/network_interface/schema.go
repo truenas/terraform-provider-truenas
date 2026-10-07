@@ -37,6 +37,7 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"type": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("BRIDGE", "LINK_AGGREGATION", "VLAN")},
 				Required:    true,
 				Description: "Interface type: BRIDGE, LINK_AGGREGATION, VLAN. PHYSICAL is import-only.",
 				PlanModifiers: []planmodifier.String{
@@ -118,6 +119,7 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"lag_protocol": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("FAILOVER", "LACP", "LOADBALANCE", "NONE", "ROUNDROBIN")},
 				Optional:    true,
 				Computed:    true,
 				Description: "Link aggregation protocol (LINK_AGGREGATION only, \"\" = unset).",

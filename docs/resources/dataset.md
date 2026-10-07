@@ -63,11 +63,11 @@ resource "truenas_dataset" "keyed" {
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
 - `aclmode` (String) ACL inheritance mode: PASSTHROUGH, RESTRICTED, or DISCARD. Null (unset) inherits from the parent.
-- `acltype` (String) ACL type: posix, nfsv4, or off. Case-insensitive.
+- `acltype` (String) ACL type: posix, nfsv4, off, or inherit. Case-insensitive.
 - `atime` (String) Update access time on read: ON or OFF. Null inherits.
 - `checksum` (String) Checksum algorithm: ON, OFF, FLETCHER2, FLETCHER4, SHA256, SHA512, SKEIN, EDONR, or BLAKE3. Null inherits.
 - `comments` (String) Human-readable description stored as org.freenas:description.
-- `compression` (String) Compression algorithm. Case-insensitive: lz4, zstd, off, etc.
+- `compression` (String) Compression algorithm. Case-insensitive: lz4, zstd, off, inherit, etc.
 - `copies` (Number) Number of copies of each block (1-3). Null (unset) inherits from the parent.
 - `dedup` (String) Deduplication (the ZFS `deduplication` property): ON, VERIFY, or OFF. Null inherits. Named `dedup` to match truenas_zvol.
 - `encryption` (Boolean) Enable ZFS encryption on this dataset at creation. Create-only: changing it recreates the dataset. Cannot be combined with inherit_encryption = true (the parent determines encryption).

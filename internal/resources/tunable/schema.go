@@ -4,11 +4,13 @@
 package tunable
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 func resourceSchema() schema.Schema {
@@ -34,6 +36,7 @@ func resourceSchema() schema.Schema {
 				Description: "Value to set for the tunable variable.",
 			},
 			"type": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("SYSCTL", "UDEV", "ZFS")},
 				Optional:    true,
 				Computed:    true,
 				Description: "Tunable type: SYSCTL, UDEV, or ZFS. Changing this forces a new resource.",

@@ -432,3 +432,26 @@ resource "truenas_dataset" "inh" {
 		},
 	})
 }
+
+// TestAccDataset_syncInherit guards bucket-1 of the enum-conformance work: a
+// ZFS enum (sync) set to the API's INHERIT member round-trips (reported as
+// INHERIT when not set locally), rather than being rejected by the validator or
+// read back as the resolved value.
+func TestAccDataset_syncInherit(t *testing.T) {
+	name := fmt.Sprintf("%s/%s", acctest.TestPool(), acctest.RandName("tf-acc-dssync"))
+	cfg := acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_dataset" "si" {
+  name = %q
+  sync = "INHERIT"
+}
+`, name)
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckDatasetDestroyed(name),
+		Steps: []resource.TestStep{
+			{Config: cfg, Check: resource.TestCheckResourceAttr("truenas_dataset.si", "sync", "INHERIT")},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+		},
+	})
+}

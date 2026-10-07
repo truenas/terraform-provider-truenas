@@ -4,11 +4,13 @@
 package periodic_snapshot
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -45,6 +47,7 @@ func resourceSchema() schema.Schema {
 				Required: true,
 			},
 			"lifetime_unit": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("DAY", "HOUR", "MONTH", "WEEK", "YEAR")},
 				Required:    true,
 				Description: "HOUR, DAY, WEEK, MONTH, or YEAR.",
 			},

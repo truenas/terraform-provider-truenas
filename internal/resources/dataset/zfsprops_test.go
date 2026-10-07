@@ -110,8 +110,8 @@ func TestResponseToModel_SourceAware(t *testing.T) {
 	if m.ATime.ValueString() != "OFF" {
 		t.Errorf("atime LOCAL should be OFF, got %v", m.ATime)
 	}
-	if !m.Exec.IsNull() {
-		t.Errorf("exec DEFAULT should be null, got %v", m.Exec)
+	if m.Exec.ValueString() != "INHERIT" {
+		t.Errorf("exec DEFAULT should read back INHERIT (source-aware enum), got %v", m.Exec)
 	}
 	if m.RecordSize.ValueString() != "1M" {
 		t.Errorf("recordsize LOCAL should be 1M, got %v", m.RecordSize)

@@ -4,11 +4,13 @@
 package nvmet_port
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 func resourceSchema() schema.Schema {
@@ -23,6 +25,7 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"addr_trtype": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("RDMA", "TCP")},
 				Required:    true,
 				Description: "TCP or RDMA. Fibre Channel is not supported by this provider.",
 				PlanModifiers: []planmodifier.String{

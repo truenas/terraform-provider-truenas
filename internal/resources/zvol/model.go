@@ -242,19 +242,19 @@ func responseToModel(api *zvolAPI, m *ZvolModel) {
 	// applied "lz4"). preserveCase keeps the user's casing of either the real
 	// algorithm (local) or the inherit sentinel. (#38)
 	if api.Compression.Source == "LOCAL" {
-		m.Compression = preserveCase(m.Compression, api.Compression.Parsed)
+		m.Compression = preserveCompression(m.Compression, api.Compression.Parsed)
 	} else {
 		m.Compression = preserveCase(m.Compression, "INHERIT")
 	}
-	m.Sync = localString(api.SyncP)
-	m.Dedup = localString(api.DedupP)
+	m.Sync = localStringOrInherit(api.SyncP)
+	m.Dedup = localStringOrInherit(api.DedupP)
 	m.Comments = types.StringValue(api.UserProperties.Comments.Value)
 	// Sparse is write-only (not in API response); preserve plan/state value.
 
 	// Source-aware ZFS tuning properties (coverage audit): recorded only when set LOCAL.
-	m.Checksum = localString(api.ChecksumP)
-	m.ReadOnly = localString(api.ReadOnlyP)
-	m.Snapdev = localString(api.SnapdevP)
+	m.Checksum = localStringOrInherit(api.ChecksumP)
+	m.ReadOnly = localStringOrInherit(api.ReadOnlyP)
+	m.Snapdev = localStringOrInherit(api.SnapdevP)
 	m.Copies = localInt(api.CopiesP)
 	m.Reservation = localInt(api.ReservP)
 	m.RefReservation = localInt(api.RefReservP)
@@ -269,6 +269,35 @@ func preserveCase(current types.String, apiVal string) types.String {
 		return types.StringValue(strings.ToLower(apiVal))
 	}
 	if strings.EqualFold(current.ValueString(), apiVal) {
+		return current
+	}
+	return types.StringValue(strings.ToLower(apiVal))
+}
+
+// compressionCanon folds a compression value to the form ZFS actually stores,
+// so an input alias the API canonicalizes away still round-trips. ZFS treats
+// zstd-fast-1 as plain zstd-fast (level 1 is the default fast level) and reports
+// it back as "zstd-fast"; without folding, compression = "ZSTD-FAST-1" would
+// read back "zstd-fast" and fail with an inconsistent result. Every other level
+// (zstd-fast-10, zstd-5, gzip-9) is stored verbatim. Case-insensitive.
+func compressionCanon(v string) string {
+	s := strings.ToLower(strings.TrimSpace(v))
+	if s == "zstd-fast-1" {
+		return "zstd-fast"
+	}
+	return s
+}
+
+// preserveCompression is preserveCase for the compression property: current is
+// kept when it is the same compression as apiVal under ZFS's own folding
+// (compressionCanon), not merely equal-fold, so an alias like ZSTD-FAST-1 that
+// the API reports back as ZSTD-FAST still round-trips. Real drift (a different
+// algorithm) still overwrites state with the lower-cased API value.
+func preserveCompression(current types.String, apiVal string) types.String {
+	if current.IsNull() || current.IsUnknown() {
+		return types.StringValue(strings.ToLower(apiVal))
+	}
+	if compressionCanon(current.ValueString()) == compressionCanon(apiVal) {
 		return current
 	}
 	return types.StringValue(strings.ToLower(apiVal))

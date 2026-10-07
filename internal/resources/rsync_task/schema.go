@@ -4,6 +4,7 @@
 package rsync_task
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
@@ -11,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -35,6 +37,7 @@ func resourceSchema() schema.Schema {
 				Description: "Username to run the rsync task as.",
 			},
 			"mode": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("MODULE", "SSH")},
 				Optional:    true,
 				Computed:    true,
 				Description: "Operating mechanism for rsync: MODULE (rsync module/daemon protocol) or SSH. Defaults to MODULE.",
@@ -85,6 +88,7 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"direction": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("PULL", "PUSH")},
 				Optional:    true,
 				Computed:    true,
 				Description: "Whether data is PUSHed to or PULLed from the remote system. Defaults to PUSH.",

@@ -4,11 +4,13 @@
 package vm
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 func resourceSchema() schema.Schema {
@@ -71,6 +73,7 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"bootloader": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("UEFI", "UEFI_CSM")},
 				Optional:    true,
 				Computed:    true,
 				Description: "Bootloader type: UEFI, UEFI_CSM.",
@@ -87,6 +90,7 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"time": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("LOCAL", "UTC")},
 				Optional:    true,
 				Computed:    true,
 				Description: "Guest clock timezone: LOCAL, UTC.",
@@ -103,6 +107,7 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"cpu_mode": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("CUSTOM", "HOST-MODEL", "HOST-PASSTHROUGH")},
 				Optional:    true,
 				Computed:    true,
 				Description: "CPU mode: CUSTOM, HOST-MODEL, HOST-PASSTHROUGH.",

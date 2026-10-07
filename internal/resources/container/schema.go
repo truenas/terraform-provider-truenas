@@ -4,6 +4,7 @@
 package container
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
@@ -11,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -99,6 +101,7 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"time": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("LOCAL", "UTC")},
 				Optional:    true,
 				Computed:    true,
 				Description: "Container clock: LOCAL or UTC. Defaults to LOCAL.",
@@ -171,8 +174,9 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"capabilities_policy": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
+				Validators: []validator.String{stringvalidator.OneOf("ALLOW", "DEFAULT", "DENY")},
+				Optional:   true,
+				Computed:   true,
 				Description: "Default Linux capabilities policy: DEFAULT (drop sys_module, sys_time, mknod, " +
 					"audit_control, mac_admin), ALLOW (keep all), or DENY (drop all). Defaults to DEFAULT.",
 				PlanModifiers: []planmodifier.String{

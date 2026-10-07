@@ -4,11 +4,13 @@
 package nvmet_namespace
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 func resourceSchema() schema.Schema {
@@ -34,6 +36,7 @@ func resourceSchema() schema.Schema {
 				Description: "Path of the backing device, e.g. \"zvol/tank/vms/vm1\".",
 			},
 			"device_type": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("FILE", "ZVOL")},
 				Optional:    true,
 				Computed:    true,
 				Description: "Backing device type: ZVOL or FILE.",

@@ -346,6 +346,7 @@ func TestDecodeCreateResult_ObjectShape(t *testing.T) {
 	}
 	if api == nil {
 		t.Fatal("decodeCreateResult should return non-nil api for object shape")
+		return
 	}
 	if id != 0 {
 		t.Errorf("decodeCreateResult id = %v, want 0 for object shape", id)

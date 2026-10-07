@@ -22,7 +22,7 @@ func zfsEnumAttr(desc string, values ...string) schema.StringAttribute {
 		Optional:      true,
 		Computed:      true,
 		Description:   desc,
-		Validators:    []validator.String{stringvalidator.OneOf(values...)},
+		Validators:    []validator.String{stringvalidator.OneOf(append(append([]string{}, values...), "INHERIT")...)},
 		PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 	}
 }
@@ -61,27 +61,16 @@ func resourceSchema() schema.Schema {
 			"compression": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Compression algorithm. Case-insensitive: lz4, zstd, off, etc.",
+				Description: "Compression algorithm. Case-insensitive: lz4, zstd, off, inherit, etc.",
+				Validators:  []validator.String{stringvalidator.OneOfCaseInsensitive("ON", "OFF", "LZ4", "GZIP", "GZIP-1", "GZIP-9", "ZSTD", "ZSTD-FAST", "ZLE", "LZJB", "ZSTD-1", "ZSTD-2", "ZSTD-3", "ZSTD-4", "ZSTD-5", "ZSTD-6", "ZSTD-7", "ZSTD-8", "ZSTD-9", "ZSTD-10", "ZSTD-11", "ZSTD-12", "ZSTD-13", "ZSTD-14", "ZSTD-15", "ZSTD-16", "ZSTD-17", "ZSTD-18", "ZSTD-19", "ZSTD-FAST-1", "ZSTD-FAST-2", "ZSTD-FAST-3", "ZSTD-FAST-4", "ZSTD-FAST-5", "ZSTD-FAST-6", "ZSTD-FAST-7", "ZSTD-FAST-8", "ZSTD-FAST-9", "ZSTD-FAST-10", "ZSTD-FAST-20", "ZSTD-FAST-30", "ZSTD-FAST-40", "ZSTD-FAST-50", "ZSTD-FAST-60", "ZSTD-FAST-70", "ZSTD-FAST-80", "ZSTD-FAST-90", "ZSTD-FAST-100", "ZSTD-FAST-500", "ZSTD-FAST-1000", "INHERIT")},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"sync": schema.StringAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "Sync setting: standard, always, or disabled.",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
-			},
-			"dedup": schema.StringAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "Deduplication: off, on, or verify.",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
-			},
+			"sync": zfsEnumAttr("Sync write behaviour: STANDARD, ALWAYS, or DISABLED. INHERIT inherits from the parent.",
+				"STANDARD", "ALWAYS", "DISABLED"),
+			"dedup": zfsEnumAttr("Deduplication: ON, VERIFY, or OFF. INHERIT inherits from the parent.",
+				"ON", "VERIFY", "OFF"),
 			"sparse": schema.BoolAttribute{
 				Optional:    true,
 				Description: "Sparse provisioning (write-only; not returned by API).",

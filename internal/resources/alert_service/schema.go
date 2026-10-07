@@ -30,6 +30,7 @@ func resourceSchema() schema.Schema {
 				Description: "Name of the alert service.",
 			},
 			"level": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("ALERT", "CRITICAL", "EMERGENCY", "ERROR", "INFO", "NOTICE", "WARNING")},
 				Required:    true,
 				Description: "Minimum alert level that triggers this service. One of: INFO, NOTICE, WARNING, ERROR, CRITICAL, ALERT, EMERGENCY.",
 			},

@@ -63,8 +63,8 @@ func TestZvolResponseToModel_SourceAware(t *testing.T) {
 	if m.Checksum.ValueString() != "SHA256" {
 		t.Errorf("checksum LOCAL should be SHA256, got %v", m.Checksum)
 	}
-	if !m.ReadOnly.IsNull() {
-		t.Errorf("readonly INHERITED should be null, got %v", m.ReadOnly)
+	if m.ReadOnly.ValueString() != "INHERIT" {
+		t.Errorf("readonly INHERITED should read back INHERIT (source-aware enum), got %v", m.ReadOnly)
 	}
 	if !m.Copies.IsNull() {
 		t.Errorf("copies DEFAULT should be null, got %v", m.Copies)

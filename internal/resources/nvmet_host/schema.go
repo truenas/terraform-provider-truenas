@@ -4,10 +4,12 @@
 package nvmet_host
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 func resourceSchema() schema.Schema {
@@ -48,6 +50,7 @@ func resourceSchema() schema.Schema {
 					"Write-only: never stored in Terraform state. Requires Terraform >= 1.11.",
 			},
 			"dhchap_dhgroup": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("2048-BIT", "3072-BIT", "4096-BIT", "6144-BIT", "8192-BIT")},
 				Optional:    true,
 				Computed:    true,
 				Description: "DH-CHAP Diffie-Hellman group used for bidirectional authentication.",
@@ -56,6 +59,7 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"dhchap_hash": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("SHA-256", "SHA-384", "SHA-512")},
 				Optional:    true,
 				Computed:    true,
 				Description: "DH-CHAP hash algorithm. One of: SHA-256, SHA-384, SHA-512.",

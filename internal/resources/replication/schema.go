@@ -35,6 +35,7 @@ func resourceSchema() schema.Schema {
 				Description: "Name of the replication task.",
 			},
 			"direction": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("PULL", "PUSH")},
 				Required:    true,
 				Description: "PUSH or PULL. Changing this forces a new resource.",
 				PlanModifiers: []planmodifier.String{
@@ -203,6 +204,7 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"retention_policy": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("CUSTOM", "NONE", "SOURCE")},
 				Required:    true,
 				Description: "SOURCE, CUSTOM, or NONE.",
 			},
@@ -215,6 +217,7 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"lifetime_unit": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("DAY", "HOUR", "MONTH", "WEEK", "YEAR")},
 				Optional:    true,
 				Computed:    true,
 				Description: "HOUR, DAY, WEEK, MONTH, or YEAR. Unset (\"\") when retention_policy is not CUSTOM.",
@@ -223,6 +226,7 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"readonly": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("IGNORE", "REQUIRE", "SET")},
 				Optional:    true,
 				Computed:    true,
 				Description: "SET, REQUIRE, or IGNORE.",
@@ -255,6 +259,7 @@ func resourceSchema() schema.Schema {
 			"hold_pending_snapshots": replBoolAttr("Prevent source snapshots from being deleted by retention while a replication is pending."),
 			"only_matching_schedule": replBoolAttr("Only replicate snapshots that match `schedule` or `restrict_schedule`."),
 			"logging_level": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("DEBUG", "ERROR", "INFO", "WARNING")},
 				Optional:    true,
 				Computed:    true,
 				Description: "Log verbosity for task execution, e.g. DEBUG, INFO, WARNING, ERROR. Null uses the system default.",
@@ -282,6 +287,7 @@ func resourceSchema() schema.Schema {
 				Description: "Encryption key (hex string, or passphrase per encryption_key_format). Write-only: never stored in Terraform state or read back. Requires Terraform >= 1.11.",
 			},
 			"encryption_key_format": schema.StringAttribute{
+				Validators:  []validator.String{stringvalidator.OneOf("HEX", "PASSPHRASE")},
 				Optional:    true,
 				Computed:    true,
 				Description: "Format of encryption_key: HEX or PASSPHRASE.",
