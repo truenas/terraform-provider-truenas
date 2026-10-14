@@ -274,19 +274,15 @@ func (r *DatasetResource) responseToModel(api *apiResponse, m *DatasetModel) dia
 	// encryption_generate_key and the write-only passphrase/key are not returned
 	// by the API; keep the config/plan values.
 	m.Pool = types.StringValue(api.Pool)
-	// Source-aware compression: report "INHERIT" when it is not set LOCAL
-	// (inherited/default), so compression = "inherit" round-trips instead of
-	// resolving to the inherited value and failing with an inconsistent result. (#38)
-	if api.Compression.Source == "LOCAL" {
+	// LOCAL and RECEIVED are explicit values on this dataset. A raw replication
+	// on TrueNAS 25.10.7 reports RECEIVED; treating it as inherited loses the
+	// value and can force replacement of a restored dataset's ACL type.
+	if isExplicitSource(api.Compression.Source) {
 		m.Compression = preserveCompression(m.Compression, api.Compression.Parsed)
 	} else {
 		m.Compression = preserveCase(m.Compression, "INHERIT")
 	}
-	// acltype is source-aware like compression: a non-LOCAL (inherited/default)
-	// acltype reads back "INHERIT" so acltype = "inherit" round-trips instead of
-	// resolving to the pool default (e.g. "posix") and failing with an
-	// inconsistent result. (#38 class)
-	if api.AClType.Source == "LOCAL" {
+	if isExplicitSource(api.AClType.Source) {
 		m.AClType = preserveCase(m.AClType, api.AClType.Parsed)
 	} else {
 		m.AClType = preserveCase(m.AClType, "INHERIT")
@@ -311,8 +307,7 @@ func (r *DatasetResource) responseToModel(api *apiResponse, m *DatasetModel) dia
 	}
 	m.VolSize = types.Int64Value(api.VolSize.Parsed)
 
-	// Source-aware ZFS tuning properties (coverage audit): record a value only when the
-	// property is set LOCAL on this dataset; inherited/default reads back null.
+	// Preserve explicit tuning values, including received replication properties.
 	m.ACLMode = localStringOrInherit(api.ACLModeP)
 	m.ATime = localStringOrInherit(api.ATimeP)
 	m.Exec = localStringOrInherit(api.ExecP)

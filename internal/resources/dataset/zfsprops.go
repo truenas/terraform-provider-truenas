@@ -13,15 +13,17 @@ import (
 
 // zfsSourced is one ZFS property as pool.dataset.get_instance reports it: its
 // human value ("OFF", "128K", "1"), its numeric parsed form, and where the
-// value comes from. Source is "LOCAL" when the property is set on this dataset,
-// and "INHERITED", "DEFAULT" or "RECEIVED" otherwise.
+// value comes from. LOCAL and RECEIVED values belong to this dataset;
+// INHERITED and DEFAULT values are not explicitly set here.
 type zfsSourced struct {
 	Value  *string         `json:"value"`
 	Parsed json.RawMessage `json:"parsed"`
 	Source string          `json:"source"`
 }
 
-func (z zfsSourced) isLocal() bool { return z.Source == "LOCAL" }
+func isExplicitSource(source string) bool {
+	return source == "LOCAL" || source == "RECEIVED"
+}
 
 // parsedInt decodes the parsed field as an int64, tolerating either a JSON
 // number or a numeric string — pool.dataset.get_instance is not consistent
@@ -43,40 +45,26 @@ func (z zfsSourced) parsedInt() (int64, bool) {
 	return 0, false
 }
 
-// localString records a source-aware string property's value only when it is
-// set LOCAL on this dataset, and null otherwise. An inherited, default, or
-// received property therefore reads back as null (unset). This is what keeps
-// an Optional+Computed attribute from carrying an inherited value into state
-// and re-sending it on the next update, which would silently convert an
-// inherited property into a local one. The trade-off: reverting a
-// locally-set property to inherited cannot be expressed by removing it from
-// the configuration (the last value is kept) — revert it out of band and
-// refresh.
-// localStringOrInherit is localString for inheritable ENUM properties that
-// expose an explicit "INHERIT" member (sync, checksum, aclmode, ...): a LOCAL
-// value is reported verbatim; a non-LOCAL (inherited/default/received) property
-// reads back as "INHERIT" so that value round-trips instead of failing with an
-// inconsistent result. (#38 class; see enum conformance auditor)
+// localStringOrInherit preserves explicit LOCAL or RECEIVED enum values.
+// Only inherited/default values read back as INHERIT.
 func localStringOrInherit(z zfsSourced) types.String {
-	if z.isLocal() && z.Value != nil {
+	if isExplicitSource(z.Source) && z.Value != nil {
 		return types.StringValue(*z.Value)
 	}
 	return types.StringValue("INHERIT")
 }
 
+// localString preserves explicit LOCAL or RECEIVED strings, otherwise null.
 func localString(z zfsSourced) types.String {
-	if z.isLocal() && z.Value != nil {
+	if isExplicitSource(z.Source) && z.Value != nil {
 		return types.StringValue(*z.Value)
 	}
 	return types.StringNull()
 }
 
-// localInt is localString's integer counterpart: the parsed integer when the
-// property is set LOCAL, null otherwise. 0 is a real value here and is kept
-// when LOCAL (the source, not a zero check, is what distinguishes "set to 0"
-// from "inherited").
+// localInt preserves explicit LOCAL or RECEIVED integers, including zero.
 func localInt(z zfsSourced) types.Int64 {
-	if z.isLocal() {
+	if isExplicitSource(z.Source) {
 		if n, ok := z.parsedInt(); ok {
 			return types.Int64Value(n)
 		}
