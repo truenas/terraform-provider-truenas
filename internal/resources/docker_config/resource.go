@@ -19,6 +19,7 @@ import (
 var _ resource.Resource = &DockerConfigResource{}
 var _ resource.ResourceWithImportState = &DockerConfigResource{}
 var _ resource.ResourceWithIdentity = &DockerConfigResource{}
+var _ resource.ResourceWithModifyPlan = &DockerConfigResource{}
 
 // DockerConfigResource implements the truenas_docker_config singleton
 // resource.
@@ -37,6 +38,23 @@ func (r *DockerConfigResource) Schema(_ context.Context, _ resource.SchemaReques
 
 func (r *DockerConfigResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
 	resp.IdentitySchema = listing.StringIDIdentitySchema()
+}
+
+// ModifyPlan runs after attribute modifiers have resolved the optional pool.
+// The dataset can only reuse its previous value when that pool is unchanged.
+func (r *DockerConfigResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+	var previousPool, plannedPool types.String
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("pool"), &previousPool)...)
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("pool"), &plannedPool)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if plannedPool.IsUnknown() || !plannedPool.Equal(previousPool) {
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("dataset"), types.StringUnknown())...)
+	}
 }
 
 func (r *DockerConfigResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {

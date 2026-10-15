@@ -7,34 +7,65 @@ import (
 	"context"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
-func TestDatasetPlanAllowsPoolChanges(t *testing.T) {
-	for _, previous := range []types.String{types.StringNull(), types.StringValue("old/ix-apps")} {
-		t.Run(previous.String(), func(t *testing.T) {
-			// An imported singleton already exists even when Docker is unconfigured.
-			request := planmodifier.StringRequest{
-				State:       tfsdk.State{Raw: tftypes.NewValue(tftypes.Object{AttributeTypes: map[string]tftypes.Type{}}, map[string]tftypes.Value{})},
-				StateValue:  previous,
-				ConfigValue: types.StringNull(),
-				PlanValue:   types.StringUnknown(),
+func TestDatasetPlanFollowsPool(t *testing.T) {
+	ctx := context.Background()
+	unknown, empty := types.StringUnknown(), types.StringNull()
+	oldPool, newPool := types.StringValue("old"), types.StringValue("new")
+	oldDataset := types.StringValue("old/ix-apps")
+	cases := []struct {
+		name                      string
+		previousPool, plannedPool types.String
+		previousDataset, expected types.String
+	}{
+		{"configure", empty, newPool, empty, unknown},
+		{"switch pool", oldPool, newPool, oldDataset, unknown},
+		{"unknown pool", oldPool, unknown, oldDataset, unknown},
+		{"clear pool", oldPool, empty, oldDataset, unknown},
+		{"unchanged pool", oldPool, oldPool, oldDataset, oldDataset},
+		{"still unconfigured", empty, empty, empty, empty},
+	}
+	s := resourceSchema()
+	testSchema := schema.Schema{Attributes: map[string]schema.Attribute{
+		"pool": s.Attributes["pool"], "dataset": s.Attributes["dataset"],
+	}}
+	objectType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"pool": tftypes.String, "dataset": tftypes.String,
+	}}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			value := func(v types.String) tftypes.Value {
+				t.Helper()
+				result, err := v.ToTerraformValue(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return result
 			}
-			response := planmodifier.StringResponse{PlanValue: request.PlanValue}
-			attribute := resourceSchema().Attributes["dataset"].(schema.StringAttribute)
-			for _, modifier := range attribute.PlanModifiers {
-				modifier.PlanModifyString(context.Background(), request, &response)
-				request.PlanValue = response.PlanValue
+			state := tfsdk.State{Schema: testSchema, Raw: tftypes.NewValue(objectType, map[string]tftypes.Value{
+				"pool": value(tc.previousPool), "dataset": value(tc.previousDataset),
+			})}
+			plan := tfsdk.Plan{Schema: testSchema, Raw: tftypes.NewValue(objectType, map[string]tftypes.Value{
+				"pool": value(tc.plannedPool), "dataset": value(tc.previousDataset),
+			})}
+			response := resource.ModifyPlanResponse{Plan: plan}
+			if modifier, ok := NewResource().(resource.ResourceWithModifyPlan); ok {
+				modifier.ModifyPlan(ctx, resource.ModifyPlanRequest{State: state, Plan: plan}, &response)
 			}
+			var actual types.String
+			response.Diagnostics.Append(response.Plan.GetAttribute(ctx, path.Root("dataset"), &actual)...)
 			if response.Diagnostics.HasError() {
 				t.Fatalf("plan modification failed: %v", response.Diagnostics)
 			}
-			if !response.PlanValue.IsUnknown() {
-				t.Fatalf("dataset must remain unknown when the pool changes, got %s", response.PlanValue)
+			if !actual.Equal(tc.expected) {
+				t.Fatalf("dataset plan = %s, want %s", actual, tc.expected)
 			}
 		})
 	}
