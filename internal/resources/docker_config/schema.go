@@ -55,9 +55,6 @@ func resourceSchema() schema.Schema {
 			"dataset": schema.StringAttribute{
 				Computed:    true,
 				Description: "Read-only: the ZFS dataset TrueNAS created under \"pool\" for Docker data storage, or null if Docker is unconfigured. Not settable via docker.update.",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
 			},
 			"nvidia": schema.BoolAttribute{
 				Optional: true,
