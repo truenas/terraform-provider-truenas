@@ -186,6 +186,14 @@ func (m *DatasetModel) updateAPIPayload(prior *DatasetModel) map[string]any {
 		stripUnchangedInt(p, "quota", m.Quota, prior.Quota)
 		stripUnchangedInt(p, "refquota", m.RefQuota, prior.RefQuota)
 		stripUnchangedInt(p, "reservation", m.Reservation, prior.Reservation)
+		// comments is the same class: an absent description reads back as a
+		// known "" (user_properties has no comments key), and UseStateForUnknown
+		// carries it into every plan, so apiPayload always includes comments.
+		// Resending the unchanged "" on an unrelated update writes
+		// org.freenas:description as a LOCAL empty-string property. Drop it when
+		// the plan equals prior state; an explicit change — including clearing a
+		// description to "" — still goes through. (#62)
+		stripUnchangedString(p, "comments", m.Comments, prior.Comments)
 	}
 	return p
 }
@@ -198,6 +206,16 @@ func stripUnchangedInt(p map[string]any, key string, planned, prior types.Int64)
 		return
 	}
 	if planned.ValueInt64() == prior.ValueInt64() {
+		delete(p, key)
+	}
+}
+
+// stripUnchangedString is stripUnchangedInt for a string attribute.
+func stripUnchangedString(p map[string]any, key string, planned, prior types.String) {
+	if planned.IsNull() || planned.IsUnknown() || prior.IsNull() || prior.IsUnknown() {
+		return
+	}
+	if planned.ValueString() == prior.ValueString() {
 		delete(p, key)
 	}
 }

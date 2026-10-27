@@ -111,6 +111,61 @@ func TestDatasetUpdateAPIPayloadKeepsQuotaChanges(t *testing.T) {
 	}
 }
 
+// TestDatasetUpdateAPIPayloadOmitsUnchangedComments is a regression test for
+// #62: an absent description reads back as a known "" and was resent on an
+// unrelated update, writing org.freenas:description as a LOCAL empty string.
+// An unchanged comments must be omitted; a real change (set or clear) is kept.
+func TestDatasetUpdateAPIPayloadOmitsUnchangedComments(t *testing.T) {
+	prior := &DatasetModel{
+		Name:     types.StringValue("tank/mydata"),
+		Type:     types.StringValue("filesystem"),
+		Comments: types.StringValue(""), // absent description reads back as ""
+	}
+	plan := &DatasetModel{
+		Name:        types.StringValue("tank/mydata"),
+		Type:        types.StringValue("filesystem"),
+		Compression: types.StringValue("zstd"), // the only real change
+		Comments:    types.StringValue(""),     // carried forward by UseStateForUnknown
+	}
+
+	payload := plan.updateAPIPayload(prior)
+
+	if _, ok := payload["comments"]; ok {
+		t.Errorf("unchanged comments must be omitted from update payload, got: %v", payload)
+	}
+	if payload["compression"] != "ZSTD" {
+		t.Errorf("changed compression must survive, got %v", payload["compression"])
+	}
+}
+
+// TestDatasetUpdateAPIPayloadKeepsCommentsChange verifies a real description
+// change still goes through, including clearing it back to "".
+func TestDatasetUpdateAPIPayloadKeepsCommentsChange(t *testing.T) {
+	// Set a description.
+	set := (&DatasetModel{
+		Name: types.StringValue("tank/mydata"), Type: types.StringValue("filesystem"),
+		Comments: types.StringValue("hello"),
+	}).updateAPIPayload(&DatasetModel{
+		Name: types.StringValue("tank/mydata"), Type: types.StringValue("filesystem"),
+		Comments: types.StringValue(""),
+	})
+	if set["comments"] != "hello" {
+		t.Errorf("new description must be sent, got %v", set["comments"])
+	}
+
+	// Clear a description back to "".
+	clear := (&DatasetModel{
+		Name: types.StringValue("tank/mydata"), Type: types.StringValue("filesystem"),
+		Comments: types.StringValue(""),
+	}).updateAPIPayload(&DatasetModel{
+		Name: types.StringValue("tank/mydata"), Type: types.StringValue("filesystem"),
+		Comments: types.StringValue("hello"),
+	})
+	if v, ok := clear["comments"]; !ok || v != "" {
+		t.Errorf("clearing a description must send comments=\"\", got %v (present=%v)", v, ok)
+	}
+}
+
 // TestDatasetCreateAPIPayloadStillIncludesType verifies the create payload
 // (apiPayload) is unaffected by the update-only stripping in
 // updateAPIPayload - type and name must still be present for pool.dataset.create.

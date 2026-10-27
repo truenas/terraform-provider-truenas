@@ -6,6 +6,18 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.5.22] - 2026-10-27
+
+### Fixed
+- `truenas_dataset`: an update that changes only another field (e.g.
+  `compression`) no longer writes an empty `org.freenas:description`
+  (`comments`) as a LOCAL user property on datasets that have no description.
+  An absent description reads back as a known `""` and `UseStateForUnknown`
+  carried it into the plan, so the unchanged `""` was resent on every update —
+  the same class as the quota fix in 1.5.21, for the `comments` field. The
+  update now omits `comments` when it matches prior state; setting or clearing a
+  description still applies. (#62)
+
 ## [1.5.21] - 2026-10-27
 
 ### Fixed
