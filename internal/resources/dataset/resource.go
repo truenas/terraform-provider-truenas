@@ -165,13 +165,16 @@ func (r *DatasetResource) Read(ctx context.Context, req resource.ReadRequest, re
 }
 
 func (r *DatasetResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan DatasetModel
+	var plan, state DatasetModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	payload := plan.updateAPIPayload()
+	// Pass prior state so unchanged quota/refquota/reservation are omitted and
+	// their property source is not flipped to LOCAL by a no-op resend. (#61)
+	payload := plan.updateAPIPayload(&state)
 
 	_, err := r.client.Call(ctx, "pool.dataset.update", plan.Name.ValueString(), payload)
 	if err != nil {

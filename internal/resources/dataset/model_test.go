@@ -25,7 +25,7 @@ func TestDatasetUpdateAPIPayloadOmitsCreateOnlyKeys(t *testing.T) {
 		Comments:    types.StringValue("updated"),
 	}
 
-	payload := m.updateAPIPayload()
+	payload := m.updateAPIPayload(nil)
 
 	if _, ok := payload["type"]; ok {
 		t.Errorf("update payload must not include \"type\", got: %v", payload)
@@ -40,6 +40,74 @@ func TestDatasetUpdateAPIPayloadOmitsCreateOnlyKeys(t *testing.T) {
 	}
 	if payload["comments"] != "updated" {
 		t.Errorf("expected comments=updated to survive, got %v", payload["comments"])
+	}
+}
+
+// TestDatasetUpdateAPIPayloadOmitsUnchangedQuota is a regression test for #61:
+// a comment-only update resent quota/refquota/reservation at their unchanged
+// read-back value (0 = unlimited), which flipped the TrueNAS property source
+// from DEFAULT to LOCAL. With prior state equal to the plan for those fields,
+// they must be omitted from the update payload, while a genuinely changed field
+// (here comments) still goes through.
+func TestDatasetUpdateAPIPayloadOmitsUnchangedQuota(t *testing.T) {
+	prior := &DatasetModel{
+		Name:        types.StringValue("tank/mydata"),
+		Type:        types.StringValue("filesystem"),
+		Comments:    types.StringValue("before"),
+		Quota:       types.Int64Value(0),
+		RefQuota:    types.Int64Value(0),
+		Reservation: types.Int64Value(0),
+	}
+	plan := &DatasetModel{
+		Name:        types.StringValue("tank/mydata"),
+		Type:        types.StringValue("filesystem"),
+		Comments:    types.StringValue("after"), // the only real change
+		Quota:       types.Int64Value(0),        // carried forward by UseStateForUnknown
+		RefQuota:    types.Int64Value(0),
+		Reservation: types.Int64Value(0),
+	}
+
+	payload := plan.updateAPIPayload(prior)
+
+	for _, k := range []string{"quota", "refquota", "reservation"} {
+		if _, ok := payload[k]; ok {
+			t.Errorf("unchanged %q must be omitted from update payload, got: %v", k, payload)
+		}
+	}
+	if payload["comments"] != "after" {
+		t.Errorf("changed comments must survive, got %v", payload["comments"])
+	}
+}
+
+// TestDatasetUpdateAPIPayloadKeepsQuotaChanges verifies the strip does not
+// swallow real changes, including a reset to 0 that clears a prior limit and a
+// newly-set limit.
+func TestDatasetUpdateAPIPayloadKeepsQuotaChanges(t *testing.T) {
+	prior := &DatasetModel{
+		Name:        types.StringValue("tank/mydata"),
+		Type:        types.StringValue("filesystem"),
+		Quota:       types.Int64Value(5368709120), // 5Gi, to be cleared
+		RefQuota:    types.Int64Value(0),          // unset, to be set
+		Reservation: types.Int64Value(0),          // unchanged
+	}
+	plan := &DatasetModel{
+		Name:        types.StringValue("tank/mydata"),
+		Type:        types.StringValue("filesystem"),
+		Quota:       types.Int64Value(0),          // reset -> must send 0
+		RefQuota:    types.Int64Value(1073741824), // 1Gi -> must send
+		Reservation: types.Int64Value(0),          // unchanged -> omit
+	}
+
+	payload := plan.updateAPIPayload(prior)
+
+	if payload["quota"] != int64(0) {
+		t.Errorf("quota reset to 0 must be sent, got %v (%T)", payload["quota"], payload["quota"])
+	}
+	if payload["refquota"] != int64(1073741824) {
+		t.Errorf("new refquota must be sent, got %v", payload["refquota"])
+	}
+	if _, ok := payload["reservation"]; ok {
+		t.Errorf("unchanged reservation must be omitted, got: %v", payload)
 	}
 }
 
@@ -80,7 +148,7 @@ func TestDatasetUpdateAPIPayloadOmitsVolsizeForFilesystem(t *testing.T) {
 		VolSize:     types.Int64Value(0), // as read back for FILESYSTEM datasets
 	}
 
-	payload := m.updateAPIPayload()
+	payload := m.updateAPIPayload(nil)
 
 	if _, ok := payload["volsize"]; ok {
 		t.Errorf("update payload for FILESYSTEM dataset must not include \"volsize\", got: %v", payload)

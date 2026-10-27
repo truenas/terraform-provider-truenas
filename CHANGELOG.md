@@ -6,6 +6,18 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.5.21] - 2026-10-27
+
+### Fixed
+- `truenas_dataset`: an update that changes only another field (e.g. `comments`)
+  no longer flips the `quota`, `refquota`, and `reservation` property sources
+  from `DEFAULT`/`INHERITED` to `LOCAL`. These read back as a known value
+  (`0` = unlimited) and `UseStateForUnknown` carries that into the plan, so the
+  update resent the unchanged value, which TrueNAS records as a local property.
+  The update now omits a quota field when it matches prior state; an explicit
+  change — including a reset to `0` that clears a prior limit — still applies.
+  (#61)
+
 ## [1.5.20] - 2026-10-27
 
 ### Fixed

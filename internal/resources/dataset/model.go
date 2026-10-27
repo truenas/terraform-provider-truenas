@@ -157,7 +157,7 @@ func (m *DatasetModel) encryptionOptions() map[string]any {
 // key) and "type" (changing a dataset's type after creation isn't
 // supported; TrueNAS returns "[EINVAL] data.type: Extra inputs are not
 // permitted" if it's included).
-func (m *DatasetModel) updateAPIPayload() map[string]any {
+func (m *DatasetModel) updateAPIPayload(prior *DatasetModel) map[string]any {
 	p := m.apiPayload()
 	delete(p, "name")
 	delete(p, "type")
@@ -174,7 +174,32 @@ func (m *DatasetModel) updateAPIPayload() map[string]any {
 	// turning inherited aclmode into a local value and breaking the first
 	// in-place update with an inconsistent-result error. (#26)
 	delete(p, "acltype")
+	// quota/refquota/reservation read back as a known value (0 = unlimited),
+	// and UseStateForUnknown carries that into the plan, so apiPayload always
+	// includes them on update. Resending an UNCHANGED value flips the TrueNAS
+	// property source from DEFAULT/INHERITED to LOCAL — e.g. an untouched
+	// unlimited quota becomes a local quota of 0 — even though the effective
+	// limit does not change. Drop each one when the plan equals prior state; an
+	// explicit change, including a reset to 0 that clears a prior limit, still
+	// goes through. (#61)
+	if prior != nil {
+		stripUnchangedInt(p, "quota", m.Quota, prior.Quota)
+		stripUnchangedInt(p, "refquota", m.RefQuota, prior.RefQuota)
+		stripUnchangedInt(p, "reservation", m.Reservation, prior.Reservation)
+	}
 	return p
+}
+
+// stripUnchangedInt removes key from p when the planned value is known and
+// equals the prior-state value. If either value is null or unknown it leaves p
+// alone, so a field it cannot prove unchanged is still sent.
+func stripUnchangedInt(p map[string]any, key string, planned, prior types.Int64) {
+	if planned.IsNull() || planned.IsUnknown() || prior.IsNull() || prior.IsUnknown() {
+		return
+	}
+	if planned.ValueInt64() == prior.ValueInt64() {
+		delete(p, key)
+	}
 }
 
 // apiResponse matches the flat JSON structure returned by pool.dataset.get_instance.
