@@ -146,9 +146,15 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 			},
 			"complete_identifier": schema.StringAttribute{
-				Computed:      true,
-				Description:   "Server-derived, fully-qualified UPS identifier. Read-only: never sent to TrueNAS.",
-				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+				Computed: true,
+				Description: "Server-derived, fully-qualified UPS identifier. Read-only: never sent to TrueNAS. " +
+					"Recomputed when its source fields (identifier, mode, remotehost, remoteport) change.",
+				// No UseStateForUnknown: this value is derived from identifier/
+				// mode/remotehost/remoteport, so holding the prior state value
+				// when those change (e.g. MASTER -> SLAVE) produced "inconsistent
+				// result after apply" — the plan kept "...@localhost" but the
+				// server returned "...@<remotehost>". Letting it be unknown on any
+				// update lets the server recompute it consistently.
 			},
 		},
 	}

@@ -82,6 +82,93 @@ func TestAccRsyncTask_basic(t *testing.T) {
 	})
 }
 
+// TestAccRsyncTask_coverage sets the rsync flag/mode attributes that
+// _basic leaves at server defaults, using flipped (non-default) values, then
+// imports. MODULE mode, disabled, validate_rpath=false, TEST-NET host: nothing
+// is contacted. ssh_credentials is left unset: it needs a keychain SSH
+// credential and SSH mode (which requires a reachable host + user keypair).
+func TestAccRsyncTask_coverage(t *testing.T) {
+	datasetName := fmt.Sprintf("%s/%s", acctest.TestPool(), acctest.RandName("tf-acc-rsynccov-ds"))
+	r := "truenas_rsync_task.test"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy: resource.ComposeAggregateTestCheckFunc(
+			testAccCheckRsyncTaskDestroyed(datasetName),
+			testAccCheckRsyncDatasetDestroyed(datasetName),
+		),
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccRsyncTaskCoverageConfig(datasetName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(r, "direction", "PULL"),
+					resource.TestCheckResourceAttr(r, "remotepath", "/tfacc/remote"),
+					resource.TestCheckResourceAttr(r, "remoteport", "2222"),
+					resource.TestCheckResourceAttr(r, "recursive", "false"),
+					resource.TestCheckResourceAttr(r, "times", "false"),
+					resource.TestCheckResourceAttr(r, "compress", "false"),
+					resource.TestCheckResourceAttr(r, "archive", "true"),
+					resource.TestCheckResourceAttr(r, "delete", "true"),
+					resource.TestCheckResourceAttr(r, "quiet", "true"),
+					resource.TestCheckResourceAttr(r, "preserveperm", "true"),
+					resource.TestCheckResourceAttr(r, "preserveattr", "true"),
+					resource.TestCheckResourceAttr(r, "delayupdates", "false"),
+					resource.TestCheckResourceAttr(r, "extra.#", "2"),
+					resource.TestCheckResourceAttr(r, "extra.0", "--bwlimit=100"),
+					resource.TestCheckResourceAttr(r, "extra.1", "--exclude=*.tmp"),
+					resource.TestCheckResourceAttr(r, "ssh_keyscan", "false"),
+				),
+			},
+			{
+				ResourceName:            r,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"validate_rpath", "ssh_keyscan"},
+			},
+		},
+	})
+}
+
+func testAccRsyncTaskCoverageConfig(datasetName string) string {
+	return fmt.Sprintf(`
+resource "truenas_dataset" "fixture" {
+  name = %q
+}
+
+resource "truenas_rsync_task" "test" {
+  path           = truenas_dataset.fixture.mountpoint
+  user           = "root"
+  mode           = "MODULE"
+  remotehost     = "192.0.2.10"
+  remotemodule   = "tfacc"
+  remotepath     = "/tfacc/remote"
+  remoteport     = 2222
+  direction      = "PULL"
+  enabled        = false
+  validate_rpath = false
+  ssh_keyscan    = false
+  recursive      = false
+  times          = false
+  compress       = false
+  archive        = true
+  delete         = true
+  quiet          = true
+  preserveperm   = true
+  preserveattr   = true
+  delayupdates   = false
+  extra          = ["--bwlimit=100", "--exclude=*.tmp"]
+  schedule = {
+    minute = "0"
+    hour   = "3"
+    dom    = "*"
+    month  = "*"
+    dow    = "*"
+  }
+}
+`, datasetName)
+}
+
 func testAccRsyncTaskConfig(datasetName, desc string) string {
 	return fmt.Sprintf(`
 resource "truenas_dataset" "fixture" {

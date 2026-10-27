@@ -6,6 +6,19 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.5.23] - 2026-10-27
+
+### Fixed
+- `truenas_ups_config`: switching `mode` (e.g. `MASTER` -> `SLAVE`) or changing
+  the remote host no longer fails with "Provider produced inconsistent result
+  after apply". The computed `complete_identifier` (`<identifier>@<host>:<port>`)
+  was pinned with `UseStateForUnknown`, so the plan kept the old `...@localhost`
+  while the server returned `...@<remotehost>`. It now recomputes on update.
+- `truenas_nvmet_port`: `addr_adrfam` (the address family derived from
+  `addr_traddr`) had the same stale-computed-value defect — changing
+  `addr_traddr` across IPv4/IPv6 would have produced an inconsistent result. It
+  now recomputes on update. (Same class as the `ups_config` fix.)
+
 ## [1.5.22] - 2026-10-27
 
 ### Fixed

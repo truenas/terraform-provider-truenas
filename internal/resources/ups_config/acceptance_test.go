@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/tfversion"
 	"github.com/truenas/terraform-provider-truenas/internal/acctest"
 )
 
@@ -183,4 +184,96 @@ resource "truenas_ups_config" "test" {
   description = %q
 }
 `, description)
+}
+
+// TestAccUPSConfig_coverage sets every writable truenas_ups_config attribute
+// (including the write-only monpwd / monpwd_wo_version pair) to a non-default
+// value, asserts the read-back and the framework's empty-plan check, then
+// flips mode to SLAVE, and finally imports. driver and port are set to the
+// box's own current values so ups.update stays valid. The original
+// configuration is captured first and restored via t.Cleanup (full
+// ups.update payload), so the box is left as found even on failure.
+//
+// monpwd is write-only and cannot be asserted from state; ups.config returns
+// it masked, so the test only proves ups.update accepts it.
+func TestAccUPSConfig_coverage(t *testing.T) {
+	acctest.DisruptiveCheck(t)
+
+	orig := readUPSConfigOriginal(t)
+	if orig.Driver == "" || orig.Port == "" {
+		t.Skip("UPS is unconfigured on the target box (empty driver/port); set-and-restore cannot restore the unconfigured state")
+	}
+	t.Cleanup(func() { restoreUPSConfig(t, orig) })
+
+	const extraUsers = "[tfaccextra]\n\tpassword = tfaccpass\n\tupsmon slave"
+
+	full := func(mode string) string {
+		return acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_ups_config" "test" {
+  identifier        = "tfaccups"
+  mode              = %q
+  remotehost        = "192.0.2.10"
+  remoteport        = 3494
+  driver            = %q
+  port              = %q
+  options           = "pollinterval = 10"
+  optionsupsd       = "MAXAGE 25"
+  description       = "tf-acc-ups-coverage"
+  shutdown          = "BATT"
+  shutdowntimer     = 90
+  shutdowncmd       = "/sbin/poweroff"
+  monuser           = "tfaccmon"
+  monpwd            = "tfaccmonpass1"
+  monpwd_wo_version = 1
+  extrausers        = %q
+  rmonitor          = true
+  powerdown         = true
+  hostsync          = 25
+  nocommwarntime    = 400
+}
+`, mode, orig.Driver, orig.Port, extraUsers)
+	}
+
+	r := "truenas_ups_config.test"
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		TerraformVersionChecks:   []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_11_0)},
+		Steps: []resource.TestStep{
+			{
+				Config: full("MASTER"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(r, "identifier", "tfaccups"),
+					resource.TestCheckResourceAttr(r, "mode", "MASTER"),
+					resource.TestCheckResourceAttr(r, "remotehost", "192.0.2.10"),
+					resource.TestCheckResourceAttr(r, "remoteport", "3494"),
+					resource.TestCheckResourceAttr(r, "driver", orig.Driver),
+					resource.TestCheckResourceAttr(r, "port", orig.Port),
+					resource.TestCheckResourceAttr(r, "options", "pollinterval = 10"),
+					resource.TestCheckResourceAttr(r, "optionsupsd", "MAXAGE 25"),
+					resource.TestCheckResourceAttr(r, "description", "tf-acc-ups-coverage"),
+					resource.TestCheckResourceAttr(r, "shutdown", "BATT"),
+					resource.TestCheckResourceAttr(r, "shutdowntimer", "90"),
+					resource.TestCheckResourceAttr(r, "shutdowncmd", "/sbin/poweroff"),
+					resource.TestCheckResourceAttr(r, "monuser", "tfaccmon"),
+					resource.TestCheckResourceAttr(r, "monpwd_wo_version", "1"),
+					resource.TestCheckResourceAttr(r, "extrausers", extraUsers),
+					resource.TestCheckResourceAttr(r, "rmonitor", "true"),
+					resource.TestCheckResourceAttr(r, "powerdown", "true"),
+					resource.TestCheckResourceAttr(r, "hostsync", "25"),
+					resource.TestCheckResourceAttr(r, "nocommwarntime", "400"),
+				),
+			},
+			{
+				Config: full("SLAVE"),
+				Check:  resource.TestCheckResourceAttr(r, "mode", "SLAVE"),
+			},
+			{
+				ResourceName:            r,
+				ImportState:             true,
+				ImportStateId:           "ups_config",
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"monpwd", "monpwd_wo_version"},
+			},
+		},
+	})
 }

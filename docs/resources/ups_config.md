@@ -59,5 +59,5 @@ variable "ups_password" {
 
 ### Read-Only
 
-- `complete_identifier` (String) Server-derived, fully-qualified UPS identifier. Read-only: never sent to TrueNAS.
+- `complete_identifier` (String) Server-derived, fully-qualified UPS identifier. Read-only: never sent to TrueNAS. Recomputed when its source fields (identifier, mode, remotehost, remoteport) change.
 - `id` (String) Fixed identifier for this singleton resource: always "ups_config".

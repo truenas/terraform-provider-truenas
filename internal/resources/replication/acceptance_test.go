@@ -17,6 +17,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfversion"
 	"golang.org/x/crypto/ssh"
 
 	"github.com/truenas/terraform-provider-truenas/internal/acctest"
@@ -572,4 +573,377 @@ func testAccCheckReplicationSSHDestroyed(name, username string) resource.TestChe
 		}
 		return nil
 	}
+}
+
+// coverageSteps builds the standard create+import step pair for the
+// attribute-coverage tests below.
+func coverageSteps(name, cfg string, checks ...resource.TestCheckFunc) []resource.TestStep {
+	return []resource.TestStep{
+		{
+			Config: acctest.ProviderConfig() + cfg,
+			Check:  resource.ComposeTestCheckFunc(checks...),
+		},
+		{
+			ResourceName:      "truenas_replication_task.test",
+			ImportState:       true,
+			ImportStateVerify: true,
+		},
+	}
+}
+
+// TestAccReplication_coveragePeriodic sets the send-stream flags, retries,
+// logging_level, exclude, properties/properties_exclude/properties_override
+// and periodic_snapshot_tasks on a LOCAL PUSH task bound to a periodic
+// snapshot task. The framework's post-apply empty-plan check is the
+// read-back assertion for every one of them.
+func TestAccReplication_coveragePeriodic(t *testing.T) {
+	name := acctest.RandName("tf-acc-replcp")
+	pool := acctest.TestPool()
+	src := acctest.RandName("tf-acc-replcp-src")
+	dst := acctest.RandName("tf-acc-replcp-dst")
+	cfg := fmt.Sprintf(`
+resource "truenas_dataset" "src" {
+  name = "%[1]s/%[2]s"
+}
+
+resource "truenas_dataset" "child" {
+  name = "${truenas_dataset.src.name}/child"
+}
+
+resource "truenas_dataset" "dst" {
+  name = "%[1]s/%[3]s"
+}
+
+resource "truenas_periodic_snapshot_task" "feed" {
+  dataset        = truenas_dataset.src.name
+  recursive      = true
+  lifetime_value = 1
+  lifetime_unit  = "WEEK"
+  naming_schema  = "tf-acc-%%Y%%m%%d-%%H%%M"
+  enabled        = true
+  schedule = {
+    minute = "0"
+    hour   = "0"
+    dom    = "1"
+    month  = "1"
+    dow    = "*"
+  }
+}
+
+resource "truenas_replication_task" "test" {
+  name             = %[4]q
+  direction        = "PUSH"
+  transport        = "LOCAL"
+  source_datasets  = [truenas_dataset.src.name]
+  target_dataset   = truenas_dataset.dst.name
+  recursive        = true
+  exclude          = [truenas_dataset.child.name]
+  auto             = false
+  retention_policy = "SOURCE"
+
+  periodic_snapshot_tasks = [truenas_periodic_snapshot_task.feed.id]
+
+  compressed             = true
+  embed                  = true
+  large_block            = true
+  allow_from_scratch     = true
+  hold_pending_snapshots = true
+  retries                = 3
+  logging_level          = "DEBUG"
+
+  properties         = true
+  properties_exclude = ["quota"]
+  properties_override = {
+    compression = "lz4"
+  }
+}
+`, pool, src, dst, name)
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckReplicationDestroyed(name),
+		Steps: coverageSteps(name, cfg,
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "periodic_snapshot_tasks.#", "1"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "exclude.#", "1"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "compressed", "true"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "embed", "true"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "large_block", "true"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "allow_from_scratch", "true"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "hold_pending_snapshots", "true"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "retries", "3"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "logging_level", "DEBUG"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "properties", "true"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "properties_exclude.#", "1"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "properties_override.compression", "lz4"),
+		),
+	})
+}
+
+// TestAccReplication_coverageSchedule sets schedule, name_regex,
+// only_matching_schedule and restrict_schedule (with begin/end). name_regex
+// only allows retention SOURCE or NONE, so retention is SOURCE here.
+func TestAccReplication_coverageSchedule(t *testing.T) {
+	name := acctest.RandName("tf-acc-replcs")
+	pool := acctest.TestPool()
+	src := acctest.RandName("tf-acc-replcs-src")
+	dst := acctest.RandName("tf-acc-replcs-dst")
+	cfg := fmt.Sprintf(`
+resource "truenas_dataset" "src" {
+  name = "%[1]s/%[2]s"
+}
+
+resource "truenas_dataset" "dst" {
+  name = "%[1]s/%[3]s"
+}
+
+resource "truenas_replication_task" "test" {
+  name            = %[4]q
+  direction       = "PUSH"
+  transport       = "LOCAL"
+  source_datasets = [truenas_dataset.src.name]
+  target_dataset  = truenas_dataset.dst.name
+  recursive       = false
+  auto            = true
+
+  name_regex = "tf-acc-.*"
+
+  schedule = {
+    minute = "30"
+    hour   = "3"
+    dom    = "*"
+    month  = "*"
+    dow    = "*"
+  }
+
+  only_matching_schedule = true
+  restrict_schedule = {
+    minute = "0"
+    hour   = "*"
+    dom    = "*"
+    month  = "*"
+    dow    = "*"
+    begin  = "01:00"
+    end    = "22:30"
+  }
+
+  retention_policy = "SOURCE"
+}
+`, pool, src, dst, name)
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckReplicationDestroyed(name),
+		Steps: coverageSteps(name, cfg,
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "name_regex", "tf-acc-.*"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "schedule.hour", "3"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "only_matching_schedule", "true"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "restrict_schedule.begin", "01:00"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "restrict_schedule.end", "22:30"),
+		),
+	})
+}
+
+// TestAccReplication_coverageCustomRetention sets CUSTOM retention via
+// lifetime_value/lifetime_unit plus a lifetimes rule (name_regex cannot be
+// combined with CUSTOM, so this uses also_include_naming_schema).
+func TestAccReplication_coverageCustomRetention(t *testing.T) {
+	name := acctest.RandName("tf-acc-replcr2")
+	pool := acctest.TestPool()
+	src := acctest.RandName("tf-acc-replcr2-src")
+	dst := acctest.RandName("tf-acc-replcr2-dst")
+	cfg := fmt.Sprintf(`
+resource "truenas_dataset" "src" {
+  name = "%[1]s/%[2]s"
+}
+
+resource "truenas_dataset" "dst" {
+  name = "%[1]s/%[3]s"
+}
+
+resource "truenas_replication_task" "test" {
+  name             = %[4]q
+  direction        = "PUSH"
+  transport        = "LOCAL"
+  source_datasets  = [truenas_dataset.src.name]
+  target_dataset   = truenas_dataset.dst.name
+  recursive        = false
+  auto             = false
+
+  also_include_naming_schema = ["auto-%%Y-%%m-%%d_%%H-%%M"]
+
+  retention_policy = "CUSTOM"
+  lifetime_value   = 2
+  lifetime_unit    = "WEEK"
+  lifetimes = [{
+    schedule = {
+      minute = "0"
+      hour   = "0"
+      dom    = "*"
+      month  = "*"
+      dow    = "1"
+    }
+    lifetime_value = 1
+    lifetime_unit  = "MONTH"
+  }]
+}
+`, pool, src, dst, name)
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckReplicationDestroyed(name),
+		Steps: coverageSteps(name, cfg,
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "lifetime_value", "2"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "lifetime_unit", "WEEK"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "lifetimes.#", "1"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "lifetimes.0.lifetime_unit", "MONTH"),
+		),
+	})
+}
+
+// TestAccReplication_coverageReplicate sets replicate = true on a recursive
+// LOCAL PUSH task bound to a recursive periodic snapshot task.
+func TestAccReplication_coverageReplicate(t *testing.T) {
+	name := acctest.RandName("tf-acc-replcr")
+	pool := acctest.TestPool()
+	src := acctest.RandName("tf-acc-replcr-src")
+	dst := acctest.RandName("tf-acc-replcr-dst")
+	cfg := fmt.Sprintf(`
+resource "truenas_dataset" "src" {
+  name = "%[1]s/%[2]s"
+}
+
+resource "truenas_dataset" "dst" {
+  name = "%[1]s/%[3]s"
+}
+
+resource "truenas_periodic_snapshot_task" "feed" {
+  dataset        = truenas_dataset.src.name
+  recursive      = true
+  lifetime_value = 1
+  lifetime_unit  = "WEEK"
+  naming_schema  = "tf-acc-%%Y%%m%%d-%%H%%M"
+  enabled        = true
+  schedule = {
+    minute = "0"
+    hour   = "0"
+    dom    = "1"
+    month  = "1"
+    dow    = "*"
+  }
+}
+
+resource "truenas_replication_task" "test" {
+  name                    = %[4]q
+  direction               = "PUSH"
+  transport               = "LOCAL"
+  source_datasets         = [truenas_dataset.src.name]
+  target_dataset          = truenas_dataset.dst.name
+  recursive               = true
+  replicate               = true
+  properties              = true
+  auto                    = false
+  retention_policy        = "SOURCE"
+  periodic_snapshot_tasks = [truenas_periodic_snapshot_task.feed.id]
+}
+`, pool, src, dst, name)
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckReplicationDestroyed(name),
+		Steps: coverageSteps(name, cfg,
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "replicate", "true"),
+		),
+	})
+}
+
+// TestAccReplication_coveragePull sets naming_schema (PULL-only) on a LOCAL
+// PULL task.
+func TestAccReplication_coveragePull(t *testing.T) {
+	name := acctest.RandName("tf-acc-replpl")
+	pool := acctest.TestPool()
+	src := acctest.RandName("tf-acc-replpl-src")
+	dst := acctest.RandName("tf-acc-replpl-dst")
+	cfg := fmt.Sprintf(`
+resource "truenas_dataset" "src" {
+  name = "%[1]s/%[2]s"
+}
+
+resource "truenas_dataset" "dst" {
+  name = "%[1]s/%[3]s"
+}
+
+resource "truenas_replication_task" "test" {
+  name             = %[4]q
+  direction        = "PULL"
+  transport        = "LOCAL"
+  source_datasets  = [truenas_dataset.src.name]
+  target_dataset   = truenas_dataset.dst.name
+  recursive        = false
+  auto             = false
+  retention_policy = "NONE"
+  naming_schema    = ["tf-acc-%%Y%%m%%d-%%H%%M"]
+}
+`, pool, src, dst, name)
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckReplicationDestroyed(name),
+		Steps: coverageSteps(name, cfg,
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "naming_schema.#", "1"),
+		),
+	})
+}
+
+// TestAccReplication_coverageEncryption sets target-side encryption with a
+// HEX key. encryption_key is write-only (Terraform >= 1.11) and is absent
+// from state, so it is set in config but never asserted. The target dataset
+// is a not-yet-existing child of an own-created parent so the replication
+// creates it encrypted.
+func TestAccReplication_coverageEncryption(t *testing.T) {
+	name := acctest.RandName("tf-acc-replce")
+	pool := acctest.TestPool()
+	src := acctest.RandName("tf-acc-replce-src")
+	dstParent := acctest.RandName("tf-acc-replce-par")
+	keyFile := "/root/" + name + ".key"
+	cfg := fmt.Sprintf(`
+resource "truenas_dataset" "src" {
+  name = "%[1]s/%[2]s"
+}
+
+resource "truenas_dataset" "dstparent" {
+  name = "%[1]s/%[3]s"
+}
+
+resource "truenas_replication_task" "test" {
+  name             = %[4]q
+  direction        = "PUSH"
+  transport        = "LOCAL"
+  source_datasets  = [truenas_dataset.src.name]
+  target_dataset   = "${truenas_dataset.dstparent.name}/enc"
+  recursive        = false
+  auto             = false
+  retention_policy = "SOURCE"
+
+  also_include_naming_schema = ["auto-%%Y-%%m-%%d_%%H-%%M"]
+
+  encryption              = true
+  encryption_inherit      = false
+  encryption_key          = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  encryption_key_format   = "HEX"
+  encryption_key_location = %[5]q
+}
+`, pool, src, dstParent, name, keyFile)
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		TerraformVersionChecks:   []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_11_0)},
+		CheckDestroy:             testAccCheckReplicationDestroyed(name),
+		Steps: coverageSteps(name, cfg,
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "encryption", "true"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "encryption_inherit", "false"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "encryption_key_format", "HEX"),
+			resource.TestCheckResourceAttr("truenas_replication_task.test", "encryption_key_location", keyFile),
+			resource.TestCheckNoResourceAttr("truenas_replication_task.test", "encryption_key"),
+		),
+	})
 }
