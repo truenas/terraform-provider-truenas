@@ -169,3 +169,98 @@ resource "truenas_ftp_config" "test" {
 }
 `, banner)
 }
+
+// TestAccFTPConfig_coverage sets ssltls_certificate to a certificate that
+// already exists on the box and asserts it reads back with an empty
+// post-apply plan. The config pins tls = false, so FTP does not start
+// offering TLS with the chosen cert and client-facing behavior is unchanged. The candidate is the first non-CSR, non-CA certificate
+// from certificate.query that differs from the current one; the test skips
+// if there is none. The original ssltls_certificate (possibly null) and tls
+// are restored via ftp.update from t.Cleanup and re-read to confirm.
+func TestAccFTPConfig_coverage(t *testing.T) {
+	acctest.DisruptiveCheck(t)
+
+	raw, err := acctest.RestoreCall(context.Background(), "ftp.config")
+	if err != nil {
+		t.Fatalf("error reading current ftp config: %v", err)
+	}
+	var orig struct {
+		TLS               bool   `json:"tls"`
+		SSLTLSCertificate *int64 `json:"ssltls_certificate"`
+	}
+	if err := json.Unmarshal(raw, &orig); err != nil {
+		t.Fatalf("error parsing ftp.config response: %v", err)
+	}
+
+	raw, err = acctest.RestoreCall(context.Background(), "certificate.query")
+	if err != nil {
+		t.Skipf("certificate.query failed: %v", err)
+	}
+	var certs []struct {
+		ID  int64 `json:"id"`
+		CSR bool  `json:"cert_type_CSR"`
+		CA  bool  `json:"cert_type_CA"`
+	}
+	if err := json.Unmarshal(raw, &certs); err != nil {
+		t.Fatalf("error parsing certificate.query response: %v", err)
+	}
+	var certID int64
+	for _, c := range certs {
+		if c.CSR || c.CA {
+			continue
+		}
+		if orig.SSLTLSCertificate != nil && *orig.SSLTLSCertificate == c.ID {
+			continue
+		}
+		certID = c.ID
+		break
+	}
+	if certID == 0 {
+		t.Skip("no usable certificate on the box that differs from the current ftp ssltls_certificate")
+	}
+
+	t.Cleanup(func() {
+		if _, err := acctest.RestoreCall(context.Background(), "ftp.update", map[string]any{
+			"tls":                orig.TLS,
+			"ssltls_certificate": orig.SSLTLSCertificate,
+		}); err != nil {
+			t.Errorf("error restoring ftp ssltls_certificate: %v", err)
+			return
+		}
+		raw, err := acctest.RestoreCall(context.Background(), "ftp.config")
+		if err != nil {
+			t.Errorf("error re-reading ftp.config after restore: %v", err)
+			return
+		}
+		var got struct {
+			TLS               bool   `json:"tls"`
+			SSLTLSCertificate *int64 `json:"ssltls_certificate"`
+		}
+		if err := json.Unmarshal(raw, &got); err != nil {
+			t.Errorf("error parsing ftp.config after restore: %v", err)
+			return
+		}
+		sameCert := (got.SSLTLSCertificate == nil && orig.SSLTLSCertificate == nil) ||
+			(got.SSLTLSCertificate != nil && orig.SSLTLSCertificate != nil && *got.SSLTLSCertificate == *orig.SSLTLSCertificate)
+		if got.TLS != orig.TLS || !sameCert {
+			t.Errorf("ftp tls/ssltls_certificate not restored: want %+v, got %+v", orig, got)
+		}
+	})
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_ftp_config" "test" {
+  tls                = false
+  ssltls_certificate = %d
+}
+`, certID),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_ftp_config.test", "ssltls_certificate", fmt.Sprint(certID)),
+				),
+			},
+		},
+	})
+}

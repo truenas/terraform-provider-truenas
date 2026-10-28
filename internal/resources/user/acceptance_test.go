@@ -238,6 +238,7 @@ func TestAccUser_fullSurface(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_user.test", "username", username),
 					resource.TestCheckResourceAttr("truenas_user.test", "ssh_password_enabled", "true"),
+					resource.TestCheckResourceAttr("truenas_user.test", "password_wo_version", "1"),
 					resource.TestCheckResourceAttrSet("truenas_user.test", "group"),
 					resource.TestCheckResourceAttr("truenas_user.test", "groups.#", "1"),
 				),
@@ -246,7 +247,7 @@ func TestAccUser_fullSurface(t *testing.T) {
 				ResourceName:            "truenas_user.test",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"password", "group_create", "home_mode", "groups"},
+				ImportStateVerifyIgnore: []string{"password", "password_wo_version", "group_create", "home_mode", "groups"},
 			},
 		},
 	})
@@ -274,6 +275,7 @@ resource "truenas_user" "test" {
   username             = %q
   full_name            = "Full Surface"
   password             = "Tf-Acc-Test-Passw0rd!"
+  password_wo_version  = 1
   password_disabled    = false
   home                 = truenas_dataset.home.mountpoint
   home_mode            = "0700"

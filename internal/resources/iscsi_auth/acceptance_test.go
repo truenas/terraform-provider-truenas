@@ -54,6 +54,64 @@ func TestAccISCSIAuth_basic(t *testing.T) {
 	})
 }
 
+// TestAccISCSIAuth_mutual sets a consistent mutual-CHAP combination:
+// peeruser, peersecret (write-only) with discovery_auth = CHAP_MUTUAL, plus
+// the secret_wo_version / peersecret_wo_version rotation triggers, then bumps
+// the triggers to rotate both secrets.
+func TestAccISCSIAuth_mutual(t *testing.T) {
+	user := acctest.RandName("tf-acc-chapm")
+	peer := acctest.RandName("tf-acc-peer")
+	cfg := func(secret, peerSecret string, ver int) string {
+		return acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_iscsi_auth" "test" {
+  tag                   = %d
+  user                  = %q
+  secret                = %q
+  secret_wo_version     = %d
+  peeruser              = %q
+  peersecret            = %q
+  peersecret_wo_version = %d
+  discovery_auth        = "CHAP_MUTUAL"
+}
+`, testAccISCSIAuthTag, user, secret, ver, peer, peerSecret, ver)
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckISCSIAuthDestroyed(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg("tfacc-secret-1m", "tfacc-peersec-1", 1),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_iscsi_auth.test", "user", user),
+					resource.TestCheckResourceAttr("truenas_iscsi_auth.test", "peeruser", peer),
+					resource.TestCheckResourceAttr("truenas_iscsi_auth.test", "discovery_auth", "CHAP_MUTUAL"),
+					resource.TestCheckResourceAttr("truenas_iscsi_auth.test", "secret_wo_version", "1"),
+					resource.TestCheckResourceAttr("truenas_iscsi_auth.test", "peersecret_wo_version", "1"),
+				),
+			},
+			// Rotate both secrets by bumping the version triggers.
+			{
+				Config: cfg("tfacc-secret-2m", "tfacc-peersec-2", 2),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_iscsi_auth.test", "secret_wo_version", "2"),
+					resource.TestCheckResourceAttr("truenas_iscsi_auth.test", "peersecret_wo_version", "2"),
+					resource.TestCheckResourceAttr("truenas_iscsi_auth.test", "peeruser", peer),
+				),
+			},
+			{
+				ResourceName:      "truenas_iscsi_auth.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				// Write-only secrets and their version triggers are never
+				// returned by the API.
+				ImportStateVerifyIgnore: []string{"secret", "peersecret", "secret_wo_version", "peersecret_wo_version"},
+			},
+		},
+	})
+}
+
 func testAccISCSIAuthConfig(user, secret, discoveryAuth string) string {
 	discoveryAuthLine := ""
 	if discoveryAuth != "" {

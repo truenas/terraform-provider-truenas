@@ -34,6 +34,8 @@ func TestAccNTPServer_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("truenas_ntp_server.test", "iburst", "false"),
 					resource.TestCheckResourceAttr("truenas_ntp_server.test", "burst", "false"),
 					resource.TestCheckResourceAttr("truenas_ntp_server.test", "prefer", "false"),
+					resource.TestCheckResourceAttr("truenas_ntp_server.test", "minpoll", "5"),
+					resource.TestCheckResourceAttr("truenas_ntp_server.test", "maxpoll", "8"),
 					resource.TestCheckResourceAttrSet("truenas_ntp_server.test", "id"),
 				),
 			},
@@ -42,6 +44,8 @@ func TestAccNTPServer_basic(t *testing.T) {
 				Config: acctest.ProviderConfig() + testAccNTPServerConfig(address, true),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_ntp_server.test", "prefer", "true"),
+					resource.TestCheckResourceAttr("truenas_ntp_server.test", "minpoll", "5"),
+					resource.TestCheckResourceAttr("truenas_ntp_server.test", "maxpoll", "8"),
 				),
 			},
 			{
@@ -61,6 +65,8 @@ resource "truenas_ntp_server" "test" {
   iburst  = false
   burst   = false
   prefer  = %v
+  minpoll = 5
+  maxpoll = 8
   force   = true
 }
 `, address, prefer)

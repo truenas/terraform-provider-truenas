@@ -199,3 +199,68 @@ resource "truenas_zvol" "encp" {
 		},
 	})
 }
+
+// TestAccZvol_reservations sets reservation and refreservation on a
+// non-sparse zvol (a sparse zvol carries no local reservation and reads them
+// back null), asserts both read back, and imports.
+func TestAccZvol_reservations(t *testing.T) {
+	name := fmt.Sprintf("%s/%s", acctest.TestPool(), acctest.RandName("tfacc-zres"))
+	cfg := acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_zvol" "res" {
+  name           = %q
+  volsize        = 67108864
+  reservation    = 33554432
+  refreservation = 134217728
+}
+`, name)
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckZvolDestroyed(name),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_zvol.res", "reservation", "33554432"),
+					resource.TestCheckResourceAttr("truenas_zvol.res", "refreservation", "134217728"),
+				),
+			},
+			{
+				ResourceName:      "truenas_zvol.res",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+// TestAccZvol_encryptedExplicitKey creates a key-based encrypted zvol from an
+// explicit 64-hex-character write-only encryption_key.
+func TestAccZvol_encryptedExplicitKey(t *testing.T) {
+	name := fmt.Sprintf("%s/%s", acctest.TestPool(), acctest.RandName("tfacc-zenck"))
+	cfg := acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_zvol" "enck" {
+  name                 = %q
+  volsize              = 67108864
+  encryption           = true
+  inherit_encryption   = false
+  encryption_algorithm = "AES-256-GCM"
+  encryption_key       = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+}
+`, name)
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckZvolDestroyed(name),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_zvol.enck", "encrypted", "true"),
+					resource.TestCheckResourceAttr("truenas_zvol.enck", "key_format", "HEX"),
+					resource.TestCheckResourceAttr("truenas_zvol.enck", "encryption_algorithm", "AES-256-GCM"),
+				),
+			},
+		},
+	})
+}

@@ -109,6 +109,9 @@ resource "truenas_filesystem_permissions" "test" {
   mode = %q
   uid  = truenas_user.fixture.uid
   gid  = truenas_group.fixture.gid
+
+  recursive = true
+  traverse  = true
 }
 `, mode)
 }

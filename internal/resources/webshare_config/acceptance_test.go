@@ -6,6 +6,7 @@ package webshare_config_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -155,4 +156,119 @@ resource "truenas_webshare_config" "test" {
   search = ` + boolStr(search) + `
 }
 `
+}
+
+// TestAccWebshareConfig_coverage sets passkey and bindip, which the search
+// toggle test leaves alone, and asserts they read back with an empty
+// post-apply plan. 26.0+ only and DisruptiveCheck-gated, like the toggle
+// test.
+//
+// Safety: passkey is only ever moved between ENABLED and DISABLED, never
+// REQUIRED (which could lock users out). bindip is only set to an address
+// offered by webshare.bindip_choices (so it is valid on this box) and only
+// when that differs from the current binding. groups is NOT exercised: it
+// takes AD/LDAP group names, which need a directory service on the box, so
+// it stays ratcheted. All four fields (search, bindip, passkey, groups) are
+// restored from t.Cleanup and re-read to confirm.
+func TestAccWebshareConfig_coverage(t *testing.T) {
+	acctest.DisruptiveCheck(t)
+	if !acctest.ServerVersionAtLeast(t, 26, 0) {
+		t.Skip("truenas_webshare_config requires TrueNAS 26.0 or later (webshare namespace absent on 25.10, confirmed live)")
+	}
+
+	type cfgShape struct {
+		Search  bool     `json:"search"`
+		Bindip  []string `json:"bindip"`
+		Passkey string   `json:"passkey"`
+		Groups  []string `json:"groups"`
+	}
+	raw, err := acctest.RestoreCall(context.Background(), "webshare.config")
+	if err != nil {
+		t.Skip("webshare.config could not be read on the target box")
+	}
+	var orig cfgShape
+	if err := json.Unmarshal(raw, &orig); err != nil {
+		t.Fatalf("error parsing webshare.config response: %v", err)
+	}
+	if orig.Bindip == nil {
+		orig.Bindip = []string{}
+	}
+	if orig.Groups == nil {
+		orig.Groups = []string{}
+	}
+
+	t.Cleanup(func() {
+		if _, err := acctest.RestoreCall(context.Background(), "webshare.update", map[string]any{
+			"search":  orig.Search,
+			"bindip":  orig.Bindip,
+			"passkey": orig.Passkey,
+			"groups":  orig.Groups,
+		}); err != nil {
+			t.Errorf("error restoring webshare config: %v", err)
+			return
+		}
+		raw, err := acctest.RestoreCall(context.Background(), "webshare.config")
+		if err != nil {
+			t.Errorf("error re-reading webshare.config after restore: %v", err)
+			return
+		}
+		var got cfgShape
+		if err := json.Unmarshal(raw, &got); err != nil {
+			t.Errorf("error parsing webshare.config after restore: %v", err)
+			return
+		}
+		if got.Search != orig.Search || got.Passkey != orig.Passkey ||
+			fmt.Sprint(got.Bindip) != fmt.Sprint(orig.Bindip) || fmt.Sprint(got.Groups) != fmt.Sprint(orig.Groups) {
+			t.Errorf("webshare config not restored: want %+v, got %+v", orig, got)
+		}
+	})
+
+	passkey := "ENABLED"
+	if orig.Passkey == "ENABLED" {
+		passkey = "DISABLED"
+	}
+
+	newIP := ""
+	if raw, err := acctest.RestoreCall(context.Background(), "webshare.bindip_choices"); err == nil {
+		var choices map[string]string
+		if json.Unmarshal(raw, &choices) == nil {
+			for k := range choices {
+				if k != "" && (len(orig.Bindip) != 1 || orig.Bindip[0] != k) {
+					newIP = k
+					break
+				}
+			}
+		}
+	}
+
+	cfg := fmt.Sprintf(`
+resource "truenas_webshare_config" "test" {
+  passkey = %q
+}
+`, passkey)
+	checks := []resource.TestCheckFunc{
+		resource.TestCheckResourceAttr("truenas_webshare_config.test", "passkey", passkey),
+	}
+	if newIP != "" {
+		cfg = fmt.Sprintf(`
+resource "truenas_webshare_config" "test" {
+  passkey = %q
+  bindip  = [%q]
+}
+`, passkey, newIP)
+		checks = append(checks,
+			resource.TestCheckResourceAttr("truenas_webshare_config.test", "bindip.#", "1"),
+			resource.TestCheckResourceAttr("truenas_webshare_config.test", "bindip.0", newIP),
+		)
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + cfg,
+				Check:  resource.ComposeTestCheckFunc(checks...),
+			},
+		},
+	})
 }

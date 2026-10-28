@@ -160,3 +160,127 @@ resource "truenas_lxc_config" "test" {
 }
 `
 }
+
+// TestAccLXCConfig_coverage sets v6_network and bridge, which the v4_network
+// toggle test leaves alone, and asserts they read back with an empty
+// post-apply plan. It keeps the same safety rules as
+// TestAccLXCConfig_setAndRestore: 26.0+ only, DisruptiveCheck, and a
+// self-skip when preferred_pool is set (LXC in use). preferred_pool itself
+// is never sent. bridge is only set when lxc.bridge_choices offers a value
+// different from the current one; otherwise only v6_network is exercised.
+// The original v4_network, v6_network and bridge are restored (and re-read
+// to confirm) from t.Cleanup.
+func TestAccLXCConfig_coverage(t *testing.T) {
+	acctest.DisruptiveCheck(t)
+	if !acctest.ServerVersionAtLeast(t, 26, 0) {
+		t.Skip("truenas_lxc_config requires TrueNAS 26.0 or later (lxc namespace absent on 25.10, confirmed live)")
+	}
+
+	raw, err := acctest.RestoreCall(context.Background(), "lxc.config")
+	if err != nil {
+		t.Skip("lxc.config could not be read on the target box")
+	}
+	var orig struct {
+		PreferredPool *string `json:"preferred_pool"`
+		Bridge        *string `json:"bridge"`
+		V4Network     string  `json:"v4_network"`
+		V6Network     string  `json:"v6_network"`
+	}
+	if err := json.Unmarshal(raw, &orig); err != nil {
+		t.Fatalf("error parsing lxc.config response: %v", err)
+	}
+	if orig.PreferredPool != nil {
+		t.Skip("lxc.config's preferred_pool is set (LXC is in use) on the target box; skipping to avoid disturbing an active LXC configuration")
+	}
+
+	// Pick a bridge different from the current one, if the box offers any.
+	newBridge := ""
+	if raw, err := acctest.RestoreCall(context.Background(), "lxc.bridge_choices"); err == nil {
+		var choices map[string]string
+		if json.Unmarshal(raw, &choices) == nil {
+			for k := range choices {
+				if k != "" && (orig.Bridge == nil || *orig.Bridge != k) {
+					newBridge = k
+					break
+				}
+			}
+		}
+	}
+
+	t.Cleanup(func() {
+		payload := map[string]any{
+			"v4_network": orig.V4Network,
+			"v6_network": orig.V6Network,
+			"bridge":     orig.Bridge,
+		}
+		if _, err := acctest.RestoreCall(context.Background(), "lxc.update", payload); err != nil {
+			t.Errorf("error restoring lxc config: %v", err)
+			return
+		}
+		raw, err := acctest.RestoreCall(context.Background(), "lxc.config")
+		if err != nil {
+			t.Errorf("error re-reading lxc.config after restore: %v", err)
+			return
+		}
+		var got struct {
+			Bridge    *string `json:"bridge"`
+			V4Network string  `json:"v4_network"`
+			V6Network string  `json:"v6_network"`
+		}
+		if err := json.Unmarshal(raw, &got); err != nil {
+			t.Errorf("error parsing lxc.config after restore: %v", err)
+			return
+		}
+		if got.V4Network != orig.V4Network || got.V6Network != orig.V6Network || !strPtrEqual(got.Bridge, orig.Bridge) {
+			t.Errorf("lxc config not restored: want v4=%s v6=%s bridge=%s, got v4=%s v6=%s bridge=%s",
+				orig.V4Network, orig.V6Network, fmtStrPtr(orig.Bridge), got.V4Network, got.V6Network, fmtStrPtr(got.Bridge))
+		}
+	})
+
+	v6 := "fd42:4c58:43af::/64"
+	if orig.V6Network == v6 {
+		v6 = "fd42:4c58:43b0::/64"
+	}
+
+	cfg := `
+resource "truenas_lxc_config" "test" {
+  v6_network = "` + v6 + `"
+}
+`
+	checks := []resource.TestCheckFunc{
+		resource.TestCheckResourceAttr("truenas_lxc_config.test", "v6_network", v6),
+	}
+	if newBridge != "" {
+		cfg = `
+resource "truenas_lxc_config" "test" {
+  v6_network = "` + v6 + `"
+  bridge     = "` + newBridge + `"
+}
+`
+		checks = append(checks, resource.TestCheckResourceAttr("truenas_lxc_config.test", "bridge", newBridge))
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + cfg,
+				Check:  resource.ComposeTestCheckFunc(checks...),
+			},
+		},
+	})
+}
+
+func strPtrEqual(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+func fmtStrPtr(p *string) string {
+	if p == nil {
+		return "<null>"
+	}
+	return *p
+}

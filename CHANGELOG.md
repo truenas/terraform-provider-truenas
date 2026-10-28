@@ -6,6 +6,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.5.24] - 2026-10-27
+
+### Changed
+- Test coverage only (no runtime behavior change): exercised ~115 previously
+  untested resource attributes across the suite, and added enforcement so the
+  attribute-coverage audit fails on any unexercised attribute that is not
+  justified in-line (a bare ratchet entry now fails the build). Also added a
+  live regression test (`TestAccNVMetPort_addrFamilyChange`) for the v1.5.23
+  `nvmet_port.addr_adrfam` fix.
+
 ## [1.5.23] - 2026-10-27
 
 ### Fixed

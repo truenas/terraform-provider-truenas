@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -48,6 +49,58 @@ func TestAccAlertService_basic(t *testing.T) {
 			},
 		},
 	})
+}
+
+// TestAccAlertService_coverage creates a disabled Slack service whose webhook
+// url is supplied only via the write-only attributes_secrets_wo overlay, and
+// confirms the secret stays out of state and the plan is empty afterward.
+func TestAccAlertService_coverage(t *testing.T) {
+	name := acctest.RandName("tf-acc-alertwo")
+	const secretURL = "https://hooks.slack.com/services/T000/B000/tfaccsecret"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckAlertServiceDestroyed(name),
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccAlertServiceWOConfig(name, secretURL),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet("truenas_alert_service.test", "id"),
+					resource.TestCheckResourceAttr("truenas_alert_service.test", "enabled", "false"),
+					resource.TestCheckResourceAttr("truenas_alert_service.test", "attributes_secrets_wo_version", "1"),
+					resource.TestCheckNoResourceAttr("truenas_alert_service.test", "attributes_secrets_wo"),
+					resource.TestCheckResourceAttrWith("truenas_alert_service.test", "attributes", func(v string) error {
+						if strings.Contains(v, "tfaccsecret") {
+							return fmt.Errorf("secret leaked into attributes state: %s", v)
+						}
+						return nil
+					}),
+				),
+			},
+			{
+				ResourceName:            "truenas_alert_service.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"attributes", "attributes_secrets_wo_version"},
+			},
+		},
+	})
+}
+
+func testAccAlertServiceWOConfig(name, secretURL string) string {
+	return fmt.Sprintf(`
+resource "truenas_alert_service" "test" {
+  name    = %q
+  level   = "WARNING"
+  enabled = false
+  attributes = jsonencode({
+    type = "Slack"
+  })
+  attributes_secrets_wo         = jsonencode({ url = %q })
+  attributes_secrets_wo_version = 1
+}
+`, name, secretURL)
 }
 
 func testAccAlertServiceConfig(name, level, email string) string {

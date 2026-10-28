@@ -56,6 +56,62 @@ func TestAccGroup_basic(t *testing.T) {
 	})
 }
 
+// TestAccGroup_membership creates a local user and a group listing that user
+// in users, with sudo_commands_nopasswd set, then imports the group.
+func TestAccGroup_membership(t *testing.T) {
+	name := acctest.RandName("tf-acc-grpm")
+	username := "tfaccgm" + strings.ReplaceAll(acctest.RandName(""), "-", "")
+	if len(username) > 32 {
+		username = username[:32]
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckGroupDestroyed(name),
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccGroupMembershipConfig(name, username),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_group.test", "name", name),
+					resource.TestCheckResourceAttr("truenas_group.test", "users.#", "1"),
+					resource.TestCheckResourceAttrPair("truenas_group.test", "users.0", "truenas_user.member", "id"),
+					resource.TestCheckResourceAttr("truenas_group.test", "sudo_commands_nopasswd.#", "2"),
+					resource.TestCheckResourceAttr("truenas_group.test", "sudo_commands_nopasswd.0", "/usr/bin/whoami"),
+					resource.TestCheckResourceAttr("truenas_group.test", "sudo_commands_nopasswd.1", "/usr/bin/id"),
+				),
+			},
+			{
+				ResourceName:      "truenas_group.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func testAccGroupMembershipConfig(name, username string) string {
+	return fmt.Sprintf(`
+resource "truenas_user" "member" {
+  username          = %q
+  full_name         = "TF Acc Group Member"
+  password          = "Tf-Acc-Test-Passw0rd!"
+  password_disabled = false
+  home              = "/var/empty"
+  shell             = "/usr/bin/bash"
+  smb               = false
+  group_create      = true
+}
+
+resource "truenas_group" "test" {
+  name                   = %q
+  smb                    = false
+  users                  = [truenas_user.member.id]
+  sudo_commands_nopasswd = ["/usr/bin/whoami", "/usr/bin/id"]
+}
+`, username, name)
+}
+
 func testAccGroupConfig(name string, smb bool, sudoCommands []string) string {
 	quoted := make([]string, len(sudoCommands))
 	for i, c := range sudoCommands {

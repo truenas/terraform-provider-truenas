@@ -27,8 +27,10 @@ import (
 // any acceptance config is untested surface.
 //
 // This is a plain unit test (no TF_ACC, no live box): it reads the schema and
-// greps the acceptance_test.go source. It is report-only by default; set
-// COVERAGE_AUDIT_STRICT=1 to fail on any gap not in the ratchet allowlist.
+// greps the acceptance_test.go source. It FAILS on any writable attribute not
+// exercised by an acceptance config and not in the coverageRatchet allowlist;
+// TestCoverageRatchet_Justified additionally fails on any bare (unreasoned)
+// ratchet entry, so unexercised attributes cannot hide as silent debt.
 func TestAttributeCoverage_Audit(t *testing.T) {
 	root := repoRoot(t)
 	testSrc := acceptanceSources(t, root)

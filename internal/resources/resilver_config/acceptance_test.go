@@ -46,6 +46,8 @@ data "truenas_resilver_config" "test" {}
 type resilverConfigOriginal struct {
 	Enabled bool    `json:"enabled"`
 	Weekday []int64 `json:"weekday"`
+	Begin   string  `json:"begin"`
+	End     string  `json:"end"`
 }
 
 // readResilverConfigOriginal reads the box's current enabled/weekday via
@@ -71,6 +73,8 @@ func restoreResilverConfig(t *testing.T, orig resilverConfigOriginal) {
 	if _, err := acctest.Client().Call(context.Background(), "pool.resilver.update", map[string]any{
 		"enabled": orig.Enabled,
 		"weekday": orig.Weekday,
+		"begin":   orig.Begin,
+		"end":     orig.End,
 	}); err != nil {
 		t.Fatalf("error restoring resilver config: %v", err)
 	}
@@ -112,6 +116,60 @@ func TestAccResilverConfig_setAndRestore(t *testing.T) {
 				ImportState:       true,
 				ImportStateId:     "resilver_config",
 				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+// TestAccResilverConfig_coverage sets the schedule window attributes the
+// toggle test leaves alone (begin, end, weekday) to values that differ from
+// the box's current ones, asserts they read back, and relies on the
+// framework's post-apply empty-plan check to catch any value that does not
+// round-trip. "enabled" is held at its original value so the box's live
+// resilver behavior is not switched on or off. The original schedule is
+// restored (and re-read to confirm) from t.Cleanup.
+func TestAccResilverConfig_coverage(t *testing.T) {
+	acctest.DisruptiveCheck(t)
+
+	orig := readResilverConfigOriginal(t)
+	t.Cleanup(func() {
+		restoreResilverConfig(t, orig)
+		got := readResilverConfigOriginal(t)
+		if got.Begin != orig.Begin || got.End != orig.End || got.Enabled != orig.Enabled ||
+			fmt.Sprint(got.Weekday) != fmt.Sprint(orig.Weekday) {
+			t.Errorf("resilver config not restored: want %+v, got %+v", orig, got)
+		}
+	})
+
+	begin, end := "01:00", "05:00"
+	if orig.Begin == begin && orig.End == end {
+		begin, end = "02:00", "06:00"
+	}
+	weekday := []int64{1, 2, 3}
+	if fmt.Sprint(orig.Weekday) == fmt.Sprint(weekday) {
+		weekday = []int64{4, 5, 6}
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_resilver_config" "test" {
+  enabled = %v
+  begin   = %q
+  end     = %q
+  weekday = [%d, %d, %d]
+}
+`, orig.Enabled, begin, end, weekday[0], weekday[1], weekday[2]),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_resilver_config.test", "begin", begin),
+					resource.TestCheckResourceAttr("truenas_resilver_config.test", "end", end),
+					resource.TestCheckResourceAttr("truenas_resilver_config.test", "weekday.#", "3"),
+					resource.TestCheckResourceAttr("truenas_resilver_config.test", "weekday.0", fmt.Sprint(weekday[0])),
+					resource.TestCheckResourceAttr("truenas_resilver_config.test", "weekday.1", fmt.Sprint(weekday[1])),
+					resource.TestCheckResourceAttr("truenas_resilver_config.test", "weekday.2", fmt.Sprint(weekday[2])),
+				),
 			},
 		},
 	})

@@ -92,6 +92,7 @@ func resourceSchema() schema.Schema {
 				// address family (IPv4 <-> IPv6) would produce "inconsistent result
 				// after apply" — the same class as ups_config.complete_identifier.
 				// Letting it be unknown on update lets the server recompute it.
+				// Regression-tested live by TestAccNVMetPort_addrFamilyChange.
 			},
 		},
 	}

@@ -356,3 +356,64 @@ resource "truenas_ipmi_lan" "test" {
 		},
 	})
 }
+
+// testAccIPMILanCoverageConfig is testAccIPMILanConfig plus apply_remote and
+// password_wo_version. The vlan is left unset and ip/netmask/gateway are the
+// box's own values, so the BMC's reachability never changes.
+func testAccIPMILanCoverageConfig(channel int64, dhcp bool, ipaddress, netmask, gateway string, woVersion int64) string {
+	addr := ""
+	if !dhcp {
+		addr = fmt.Sprintf("  ipaddress = %q\n  netmask   = %q\n  gateway   = %q\n", ipaddress, netmask, gateway)
+	}
+	return fmt.Sprintf(`
+resource "truenas_ipmi_lan" "test" {
+  channel             = %d
+  dhcp                = %t
+%s  apply_remote        = false
+  password_wo_version = %d
+}
+`, channel, dhcp, addr, woVersion)
+}
+
+// TestAccIPMILan_coverage sets apply_remote (explicitly false: sending true
+// would push this controller's address to the peer's BMC) and
+// password_wo_version (bumped 1 -> 2 across two applies) and asserts both are
+// stored and re-plan empty.
+//
+// "password" is deliberately NOT set: it is write-only, so the BMC's original
+// password cannot be read back and therefore cannot be restored, and a wrong
+// change could lock out BMC admin access on the shared BMC. Without a
+// configured password the resource never sends one, so bumping
+// password_wo_version here is only a state-level change. The channel's
+// original config is restored via t.Cleanup registered before any mutation.
+// Gated by IPMICheck + DisruptiveCheck.
+func TestAccIPMILan_coverage(t *testing.T) {
+	acctest.IPMICheck(t)
+	acctest.DisruptiveCheck(t)
+
+	channel := firstIPMIChannel(t)
+	orig := readIPMILanOriginal(t, channel)
+	t.Cleanup(func() { restoreIPMILanVlan(t, channel, orig) })
+	dhcp := isDHCPSource(orig.IPAddressSource)
+
+	cfg := func(v int64) string {
+		return acctest.ProviderConfig() + testAccIPMILanCoverageConfig(channel, dhcp, orig.IPAddress, orig.SubnetMask, orig.DefaultGatewayIPAddress, v)
+	}
+	check := func(v string) resource.TestCheckFunc {
+		return resource.ComposeTestCheckFunc(
+			resource.TestCheckResourceAttr("truenas_ipmi_lan.test", "apply_remote", "false"),
+			resource.TestCheckResourceAttr("truenas_ipmi_lan.test", "password_wo_version", v),
+			resource.TestCheckNoResourceAttr("truenas_ipmi_lan.test", "password"),
+		)
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{Config: cfg(1), Check: check("1")},
+			{Config: cfg(1), PlanOnly: true},
+			{Config: cfg(2), Check: check("2")},
+			{Config: cfg(2), PlanOnly: true},
+		},
+	})
+}

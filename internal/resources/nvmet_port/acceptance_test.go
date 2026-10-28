@@ -55,6 +55,44 @@ func TestAccNVMetPort_basic(t *testing.T) {
 	})
 }
 
+// TestAccNVMetPort_dataProtection sets inline_data_size and pi_enable on a
+// TCP port (distinct trsvcid 14422) and asserts they read back and import.
+// NOTE: inline_data_size / pi_enable may be rejected by the middleware for the
+// TCP transport on some releases; a failure here is a finding, not a test bug.
+func TestAccNVMetPort_dataProtection(t *testing.T) {
+	const trsvcid = 14422
+	cfg := acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_nvmet_port" "dp" {
+  addr_trtype      = "TCP"
+  addr_traddr      = %q
+  addr_trsvcid     = %d
+  enabled          = false
+  inline_data_size = 8192
+  pi_enable        = true
+}
+`, acctest.EndpointHost(), trsvcid)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckNVMetPortDestroyedByName("truenas_nvmet_port.dp"),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_nvmet_port.dp", "inline_data_size", "8192"),
+					resource.TestCheckResourceAttr("truenas_nvmet_port.dp", "pi_enable", "true"),
+				),
+			},
+			{
+				ResourceName:      "truenas_nvmet_port.dp",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
 func testAccNVMetPortConfig(trsvcid int, enabled bool, maxQueueSize int) string {
 	if maxQueueSize == 0 {
 		return fmt.Sprintf(`
@@ -78,13 +116,21 @@ resource "truenas_nvmet_port" "test" {
 }
 
 func testAccCheckNVMetPortDestroyed(s *terraform.State) error {
-	rs, ok := s.RootModule().Resources["truenas_nvmet_port.test"]
+	return checkNVMetPortGone(s, "truenas_nvmet_port.test")
+}
+
+func testAccCheckNVMetPortDestroyedByName(addr string) resource.TestCheckFunc {
+	return func(s *terraform.State) error { return checkNVMetPortGone(s, addr) }
+}
+
+func checkNVMetPortGone(s *terraform.State, addr string) error {
+	rs, ok := s.RootModule().Resources[addr]
 	if !ok {
-		return fmt.Errorf("resource truenas_nvmet_port.test not found in pre-destroy state")
+		return fmt.Errorf("resource %s not found in pre-destroy state", addr)
 	}
 	idStr, ok := rs.Primary.Attributes["id"]
 	if !ok {
-		return fmt.Errorf("truenas_nvmet_port.test has no id attribute in pre-destroy state")
+		return fmt.Errorf("%s has no id attribute in pre-destroy state", addr)
 	}
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -106,4 +152,49 @@ func testAccCheckNVMetPortDestroyed(s *terraform.State) error {
 		return fmt.Errorf("nvmet port id=%d still exists", id)
 	}
 	return nil
+}
+
+// TestAccNVMetPort_addrFamilyChange is the live regression test for the
+// addr_adrfam stale-computed-value bug: addr_adrfam is derived by the server
+// from addr_traddr, so updating addr_traddr from an IPv4 to an IPv6 address
+// must flip addr_adrfam IPV4 -> IPV6 without a "Provider produced inconsistent
+// result after apply" error. With the schema's UseStateForUnknown on
+// addr_adrfam (the pre-fix state), the plan would hold the stale IPV4 and this
+// test fails on the update step; without it (the fix) the server recomputes it.
+func TestAccNVMetPort_addrFamilyChange(t *testing.T) {
+	cfg := func(addr string) string {
+		return acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_nvmet_port" "test" {
+  addr_trtype  = "TCP"
+  addr_traddr  = %q
+  addr_trsvcid = 14499
+  enabled      = false
+}
+`, addr)
+	}
+	const r = "truenas_nvmet_port.test"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckNVMetPortDestroyed,
+		Steps: []resource.TestStep{
+			{
+				// IPv4 listen address -> server derives addr_adrfam = IPV4.
+				Config: cfg(acctest.EndpointHost()),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(r, "addr_adrfam", "IPV4"),
+				),
+			},
+			{
+				// Flip addr_traddr to IPv6 (loopback is a valid listen address);
+				// the server must recompute addr_adrfam = IPV6 with no
+				// inconsistent-result error on apply.
+				Config: cfg("::1"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(r, "addr_traddr", "::1"),
+					resource.TestCheckResourceAttr(r, "addr_adrfam", "IPV6"),
+				),
+			},
+		},
+	})
 }

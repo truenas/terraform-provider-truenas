@@ -35,6 +35,7 @@ func TestAccInitShutdownScript_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("truenas_init_shutdown_script.test", "command", "/usr/bin/true"),
 					resource.TestCheckResourceAttr("truenas_init_shutdown_script.test", "when", "POSTINIT"),
 					resource.TestCheckResourceAttr("truenas_init_shutdown_script.test", "enabled", "false"),
+					resource.TestCheckResourceAttr("truenas_init_shutdown_script.test", "timeout", "25"),
 					resource.TestCheckResourceAttr("truenas_init_shutdown_script.test", "comment", comment),
 				),
 			},
@@ -57,6 +58,49 @@ func TestAccInitShutdownScript_basic(t *testing.T) {
 	})
 }
 
+// TestAccInitShutdownScript_script creates a SCRIPT-type task pointing at
+// /usr/bin/true (an existing executable), disabled, and imports it.
+func TestAccInitShutdownScript_script(t *testing.T) {
+	comment := acctest.RandName("tf-acc-ishs")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckInitShutdownScriptDestroyed(comment),
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccInitShutdownScriptScriptConfig(comment),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet("truenas_init_shutdown_script.test", "id"),
+					resource.TestCheckResourceAttr("truenas_init_shutdown_script.test", "type", "SCRIPT"),
+					resource.TestCheckResourceAttr("truenas_init_shutdown_script.test", "script", "/usr/bin/true"),
+					resource.TestCheckResourceAttr("truenas_init_shutdown_script.test", "when", "PREINIT"),
+					resource.TestCheckResourceAttr("truenas_init_shutdown_script.test", "timeout", "40"),
+					resource.TestCheckResourceAttr("truenas_init_shutdown_script.test", "enabled", "false"),
+				),
+			},
+			{
+				ResourceName:      "truenas_init_shutdown_script.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func testAccInitShutdownScriptScriptConfig(comment string) string {
+	return fmt.Sprintf(`
+resource "truenas_init_shutdown_script" "test" {
+  type    = "SCRIPT"
+  script  = "/usr/bin/true"
+  when    = "PREINIT"
+  enabled = false
+  timeout = 40
+  comment = %q
+}
+`, comment)
+}
+
 func testAccInitShutdownScriptConfig(comment string) string {
 	return fmt.Sprintf(`
 resource "truenas_init_shutdown_script" "test" {
@@ -64,6 +108,7 @@ resource "truenas_init_shutdown_script" "test" {
   command = "/usr/bin/true"
   when    = "POSTINIT"
   enabled = false
+  timeout = 25
   comment = %q
 }
 `, comment)

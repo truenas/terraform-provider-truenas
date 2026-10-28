@@ -229,6 +229,45 @@ resource "truenas_dataset" "enckey" {
 	})
 }
 
+// TestAccDataset_encryptedExplicitKey creates a key-based encrypted dataset
+// with an explicit 64-hex-character key (write-only encryption_key), covering
+// the path complementary to encryption_generate_key.
+func TestAccDataset_encryptedExplicitKey(t *testing.T) {
+	name := fmt.Sprintf("%s/%s", acctest.TestPool(), acctest.RandName("tf-acc-ds-exkey"))
+	config := acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_dataset" "exkey" {
+  name                 = %q
+  encryption           = true
+  inherit_encryption   = false
+  encryption_algorithm = "AES-256-GCM"
+  encryption_key       = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+}
+`, name)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckDatasetDestroyed(name),
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_dataset.exkey", "encrypted", "true"),
+					resource.TestCheckResourceAttr("truenas_dataset.exkey", "key_format", "HEX"),
+					resource.TestCheckResourceAttr("truenas_dataset.exkey", "locked", "false"),
+					resource.TestCheckNoResourceAttr("truenas_dataset.exkey", "encryption_key"),
+				),
+			},
+			{
+				ResourceName:            "truenas_dataset.exkey",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"encryption_key", "inherit_encryption", "encryption_generate_key", "encryption_passphrase"},
+			},
+		},
+	})
+}
+
 // TestAccDataset_aclTypeUpdate guards GH #26: an in-place update of a dataset
 // created with acltype=posix must not resend acltype. acltype is RequiresReplace,
 // so update only ever carries the current value — but pool.dataset.update also

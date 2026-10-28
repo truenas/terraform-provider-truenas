@@ -34,6 +34,10 @@ func TestAccPeriodicSnapshot_basic(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "dataset", datasetName),
 					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "enabled", "true"),
+					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "recursive", "true"),
+					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "allow_empty", "false"),
+					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "exclude.#", "1"),
+					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "exclude.0", datasetName+"/skip"),
 					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "lifetime_value", "2"),
 					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "lifetime_unit", "WEEK"),
 					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "naming_schema", "tf-acc-%Y%m%d-%H%M"),
@@ -48,6 +52,8 @@ func TestAccPeriodicSnapshot_basic(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "schedule.minute", "15"),
 					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "lifetime_value", "3"),
+					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "allow_empty", "false"),
+					resource.TestCheckResourceAttr("truenas_periodic_snapshot_task.test", "exclude.0", datasetName+"/skip"),
 				),
 			},
 			// Import by the task's numeric id.
@@ -66,9 +72,15 @@ resource "truenas_dataset" "test" {
   name = %q
 }
 
+resource "truenas_dataset" "skip" {
+  name = "${truenas_dataset.test.name}/skip"
+}
+
 resource "truenas_periodic_snapshot_task" "test" {
   dataset        = truenas_dataset.test.name
-  recursive      = false
+  recursive      = true
+  exclude        = [truenas_dataset.skip.name]
+  allow_empty    = false
   lifetime_value = %d
   lifetime_unit  = "WEEK"
   naming_schema  = "tf-acc-%%Y%%m%%d-%%H%%M"

@@ -31,6 +31,10 @@ func TestAccNVMetSubsys_basic(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_nvmet_subsys.test", "name", name),
 					resource.TestCheckResourceAttr("truenas_nvmet_subsys.test", "allow_any_host", "false"),
+					resource.TestCheckResourceAttr("truenas_nvmet_subsys.test", "ieee_oui", "AABBCC"),
+					resource.TestCheckResourceAttr("truenas_nvmet_subsys.test", "pi_enable", "false"),
+					resource.TestCheckResourceAttr("truenas_nvmet_subsys.test", "qid_max", "128"),
+					resource.TestCheckResourceAttr("truenas_nvmet_subsys.test", "subnqn", "nqn.2011-06.com.truenas:tfacc-subsys"),
 					resource.TestCheckResourceAttrSet("truenas_nvmet_subsys.test", "id"),
 					resource.TestCheckResourceAttrSet("truenas_nvmet_subsys.test", "subnqn"),
 					resource.TestCheckResourceAttrSet("truenas_nvmet_subsys.test", "serial"),

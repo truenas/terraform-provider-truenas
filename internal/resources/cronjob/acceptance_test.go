@@ -34,6 +34,8 @@ func TestAccCronjob_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("truenas_cronjob.test", "user", "root"),
 					resource.TestCheckResourceAttr("truenas_cronjob.test", "description", desc),
 					resource.TestCheckResourceAttr("truenas_cronjob.test", "enabled", "false"),
+					resource.TestCheckResourceAttr("truenas_cronjob.test", "stdout", "false"),
+					resource.TestCheckResourceAttr("truenas_cronjob.test", "stderr", "true"),
 					resource.TestCheckResourceAttr("truenas_cronjob.test", "schedule.minute", "0"),
 					resource.TestCheckResourceAttr("truenas_cronjob.test", "schedule.hour", "3"),
 				),
@@ -63,6 +65,8 @@ resource "truenas_cronjob" "test" {
   command     = "/usr/bin/true"
   user        = "root"
   enabled     = false
+  stdout      = false
+  stderr      = true
   description = %q
   schedule = {
     minute = "0"

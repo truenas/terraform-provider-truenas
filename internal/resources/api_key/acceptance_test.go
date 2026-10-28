@@ -49,6 +49,7 @@ func TestAccAPIKey_basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("truenas_api_key.test", "id"),
 					resource.TestCheckResourceAttr("truenas_api_key.test", "name", name),
 					resource.TestCheckResourceAttr("truenas_api_key.test", "username", username),
+					resource.TestCheckResourceAttr("truenas_api_key.test", "expires_at", "2035-01-01T00:00:00Z"),
 					resource.TestCheckResourceAttrSet("truenas_api_key.test", "key"),
 					resource.TestCheckResourceAttrSet("truenas_api_key.test", "created_at"),
 					resource.TestCheckResourceAttr("truenas_api_key.test", "local", "true"),
@@ -66,6 +67,7 @@ func TestAccAPIKey_basic(t *testing.T) {
 				Config: acctest.ProviderConfig() + testAccAPIKeyConfig(renamed, username),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_api_key.test", "name", renamed),
+					resource.TestCheckResourceAttr("truenas_api_key.test", "expires_at", "2035-01-01T00:00:00Z"),
 					resource.TestCheckResourceAttrSet("truenas_api_key.test", "key"),
 				),
 			},
@@ -86,6 +88,8 @@ func testAccAPIKeyConfig(name, username string) string {
 resource "truenas_api_key" "test" {
   name     = %q
   username = %q
+  # RFC3339 UTC 'Z' form, as the provider reads it back.
+  expires_at = "2035-01-01T00:00:00Z"
 }
 `, name, username)
 }

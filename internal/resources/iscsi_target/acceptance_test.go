@@ -89,6 +89,65 @@ func TestAccISCSITarget_params(t *testing.T) {
 	})
 }
 
+// TestAccISCSITarget_authNetworks sets auth_networks, updates it in place,
+// and imports.
+func TestAccISCSITarget_authNetworks(t *testing.T) {
+	portalComment := acctest.RandName("tf-acc-tgtnet-portal")
+	name := acctest.RandName("tfacctgtnet")
+	cfg := func(nets string) string {
+		return acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_iscsi_portal" "fixture" {
+  comment = %q
+  listen = [
+    {
+      ip = %q
+    }
+  ]
+}
+
+resource "truenas_iscsi_target" "test" {
+  name = %q
+  mode = "ISCSI"
+  groups = [
+    {
+      portal     = truenas_iscsi_portal.fixture.id
+      authmethod = "NONE"
+    }
+  ]
+  auth_networks = %s
+}
+`, portalComment, acctest.EndpointHost(), name, nets)
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckISCSITargetDestroyed(name),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg(`["10.20.0.0/16", "192.168.77.0/24"]`),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_iscsi_target.test", "auth_networks.#", "2"),
+					resource.TestCheckResourceAttr("truenas_iscsi_target.test", "auth_networks.0", "10.20.0.0/16"),
+					resource.TestCheckResourceAttr("truenas_iscsi_target.test", "auth_networks.1", "192.168.77.0/24"),
+				),
+			},
+			{
+				Config: cfg(`["172.16.5.0/24"]`),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_iscsi_target.test", "auth_networks.#", "1"),
+					resource.TestCheckResourceAttr("truenas_iscsi_target.test", "auth_networks.0", "172.16.5.0/24"),
+				),
+			},
+			{
+				ResourceName:      "truenas_iscsi_target.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
 func testAccISCSITargetParamsConfig(portalComment, name string, queuedCommands int64) string {
 	return fmt.Sprintf(`
 resource "truenas_iscsi_portal" "fixture" {

@@ -66,6 +66,59 @@ resource "truenas_cloudsync_credentials" "test" {
 `, name)
 }
 
+// TestAccCloudsyncCredentials_secretsWO stores the secret key through the
+// write-only provider_secrets_wo overlay (kept out of state), bumps the
+// version to re-send it, and imports (provider_config projection, so only
+// the write-only pair is ignored).
+func TestAccCloudsyncCredentials_secretsWO(t *testing.T) {
+	name := acctest.RandName("tf-acc-credswo")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCloudsyncCredentialsDestroyed(name),
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccCloudsyncCredentialsWOConfig(name, "tfacc-secret-1", 1),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet("truenas_cloudsync_credentials.test", "id"),
+					resource.TestCheckResourceAttr("truenas_cloudsync_credentials.test", "name", name),
+					resource.TestCheckResourceAttr("truenas_cloudsync_credentials.test", "provider_secrets_wo_version", "1"),
+					resource.TestCheckNoResourceAttr("truenas_cloudsync_credentials.test", "provider_secrets_wo"),
+				),
+			},
+			{
+				Config: acctest.ProviderConfig() + testAccCloudsyncCredentialsWOConfig(name, "tfacc-secret-2", 2),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_cloudsync_credentials.test", "provider_secrets_wo_version", "2"),
+				),
+			},
+			{
+				ResourceName:            "truenas_cloudsync_credentials.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"provider_config", "provider_secrets_wo", "provider_secrets_wo_version"},
+			},
+		},
+	})
+}
+
+func testAccCloudsyncCredentialsWOConfig(name, secret string, version int) string {
+	return fmt.Sprintf(`
+resource "truenas_cloudsync_credentials" "test" {
+  name = %q
+  provider_config = jsonencode({
+    type          = "STORJ_IX"
+    access_key_id = "tfacc"
+  })
+  provider_secrets_wo = jsonencode({
+    secret_access_key = %q
+  })
+  provider_secrets_wo_version = %d
+}
+`, name, secret, version)
+}
+
 func testAccCheckCloudsyncCredentialsDestroyed(name string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		c := acctest.Client()

@@ -43,6 +43,9 @@ func TestAccKerberosRealm_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("truenas_kerberos_realm.test", "kdc.#", "1"),
 					resource.TestCheckResourceAttr("truenas_kerberos_realm.test", "kdc.0", "192.0.2.88"),
 					resource.TestCheckResourceAttr("truenas_kerberos_realm.test", "admin_server.#", "0"),
+					resource.TestCheckResourceAttr("truenas_kerberos_realm.test", "primary_kdc", "192.0.2.90"),
+					resource.TestCheckResourceAttr("truenas_kerberos_realm.test", "kpasswd_server.#", "1"),
+					resource.TestCheckResourceAttr("truenas_kerberos_realm.test", "kpasswd_server.0", "192.0.2.91"),
 				),
 			},
 			// Update in place: set admin_server.
@@ -51,6 +54,8 @@ func TestAccKerberosRealm_basic(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_kerberos_realm.test", "admin_server.#", "1"),
 					resource.TestCheckResourceAttr("truenas_kerberos_realm.test", "admin_server.0", "192.0.2.89"),
+					resource.TestCheckResourceAttr("truenas_kerberos_realm.test", "primary_kdc", "192.0.2.90"),
+					resource.TestCheckResourceAttr("truenas_kerberos_realm.test", "kpasswd_server.0", "192.0.2.91"),
 				),
 			},
 			// Import by the realm's numeric id.
@@ -69,6 +74,8 @@ resource "truenas_kerberos_realm" "test" {
   realm        = %q
   kdc          = %s
   admin_server = %s
+  primary_kdc    = "192.0.2.90"
+  kpasswd_server = ["192.0.2.91"]
 }
 `, realmName, kdcHCL, adminServerHCL)
 }

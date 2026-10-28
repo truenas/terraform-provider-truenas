@@ -80,6 +80,53 @@ func TestAccKerberosKeytab_basic(t *testing.T) {
 	})
 }
 
+// TestAccKerberosKeytab_fileWO supplies the keytab through the write-only
+// file_wo/file_wo_version pair (kept out of state), bumps the version to
+// re-send, and imports (file_wo pair ignored; file is not set in config).
+func TestAccKerberosKeytab_fileWO(t *testing.T) {
+	fileB64 := testAccKeytabPreCheck(t)
+
+	name := acctest.RandName("tf-acc-keytabwo")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckKerberosKeytabDestroyed,
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccKerberosKeytabWOConfig(name, fileB64, 1),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("truenas_kerberos_keytab.test", "id"),
+					resource.TestCheckResourceAttr("truenas_kerberos_keytab.test", "name", name),
+					resource.TestCheckResourceAttr("truenas_kerberos_keytab.test", "file_wo_version", "1"),
+					resource.TestCheckNoResourceAttr("truenas_kerberos_keytab.test", "file_wo"),
+				),
+			},
+			{
+				Config: acctest.ProviderConfig() + testAccKerberosKeytabWOConfig(name, fileB64, 2),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_kerberos_keytab.test", "file_wo_version", "2"),
+				),
+			},
+			{
+				ResourceName:            "truenas_kerberos_keytab.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"file", "file_wo", "file_wo_version"},
+			},
+		},
+	})
+}
+
+func testAccKerberosKeytabWOConfig(name, fileB64 string, version int) string {
+	return fmt.Sprintf(`
+resource "truenas_kerberos_keytab" "test" {
+  name            = %q
+  file_wo         = %q
+  file_wo_version = %d
+}
+`, name, fileB64, version)
+}
+
 func testAccKerberosKeytabConfig(name, fileB64 string) string {
 	return fmt.Sprintf(`
 resource "truenas_kerberos_keytab" "test" {

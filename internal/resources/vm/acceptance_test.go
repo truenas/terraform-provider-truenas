@@ -88,6 +88,59 @@ resource "truenas_vm" "test" {
 `, name, description, vcpus)
 }
 
+// TestAccVM_hardware sets the hardware/firmware options (arch_type,
+// machine_type, bootloader_ovmf, cpu_mode CUSTOM + cpu_model) on a STOPPED VM.
+// The guest is never started, so no bootable disk is needed. The framework's
+// post-apply empty-plan check asserts each value round-trips; import-verify
+// compares the read-back state to the config.
+func TestAccVM_hardware(t *testing.T) {
+	name := "tfaccvmhw" + strings.ReplaceAll(acctest.RandName(""), "-", "")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckVMDestroyed(name),
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccVMHardwareConfig(name),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_vm.test", "arch_type", "x86_64"),
+					resource.TestCheckResourceAttr("truenas_vm.test", "machine_type", "q35"),
+					resource.TestCheckResourceAttr("truenas_vm.test", "bootloader_ovmf", "OVMF_CODE_4M.fd"),
+					resource.TestCheckResourceAttr("truenas_vm.test", "bootloader", "UEFI"),
+					resource.TestCheckResourceAttr("truenas_vm.test", "cpu_mode", "CUSTOM"),
+					resource.TestCheckResourceAttr("truenas_vm.test", "cpu_model", "qemu64"),
+					resource.TestCheckResourceAttr("truenas_vm.test", "running", "false"),
+				),
+			},
+			{
+				ResourceName:      "truenas_vm.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func testAccVMHardwareConfig(name string) string {
+	return fmt.Sprintf(`
+resource "truenas_vm" "test" {
+  name      = %q
+  memory    = 536870912
+  vcpus     = 1
+  autostart = false
+  running   = false
+
+  arch_type       = "x86_64"
+  machine_type    = "q35"
+  bootloader      = "UEFI"
+  bootloader_ovmf = "OVMF_CODE_4M.fd"
+  cpu_mode        = "CUSTOM"
+  cpu_model       = "qemu64"
+}
+`, name)
+}
+
 func testAccCheckVMDestroyed(name string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		c := acctest.Client()

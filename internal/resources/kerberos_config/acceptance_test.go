@@ -139,3 +139,46 @@ resource "truenas_kerberos_config" "test" {
 }
 `, appdefaultsAux)
 }
+
+// TestAccKerberosConfig_coverage sets libdefaults_aux, which the
+// appdefaults_aux test leaves alone, to the well-formed krb5.conf line
+// "no_addresses = true" (a recognized, harmless libdefaults relation; see
+// the note on TestAccKerberosConfig_setAndRestore for why free-text lines
+// are unsafe: kerberos.update crashes on a line without "="). The original
+// appdefaults_aux and libdefaults_aux are restored (and re-read to
+// confirm) from t.Cleanup.
+func TestAccKerberosConfig_coverage(t *testing.T) {
+	acctest.DisruptiveCheck(t)
+
+	orig := readKerberosConfigOriginal(t)
+	t.Cleanup(func() {
+		restoreKerberosConfig(t, orig)
+		got := readKerberosConfigOriginal(t)
+		if got != orig {
+			t.Errorf("kerberos config not restored: want %+v, got %+v", orig, got)
+		}
+	})
+
+	// dns_lookup_kdc is a real, harmless [libdefaults] relation (no_addresses is
+	// an [appdefaults] key and kerberos.update rejects it under libdefaults).
+	marker := "dns_lookup_kdc = true"
+	if orig.LibdefaultsAux == marker {
+		marker = "dns_lookup_kdc = false"
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_kerberos_config" "test" {
+  libdefaults_aux = %q
+}
+`, marker),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_kerberos_config.test", "libdefaults_aux", marker),
+				),
+			},
+		},
+	})
+}

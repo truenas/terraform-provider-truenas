@@ -76,6 +76,49 @@ func TestAccWebshare_basic(t *testing.T) {
 	})
 }
 
+// TestAccWebshare_homeBase sets is_home_base = true, asserts it reads back,
+// and imports. Requires TrueNAS 26.0+.
+func TestAccWebshare_homeBase(t *testing.T) {
+	if !acctest.ServerVersionAtLeast(t, 26, 0) {
+		t.Skip("truenas_webshare requires TrueNAS 26.0 or later")
+	}
+	datasetName := fmt.Sprintf("%s/%s", acctest.TestPool(), acctest.RandName("tf-acc-ds-wshb"))
+	shareName := acctest.RandName("tf-acc-wshb")
+	cfg := acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_dataset" "test" {
+  name = %q
+}
+
+resource "truenas_webshare" "test" {
+  path         = truenas_dataset.test.mountpoint
+  name         = %q
+  is_home_base = true
+}
+`, datasetName, shareName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy: resource.ComposeAggregateTestCheckFunc(
+			testAccCheckWebshareDestroyed(shareName),
+			testAccCheckWebshareDatasetDestroyed(datasetName),
+		),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_webshare.test", "is_home_base", "true"),
+				),
+			},
+			{
+				ResourceName:      "truenas_webshare.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
 func testAccWebshareConfig(datasetName, shareName string, enabled bool) string {
 	return fmt.Sprintf(`
 resource "truenas_dataset" "test" {

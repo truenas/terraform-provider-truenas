@@ -35,7 +35,7 @@ func TestAccNVMetNamespace_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("truenas_nvmet_namespace.test", "device_type", "ZVOL"),
 					resource.TestCheckResourceAttr("truenas_nvmet_namespace.test", "enabled", "true"),
 					resource.TestCheckResourceAttrSet("truenas_nvmet_namespace.test", "id"),
-					resource.TestCheckResourceAttrSet("truenas_nvmet_namespace.test", "nsid"),
+					resource.TestCheckResourceAttr("truenas_nvmet_namespace.test", "nsid", "3"),
 					resource.TestCheckResourceAttrSet("truenas_nvmet_namespace.test", "device_nguid"),
 					resource.TestCheckResourceAttrSet("truenas_nvmet_namespace.test", "device_uuid"),
 				),
@@ -48,6 +48,51 @@ func TestAccNVMetNamespace_basic(t *testing.T) {
 			},
 			{
 				ResourceName:      "truenas_nvmet_namespace.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+// TestAccNVMetNamespace_file backs a namespace with a FILE device_type and
+// sets filesize. The file lives in its own dataset fixture, which is removed
+// on destroy.
+func TestAccNVMetNamespace_file(t *testing.T) {
+	subsysName := acctest.RandName("tf-acc-nsf-subsys")
+	dsName := fmt.Sprintf("%s/%s", acctest.TestPool(), acctest.RandName("tf-acc-nsf-ds"))
+	cfg := acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_nvmet_subsys" "test" {
+  name = %q
+}
+
+resource "truenas_dataset" "test" {
+  name = %q
+}
+
+resource "truenas_nvmet_namespace" "file" {
+  subsys_id   = truenas_nvmet_subsys.test.id
+  device_path = "${truenas_dataset.test.mountpoint}/ns.img"
+  device_type = "FILE"
+  filesize    = 67108864
+}
+`, subsysName, dsName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckNVMetNamespaceDestroyed("/mnt/"+dsName+"/ns.img", dsName),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_nvmet_namespace.file", "device_type", "FILE"),
+					resource.TestCheckResourceAttr("truenas_nvmet_namespace.file", "filesize", "67108864"),
+					resource.TestCheckResourceAttr("truenas_nvmet_namespace.file", "device_path", "/mnt/"+dsName+"/ns.img"),
+				),
+			},
+			{
+				ResourceName:      "truenas_nvmet_namespace.file",
 				ImportState:       true,
 				ImportStateVerify: true,
 			},
@@ -71,6 +116,7 @@ resource "truenas_nvmet_namespace" "test" {
   device_path = "zvol/${truenas_zvol.test.name}"
   device_type = "ZVOL"
   enabled     = %v
+  nsid        = 3
 }
 `, subsysName, zvolName, enabled)
 }
