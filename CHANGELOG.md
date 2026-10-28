@@ -64,7 +64,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   the plan failed outright. Replacement now compares *effective* values (unset
   reads as the default `true`), so an upgrade records `true` in place. A real
   change (`true`<->`false`, or `null`->`false`) still replaces, since the key
-  can't be added to or removed from an existing certificate. (regression from #49)
+  can't be added to or removed from an existing certificate. (regression from #49;
+  reported and diagnosed in #59 by @filipegalo)
 - `truenas_replication_task`: `transport` carried the same latent trap — a
   default (`LOCAL`) plus an unconditional `RequiresReplace`. It was not an
   active upgrade regression (the attribute has existed since the resource
