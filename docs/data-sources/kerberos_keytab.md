@@ -21,5 +21,5 @@ Fetches a TrueNAS Kerberos keytab entry by name.
 
 ### Read-Only
 
-- `file` (String, Sensitive) Base64-encoded Kerberos keytab data merged into the system keytab.
+- `file` (String, Sensitive) Base64-encoded Kerberos keytab data merged into the system keytab. Null when the API key lacks full-admin rights (the API masks it).
 - `id` (Number) Numeric identifier of the Kerberos keytab entry.

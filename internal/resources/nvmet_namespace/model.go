@@ -153,12 +153,17 @@ func responseToDataSourceModel(_ context.Context, api *nvmetNamespaceAPI, m *NVM
 
 // guardedFields builds the set of optional payload fields shared by create
 // and update: device_type, enabled, filesize. Each is included only when its
-// model value is known (not null, not unknown).
+// model value is known (not null, not unknown), except device_type, which
+// falls back to the type derived from device_path (see inferDeviceType).
 func (m *NVMetNamespaceModel) guardedFields() map[string]any {
 	p := map[string]any{}
 
 	if !m.DeviceType.IsNull() && !m.DeviceType.IsUnknown() {
 		p["device_type"] = m.DeviceType.ValueString()
+	} else if !m.DevicePath.IsNull() && !m.DevicePath.IsUnknown() {
+		// Unset device_type whose device_path was unknown at plan time:
+		// derive it now (the API requires it).
+		p["device_type"] = inferDeviceType(m.DevicePath.ValueString())
 	}
 	if !m.Enabled.IsNull() && !m.Enabled.IsUnknown() {
 		p["enabled"] = m.Enabled.ValueBool()
@@ -202,4 +207,18 @@ func (m *NVMetNamespaceModel) updatePayload(_ context.Context) (map[string]any, 
 	}
 
 	return payload, diags
+}
+
+// deviceChanged reports whether the plan switches the backing device
+// (device_path or device_type) relative to prior state. TrueNAS refuses
+// those changes on an enabled namespace while the NVMe-oF target runs.
+func deviceChanged(plan, state *NVMetNamespaceModel) bool {
+	if !plan.DevicePath.IsUnknown() && !plan.DevicePath.Equal(state.DevicePath) {
+		return true
+	}
+	planType := plan.DeviceType
+	if planType.IsUnknown() && !plan.DevicePath.IsUnknown() {
+		planType = types.StringValue(inferDeviceType(plan.DevicePath.ValueString()))
+	}
+	return !planType.IsUnknown() && !planType.Equal(state.DeviceType)
 }

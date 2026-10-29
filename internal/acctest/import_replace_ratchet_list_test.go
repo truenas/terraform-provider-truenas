@@ -1,0 +1,80 @@
+// Copyright TrueNAS 2026
+// SPDX-License-Identifier: MPL-2.0
+
+package acctest_test
+
+// importReplaceReadBack lists every attribute that keeps the framework's
+// unconditional RequiresReplace() and says where import reads it from the API,
+// so a matching config never plans a replacement after `terraform import`.
+// See TestImportReplace_Audit. An attribute the API does not return belongs on
+// planmod.ReplaceFromKnown*, not here.
+var importReplaceReadBack = map[string]string{
+	"truenas_api_key.username":                 "api_key/model.go responseToModel: username",
+	"truenas_app.catalog_app":                  "app/model.go responseToModel: metadata.name (catalog apps; custom apps keep null)",
+	"truenas_app.custom_app":                   "app/model.go responseToModel: custom_app",
+	"truenas_app.name":                         "app/model.go responseToModel: name",
+	"truenas_app.train":                        "app/model.go responseToModel: metadata.train",
+	"truenas_boot_environment.name":            "boot_environment/model.go responseToModel: id",
+	"truenas_certificate.certificate":          "certificate/model.go responseToModel: certificate",
+	"truenas_certificate.city":                 "certificate/model.go responseToModel: city",
+	"truenas_certificate.common":               "certificate/model.go responseToModel: common",
+	"truenas_certificate.country":              "certificate/model.go responseToModel: country",
+	"truenas_certificate.csr":                  "certificate/model.go responseToModel: CSR",
+	"truenas_certificate.email":                "certificate/model.go responseToModel: email",
+	"truenas_certificate.key_length":           "certificate/model.go responseToModel: key_length",
+	"truenas_certificate.key_type":             "certificate/model.go responseToModel: key_type",
+	"truenas_certificate.organization":         "certificate/model.go responseToModel: organization",
+	"truenas_certificate.organizational_unit":  "certificate/model.go responseToModel: organizational_unit",
+	"truenas_certificate.san":                  "certificate/model.go responseToModel: san (DNS: prefix stripped)",
+	"truenas_certificate.state":                "certificate/model.go responseToModel: state",
+	"truenas_cloud_backup.absolute_paths":      "cloud_backup/model.go: absolute_paths",
+	"truenas_container.pool":                   "container/model.go responseToModel: derived from dataset (poolFromDataset)",
+	"truenas_container_device.container":       "container_device/model.go: container",
+	"truenas_enclosure_label.id":               "enclosure_label/model.go: id from enclosure2.query",
+	"truenas_filesystem_acl.path":              "filesystem_acl/model.go: filesystem.getacl path",
+	"truenas_filesystem_permissions.path":      "filesystem_permissions: the import ID is the path (filesystem.stat has none)",
+	"truenas_group.gid":                        "group/model.go: gid",
+	"truenas_group.name":                       "group/model.go: group",
+	"truenas_ipmi_lan.channel":                 "ipmi_lan/model.go: channel",
+	"truenas_iscsi_extent.name":                "iscsi_extent/model.go: name",
+	"truenas_iscsi_targetextent.extent":        "iscsi_targetextent/model.go: extent",
+	"truenas_iscsi_targetextent.target":        "iscsi_targetextent/model.go: target",
+	"truenas_keychain_ssh_keypair.private_key": "keychain_ssh_keypair/model.go responseToModel: attributes.private_key",
+	"truenas_network_interface.name":           "network_interface/model.go: name",
+	"truenas_network_interface.type":           "network_interface/model.go: type",
+	"truenas_nfs_share.path":                   "nfs/resource.go: path",
+	"truenas_nvmet_host_subsys.host_id":        "nvmet_host_subsys/model.go: host.id",
+	"truenas_nvmet_host_subsys.subsys_id":      "nvmet_host_subsys/model.go: subsys.id",
+	"truenas_nvmet_namespace.nsid":             "nvmet_namespace/model.go: nsid",
+	"truenas_nvmet_namespace.subsys_id":        "nvmet_namespace/model.go: subsys",
+	"truenas_nvmet_port.addr_trtype":           "nvmet_port/model.go: addr_trtype",
+	"truenas_nvmet_port_subsys.port_id":        "nvmet_port_subsys/model.go: port.id",
+	"truenas_nvmet_port_subsys.subsys_id":      "nvmet_port_subsys/model.go: subsys.id",
+	"truenas_nvmet_subsys.name":                "nvmet_subsys/model.go: name",
+	"truenas_replication_task.direction":       "replication/model.go: direction",
+	"truenas_scrub_task.pool":                  "scrub_task/model.go: pool (pool id)",
+	"truenas_service.name":                     "service/model.go: service",
+	"truenas_smb_share.path":                   "smb/model.go: path",
+	"truenas_smb_share_acl.share_name":         "smb_share_acl: the import ID is the share name (kept from state on Read)",
+	"truenas_dataset.encryption":               "dataset/resource.go responseToModel: Encrypted",
+	"truenas_dataset.encryption_algorithm":     "dataset/resource.go responseToModel: encryption_algorithm (null when unencrypted)",
+	"truenas_dataset.name":                     "dataset/resource.go responseToModel: name",
+	"truenas_zvol.encryption":                  "zvol/model.go responseToModel: Encrypted",
+	"truenas_zvol.encryption_algorithm":        "zvol/model.go responseToModel: encryption_algorithm (null when unencrypted)",
+	"truenas_zvol.name":                        "zvol/model.go responseToModel: name",
+	"truenas_zvol.volblocksize":                "zvol/model.go responseToModel: volblocksize (parsed bytes)",
+	"truenas_snapshot.dataset":                 "snapshot/model.go responseToModel: dataset",
+	"truenas_snapshot.name":                    "snapshot/model.go responseToModel: snapshot_name",
+	"truenas_tunable.type":                     "tunable/model.go: type",
+	"truenas_tunable.var":                      "tunable/model.go: var",
+	"truenas_user.uid":                         "user/model.go: uid",
+	"truenas_user.username":                    "user/model.go: username",
+	"truenas_vm.bootloader_ovmf":               "vm/model.go: bootloader_ovmf",
+	"truenas_vm.enable_secure_boot":            "vm/model.go: enable_secure_boot",
+	"truenas_vm_device.vm":                     "vm_device/model.go: vm",
+	"truenas_webshare.path":                    "webshare/model.go: path",
+}
+
+// importReplacePending lists stock-RequiresReplace attributes owned by work in
+// progress elsewhere. Entries need not still exist (the owner may convert them).
+var importReplacePending = map[string]string{}

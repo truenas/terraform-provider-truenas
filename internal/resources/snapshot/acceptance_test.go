@@ -24,14 +24,15 @@ func TestAccSnapshot_basic(t *testing.T) {
 	datasetName := fmt.Sprintf("%s/%s", acctest.TestPool(), acctest.RandName("tf-acc-snap-ds"))
 	snapName := acctest.RandName("tf-acc-snap")
 	snapID := fmt.Sprintf("%s@%s", datasetName, snapName)
+	cfg := acctest.ProviderConfig() + testAccSnapshotConfig(datasetName, snapName, false)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckSnapshotDestroyed(snapID),
-		Steps: []resource.TestStep{
+		Steps: append([]resource.TestStep{
 			{
-				Config: acctest.ProviderConfig() + testAccSnapshotConfig(datasetName, snapName, false),
+				Config: cfg,
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_snapshot.test", "id", snapID),
 					resource.TestCheckResourceAttr("truenas_snapshot.test", "dataset", datasetName),
@@ -49,7 +50,9 @@ func TestAccSnapshot_basic(t *testing.T) {
 				// cannot be recovered by import.
 				ImportStateVerifyIgnore: []string{"recursive"},
 			},
-		},
+			// Import then plan the same config: recursive reads back null and
+			// is recorded in place, never a replacement (BUGS B-003).
+		}, acctest.ImportReapplyNoop("truenas_snapshot.test", cfg, "recursive")...),
 	})
 }
 

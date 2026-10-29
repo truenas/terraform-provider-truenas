@@ -4,6 +4,8 @@
 package cloudsync
 
 import (
+	"regexp"
+
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -14,6 +16,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+// hhmmRe matches a 24-hour "HH:MM" time in the zero-padded form the server
+// stores and returns.
+var hhmmRe = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
@@ -141,6 +147,11 @@ func resourceSchema() schema.Schema {
 						"time": schema.StringAttribute{
 							Required:    true,
 							Description: "Time of day the limit takes effect, 24-hour \"HH:MM\" (e.g. \"18:00\").",
+							// The server zero-pads "8:00" to "08:00", which fails the
+							// apply with an inconsistent result; require the padded form.
+							Validators: []validator.String{
+								stringvalidator.RegexMatches(hhmmRe, `must be 24-hour "HH:MM" with a leading zero, e.g. "08:00"`),
+							},
 						},
 						"bandwidth": schema.Int64Attribute{
 							Optional:    true,

@@ -10,9 +10,12 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
@@ -44,7 +47,7 @@ func baseModel() *SystemAdvancedModel {
 		Serialspeed:        types.StringNull(),
 		SyslogAudit:        types.BoolNull(),
 		Sysloglevel:        types.StringNull(),
-		Syslogservers:      types.ListNull(types.StringType),
+		Syslogservers:      types.ListNull(types.ObjectType{AttrTypes: syslogServerAttrTypes}),
 		Traceback:          types.BoolNull(),
 		Uploadcrash:        types.BoolNull(),
 	}
@@ -142,9 +145,9 @@ func TestSystemAdvancedSchema_WritableFieldsOptionalComputed(t *testing.T) {
 		}
 	}
 
-	listAttr, ok := s.Attributes["syslogservers"].(schema.ListAttribute)
+	listAttr, ok := s.Attributes["syslogservers"].(schema.ListNestedAttribute)
 	if !ok {
-		t.Fatal("schema missing 'syslogservers' ListAttribute")
+		t.Fatal("schema missing 'syslogservers' ListNestedAttribute")
 	}
 	if !listAttr.IsOptional() || !listAttr.IsComputed() {
 		t.Error("'syslogservers' should be Optional+Computed")
@@ -183,8 +186,10 @@ func TestSystemAdvancedSchema_SedPasswdIsWriteOnlySecret(t *testing.T) {
 }
 
 // TestSystemAdvancedSchema_ComputedOnlyPair verifies that anonstats_token
-// and isolated_gpu_pci_ids are Computed-only (not Optional) and carry NO
-// plan modifiers.
+// and isolated_gpu_pci_ids are Computed-only (not Optional) and keep their
+// state value in the plan (UseStateForUnknown): neither is derived from an
+// attribute this resource writes, so an unrelated plan must not show them as
+// "known after apply" (seen live with syslogservers unset in config, B-012).
 func TestSystemAdvancedSchema_ComputedOnlyPair(t *testing.T) {
 	s := resourceSchema()
 
@@ -195,8 +200,8 @@ func TestSystemAdvancedSchema_ComputedOnlyPair(t *testing.T) {
 	if !tokenAttr.IsComputed() || tokenAttr.IsOptional() {
 		t.Error("'anonstats_token' should be Computed-only")
 	}
-	if len(tokenAttr.PlanModifiers) != 0 {
-		t.Errorf("'anonstats_token' should have NO plan modifiers, got %d", len(tokenAttr.PlanModifiers))
+	if len(tokenAttr.PlanModifiers) != 1 {
+		t.Errorf("'anonstats_token' should have UseStateForUnknown, got %d plan modifiers", len(tokenAttr.PlanModifiers))
 	}
 
 	gpuAttr, ok := s.Attributes["isolated_gpu_pci_ids"].(schema.ListAttribute)
@@ -206,8 +211,8 @@ func TestSystemAdvancedSchema_ComputedOnlyPair(t *testing.T) {
 	if !gpuAttr.IsComputed() || gpuAttr.IsOptional() {
 		t.Error("'isolated_gpu_pci_ids' should be Computed-only")
 	}
-	if len(gpuAttr.PlanModifiers) != 0 {
-		t.Errorf("'isolated_gpu_pci_ids' should have NO plan modifiers, got %d", len(gpuAttr.PlanModifiers))
+	if len(gpuAttr.PlanModifiers) != 1 {
+		t.Errorf("'isolated_gpu_pci_ids' should have UseStateForUnknown, got %d plan modifiers", len(gpuAttr.PlanModifiers))
 	}
 }
 
@@ -346,7 +351,7 @@ func TestResponseToModel_MapsPlainFields(t *testing.T) {
 		Serialspeed:        "115200",
 		SyslogAudit:        true,
 		Sysloglevel:        "F_INFO",
-		Syslogservers:      []string{"syslog.example.com"},
+		Syslogservers:      []syslogServerAPI{{Host: "syslog.example.com", Transport: "UDP"}},
 		Traceback:          true,
 		Uploadcrash:        true,
 	}
@@ -420,7 +425,7 @@ func TestUpdatePayload_OnlyKnownFieldsSent(t *testing.T) {
 // overprovision and a non-empty syslogservers list.
 func TestUpdatePayload_AllKnownFieldsSent(t *testing.T) {
 	ctx := context.Background()
-	syslogservers, _ := types.ListValueFrom(ctx, types.StringType, []string{"syslog.example.com"})
+	syslogservers, _ := syslogserversListValue(ctx, []syslogServerAPI{{Host: "syslog.example.com", Transport: "UDP"}})
 
 	m := &SystemAdvancedModel{
 		Advancedmode:       types.BoolValue(true),
@@ -463,8 +468,9 @@ func TestUpdatePayload_AllKnownFieldsSent(t *testing.T) {
 	}
 	if v, ok := p["syslogservers"]; !ok {
 		t.Error("expected 'syslogservers' present")
-	} else if s, ok := v.([]string); !ok || len(s) != 1 || s[0] != "syslog.example.com" {
-		t.Errorf("payload[syslogservers] = %v, want [syslog.example.com]", v)
+	} else if s, ok := v.([]map[string]any); !ok || len(s) != 1 || s[0]["host"] != "syslog.example.com" ||
+		s[0]["transport"] != "UDP" || s[0]["tls_certificate"] != nil {
+		t.Errorf("payload[syslogservers] = %v, want [{host:syslog.example.com transport:UDP tls_certificate:nil}]", v)
 	}
 
 	want := map[string]any{
@@ -671,7 +677,7 @@ func TestUpdatePayload_ComputedOnlyPairNeverSent(t *testing.T) {
 // panicking or being omitted.
 func TestUpdatePayload_SyslogserversNilMapsToEmptyList(t *testing.T) {
 	ctx := context.Background()
-	empty, _ := types.ListValueFrom(ctx, types.StringType, []string{})
+	empty, _ := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: syslogServerAttrTypes}, []syslogServerModel{})
 
 	m := baseModel()
 	m.Syslogservers = empty
@@ -685,9 +691,9 @@ func TestUpdatePayload_SyslogserversNilMapsToEmptyList(t *testing.T) {
 	if !ok {
 		t.Fatal("expected 'syslogservers' present")
 	}
-	s, ok := v.([]string)
+	s, ok := v.([]map[string]any)
 	if !ok {
-		t.Fatalf("payload[syslogservers] is %T, want []string", v)
+		t.Fatalf("payload[syslogservers] is %T, want []map[string]any", v)
 	}
 	if len(s) != 0 {
 		t.Errorf("payload[syslogservers] = %v, want []", s)
@@ -757,5 +763,85 @@ func TestSystemAdvancedDataSource_NoSedPasswdAttribute(t *testing.T) {
 
 	if _, ok := resp.Schema.Attributes["sed_passwd"]; ok {
 		t.Error("datasource schema must not have a 'sed_passwd' attribute")
+	}
+}
+
+// TestResponseToModel_SyslogserversObjects decodes a system.advanced.config
+// response whose syslogservers entries are SyslogServer objects (the shape
+// on 25.10, 26.0 and 28.0; B-012) into the list-of-objects attribute, with
+// a null tls_certificate kept null.
+func TestResponseToModel_SyslogserversObjects(t *testing.T) {
+	raw := `{"id":1,"syslogservers":[{"host":"192.0.2.10","transport":"UDP","tls_certificate":null},` +
+		`{"host":"192.0.2.11:6514","transport":"TLS","tls_certificate":7}]}`
+	var api systemAdvancedAPI
+	if err := json.Unmarshal([]byte(raw), &api); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	for _, decode := range []func() (types.List, diag.Diagnostics){
+		func() (types.List, diag.Diagnostics) {
+			m := &SystemAdvancedModel{}
+			d := responseToModel(context.Background(), &api, m)
+			return m.Syslogservers, d
+		},
+		func() (types.List, diag.Diagnostics) {
+			m := &SystemAdvancedDataSourceModel{}
+			d := responseToDataSourceModel(context.Background(), &api, m)
+			return m.Syslogservers, d
+		},
+	} {
+		l, diags := decode()
+		if diags.HasError() {
+			t.Fatalf("unexpected error: %v", diags)
+		}
+		var got []syslogServerModel
+		if d := l.ElementsAs(context.Background(), &got, false); d.HasError() {
+			t.Fatalf("ElementsAs: %v", d)
+		}
+		if len(got) != 2 {
+			t.Fatalf("got %d entries, want 2", len(got))
+		}
+		if got[0].Host.ValueString() != "192.0.2.10" || got[0].Transport.ValueString() != "UDP" || !got[0].TLSCertificate.IsNull() {
+			t.Errorf("entry 0 = %+v", got[0])
+		}
+		if got[1].Host.ValueString() != "192.0.2.11:6514" || got[1].Transport.ValueString() != "TLS" || got[1].TLSCertificate.ValueInt64() != 7 {
+			t.Errorf("entry 1 = %+v", got[1])
+		}
+	}
+}
+
+// TestSyslogServerTLSCertificateValidator verifies tls_certificate is
+// rejected unless transport is TLS (TrueNAS drops it for UDP/TCP, and an
+// unset transport means UDP), and allowed when transport is TLS or unknown.
+func TestSyslogServerTLSCertificateValidator(t *testing.T) {
+	obj := func(transport types.String, cert types.Int64) types.Object {
+		return types.ObjectValueMust(syslogServerAttrTypes, map[string]attr.Value{
+			"host":            types.StringValue("192.0.2.10"),
+			"transport":       transport,
+			"tls_certificate": cert,
+		})
+	}
+	cases := []struct {
+		name    string
+		v       types.Object
+		wantErr bool
+	}{
+		{"udp with cert", obj(types.StringValue("UDP"), types.Int64Value(1)), true},
+		{"tcp with cert", obj(types.StringValue("TCP"), types.Int64Value(1)), true},
+		{"default transport with cert", obj(types.StringNull(), types.Int64Value(1)), true},
+		{"tls with cert", obj(types.StringValue("TLS"), types.Int64Value(1)), false},
+		{"unknown transport with cert", obj(types.StringUnknown(), types.Int64Value(1)), false},
+		{"udp without cert", obj(types.StringValue("UDP"), types.Int64Null()), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := &validator.ObjectResponse{}
+			syslogServerTLSCertificateValidator{}.ValidateObject(context.Background(), validator.ObjectRequest{
+				Path:        path.Root("syslogservers").AtListIndex(0),
+				ConfigValue: tc.v,
+			}, resp)
+			if got := resp.Diagnostics.HasError(); got != tc.wantErr {
+				t.Errorf("HasError = %v, want %v (%v)", got, tc.wantErr, resp.Diagnostics)
+			}
+		})
 	}
 }

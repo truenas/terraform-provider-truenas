@@ -267,6 +267,38 @@ and the `filesystem_permissions` / `filesystem_acl` resources.
 
 ---
 
+## 8. `nvmet.subsys` accepts `ieee_oui` values the kernel misreads or ignores
+
+**Severity:** correctness — a configured value silently becomes a different one.
+**Observed on:** SCALE 28.0 (MASTER 2026-10-05); the same validation is in the 25.10 and 26.0 source.
+**Namespace/method:** `nvmet.subsys.create` / `nvmet.subsys.update` (`ieee_oui`).
+
+### Summary
+`ieee_oui` is accepted as a free string. Only the `0x`-prefixed hex form reaches
+the kernel's nvmet configfs correctly. An all-digit value such as `005056`
+(VMware's OUI) is stored as an integer, returned by `nvmet.subsys.query` as a
+JSON number, and written to the kernel as a different OUI (`0x0013c0`). A hex
+value without the prefix such as `AABBCC` is silently ignored (the kernel shows
+`0x000000`).
+
+### Reproduction
+1. `midclt call nvmet.subsys.create '{"name":"ouitest","ieee_oui":"005056"}'`
+2. `midclt call nvmet.subsys.query '[["name","=","ouitest"]]'` — `ieee_oui` comes
+   back as the number `5056`.
+3. Read the subsystem's `attr_ieee_oui` in nvmet configfs — `0x0013c0`.
+4. Repeat with `"AABBCC"` — configfs shows `0x000000`.
+5. Delete the test subsystem.
+
+### Expected
+Validate `ieee_oui` as a 24-bit hex value, store it as a string, and write it to
+configfs in the form the kernel parses.
+
+### Provider handling
+`truenas_nvmet_subsys.ieee_oui` requires `0x`-prefixed hex at plan time and
+decodes a numeric value from the API. In `internal/resources/nvmet_subsys/`.
+
+---
+
 ## Filing notes
 
 Findings 1, 2 and 7 have functional impact (a server crash, a broken

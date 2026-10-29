@@ -592,3 +592,23 @@ func TestStoresPrivatekey(t *testing.T) {
 		})
 	}
 }
+
+func TestImportedCreateType(t *testing.T) {
+	uri := "https://acme.example/order/1"
+	empty := ""
+	cases := []struct {
+		name string
+		api  certificateAPI
+		want types.String
+	}{
+		{"csr", certificateAPI{CertTypeCSR: true}, types.StringNull()},
+		{"acme by registration", certificateAPI{Acme: float64(3)}, types.StringValue(CreateTypeACME)},
+		{"acme by uri", certificateAPI{AcmeURI: &uri}, types.StringValue(CreateTypeACME)},
+		{"imported", certificateAPI{AcmeURI: &empty}, types.StringValue(CreateTypeImported)},
+	}
+	for _, c := range cases {
+		if got := importedCreateType(&c.api); !got.Equal(c.want) {
+			t.Errorf("%s: importedCreateType = %v, want %v", c.name, got, c.want)
+		}
+	}
+}

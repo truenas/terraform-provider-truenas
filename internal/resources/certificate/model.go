@@ -107,14 +107,15 @@ type CertificateDataSourceModel struct {
 // string "********" (confirmed live: create response showed
 // "privatekey": "********" while the certificate PEM in the same response
 // was NOT masked). A subsequent certificate.get_instance call for the same
-// id, however, returns the real PEM-encoded private key byte-for-byte
-// intact. This means the resource's Create/Update handlers must NOT trust
+// id, however, returns the real PEM-encoded private key (unmasked, but
+// re-encoded for imported keys: PKCS#8, decrypted, trailing newline; see
+// samePrivateKey). This means the resource's Create/Update handlers must NOT trust
 // the job result for "privatekey" — they must always re-read via
 // certificate.get_instance before populating state (same "re-read after
 // write" shape dataset.go uses, but for a different reason: masking, not
 // omission). "certificate" and "CSR" are never masked in the job result;
 // only "privatekey" is. Because get_instance itself returns privatekey
-// intact (matching the kerberos_keytab precedent: create -> get_instance ->
+// unmasked (matching the kerberos_keytab precedent: create -> get_instance ->
 // query round trip showed the value returned byte-for-byte, never
 // redacted), "privatekey" is modeled as a normal Sensitive attribute (kept
 // out of plan/apply output and logs) rather than WriteOnly.
@@ -138,6 +139,9 @@ type certificateAPI struct {
 	PrivatekeyPath     *string  `json:"privatekey_path"`
 	CsrPath            *string  `json:"csr_path"`
 	CertType           string   `json:"cert_type"`
+	CertTypeCSR        bool     `json:"cert_type_CSR"`
+	Acme               any      `json:"acme"`     // ACME registration id; null unless issued via ACME
+	AcmeURI            *string  `json:"acme_uri"` // null unless issued via ACME
 	KeyLength          *int64   `json:"key_length"`
 	KeyType            *string  `json:"key_type"`
 	Country            *string  `json:"country"`
@@ -311,10 +315,15 @@ func responseToModel(ctx context.Context, api *certificateAPI, m *CertificateMod
 	// defaults to true, and a null/unknown value (older state, or an import that
 	// carried no value) reads as true, so existing certificates are unaffected.
 	// Imported keys are the user's own input and always kept. (#49)
+	//
+	// The server re-encodes an imported key (PKCS#1/SEC1 to PKCS#8, decrypted,
+	// trailing newline added), so when the prior plan/state key is the same key
+	// as the server's, that prior text is kept (B-013; see samePrivateKey).
 	storeKey := storesPrivatekey(m.StorePrivatekey)
 	if m.CreateType.ValueString() == CreateTypeACME || !storeKey {
 		m.Privatekey = types.StringNull()
-	} else {
+	} else if api.Privatekey == nil || m.Privatekey.IsNull() || m.Privatekey.IsUnknown() ||
+		!samePrivateKey(m.Privatekey.ValueString(), *api.Privatekey, boundPEM(api)) {
 		m.Privatekey = types.StringPointerValue(api.Privatekey)
 	}
 	m.CSR = types.StringPointerValue(api.CSR)
@@ -410,6 +419,23 @@ func responseToDataSourceModel(ctx context.Context, api *certificateAPI, m *Cert
 	return diags
 }
 
+// importedCreateType derives create_type for import from what the API returns:
+// an ACME-issued certificate carries acme/acme_uri; a CSR has cert_type_CSR;
+// anything else is a stored (imported) certificate. CERTIFICATE_CREATE_CSR and
+// CERTIFICATE_CREATE_IMPORTED_CSR leave identical objects, so a CSR yields null
+// and the configured value is recorded in place (planmod.ReplaceFromKnownString).
+// (BUGS B-008)
+func importedCreateType(api *certificateAPI) types.String {
+	switch {
+	case api.CertTypeCSR:
+		return types.StringNull()
+	case api.Acme != nil || (api.AcmeURI != nil && *api.AcmeURI != ""):
+		return types.StringValue(CreateTypeACME)
+	default:
+		return types.StringValue(CreateTypeImported)
+	}
+}
+
 // Known create_type values (certificate.create's "create_type" enum,
 // probed live and identical on 25.10/26.0).
 const (
@@ -418,6 +444,18 @@ const (
 	CreateTypeImportedCSR = "CERTIFICATE_CREATE_IMPORTED_CSR"
 	CreateTypeACME        = "CERTIFICATE_CREATE_ACME"
 )
+
+// boundPEM returns the certificate (or, for a CSR, the request) the private
+// key belongs to, for samePrivateKey's encrypted-key fallback.
+func boundPEM(api *certificateAPI) string {
+	if api.Certificate != nil && *api.Certificate != "" {
+		return *api.Certificate
+	}
+	if api.CSR != nil {
+		return *api.CSR
+	}
+	return ""
+}
 
 // storesPrivatekey reports whether store_privatekey is effectively true: an
 // unset (null) or not-yet-known value means the documented default, true. The

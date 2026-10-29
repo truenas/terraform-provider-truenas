@@ -62,6 +62,8 @@ func (d *ReplicationDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 					"dom":    dschema.StringAttribute{Computed: true},
 					"month":  dschema.StringAttribute{Computed: true},
 					"dow":    dschema.StringAttribute{Computed: true},
+					"begin":  dschema.StringAttribute{Computed: true},
+					"end":    dschema.StringAttribute{Computed: true},
 				},
 			},
 			"retention_policy": dschema.StringAttribute{Computed: true},

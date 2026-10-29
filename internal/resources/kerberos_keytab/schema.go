@@ -41,8 +41,11 @@ func resourceSchema() schema.Schema {
 				Description: "Base64-encoded Kerberos keytab data to merge into the system keytab. Passed " +
 					"through as-is — do not base64-encode it again. Marked Sensitive (kept out of plan/apply " +
 					"output), but — unlike file_wo — it IS stored in state and read back on refresh (the API " +
-					"returns it unmasked). Use file_wo to keep the keytab out of state. Exactly one of file or " +
-					"file_wo must be set.",
+					"returns it unmasked to a full admin; a read-only admin's masked value is ignored). Use file_wo " +
+					"to keep the keytab out of state. Import never reads the keytab into state, since it cannot " +
+					"tell whether the configuration uses file or file_wo: after importing a file-managed keytab, " +
+					"the next apply records file with a one-time in-place update. Exactly one of file or file_wo " +
+					"must be set.",
 			},
 			"file_wo": schema.StringAttribute{
 				Optional:  true,

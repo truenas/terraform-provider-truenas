@@ -60,7 +60,7 @@ func TestAccBootEnvironment_basic(t *testing.T) {
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckBootEnvironmentDestroyed(cloneName),
-		Steps: []resource.TestStep{
+		Steps: append([]resource.TestStep{
 			{
 				Config: acctest.ProviderConfig() + testAccBootEnvironmentConfig(cloneName, sourceName, true),
 				Check: resource.ComposeTestCheckFunc(
@@ -88,7 +88,8 @@ func TestAccBootEnvironment_basic(t *testing.T) {
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"source"},
 			},
-		},
+			// Import then plan the same config: source reads back null and is recorded in place, never a replacement (BUGS B-007).
+		}, acctest.ImportReapplyNoop("truenas_boot_environment.test", acctest.ProviderConfig()+testAccBootEnvironmentConfig(cloneName, sourceName, false), "source")...),
 	})
 }
 

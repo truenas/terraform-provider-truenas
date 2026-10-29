@@ -5,9 +5,11 @@ package nvmet_subsys
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -210,7 +212,7 @@ func TestCreatePayload_AllFieldsKnown(t *testing.T) {
 		SubNQN:       types.StringValue("nqn.2011-06.com.truenas:uuid:custom"),
 		AllowAnyHost: types.BoolValue(true),
 		ANA:          types.BoolValue(true),
-		IEEEOUI:      types.StringValue("00:0A:0B"),
+		IEEEOUI:      types.StringValue("0x000A0B"),
 		PIEnable:     types.BoolValue(true),
 		QIDMax:       types.Int64Value(16),
 	}
@@ -225,7 +227,7 @@ func TestCreatePayload_AllFieldsKnown(t *testing.T) {
 		"subnqn":         "nqn.2011-06.com.truenas:uuid:custom",
 		"allow_any_host": true,
 		"ana":            true,
-		"ieee_oui":       "00:0A:0B",
+		"ieee_oui":       "0x000A0B",
 		"pi_enable":      true,
 		"qid_max":        int64(16),
 	}
@@ -329,7 +331,7 @@ func TestResponseToModel_AllFields(t *testing.T) {
 	ctx := context.Background()
 
 	ana := true
-	oui := "0A0B0C"
+	oui := ouiString("0x0A0B0C")
 	pi := true
 	qidMax := int64(32)
 
@@ -369,8 +371,8 @@ func TestResponseToModel_AllFields(t *testing.T) {
 	if !m.ANA.ValueBool() {
 		t.Error("ANA should be true")
 	}
-	if m.IEEEOUI.ValueString() != "0A0B0C" {
-		t.Errorf("IEEEOUI = %v, want 0A0B0C", m.IEEEOUI.ValueString())
+	if m.IEEEOUI.ValueString() != "0x0A0B0C" {
+		t.Errorf("IEEEOUI = %v, want 0x0A0B0C", m.IEEEOUI.ValueString())
 	}
 	if !m.PIEnable.ValueBool() {
 		t.Error("PIEnable should be true")
@@ -379,3 +381,67 @@ func TestResponseToModel_AllFields(t *testing.T) {
 		t.Errorf("QIDMax = %v, want 32", m.QIDMax.ValueInt64())
 	}
 }
+
+// TestNVMetSubsysAPI_IEEEOUIDecode verifies that ieee_oui decodes whether the
+// server returns it as a string or, for an all-digit stored value, as a JSON
+// number (the DB column is INTEGER). A strict *string decode failed create
+// after the subsystem already existed, and broke the data source and list.
+func TestNVMetSubsysAPI_IEEEOUIDecode(t *testing.T) {
+	cases := []struct {
+		raw  string
+		want *string
+	}{
+		{`{"id":1,"ieee_oui":"0x005056"}`, strPtr("0x005056")},
+		{`{"id":1,"ieee_oui":5056}`, strPtr("5056")},
+		{`{"id":1,"ieee_oui":123456}`, strPtr("123456")},
+		{`{"id":1,"ieee_oui":null}`, nil},
+		{`{"id":1}`, nil},
+	}
+	for _, tc := range cases {
+		var api nvmetSubsysAPI
+		if err := json.Unmarshal([]byte(tc.raw), &api); err != nil {
+			t.Errorf("%s: decode error: %v", tc.raw, err)
+			continue
+		}
+		switch {
+		case tc.want == nil && api.IEEEOUI != nil:
+			t.Errorf("%s: ieee_oui = %q, want nil", tc.raw, *api.IEEEOUI)
+		case tc.want != nil && (api.IEEEOUI == nil || string(*api.IEEEOUI) != *tc.want):
+			t.Errorf("%s: ieee_oui = %v, want %q", tc.raw, api.IEEEOUI, *tc.want)
+		}
+	}
+	var bad nvmetSubsysAPI
+	if err := json.Unmarshal([]byte(`{"ieee_oui":true}`), &bad); err == nil {
+		t.Error("ieee_oui=true: want decode error")
+	}
+}
+
+// TestNVMetSubsysSchema_IEEEOUIValidator verifies that only 0x-prefixed hex
+// (or "" to clear) is accepted. The kernel ignores hex without 0x and reads
+// all-digit values as decimal, so those silently set the wrong OUI.
+func TestNVMetSubsysSchema_IEEEOUIValidator(t *testing.T) {
+	attr := resourceSchema().Attributes["ieee_oui"].(schema.StringAttribute)
+	cases := map[string]bool{
+		"":          true,
+		"0x005056":  true,
+		"0XAABBCC":  true,
+		"0x1":       true,
+		"005056":    false,
+		"123456":    false,
+		"AABBCC":    false,
+		"0x1000000": false,
+		"00:50:56":  false,
+		"0x":        false,
+	}
+	for v, ok := range cases {
+		var resp validator.StringResponse
+		for _, vd := range attr.Validators {
+			vd.ValidateString(context.Background(), validator.StringRequest{ConfigValue: types.StringValue(v)}, &resp)
+		}
+		if resp.Diagnostics.HasError() == ok {
+			t.Errorf("ieee_oui %q: error=%v, want accepted=%v", v, resp.Diagnostics.HasError(), ok)
+		}
+	}
+}
+
+func strPtr(s string) *string { return &s }

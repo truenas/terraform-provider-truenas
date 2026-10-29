@@ -4,7 +4,11 @@
 package replication
 
 import (
+	"regexp"
+
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -194,13 +198,15 @@ func resourceSchema() schema.Schema {
 			},
 			"schedule": schema.SingleNestedAttribute{
 				Optional:    true,
-				Description: "Cron schedule for automatic replication runs.",
+				Description: "Cron schedule for automatic replication runs. Removing it clears the schedule on the server (required when auto = false).",
 				Attributes: map[string]schema.Attribute{
 					"minute": schema.StringAttribute{Required: true, Description: "Cron minute (e.g. 0, */15)."},
 					"hour":   schema.StringAttribute{Required: true, Description: "Cron hour."},
 					"dom":    schema.StringAttribute{Required: true, Description: "Day of month."},
 					"month":  schema.StringAttribute{Required: true, Description: "Month."},
 					"dow":    schema.StringAttribute{Required: true, Description: "Day of week."},
+					"begin":  windowAttr("Start of the daily window in which runs may start, 24-hour \"HH:MM\". Defaults to \"00:00\"; when omitted after being set, the current value is kept."),
+					"end":    windowAttr("End of the daily window in which runs may start, 24-hour \"HH:MM\". Defaults to \"23:59\"; when omitted after being set, the current value is kept."),
 				},
 			},
 			"retention_policy": schema.StringAttribute{
@@ -208,22 +214,18 @@ func resourceSchema() schema.Schema {
 				Required:    true,
 				Description: "SOURCE, CUSTOM, or NONE.",
 			},
+			// lifetime_value/lifetime_unit are Optional, not Computed: they only
+			// apply to retention_policy = CUSTOM, and removing them from config
+			// must plan null so the update clears them (the server rejects them
+			// under SOURCE/NONE).
 			"lifetime_value": schema.Int64Attribute{
 				Optional:    true,
-				Computed:    true,
-				Description: "Retention lifetime value. Unset (0) when retention_policy is not CUSTOM.",
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.UseStateForUnknown(),
-				},
+				Description: "Retention lifetime value. Only valid with retention_policy = CUSTOM; null otherwise.",
 			},
 			"lifetime_unit": schema.StringAttribute{
 				Validators:  []validator.String{stringvalidator.OneOf("DAY", "HOUR", "MONTH", "WEEK", "YEAR")},
 				Optional:    true,
-				Computed:    true,
-				Description: "HOUR, DAY, WEEK, MONTH, or YEAR. Unset (\"\") when retention_policy is not CUSTOM.",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
+				Description: "HOUR, DAY, WEEK, MONTH, or YEAR. Only valid with retention_policy = CUSTOM; null otherwise.",
 			},
 			"readonly": schema.StringAttribute{
 				Validators:  []validator.String{stringvalidator.OneOf("IGNORE", "REQUIRE", "SET")},
@@ -312,18 +314,24 @@ func resourceSchema() schema.Schema {
 					"dom":    schema.StringAttribute{Required: true, Description: "Day of month."},
 					"month":  schema.StringAttribute{Required: true, Description: "Month."},
 					"dow":    schema.StringAttribute{Required: true, Description: "Day of week."},
-					"begin":  schema.StringAttribute{Optional: true, Description: "Start of the daily window, \"HH:MM\"."},
-					"end":    schema.StringAttribute{Optional: true, Description: "End of the daily window, \"HH:MM\"."},
+					"begin":  windowAttr("Start of the daily window, 24-hour \"HH:MM\". Defaults to \"00:00\"; when omitted after being set, the current value is kept."),
+					"end":    windowAttr("End of the daily window, 24-hour \"HH:MM\". Defaults to \"23:59\"; when omitted after being set, the current value is kept."),
 				},
 			},
 			"properties_override": schema.MapAttribute{
 				Optional:    true,
 				ElementType: types.StringType,
-				Description: "ZFS properties to force to specific values on the target datasets (property name -> value).",
+				Description: "ZFS properties to force to specific values on the target datasets (property name -> value). Omit it (rather than {}) for none.",
+				// The server stores {} as "no overrides" and it reads back as
+				// null, so an explicit {} could never match.
+				Validators: []validator.Map{mapvalidator.SizeAtLeast(1)},
 			},
 			"lifetimes": schema.ListNestedAttribute{
 				Optional:    true,
-				Description: "Per-schedule snapshot retention rules on the target (used with retention_policy = CUSTOM). Each rule keeps snapshots matching its schedule for lifetime_value lifetime_units.",
+				Description: "Per-schedule snapshot retention rules on the target (used with retention_policy = CUSTOM). Each rule keeps snapshots matching its schedule for lifetime_value lifetime_units. Omit it (rather than []) for none.",
+				// The server stores [] as "no rules" and it reads back as null,
+				// so an explicit [] could never match.
+				Validators: []validator.List{listvalidator.SizeAtLeast(1)},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"schedule": schema.SingleNestedAttribute{
@@ -346,6 +354,28 @@ func resourceSchema() schema.Schema {
 					},
 				},
 			},
+		},
+	}
+}
+
+// hhmmRe matches a 24-hour "HH:MM" time in the zero-padded form the server
+// stores and returns ("8:00" would be read back as "08:00").
+var hhmmRe = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
+
+// windowAttr is a schedule/restrict_schedule begin/end time. Optional+Computed:
+// the server fills 00:00/23:59 when it is not sent, and the prior value is
+// kept in the plan so an update sends the window back (the server replaces
+// the whole schedule object).
+func windowAttr(desc string) schema.StringAttribute {
+	return schema.StringAttribute{
+		Optional:    true,
+		Computed:    true,
+		Description: desc,
+		Validators: []validator.String{
+			stringvalidator.RegexMatches(hhmmRe, `must be 24-hour "HH:MM" with a leading zero, e.g. "08:00"`),
+		},
+		PlanModifiers: []planmodifier.String{
+			stringplanmodifier.UseStateForUnknown(),
 		},
 	}
 }

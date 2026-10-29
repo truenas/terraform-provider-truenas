@@ -148,9 +148,31 @@ func (r *NVMetNamespaceResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
+	// TrueNAS rejects a device_path/device_type change on an enabled
+	// namespace while the target runs ("Disable first to allow change"), and
+	// the check is against the stored enabled flag, so enabled=false in the
+	// same call does not help. Disable first, then send the full payload
+	// (which re-enables when planned). If that fails, restore enabled so a
+	// rejected change does not leave the namespace offline.
+	disabled := false
+	if state.Enabled.ValueBool() && deviceChanged(&plan, &state) {
+		if _, err := r.client.Call(ctx, "nvmet.namespace.update", plan.ID.ValueInt64(), map[string]any{"enabled": false}); err != nil {
+			resp.Diagnostics.AddError("Update NVMe-oF namespace failed",
+				"Disabling the namespace before changing its device failed: "+err.Error())
+			return
+		}
+		disabled = true
+	}
+
 	_, err := r.client.Call(ctx, "nvmet.namespace.update", plan.ID.ValueInt64(), payload)
 	if err != nil {
-		resp.Diagnostics.AddError("Update NVMe-oF namespace failed", err.Error())
+		msg := err.Error()
+		if disabled {
+			if _, rerr := r.client.Call(ctx, "nvmet.namespace.update", plan.ID.ValueInt64(), map[string]any{"enabled": true}); rerr != nil {
+				msg += "\n\nThe namespace was disabled to change its device and re-enabling it also failed: " + rerr.Error()
+			}
+		}
+		resp.Diagnostics.AddError("Update NVMe-oF namespace failed", msg)
 		return
 	}
 

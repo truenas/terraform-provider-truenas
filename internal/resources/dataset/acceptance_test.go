@@ -213,7 +213,7 @@ resource "truenas_dataset" "enckey" {
 		// Guards GH #29: inherit_encryption / encryption_generate_key are create-
 		// only inputs the API does not return, so an imported dataset reads them
 		// back null; a plan against the config that sets them must NOT force a
-		// replace (they are replaceIfChangedFromKnown, not RequiresReplace). Both
+		// replace (they use planmod.ReplaceFromKnownBool, not RequiresReplace). Both
 		// are ignored by import-verify because they cannot round-trip (null in
 		// imported state).
 		Steps: append([]resource.TestStep{
@@ -262,7 +262,7 @@ resource "truenas_dataset" "exkey" {
 				ResourceName:            "truenas_dataset.exkey",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"encryption_key", "inherit_encryption", "encryption_generate_key", "encryption_passphrase"},
+				ImportStateVerifyIgnore: []string{"encryption_key", "encryption_generate_key", "encryption_passphrase"},
 			},
 		},
 	})

@@ -72,9 +72,9 @@ resource "truenas_replication_task" "local_backup" {
 - `exclude` (List of String) Dataset paths to exclude from a recursive replication.
 - `hold_pending_snapshots` (Boolean) Prevent source snapshots from being deleted by retention while a replication is pending.
 - `large_block` (Boolean) Enable large-block ZFS send streams (zfs send -L).
-- `lifetime_unit` (String) HOUR, DAY, WEEK, MONTH, or YEAR. Unset ("") when retention_policy is not CUSTOM.
-- `lifetime_value` (Number) Retention lifetime value. Unset (0) when retention_policy is not CUSTOM.
-- `lifetimes` (Attributes List) Per-schedule snapshot retention rules on the target (used with retention_policy = CUSTOM). Each rule keeps snapshots matching its schedule for lifetime_value lifetime_units. (see [below for nested schema](#nestedatt--lifetimes))
+- `lifetime_unit` (String) HOUR, DAY, WEEK, MONTH, or YEAR. Only valid with retention_policy = CUSTOM; null otherwise.
+- `lifetime_value` (Number) Retention lifetime value. Only valid with retention_policy = CUSTOM; null otherwise.
+- `lifetimes` (Attributes List) Per-schedule snapshot retention rules on the target (used with retention_policy = CUSTOM). Each rule keeps snapshots matching its schedule for lifetime_value lifetime_units. Omit it (rather than []) for none. (see [below for nested schema](#nestedatt--lifetimes))
 - `logging_level` (String) Log verbosity for task execution, e.g. DEBUG, INFO, WARNING, ERROR. Null uses the system default.
 - `name_regex` (String) Regular expression matching snapshot names to replicate. Mutually exclusive with naming_schema/also_include_naming_schema.
 - `naming_schema` (List of String) Naming schemas of snapshots to replicate. Mutually exclusive with name_regex.
@@ -87,12 +87,12 @@ resource "truenas_replication_task" "local_backup" {
 - `periodic_snapshot_tasks` (List of Number) IDs of periodic snapshot tasks that feed this replication task.
 - `properties` (Boolean) Include dataset properties in the replication stream.
 - `properties_exclude` (List of String) Dataset property names to exclude from replication.
-- `properties_override` (Map of String) ZFS properties to force to specific values on the target datasets (property name -> value).
+- `properties_override` (Map of String) ZFS properties to force to specific values on the target datasets (property name -> value). Omit it (rather than {}) for none.
 - `readonly` (String) SET, REQUIRE, or IGNORE.
 - `replicate` (Boolean) Replicate the full dataset tree.
 - `restrict_schedule` (Attributes) Only replicate snapshots taken within this cron window (used with only_matching_schedule). Same fields as schedule, plus optional begin/end times. (see [below for nested schema](#nestedatt--restrict_schedule))
 - `retries` (Number) Number of retries on failure.
-- `schedule` (Attributes) Cron schedule for automatic replication runs. (see [below for nested schema](#nestedatt--schedule))
+- `schedule` (Attributes) Cron schedule for automatic replication runs. Removing it clears the schedule on the server (required when auto = false). (see [below for nested schema](#nestedatt--schedule))
 - `speed_limit` (Number) Limits the speed of the SSH stream, in bytes per second. Available only for transport = "SSH"; must be unset for transport = "LOCAL".
 - `ssh_credentials` (Number) Numeric id of a truenas_keychain_ssh_connection (keychaincredential of type SSH_CREDENTIALS) to replicate over. Required when transport = "SSH"; must be unset (0) for transport = "LOCAL".
 - `sudo` (Boolean) Use sudo (expected to be passwordless on the remote system) to run zfs commands over SSH. Only meaningful for transport = "SSH".
@@ -137,8 +137,8 @@ Required:
 
 Optional:
 
-- `begin` (String) Start of the daily window, "HH:MM".
-- `end` (String) End of the daily window, "HH:MM".
+- `begin` (String) Start of the daily window, 24-hour "HH:MM". Defaults to "00:00"; when omitted after being set, the current value is kept.
+- `end` (String) End of the daily window, 24-hour "HH:MM". Defaults to "23:59"; when omitted after being set, the current value is kept.
 
 
 <a id="nestedatt--schedule"></a>
@@ -151,3 +151,8 @@ Required:
 - `hour` (String) Cron hour.
 - `minute` (String) Cron minute (e.g. 0, */15).
 - `month` (String) Month.
+
+Optional:
+
+- `begin` (String) Start of the daily window in which runs may start, 24-hour "HH:MM". Defaults to "00:00"; when omitted after being set, the current value is kept.
+- `end` (String) End of the daily window in which runs may start, 24-hour "HH:MM". Defaults to "23:59"; when omitted after being set, the current value is kept.

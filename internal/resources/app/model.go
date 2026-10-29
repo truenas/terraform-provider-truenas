@@ -63,15 +63,22 @@ type appAPI struct {
 	Version          string `json:"version"`
 	UpgradeAvailable bool   `json:"upgrade_available"`
 	Metadata         struct {
+		Name  string `json:"name"` // catalog app the app was installed from ("custom-app" for custom apps)
 		Train string `json:"train"`
 	} `json:"metadata"`
 }
 
-// responseToModel maps appAPI into AppModel. Does NOT touch CatalogApp,
-// Values, ComposeYAML (write-only-ish: API does not echo them back in query).
+// responseToModel maps appAPI into AppModel. Does NOT touch Values or
+// ComposeYAML (reconciled separately against the configured keys).
+// catalog_app is read from metadata.name for catalog apps, so import followed
+// by plan does not replace the app (BUGS B-006); a custom app has no catalog
+// app ("custom-app" in metadata), so its value is left as configured.
 func responseToModel(api *appAPI, m *AppModel) {
 	m.ID = types.StringValue(api.Name)
 	m.Name = types.StringValue(api.Name)
+	if !api.CustomApp && api.Metadata.Name != "" {
+		m.CatalogApp = types.StringValue(api.Metadata.Name)
+	}
 	m.Train = types.StringValue(api.Metadata.Train)
 	m.Version = types.StringValue(api.Version)
 	m.CustomApp = types.BoolValue(api.CustomApp)

@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 )
 
 // zfsEnumAttr builds an Optional+Computed string attribute for a source-aware
@@ -30,7 +31,8 @@ func zfsEnumAttr(desc string, values ...string) schema.StringAttribute {
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a ZFS dataset (filesystem or volume) on TrueNAS.",
+		Description: "Manages a ZFS dataset (filesystem or volume) on TrueNAS. Destroying it is non-recursive: " +
+			"while the dataset has child datasets, zvols or snapshots, the destroy fails and lists them, unless force_destroy = true.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:    true,
@@ -49,10 +51,10 @@ func resourceSchema() schema.Schema {
 			"type": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Dataset type: FILESYSTEM (default) or VOLUME. Case-insensitive.",
+				Description: "Dataset type: FILESYSTEM (default) or VOLUME. Case-insensitive. Changing it (other than its letter case) recreates the dataset.",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
+					planmod.ReplaceFromKnownStringFold(),
 				},
 			},
 			"compression": schema.StringAttribute{
@@ -67,19 +69,19 @@ func resourceSchema() schema.Schema {
 			"acltype": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "ACL type: posix, nfsv4, off, or inherit. Case-insensitive.",
+				Description: "ACL type: posix, nfsv4, off, or inherit. Case-insensitive. Changing it (other than its letter case) recreates the dataset.",
 				Validators:  []validator.String{stringvalidator.OneOfCaseInsensitive("OFF", "NFSV4", "POSIX", "INHERIT")},
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
+					planmod.ReplaceFromKnownStringFold(),
 				},
 			},
 			"share_type": schema.StringAttribute{
 				Optional:    true,
-				Description: "Optimised share-type preset applied at creation: GENERIC, SMB, MULTIPROTOCOL, NFS, or APPS (write-only, not returned by the API). Create-only.",
+				Description: "Optimised share-type preset applied at creation: GENERIC, SMB, MULTIPROTOCOL, NFS, or APPS (write-only, not returned by the API). Create-only: changing it recreates the dataset. After an import it is unknown to the provider, so setting it records the value without recreating the dataset.",
 				Validators:  []validator.String{stringvalidator.OneOfCaseInsensitive("GENERIC", "MULTIPROTOCOL", "NFS", "SMB", "APPS")},
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					planmod.ReplaceFromKnownStringFold(),
 				},
 			},
 			"comments": schema.StringAttribute{
@@ -195,6 +197,11 @@ func resourceSchema() schema.Schema {
 			"encrypted": schema.BoolAttribute{
 				Computed:    true,
 				Description: "Whether the dataset is encrypted.",
+				// Fixed at creation (encryption is create-only) or changed only by
+				// a lock/unlock outside Terraform, which Read picks up; an in-place
+				// update never changes it, so keep it known instead of planning
+				// (known after apply) on every update.
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
 			"encryption": schema.BoolAttribute{
 				Optional:    true,
@@ -213,7 +220,7 @@ func resourceSchema() schema.Schema {
 					"dataset's encryption root on read, so it reflects reality even when left unset.",
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
-					replaceIfChangedFromKnown(),
+					planmod.ReplaceFromKnownBool(),
 				},
 			},
 			"encryption_algorithm": schema.StringAttribute{
@@ -229,7 +236,7 @@ func resourceSchema() schema.Schema {
 				Optional:    true,
 				Description: "Automatically generate the encryption key (key-based encryption). Create-only.",
 				PlanModifiers: []planmodifier.Bool{
-					replaceIfChangedFromKnown(),
+					planmod.ReplaceFromKnownBool(),
 				},
 			},
 			"encryption_passphrase": schema.StringAttribute{
@@ -247,10 +254,20 @@ func resourceSchema() schema.Schema {
 			"key_format": schema.StringAttribute{
 				Computed:    true,
 				Description: "Encryption key format: PASSPHRASE or HEX (null when not encrypted).",
+				// Fixed at creation (encryption is create-only) or changed only by
+				// a lock/unlock outside Terraform, which Read picks up; an in-place
+				// update never changes it, so keep it known instead of planning
+				// (known after apply) on every update.
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"locked": schema.BoolAttribute{
 				Computed:    true,
 				Description: "Whether the encrypted dataset is currently locked.",
+				// Fixed at creation (encryption is create-only) or changed only by
+				// a lock/unlock outside Terraform, which Read picks up; an in-place
+				// update never changes it, so keep it known instead of planning
+				// (known after apply) on every update.
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
 			"pool": schema.StringAttribute{
 				Computed: true,
@@ -261,6 +278,7 @@ func resourceSchema() schema.Schema {
 				},
 				Description: "Name of the pool containing this dataset.",
 			},
+			"force_destroy": ForceDestroyAttribute("dataset"),
 		},
 	}
 }

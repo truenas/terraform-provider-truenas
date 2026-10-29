@@ -191,7 +191,7 @@ func (r *CertificateResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	// create_type cannot have changed (it's RequiresReplace); only the
+	// create_type cannot have changed from a known value (it replaces); only the
 	// renew_days-for-non-ACME check is re-run here, against Config (see
 	// validateRenewDays's doc comment for why it must be Config, not Plan).
 	resp.Diagnostics.Append(validateRenewDays(plan.CreateType.ValueString(), config.RenewDays)...)
@@ -261,16 +261,22 @@ func (r *CertificateResource) ImportState(ctx context.Context, req resource.Impo
 	}
 
 	var state CertificateModel
-	// create_type, passphrase, and the ACME-only input fields are never
-	// returned by the API and cannot be recovered on import; they are left
-	// null. This matches the ImportStateVerifyIgnore list in
-	// acceptance_test.go. "dns_mapping" needs its null value explicitly
+	// create_type is derived from the certificate (null for a CSR, see
+	// importedCreateType). passphrase and the ACME-only input fields are
+	// never returned by the API and are left null; their ReplaceFromKnown
+	// plan modifiers record the configured value in place on the next apply
+	// instead of replacing the certificate. "dns_mapping" needs its null value explicitly
 	// typed (MapNull(Int64Type)): a bare zero-value types.Map — what an
 	// uninitialized CertificateModel{} carries — has no element type
 	// attached and fails to convert against the schema's typed map
 	// attribute ("Received framework type ... MapType[!!! MISSING TYPE
 	// !!!]"), confirmed live via `terraform import`.
 	state.DNSMapping = types.MapNull(types.Int64Type)
+	state.CreateType = importedCreateType(&apiResp)
+	// store_privatekey has no API counterpart; a null value already reads as
+	// the default true (responseToModel reads the key), so record that
+	// explicitly. Left null, the Default made every import plan an update.
+	state.StorePrivatekey = types.BoolValue(true)
 	resp.Diagnostics.Append(responseToModel(ctx, &apiResp, &state)...)
 	if resp.Diagnostics.HasError() {
 		return

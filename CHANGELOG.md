@@ -6,6 +6,118 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** `truenas_dataset` and `truenas_zvol` no longer delete
+  recursively. Destroying (or replacing) a dataset or zvol that has child
+  datasets, zvols or snapshots now fails with an error naming them, instead of
+  silently deleting everything under it — including children Terraform does
+  not manage. Destroy the children first (reference them from Terraform so the
+  order is automatic), delete them yourself, or set the new `force_destroy =
+  true` to delete recursively. Snapshots are never deleted without
+  `force_destroy`. A replacement uses the `force_destroy` value already in
+  state, so set it in an apply before the change that forces replacement.
+- **Breaking:** `truenas_system_advanced.syslogservers` (resource and data
+  source) is now a list of objects `{host, transport, tls_certificate}`,
+  matching the TrueNAS API. Remote syslog servers can now be configured (at
+  most 2; `tls_certificate` requires `transport = "TLS"`), and a box with a
+  remote syslog server no longer fails refresh, import and data-source reads.
+- **Breaking:** `truenas_nvmet_subsys.ieee_oui` must be hex with a `0x` prefix
+  (e.g. `0x005056`). An all-digit value broke create and left an orphan
+  subsystem, and other forms reached the kernel as the wrong OUI or were
+  silently ignored.
+- `truenas_iscsi_initiator`: leaving `initiators` (or `comment`) out of config
+  now keeps the server value. Before, any update sent an empty list, which
+  silently opened the initiator group to every initiator. Set `initiators = []`
+  explicitly to allow all.
+- `truenas_smb_share`: changing `purpose` without configuring `options` resets
+  `options` to the new purpose's server defaults. Setting a flat legacy
+  attribute (`guestok`, `hostsallow`, ...) together with the same field under
+  `options`, or with a non-`LEGACY_SHARE` purpose, is now a plan-time error
+  (it was silently ignored).
+- `truenas_replication_task`: `lifetime_value`/`lifetime_unit` read as null
+  (not `0`/`""`) when unset; `lifetimes = []` and `properties_override = {}`
+  are rejected at plan time.
+- Times in `truenas_replication_task` (`schedule`/`restrict_schedule`
+  begin/end), `truenas_periodic_snapshot_task` (`schedule` begin/end) and
+  `truenas_cloudsync_task` (`bwlimit[].time`) must be zero-padded `HH:MM`
+  (`"08:00"`, not `"8:00"`); the server pads them, so `"8:00"` failed apply.
+- `truenas_kerberos_keytab`: import no longer reads the keytab into state.
+  After importing a `file`-managed keytab, the next apply records `file` in
+  place.
+- `truenas_container` docs and examples: feeding the image data source's
+  `latest_version` into a managed container replaces it on every new image
+  build (the API cannot change a container's image in place); the examples now
+  use `lifecycle { ignore_changes = [image] }`.
+
+### Added
+- `force_destroy` on `truenas_dataset` and `truenas_zvol` (default `false`).
+  Changing it is a state-only update; existing state reads it as `false`, so
+  upgrading plans no changes.
+- `schedule.begin`/`schedule.end` on `truenas_periodic_snapshot_task` and
+  `truenas_replication_task`.
+
+### Fixed
+- `truenas_periodic_snapshot_task`: leaving `enabled`/`allow_empty` unset now
+  uses the server default (`true`). Before, the task was created disabled and
+  never took a snapshot, with no error or diff.
+- `truenas_smb_share`: a share created without `enabled`/`browsable` (and
+  `ro`, `abe`, `comment`) was created disabled and hidden; unset values now take
+  the server defaults and are not overwritten on update. Changing a flat
+  attribute (`guestok`, `hostsallow`, `hostsdeny`, `recyclebin`, `streams`,
+  `durablehandle`, `home`, `acl`, `timemachine`, `timemachine_quota`) on an
+  existing share is now applied (it was ignored and the apply failed), and
+  changing `purpose` works.
+- `truenas_periodic_snapshot_task` and `truenas_replication_task`: an update no
+  longer resets the schedule's begin/end window to 00:00-23:59.
+- `truenas_periodic_snapshot_task`, `truenas_cloudsync_task` and
+  `truenas_cloud_backup` data sources: reads no longer fail with a Value
+  Conversion Error on `schedule`.
+- `truenas_cloud_backup`: `schedule` can be omitted, as documented; every
+  create failed without it.
+- `truenas_replication_task`: removing `schedule`, `restrict_schedule`,
+  `properties_override` or `lifetimes` from config now clears them, and
+  retention can switch from CUSTOM to SOURCE/NONE by removing the lifetime
+  fields.
+- `truenas_certificate`: imported certificates with a PKCS#1 key (the
+  `tls_private_key` default), a SEC1 EC key, a passphrase-protected key or a
+  key without a trailing newline no longer fail with "inconsistent result" (the
+  server re-encodes keys as PKCS#8; keys are now compared by key material).
+- `truenas_dataset` with `type = "VOLUME"`: in-place updates no longer fail;
+  `aclmode`/`atime`/`exec`/`snapdir` read as null for volumes.
+- `truenas_iscsi_target`: a `groups` entry without `authmethod` now applies
+  (server default NONE).
+- `truenas_nvmet_namespace`: `device_type` is derived from `device_path` when
+  omitted (create failed without it), and changing `device_path`/`device_type`
+  on an enabled namespace works in place (it is disabled briefly, then
+  re-enabled; device identity is kept).
+- `truenas_kerberos_keytab` with a read-only admin key: the redacted
+  `"********"` keytab is no longer planned as a change (the resource keeps its
+  state value; the data source returns null).
+- `terraform import` followed by a plan with the same configuration no longer
+  replaces the object. Attributes the API does not return (create-time inputs)
+  read back as null after import and forced a destroy/recreate; they are now
+  recorded in place, and attributes the API does return are read back. Affected:
+  - `truenas_dataset`: `share_type`, and upper-case `type`/`acltype` (combined
+    with the old recursive delete, this could wipe a dataset's whole subtree);
+  - `truenas_snapshot`: `recursive` (the point-in-time data was lost);
+  - `truenas_keychain_ssh_keypair`: `generate` (a new key broke every
+    connection using it);
+  - `truenas_certificate`: `create_type`, `ec_curve`, `passphrase`,
+    `digest_algorithm`, `acme_directory_uri`, `csr_id`, `tos`, `dns_mapping`
+    (`create_type` is now derived on import);
+  - `truenas_boot_environment`: `source`;
+  - `truenas_container`: `image`, `idmap`;
+  - `truenas_app`: `catalog_app` (now read back).
+- `truenas_snapshot`: destroying a `recursive = true` snapshot now also deletes
+  the child datasets' snapshots it created, instead of leaving them behind.
+- `truenas_dataset`: `encrypted`, `key_format` and `locked` no longer show as
+  "(known after apply)" on every update.
+- Test infrastructure: the shared import check (`ImportReapplyNoop`) now really
+  imports into state before checking the plan (it previously planned against
+  the pre-import state, so it could not catch import bugs), and a provider-wide
+  test fails on any replace-on-change attribute that is neither read back on
+  import nor import-safe. CI unit tests and license-header checks pass again.
+
 ## [1.5.24] - 2026-10-27
 
 ### Changed

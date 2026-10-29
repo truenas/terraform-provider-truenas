@@ -150,8 +150,13 @@ func (m *ISCSITargetModel) apiPayload(ctx context.Context) (map[string]any, diag
 	var groupsPayload []map[string]any
 	for _, g := range groupItems {
 		item := map[string]any{
-			"portal":     g.Portal.ValueInt64(),
-			"authmethod": g.AuthMethod.ValueString(),
+			"portal": g.Portal.ValueInt64(),
+		}
+		// authmethod is Optional+Computed: when unset it is unknown in the
+		// plan, and ValueString() would send "", which the server rejects.
+		// Omit it so the server applies its default (NONE).
+		if !g.AuthMethod.IsNull() && !g.AuthMethod.IsUnknown() && g.AuthMethod.ValueString() != "" {
+			item["authmethod"] = g.AuthMethod.ValueString()
 		}
 		if g.Initiator.ValueInt64() != 0 {
 			item["initiator"] = g.Initiator.ValueInt64()

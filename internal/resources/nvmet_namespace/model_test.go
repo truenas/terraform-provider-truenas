@@ -176,9 +176,10 @@ func hasUseStateForUnknown(modifiers []planmodifier.Int64) bool {
 }
 
 // TestCreatePayload_KeysAlwaysPresent verifies that "subsys_id" and
-// "device_path" are always sent on create, and that "nsid" is omitted
-// entirely when unset (auto-assign), while other guarded fields are also
-// omitted when null/unknown.
+// "device_path" are always sent on create, that "nsid" is omitted
+// entirely when unset (auto-assign), that enabled/filesize are omitted when
+// null/unknown, and that an unset device_type is derived from device_path
+// (the API requires it).
 func TestCreatePayload_KeysAlwaysPresent(t *testing.T) {
 	ctx := context.Background()
 
@@ -202,13 +203,16 @@ func TestCreatePayload_KeysAlwaysPresent(t *testing.T) {
 	if payload["device_path"] != "zvol/tank/proxmox/vm-10001-disk-0" {
 		t.Errorf("payload[device_path] = %v, want zvol/tank/proxmox/vm-10001-disk-0", payload["device_path"])
 	}
-	for _, key := range []string{"device_type", "enabled", "filesize", "nsid"} {
+	if payload["device_type"] != "ZVOL" {
+		t.Errorf("payload[device_type] = %v, want ZVOL derived from device_path", payload["device_type"])
+	}
+	for _, key := range []string{"enabled", "filesize", "nsid"} {
 		if _, ok := payload[key]; ok {
 			t.Errorf("expected %q to be omitted (null), got %v", key, payload[key])
 		}
 	}
-	if len(payload) != 2 {
-		t.Errorf("payload has %d keys (%v), want 2", len(payload), payload)
+	if len(payload) != 3 {
+		t.Errorf("payload has %d keys (%v), want 3", len(payload), payload)
 	}
 }
 
@@ -430,5 +434,45 @@ func TestResponseToModel_InvalidSubsys(t *testing.T) {
 	diags := responseToModel(ctx, api, &m)
 	if !diags.HasError() {
 		t.Fatal("responseToModel should return an error when subsys is null")
+	}
+}
+
+// TestInferDeviceType verifies the device_type derived from device_path.
+func TestInferDeviceType(t *testing.T) {
+	for p, want := range map[string]string{
+		"zvol/tank/vm1":           "ZVOL",
+		"zvol/tank/a b":           "ZVOL",
+		"/dev/zvol/tank/vm1":      "ZVOL",
+		"/mnt/tank/ds/ns.img":     "FILE",
+		"/mnt/tank/zvol/file.img": "FILE",
+	} {
+		if got := inferDeviceType(p); got != want {
+			t.Errorf("inferDeviceType(%q) = %q, want %q", p, got, want)
+		}
+	}
+}
+
+// TestDeviceChanged verifies when Update must disable the namespace first.
+func TestDeviceChanged(t *testing.T) {
+	state := NVMetNamespaceModel{
+		DevicePath: types.StringValue("zvol/tank/a"),
+		DeviceType: types.StringValue("ZVOL"),
+	}
+	cases := []struct {
+		name       string
+		path, typ  types.String
+		wantChange bool
+	}{
+		{"same", types.StringValue("zvol/tank/a"), types.StringValue("ZVOL"), false},
+		{"same, type unknown", types.StringValue("zvol/tank/a"), types.StringUnknown(), false},
+		{"new zvol", types.StringValue("zvol/tank/b"), types.StringValue("ZVOL"), true},
+		{"to file, type unknown", types.StringValue("/mnt/tank/d/ns.img"), types.StringUnknown(), true},
+		{"type only", types.StringValue("zvol/tank/a"), types.StringValue("FILE"), true},
+	}
+	for _, tc := range cases {
+		plan := NVMetNamespaceModel{DevicePath: tc.path, DeviceType: tc.typ}
+		if got := deviceChanged(&plan, &state); got != tc.wantChange {
+			t.Errorf("%s: deviceChanged = %v, want %v", tc.name, got, tc.wantChange)
+		}
 	}
 }

@@ -377,12 +377,16 @@ func TestAccReplication_SSHNetcat(t *testing.T) {
 func testAccReplicationNetcatConfig(username, homeDS, publicKeyLine, keypairName, privateKeyPEM, connName, host, hostKey, srcDS, dstDS, name string) string {
 	pool := acctest.TestPool()
 	return fmt.Sprintf(`
+# force_destroy: the replication run leaves snapshots on both datasets,
+# and a dataset with snapshots is otherwise not deleted.
 resource "truenas_dataset" "src" {
-  name = %[1]q
+  name          = %[1]q
+  force_destroy = true
 }
 
 resource "truenas_dataset" "dst" {
-  name = %[2]q
+  name          = %[2]q
+  force_destroy = true
 }
 
 resource "truenas_dataset" "sshuser_home" {
@@ -393,6 +397,7 @@ resource "truenas_user" "sshuser" {
   username               = %[4]q
   full_name              = "TF Acceptance NETCAT Replication User"
   password_disabled      = true
+  smb                    = false # the server default (true) rejects password_disabled
   home                   = "/mnt/${truenas_dataset.sshuser_home.name}"
   shell                  = "/usr/bin/bash"
   group_create           = true
@@ -443,12 +448,16 @@ resource "truenas_replication_task" "test" {
 func testAccReplicationSSHConfig(username, homeDS, publicKeyLine, keypairName, privateKeyPEM, connName, host, hostKey, srcDS, dstDS, name string, enabled bool) string {
 	pool := acctest.TestPool()
 	return fmt.Sprintf(`
+# force_destroy: the replication run leaves snapshots on both datasets,
+# and a dataset with snapshots is otherwise not deleted.
 resource "truenas_dataset" "src" {
-  name = %[1]q
+  name          = %[1]q
+  force_destroy = true
 }
 
 resource "truenas_dataset" "dst" {
-  name = %[2]q
+  name          = %[2]q
+  force_destroy = true
 }
 
 # user_create requires the home directory of any user with an sshpubkey to
@@ -464,6 +473,7 @@ resource "truenas_user" "sshuser" {
   username               = %[4]q
   full_name              = "TF Acceptance SSH Replication User"
   password_disabled      = true
+  smb                    = false # the server default (true) rejects password_disabled
   home                   = "/mnt/${truenas_dataset.sshuser_home.name}"
   shell                  = "/usr/bin/bash"
   group_create           = true

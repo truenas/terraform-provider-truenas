@@ -33,7 +33,7 @@ func TestAccApp_basic(t *testing.T) {
 		PreCheck:                 func() { acctest.AppsCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckAppDestroyed(name),
-		Steps: []resource.TestStep{
+		Steps: append([]resource.TestStep{
 			{
 				Config: acctest.ProviderConfig() + testAccAppConfig(name, "syncthing", true),
 				Check: resource.ComposeTestCheckFunc(
@@ -52,7 +52,8 @@ func TestAccApp_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("truenas_app.test", "state", "STOPPED"),
 				),
 			},
-		},
+			// Import then plan the same config: catalog_app is read from metadata.name, so the plan is empty (BUGS B-006).
+		}, acctest.ImportReapplyNoop("truenas_app.test", acctest.ProviderConfig()+testAccAppConfig(name, "syncthing", false))...),
 	})
 }
 

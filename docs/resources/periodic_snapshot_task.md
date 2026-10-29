@@ -70,3 +70,8 @@ Required:
 - `hour` (String) Cron hour.
 - `minute` (String) Cron minute (e.g. 0, */15).
 - `month` (String) Month.
+
+Optional:
+
+- `begin` (String) Start of the daily window in which snapshots are taken, 24-hour "HH:MM". Defaults to "00:00" on create; when omitted later, the current value is kept.
+- `end` (String) End of the daily window in which snapshots are taken, 24-hour "HH:MM". Defaults to "23:59" on create; when omitted later, the current value is kept.

@@ -126,6 +126,30 @@ func volblocksizeStr(b int64) string {
 	return ""
 }
 
+// zvolResourceModel is the truenas_zvol resource model: ZvolModel (shared with
+// the data source and the list resource) plus force_destroy, which only the
+// resource has.
+type zvolResourceModel struct {
+	ZvolModel
+	ForceDestroy types.Bool `tfsdk:"force_destroy"`
+}
+
+// updateAPIPayload is apiPayload without the keys pool.dataset.update does not
+// accept for a zvol.
+func (m *ZvolModel) updateAPIPayload() map[string]any {
+	p := m.apiPayload()
+	// name, type, volblocksize, and sparse are not updatable via update endpoint
+	delete(p, "name")
+	delete(p, "type")
+	delete(p, "volblocksize")
+	delete(p, "sparse")
+	// Encryption is create-only; pool.dataset.update rejects these.
+	delete(p, "encryption")
+	delete(p, "inherit_encryption")
+	delete(p, "encryption_options")
+	return p
+}
+
 func (m *ZvolModel) apiPayload() map[string]any {
 	p := map[string]any{
 		"name":    m.Name.ValueString(),

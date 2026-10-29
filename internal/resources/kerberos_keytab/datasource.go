@@ -35,7 +35,7 @@ func (d *KerberosKeytabDataSource) Schema(_ context.Context, _ datasource.Schema
 			"file": dschema.StringAttribute{
 				Computed:    true,
 				Sensitive:   true,
-				Description: "Base64-encoded Kerberos keytab data merged into the system keytab.",
+				Description: "Base64-encoded Kerberos keytab data merged into the system keytab. Null when the API key lacks full-admin rights (the API masks it).",
 			},
 		},
 	}

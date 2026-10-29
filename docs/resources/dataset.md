@@ -3,12 +3,12 @@
 page_title: "truenas_dataset Resource - truenas"
 subcategory: "Storage"
 description: |-
-  Manages a ZFS dataset (filesystem or volume) on TrueNAS.
+  Manages a ZFS dataset (filesystem or volume) on TrueNAS. Destroying it is non-recursive: while the dataset has child datasets, zvols or snapshots, the destroy fails and lists them, unless force_destroy = true.
 ---
 
 # truenas_dataset (Resource)
 
-Manages a ZFS dataset (filesystem or volume) on TrueNAS.
+Manages a ZFS dataset (filesystem or volume) on TrueNAS. Destroying it is non-recursive: while the dataset has child datasets, zvols or snapshots, the destroy fails and lists them, unless force_destroy = true.
 
 ## Example Usage
 
@@ -63,7 +63,7 @@ resource "truenas_dataset" "keyed" {
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
 - `aclmode` (String) ACL inheritance mode: PASSTHROUGH, RESTRICTED, or DISCARD. Null (unset) inherits from the parent.
-- `acltype` (String) ACL type: posix, nfsv4, off, or inherit. Case-insensitive.
+- `acltype` (String) ACL type: posix, nfsv4, off, or inherit. Case-insensitive. Changing it (other than its letter case) recreates the dataset.
 - `atime` (String) Update access time on read: ON or OFF. Null inherits.
 - `checksum` (String) Checksum algorithm: ON, OFF, FLETCHER2, FLETCHER4, SHA256, SHA512, SKEIN, EDONR, or BLAKE3. Null inherits.
 - `comments` (String) Human-readable description stored as org.freenas:description.
@@ -76,6 +76,7 @@ resource "truenas_dataset" "keyed" {
 - `encryption_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) 64-character hex key for key-based encryption. Write-only: never stored in state. Create-only.
 - `encryption_passphrase` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Passphrase for passphrase-based encryption (minimum 8 characters). Write-only: never stored in state. Create-only.
 - `exec` (String) Allow executing files: ON or OFF. Null inherits.
+- `force_destroy` (Boolean) When true, destroying (or replacing) this dataset also deletes all of its child datasets, zvols and snapshots. Default false: the delete is non-recursive, and while any of those exist it fails and lists them. Changing it updates state only. It takes effect only once applied, so set it and apply before the destroy or replacement that needs it. Import sets it to false.
 - `inherit_encryption` (Boolean) Whether this dataset inherits its encryption from the parent dataset rather than owning its own key. Create-only. Computed: reconciled from the dataset's encryption root on read, so it reflects reality even when left unset.
 - `quota` (Number) Quota in bytes (0 = unlimited).
 - `readonly` (String) Mount read-only: ON or OFF. Null inherits.
@@ -83,11 +84,11 @@ resource "truenas_dataset" "keyed" {
 - `refquota` (Number) Referenced quota in bytes (0 = unlimited).
 - `refreservation` (Number) Referenced reservation in bytes (space guaranteed to this dataset, excluding descendants/snapshots). Null (unset) inherits.
 - `reservation` (Number) Reserved space in bytes.
-- `share_type` (String) Optimised share-type preset applied at creation: GENERIC, SMB, MULTIPROTOCOL, NFS, or APPS (write-only, not returned by the API). Create-only.
+- `share_type` (String) Optimised share-type preset applied at creation: GENERIC, SMB, MULTIPROTOCOL, NFS, or APPS (write-only, not returned by the API). Create-only: changing it recreates the dataset. After an import it is unknown to the provider, so setting it records the value without recreating the dataset.
 - `snapdir` (String) Visibility of the .zfs/snapshot directory: VISIBLE, HIDDEN, or DISABLED. Null inherits.
 - `special_small_block_size` (Number) Threshold in bytes below which blocks are written to a pool's special allocation-class vdev; 0 disables it. Null (unset) inherits from the parent.
 - `sync` (String) Sync write behaviour: STANDARD, ALWAYS, or DISABLED. Null inherits.
-- `type` (String) Dataset type: FILESYSTEM (default) or VOLUME. Case-insensitive.
+- `type` (String) Dataset type: FILESYSTEM (default) or VOLUME. Case-insensitive. Changing it (other than its letter case) recreates the dataset.
 - `volsize` (Number) Volume size in bytes. Required for type=VOLUME.
 
 ### Read-Only

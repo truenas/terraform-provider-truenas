@@ -254,8 +254,8 @@ func (r *KeychainSSHKeyPairResource) ImportState(ctx context.Context, req resour
 	var state KeychainSSHKeyPairModel
 	// "generate" is never knowable on import — TrueNAS never records
 	// whether a key pair's private_key was user-supplied or
-	// server-generated. Left explicitly null; acceptance tests must set
-	// ImportStateVerifyIgnore: ["generate"].
+	// server-generated. Left explicitly null; planmod.ReplaceFromKnownBool
+	// lets the next apply record the configured value in place.
 	state.Generate = types.BoolNull()
 	resp.Diagnostics.Append(responseToModel(&apiResp, &state)...)
 	if resp.Diagnostics.HasError() {

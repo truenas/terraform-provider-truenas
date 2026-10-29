@@ -69,8 +69,12 @@ func (r *NVMetSubsysResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	// Parse create response to get the ID, then read back via get_instance.
-	var created nvmetSubsysAPI
+	// Parse only the ID from the create response, then read back via
+	// get_instance. Decoding the full object here would turn any field
+	// decode problem into an error after the subsystem already exists.
+	var created struct {
+		ID int64 `json:"id"`
+	}
 	if err := json.Unmarshal(raw, &created); err != nil {
 		resp.Diagnostics.AddError("Parse create response", err.Error())
 		return

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -29,7 +30,7 @@ var _ resource.ResourceWithValidateConfig = &DatasetResource{}
 // result after apply" error at create (#31). Failing here gives a clear message
 // at plan time instead.
 func (r *DatasetResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	var cfg DatasetModel
+	var cfg datasetResourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -79,7 +80,7 @@ func (r *DatasetResource) Configure(_ context.Context, req resource.ConfigureReq
 }
 
 func (r *DatasetResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var plan DatasetModel
+	var plan datasetResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -88,12 +89,12 @@ func (r *DatasetResource) Create(ctx context.Context, req resource.CreateRequest
 	payload := plan.apiPayload()
 	// encryption_passphrase / encryption_key are write-only: read them from the
 	// config (they are null in the plan/state) and inject into encryption_options.
-	var cfg DatasetModel
+	var cfg datasetResourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	injectEncryptionSecrets(payload, &cfg)
+	injectEncryptionSecrets(payload, &cfg.DatasetModel)
 	// TrueNAS 27.0 removed encryption_options.algorithm (the algorithm is fixed
 	// server-side); sending it there fails with "Extra inputs are not permitted".
 	// The algorithm still reads back via the computed encryption_algorithm.
@@ -125,7 +126,7 @@ func (r *DatasetResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	resp.Diagnostics.Append(r.responseToModel(&apiResp, &plan)...)
+	resp.Diagnostics.Append(r.responseToModel(&apiResp, &plan.DatasetModel)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -134,7 +135,7 @@ func (r *DatasetResource) Create(ctx context.Context, req resource.CreateRequest
 }
 
 func (r *DatasetResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var state DatasetModel
+	var state datasetResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -156,16 +157,19 @@ func (r *DatasetResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	resp.Diagnostics.Append(r.responseToModel(&apiResp, &state)...)
+	resp.Diagnostics.Append(r.responseToModel(&apiResp, &state.DatasetModel)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	// State written before force_destroy existed has it null; read it as the
+	// default so the upgrade plans no change.
+	state.ForceDestroy = ForceDestroyOrFalse(state.ForceDestroy)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueString())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
 func (r *DatasetResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan, state DatasetModel
+	var plan, state datasetResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -174,12 +178,18 @@ func (r *DatasetResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	// Pass prior state so unchanged quota/refquota/reservation are omitted and
 	// their property source is not flipped to LOCAL by a no-op resend. (#61)
-	payload := plan.updateAPIPayload(&state)
+	payload := plan.updateAPIPayload(&state.DatasetModel)
 
-	_, err := r.client.Call(ctx, "pool.dataset.update", plan.Name.ValueString(), payload)
-	if err != nil {
-		resp.Diagnostics.AddError("Update dataset failed", err.Error())
-		return
+	// Skip the API call when the payload is what prior state would send: only
+	// state-only attributes changed (force_destroy, share_type recorded after an
+	// import, a letter-case change of type/acltype/compression). Sending it
+	// anyway would rewrite properties for nothing.
+	if !reflect.DeepEqual(payload, state.updateAPIPayload(&state.DatasetModel)) {
+		_, err := r.client.Call(ctx, "pool.dataset.update", plan.Name.ValueString(), payload)
+		if err != nil {
+			resp.Diagnostics.AddError("Update dataset failed", err.Error())
+			return
+		}
 	}
 
 	// Re-read to get computed fields
@@ -195,7 +205,7 @@ func (r *DatasetResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	resp.Diagnostics.Append(r.responseToModel(&apiResp, &plan)...)
+	resp.Diagnostics.Append(r.responseToModel(&apiResp, &plan.DatasetModel)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -204,17 +214,17 @@ func (r *DatasetResource) Update(ctx context.Context, req resource.UpdateRequest
 }
 
 func (r *DatasetResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var state DatasetModel
+	var state datasetResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	_, err := r.client.CallJob(ctx, "pool.dataset.delete", state.Name.ValueString(),
-		map[string]any{"recursive": true})
-	if err != nil && !client.IsNotFound(err) {
-		resp.Diagnostics.AddError("Delete dataset failed", err.Error())
-	}
+	// Non-recursive unless force_destroy: a delete (including the destroy half
+	// of a replacement) used to be recursive and silently took child datasets
+	// and snapshots Terraform does not manage with it. (B-001)
+	force := !state.ForceDestroy.IsNull() && state.ForceDestroy.ValueBool()
+	resp.Diagnostics.Append(DeleteDataset(ctx, r.client, state.Name.ValueString(), "dataset", force)...)
 }
 
 func (r *DatasetResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -225,7 +235,7 @@ func (r *DatasetResource) ImportState(ctx context.Context, req resource.ImportSt
 		return
 	}
 
-	var state DatasetModel
+	var state datasetResourceModel
 	state.Name = types.StringValue(id)
 	state.ID = types.StringValue(id)
 
@@ -241,10 +251,11 @@ func (r *DatasetResource) ImportState(ctx context.Context, req resource.ImportSt
 		return
 	}
 
-	resp.Diagnostics.Append(r.responseToModel(&apiResp, &state)...)
+	resp.Diagnostics.Append(r.responseToModel(&apiResp, &state.DatasetModel)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	state.ForceDestroy = types.BoolValue(false)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueString())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

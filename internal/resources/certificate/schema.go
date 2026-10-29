@@ -11,11 +11,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 )
 
 func resourceSchema() schema.Schema {
@@ -51,12 +51,14 @@ func resourceSchema() schema.Schema {
 			"create_type": schema.StringAttribute{
 				Required: true,
 				Description: "Certificate creation mode: CERTIFICATE_CREATE_IMPORTED, CERTIFICATE_CREATE_CSR, " +
-					"CERTIFICATE_CREATE_IMPORTED_CSR, or CERTIFICATE_CREATE_ACME. Immutable.",
+					"CERTIFICATE_CREATE_IMPORTED_CSR, or CERTIFICATE_CREATE_ACME. Immutable. Import derives it from " +
+					"the certificate (ACME, IMPORTED); a CSR cannot be told apart from an imported CSR, so for a CSR " +
+					"it reads back null and the configured value is recorded in place on the next apply.",
 				Validators: []validator.String{stringvalidator.OneOf(
 					CreateTypeImported, CreateTypeCSR, CreateTypeImportedCSR, CreateTypeACME,
 				)},
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					planmod.ReplaceFromKnownString(),
 				},
 			},
 			"add_to_trusted_store": schema.BoolAttribute{
@@ -102,13 +104,15 @@ func resourceSchema() schema.Schema {
 					"or CERTIFICATE_CREATE_IMPORTED_CSR (the key being imported); server-generated (and read " +
 					"back here) for CERTIFICATE_CREATE_CSR. Marked Sensitive (kept out of plan/apply output and " +
 					"logs), but — unlike a WriteOnly attribute — it IS stored in state and IS read back on " +
-					"refresh/import: certificate.get_instance returns it byte-for-byte intact (probed live). The " +
+					"refresh/import from certificate.get_instance. The " +
 					"job result returned directly by certificate.create/update masks this field as \"********\" " +
 					"— this provider always re-reads via certificate.get_instance before saving state, so that " +
-					"masked value is never persisted. Immutable.",
+					"masked value is never persisted. TrueNAS stores an imported key re-encoded (PKCS#1 and SEC1 " +
+					"keys as PKCS#8, passphrase-protected keys decrypted); the configured text is kept in state " +
+					"as long as it is the same key. Changing the key itself replaces the certificate.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
-					stringplanmodifier.RequiresReplace(),
+					replaceIfPrivatekeyChanged(),
 				},
 			},
 			"store_privatekey": schema.BoolAttribute{
@@ -180,7 +184,7 @@ func resourceSchema() schema.Schema {
 					"below. Immutable.",
 				Validators: []validator.String{stringvalidator.OneOf("SECP256R1", "SECP384R1", "SECP521R1", "ed25519")},
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					planmod.ReplaceFromKnownString(),
 				},
 			},
 			"passphrase": schema.StringAttribute{
@@ -191,7 +195,7 @@ func resourceSchema() schema.Schema {
 					"get_instance/query response, so — unlike \"privatekey\" — it cannot be read back and is not " +
 					"marked Computed; the value you set here is simply preserved in state as-is. Immutable.",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					planmod.ReplaceFromKnownString(),
 				},
 			},
 			"city": schema.StringAttribute{
@@ -264,7 +268,7 @@ func resourceSchema() schema.Schema {
 				Validators:  []validator.String{stringvalidator.OneOf("SHA224", "SHA256", "SHA384", "SHA512")},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
-					stringplanmodifier.RequiresReplace(),
+					planmod.ReplaceFromKnownString(),
 				},
 			},
 			"san": schema.ListAttribute{
@@ -286,7 +290,7 @@ func resourceSchema() schema.Schema {
 					"end-to-end issuance against this URI is exercised by the provider's ACME acceptance test " +
 					"(see the resource-level description). Immutable.",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					planmod.ReplaceFromKnownString(),
 				},
 			},
 			"csr_id": schema.Int64Attribute{
@@ -294,7 +298,7 @@ func resourceSchema() schema.Schema {
 				Description: "ID of a truenas_certificate (create_type CERTIFICATE_CREATE_CSR) to use for ACME " +
 					"issuance. Required when create_type is CERTIFICATE_CREATE_ACME. Immutable.",
 				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.RequiresReplace(),
+					planmod.ReplaceFromKnownInt64(),
 				},
 			},
 			"tos": schema.BoolAttribute{
@@ -302,7 +306,7 @@ func resourceSchema() schema.Schema {
 				Description: "Set to true to accept the ACME service's terms of service. Required (must be " +
 					"true) when create_type is CERTIFICATE_CREATE_ACME. Immutable.",
 				PlanModifiers: []planmodifier.Bool{
-					boolplanmodifier.RequiresReplace(),
+					planmod.ReplaceFromKnownBool(),
 				},
 			},
 			"dns_mapping": schema.MapAttribute{
@@ -312,7 +316,7 @@ func resourceSchema() schema.Schema {
 					"listed in \"san\"/\"common\" of the target CSR. Required (at least one entry) when " +
 					"create_type is CERTIFICATE_CREATE_ACME. Immutable.",
 				PlanModifiers: []planmodifier.Map{
-					mapplanmodifier.RequiresReplace(),
+					planmod.ReplaceFromKnownMap(),
 				},
 			},
 			// certificate_path/privatekey_path/csr_path are deliberately NOT

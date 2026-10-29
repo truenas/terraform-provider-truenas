@@ -71,8 +71,10 @@ func TestUPSConfigSchema_MonPwdIsSensitiveWriteOnly(t *testing.T) {
 }
 
 // TestUPSConfigSchema_CompleteIdentifierIsComputedOnly verifies that
-// "complete_identifier" is Computed-only with UseStateForUnknown plan modifiers
-// (it is server-derived and should never be sent to ups.update).
+// "complete_identifier" is Computed-only (it is server-derived and should never
+// be sent to ups.update) and has NO plan modifiers: it is derived from
+// identifier/mode/remotehost/remoteport, so UseStateForUnknown kept a stale
+// value on update and caused "inconsistent result after apply" (v1.5.23).
 func TestUPSConfigSchema_CompleteIdentifierIsComputedOnly(t *testing.T) {
 	s := resourceSchema()
 
@@ -90,8 +92,8 @@ func TestUPSConfigSchema_CompleteIdentifierIsComputedOnly(t *testing.T) {
 	if strAttr.IsOptional() || strAttr.IsRequired() {
 		t.Error("'complete_identifier' should be Computed-only (not Optional/Required)")
 	}
-	if len(strAttr.PlanModifiers) == 0 {
-		t.Error("'complete_identifier' should have plan modifiers (UseStateForUnknown)")
+	if len(strAttr.PlanModifiers) != 0 {
+		t.Error("'complete_identifier' must not have plan modifiers: UseStateForUnknown keeps a stale derived value on update")
 	}
 }
 

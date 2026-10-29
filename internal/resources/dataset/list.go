@@ -61,9 +61,10 @@ func (l *DatasetListResource) mapRow(ctx context.Context, req list.ListRequest, 
 	res.DisplayName = api.Name
 	res.Diagnostics.Append(listing.SetIdentity(ctx, res.Identity, api.Name)...)
 	if req.IncludeResource {
-		var m DatasetModel
+		var m datasetResourceModel
 		var dr DatasetResource
-		res.Diagnostics.Append(dr.responseToModel(&api, &m)...)
+		res.Diagnostics.Append(dr.responseToModel(&api, &m.DatasetModel)...)
+		m.ForceDestroy = ForceDestroyOrFalse(m.ForceDestroy)
 		res.Diagnostics.Append(res.Resource.Set(ctx, &m)...)
 	}
 	return res

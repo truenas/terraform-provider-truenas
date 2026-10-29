@@ -37,7 +37,7 @@ resource "truenas_snapshot" "backup" {
 
 ### Optional
 
-- `recursive` (Boolean) Take recursive snapshot of child datasets (write-only; not stored in state).
+- `recursive` (Boolean) Take recursive snapshot of child datasets. Create-time only: the API never returns it, so it reads back null after import and setting it then records the value in place; any later change replaces the snapshot.
 
 ### Read-Only
 

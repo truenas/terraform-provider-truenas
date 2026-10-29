@@ -131,6 +131,26 @@ func TestISCSIInitiatorApiPayload_NullInitiators(t *testing.T) {
 	}
 }
 
+// TestISCSIInitiatorApiPayload_Unknown verifies that unknown (unset on
+// create) comment/initiators are omitted, not sent as ""/[]. Sending [] would
+// open the initiator group to all initiators.
+func TestISCSIInitiatorApiPayload_Unknown(t *testing.T) {
+	ctx := context.Background()
+
+	m := ISCSIInitiatorModel{
+		Comment:    types.StringUnknown(),
+		Initiators: types.ListUnknown(types.StringType),
+	}
+
+	payload, diags := m.apiPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("apiPayload returned diagnostic errors: %v", diags)
+	}
+	if len(payload) != 0 {
+		t.Errorf("payload = %v, want empty (unknown values omitted)", payload)
+	}
+}
+
 // TestISCSIInitiatorResponseToModel verifies that responseToModel populates all
 // fields from the initiatorAPI struct correctly.
 func TestISCSIInitiatorResponseToModel(t *testing.T) {

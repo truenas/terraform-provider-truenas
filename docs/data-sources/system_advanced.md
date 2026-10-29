@@ -41,6 +41,15 @@ Reads the current TrueNAS system advanced configuration (syslog, console, kernel
 - `serialspeed` (String) Serial console baud rate: one of 9600, 19200, 38400, 57600, or 115200.
 - `syslog_audit` (Boolean) Whether audit logs are sent to the configured syslog servers.
 - `sysloglevel` (String) Minimum severity of messages sent to syslog: one of F_EMERG, F_ALERT, F_CRIT, F_ERR, F_WARNING, F_NOTICE, F_INFO.
-- `syslogservers` (List of String) Remote syslog servers messages are forwarded to.
+- `syslogservers` (Attributes List) Remote syslog servers messages are forwarded to. (see [below for nested schema](#nestedatt--syslogservers))
 - `traceback` (Boolean) Whether a Python traceback is displayed on a middleware crash.
 - `uploadcrash` (Boolean) Whether crash dumps and telemetry are automatically uploaded to TrueNAS.
+
+<a id="nestedatt--syslogservers"></a>
+### Nested Schema for `syslogservers`
+
+Read-Only:
+
+- `host` (String) Remote syslog server hostname or IP address, with an optional ":port" suffix.
+- `tls_certificate` (Number) ID of the local certificate presented for mutual TLS, or null for one-way TLS.
+- `transport` (String) Transport protocol: one of UDP, TCP, TLS.

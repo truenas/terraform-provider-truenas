@@ -58,13 +58,15 @@ func TestPeriodicSnapshotPayload(t *testing.T) {
 		LifetimeValue: types.Int64Value(2),
 		LifetimeUnit:  types.StringValue("WEEK"),
 		NamingSchema:  types.StringValue("auto-%Y-%m-%d_%H-%M"),
-		Schedule: ScheduleModel{
-			Minute: types.StringValue("0"),
-			Hour:   types.StringValue("0"),
-			Dom:    types.StringValue("*"),
-			Month:  types.StringValue("*"),
-			Dow:    types.StringValue("*"),
-		},
+		Schedule: types.ObjectValueMust(scheduleAttrTypes, map[string]attr.Value{
+			"minute": types.StringValue("0"),
+			"hour":   types.StringValue("0"),
+			"dom":    types.StringValue("*"),
+			"month":  types.StringValue("*"),
+			"dow":    types.StringValue("*"),
+			"begin":  types.StringValue("08:00"),
+			"end":    types.StringValue("17:00"),
+		}),
 		AllowEmpty: types.BoolValue(false),
 		Enabled:    types.BoolValue(true),
 	}
@@ -101,5 +103,52 @@ func TestPeriodicSnapshotPayload(t *testing.T) {
 	}
 	if sched["dom"] != "*" {
 		t.Errorf("schedule.dom = %q, want \"*\"", sched["dom"])
+	}
+	// The server replaces the whole schedule object, so a known window must
+	// always be sent back (B-036).
+	if sched["begin"] != "08:00" || sched["end"] != "17:00" {
+		t.Errorf("schedule window = %q-%q, want 08:00-17:00", sched["begin"], sched["end"])
+	}
+}
+
+// TestPeriodicSnapshotPayload_UnsetOmitted: Optional+Computed attributes left
+// unset are unknown in the create plan and must be omitted so the server
+// defaults apply. Sending ValueBool() of an unknown sent enabled=false and
+// allow_empty=false, creating a task that never took a snapshot (B-010).
+func TestPeriodicSnapshotPayload_UnsetOmitted(t *testing.T) {
+	ctx := context.Background()
+	m := PeriodicSnapshotModel{
+		Dataset:       types.StringValue("tank/mydata"),
+		Recursive:     types.BoolUnknown(),
+		Exclude:       types.ListUnknown(types.StringType),
+		LifetimeValue: types.Int64Value(2),
+		LifetimeUnit:  types.StringValue("WEEK"),
+		NamingSchema:  types.StringValue("auto-%Y-%m-%d_%H-%M"),
+		Schedule: types.ObjectValueMust(scheduleAttrTypes, map[string]attr.Value{
+			"minute": types.StringValue("0"),
+			"hour":   types.StringValue("0"),
+			"dom":    types.StringValue("*"),
+			"month":  types.StringValue("*"),
+			"dow":    types.StringValue("*"),
+			"begin":  types.StringUnknown(),
+			"end":    types.StringUnknown(),
+		}),
+		AllowEmpty: types.BoolUnknown(),
+		Enabled:    types.BoolUnknown(),
+	}
+	payload, diags := m.apiPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("apiPayload returned diagnostics errors: %v", diags)
+	}
+	for _, key := range []string{"recursive", "exclude", "allow_empty", "enabled"} {
+		if v, ok := payload[key]; ok {
+			t.Errorf("payload[%s] = %v, want it omitted when unset", key, v)
+		}
+	}
+	sched := payload["schedule"].(map[string]string)
+	for _, key := range []string{"begin", "end"} {
+		if v, ok := sched[key]; ok {
+			t.Errorf("schedule[%s] = %q, want it omitted when unset", key, v)
+		}
 	}
 }

@@ -55,7 +55,7 @@ Required:
 Optional:
 
 - `auth` (Number) Auth group ID (0 = none).
-- `authmethod` (String) Authentication method: NONE, CHAP, CHAP_MUTUAL.
+- `authmethod` (String) Authentication method: NONE (server default when unset), CHAP, CHAP_MUTUAL.
 - `initiator` (Number) Initiator group ID (0 = none).
 
 

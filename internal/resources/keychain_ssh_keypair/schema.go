@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 )
 
 func resourceSchema() schema.Schema {
@@ -43,10 +44,11 @@ func resourceSchema() schema.Schema {
 					"is a provider-side switch controlling which keychaincredential.create path is taken; " +
 					"Create resolves it to a concrete true/false and stores that, and it is otherwise never " +
 					"read back from the API (its state value is simply preserved on refresh), so it always " +
-					"reads as null after `terraform import`. Immutable.",
+					"reads as null after `terraform import`; setting it then records the value in place without " +
+					"touching the key. Any later change replaces the key pair.",
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
-					boolplanmodifier.RequiresReplace(),
+					planmod.ReplaceFromKnownBool(),
 				},
 			},
 			"private_key": schema.StringAttribute{

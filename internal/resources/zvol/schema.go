@@ -12,6 +12,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
 )
 
 // zfsEnumAttr builds an Optional+Computed string attribute for a source-aware
@@ -29,7 +31,8 @@ func zfsEnumAttr(desc string, values ...string) schema.StringAttribute {
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a ZFS volume (zvol/block device) on TrueNAS.",
+		Description: "Manages a ZFS volume (zvol/block device) on TrueNAS. While the zvol has snapshots, " +
+			"destroying it fails and lists them, unless force_destroy = true.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:    true,
@@ -124,6 +127,11 @@ func resourceSchema() schema.Schema {
 			"encrypted": schema.BoolAttribute{
 				Computed:    true,
 				Description: "Whether the zvol is encrypted.",
+				// Fixed at creation (encryption is create-only) or changed only by
+				// a lock/unlock outside Terraform, which Read picks up; an in-place
+				// update never changes it, so keep it known instead of planning
+				// (known after apply) on every update.
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
 			"encryption": schema.BoolAttribute{
 				Optional:    true,
@@ -142,7 +150,7 @@ func resourceSchema() schema.Schema {
 					"root on read, so it reflects reality even when left unset.",
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
-					replaceIfChangedFromKnown(),
+					planmod.ReplaceFromKnownBool(),
 				},
 			},
 			"encryption_algorithm": schema.StringAttribute{
@@ -158,7 +166,7 @@ func resourceSchema() schema.Schema {
 				Optional:    true,
 				Description: "Automatically generate the encryption key (key-based encryption). Create-only.",
 				PlanModifiers: []planmodifier.Bool{
-					replaceIfChangedFromKnown(),
+					planmod.ReplaceFromKnownBool(),
 				},
 			},
 			"encryption_passphrase": schema.StringAttribute{
@@ -176,11 +184,22 @@ func resourceSchema() schema.Schema {
 			"key_format": schema.StringAttribute{
 				Computed:    true,
 				Description: "Encryption key format: PASSPHRASE or HEX (null when not encrypted).",
+				// Fixed at creation (encryption is create-only) or changed only by
+				// a lock/unlock outside Terraform, which Read picks up; an in-place
+				// update never changes it, so keep it known instead of planning
+				// (known after apply) on every update.
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"locked": schema.BoolAttribute{
 				Computed:    true,
 				Description: "Whether the encrypted zvol is currently locked.",
+				// Fixed at creation (encryption is create-only) or changed only by
+				// a lock/unlock outside Terraform, which Read picks up; an in-place
+				// update never changes it, so keep it known instead of planning
+				// (known after apply) on every update.
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
+			"force_destroy": dataset.ForceDestroyAttribute("zvol"),
 		},
 	}
 }

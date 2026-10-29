@@ -66,7 +66,7 @@ func (l *CertificateListResource) mapRow(ctx context.Context, req list.ListReque
 		// dns_mapping is never returned by the API and has no zero value for
 		// a typed Map (see ImportState); type it null up front so
 		// responseToModel's untouched field still converts cleanly.
-		m := CertificateModel{DNSMapping: types.MapNull(types.Int64Type)}
+		m := CertificateModel{DNSMapping: types.MapNull(types.Int64Type), CreateType: importedCreateType(&api), StorePrivatekey: types.BoolValue(true)}
 		res.Diagnostics.Append(responseToModel(ctx, &api, &m)...)
 		res.Diagnostics.Append(res.Resource.Set(ctx, &m)...)
 	}

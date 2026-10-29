@@ -857,3 +857,107 @@ func TestInvalidOptionKeys_UnknownPurposeSkips(t *testing.T) {
 		t.Errorf("unknown purpose should skip; got %v", bad)
 	}
 }
+
+// overlayFlatOnOptions copies known flat legacy values onto the options object
+// (pinned from state) so the payload sends them instead of the stale pinned
+// values (B-011). Unknown flat values leave the pinned value alone.
+func TestOverlayFlatOnOptions(t *testing.T) {
+	ctx := context.Background()
+	o := nullOpts()
+	o.GuestOK = types.BoolValue(false)
+	o.Streams = types.BoolValue(true)
+	o.HostsAllow = types.ListValueMust(types.StringType, []attr.Value{types.StringValue("10.0.0.0/8")})
+	o.VUID = types.StringValue("abc")
+
+	m := baseLegacyModel()
+	m.Purpose = types.StringValue(legacySharePurpose)
+	m.Options = optsObject(t, o)
+	m.GuestOK = types.BoolValue(true)
+	m.Streams = types.BoolUnknown()
+	m.HostsAllow = types.ListValueMust(types.StringType, []attr.Value{types.StringValue("192.168.0.0/16")})
+
+	obj, changed, diags := m.overlayFlatOnOptions(ctx)
+	if diags.HasError() {
+		t.Fatalf("diags: %v", diags)
+	}
+	if !changed {
+		t.Fatal("changed = false, want true")
+	}
+	var got SMBOptionsModel
+	obj.As(ctx, &got, basetypes.ObjectAsOptions{})
+	if !got.GuestOK.ValueBool() {
+		t.Error("options.guestok not overlaid from flat guestok")
+	}
+	if !got.Streams.ValueBool() {
+		t.Error("options.streams changed although flat streams is unknown")
+	}
+	if got.VUID.ValueString() != "abc" {
+		t.Errorf("options.vuid = %q, want abc (kept from state)", got.VUID.ValueString())
+	}
+
+	m.Options = obj
+	payload, d := m.apiPayload(ctx)
+	if d.HasError() {
+		t.Fatalf("apiPayload: %v", d)
+	}
+	opts := payload["options"].(map[string]any)
+	if opts["guestok"] != true {
+		t.Errorf("payload options.guestok = %v, want true", opts["guestok"])
+	}
+	if ha := opts["hostsallow"].([]string); len(ha) != 1 || ha[0] != "192.168.0.0/16" {
+		t.Errorf("payload options.hostsallow = %v, want [192.168.0.0/16]", ha)
+	}
+
+	// Overlaying again is a no-op.
+	if _, changed, _ := m.overlayFlatOnOptions(ctx); changed {
+		t.Error("second overlay reported a change")
+	}
+}
+
+// configuredFlatLegacyKeys reports every non-null flat legacy attribute,
+// including unknown (interpolated) ones.
+func TestConfiguredFlatLegacyKeys(t *testing.T) {
+	m := SMBModel{
+		Recyclebin:       types.BoolNull(),
+		GuestOK:          types.BoolValue(true),
+		HostsAllow:       types.ListUnknown(types.StringType),
+		HostsDeny:        types.ListNull(types.StringType),
+		ACL:              types.BoolNull(),
+		DurableHandle:    types.BoolNull(),
+		Streams:          types.BoolNull(),
+		TimeMachine:      types.BoolNull(),
+		TimeMachineQuota: types.Int64Value(0),
+		Home:             types.BoolNull(),
+	}
+	got := m.configuredFlatLegacyKeys()
+	want := []string{"guestok", "hostsallow", "timemachine_quota"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	}
+}
+
+// Unset (unknown) top-level Optional+Computed fields are omitted, not sent as
+// their zero value: sending enabled=false/browsable=false created every share
+// without an explicit `enabled = true` disabled and hidden.
+func TestSMBApiPayload_UnknownTopLevelOmitted(t *testing.T) {
+	m := baseLegacyModel()
+	m.Comment = types.StringUnknown()
+	m.Enabled = types.BoolUnknown()
+	m.Browsable = types.BoolUnknown()
+	m.ReadOnly = types.BoolUnknown()
+	m.ABE = types.BoolNull()
+	payload, diags := m.apiPayload(context.Background())
+	if diags.HasError() {
+		t.Fatalf("apiPayload: %v", diags)
+	}
+	for _, k := range []string{"comment", "enabled", "browsable", "readonly", "access_based_share_enumeration"} {
+		if v, ok := payload[k]; ok {
+			t.Errorf("payload[%s] = %v, want omitted", k, v)
+		}
+	}
+}

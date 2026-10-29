@@ -20,6 +20,11 @@ This is the modern, actively-developed LXC container surface — distinct from t
 # through truenas_container_image rather than hardcoding one -- the
 # upstream registry (images.linuxcontainers.org) prunes old builds, so a
 # pinned version can 404 on download once pruned.
+#
+# The image is used only at create, and changing it replaces the
+# container (TrueNAS cannot change a container's image in place). With
+# latest_version, ignore later image changes so a new registry build does
+# not replace the container; remove ignore_changes to rebuild on purpose.
 data "truenas_container_image" "alpine" {
   name = "alpine:3.22:amd64:default"
 }
@@ -34,6 +39,10 @@ resource "truenas_container" "hello" {
     name    = "alpine:3.22:amd64:default"
     version = data.truenas_container_image.alpine.latest_version
   }
+
+  lifecycle {
+    ignore_changes = [image]
+  }
 }
 ```
 
@@ -42,7 +51,7 @@ resource "truenas_container" "hello" {
 
 ### Required
 
-- `image` (Attributes) LXC registry image to create the container from. Immutable: container.update does not accept "image" (probed live), so changing it replaces the container. Use the truenas_container_image datasource to look up a current version rather than hardcoding one — the upstream image registry prunes old builds (observed live: a version the registry still listed 404'd on download once pruned). (see [below for nested schema](#nestedatt--image))
+- `image` (Attributes) LXC registry image to create the container from. Used only at create: container.update does not accept "image" on 26.0 or 28.0 (probed live), so changing the name or the version replaces the container, destroying its root filesystem. The upstream registry prunes old builds (observed live: a version the registry still listed 404'd on download once pruned), so look up a current version with the truenas_container_image datasource — but if you reference its latest_version, add lifecycle { ignore_changes = [image] } to the container, or every new registry build (roughly daily) replaces it. Remove the ignore_changes when you do want to rebuild the container from a newer image. (see [below for nested schema](#nestedatt--image))
 - `name` (String) Container name. Mutable: container.update accepts and applies a rename (probed live).
 - `pool` (String) ZFS pool the container's root dataset is created on. Immutable: container.update rejects "pool" with a clean EINVAL (probed live), so changing it replaces the container.
 

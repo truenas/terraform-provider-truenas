@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -14,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
 )
 
 var _ resource.Resource = &ZvolResource{}
@@ -25,7 +27,7 @@ var _ resource.ResourceWithValidateConfig = &ZvolResource{}
 // `inherit_encryption = true`: with inheritance the parent determines
 // encryption, so an explicit value is ambiguous (#31, mirrors truenas_dataset).
 func (r *ZvolResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	var cfg ZvolModel
+	var cfg zvolResourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -75,7 +77,7 @@ func (r *ZvolResource) Configure(_ context.Context, req resource.ConfigureReques
 }
 
 func (r *ZvolResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var plan ZvolModel
+	var plan zvolResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -84,12 +86,12 @@ func (r *ZvolResource) Create(ctx context.Context, req resource.CreateRequest, r
 	payload := plan.apiPayload()
 	// encryption_passphrase / encryption_key are write-only: read from config
 	// (null in plan/state) and inject into encryption_options.
-	var cfg ZvolModel
+	var cfg zvolResourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	injectEncryptionSecrets(payload, &cfg)
+	injectEncryptionSecrets(payload, &cfg.ZvolModel)
 	// TrueNAS 27.0 removed encryption_options.algorithm (fixed server-side);
 	// sending it there fails with "Extra inputs are not permitted". The algorithm
 	// still reads back via the computed encryption_algorithm.
@@ -129,7 +131,7 @@ func (r *ZvolResource) Create(ctx context.Context, req resource.CreateRequest, r
 	// the node is present so every consumer is safe. (#40)
 	waitForZvolDevice(ctx, r.client, plan.Name.ValueString())
 
-	responseToModel(&apiResp, &plan)
+	responseToModel(&apiResp, &plan.ZvolModel)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueString())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -179,7 +181,7 @@ func waitForZvolDevice(ctx context.Context, c deviceStater, name string) {
 }
 
 func (r *ZvolResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var state ZvolModel
+	var state zvolResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -201,33 +203,32 @@ func (r *ZvolResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		return
 	}
 
-	responseToModel(&apiResp, &state)
+	responseToModel(&apiResp, &state.ZvolModel)
+	// State written before force_destroy existed has it null; read it as the
+	// default so the upgrade plans no change.
+	state.ForceDestroy = dataset.ForceDestroyOrFalse(state.ForceDestroy)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueString())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
 func (r *ZvolResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan ZvolModel
+	var plan, state zvolResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	payload := plan.apiPayload()
-	// name, type, volblocksize, and sparse are not updatable via update endpoint
-	delete(payload, "name")
-	delete(payload, "type")
-	delete(payload, "volblocksize")
-	delete(payload, "sparse")
-	// Encryption is create-only; pool.dataset.update rejects these.
-	delete(payload, "encryption")
-	delete(payload, "inherit_encryption")
-	delete(payload, "encryption_options")
-
-	_, err := r.client.Call(ctx, "pool.dataset.update", plan.Name.ValueString(), payload)
-	if err != nil {
-		resp.Diagnostics.AddError("Update zvol failed", err.Error())
-		return
+	payload := plan.updateAPIPayload()
+	// Skip the API call when the payload is what prior state would send: only
+	// state-only attributes changed (force_destroy, sparse, a letter-case
+	// change). Sending it anyway would rewrite properties for nothing.
+	if !reflect.DeepEqual(payload, state.updateAPIPayload()) {
+		_, err := r.client.Call(ctx, "pool.dataset.update", plan.Name.ValueString(), payload)
+		if err != nil {
+			resp.Diagnostics.AddError("Update zvol failed", err.Error())
+			return
+		}
 	}
 
 	// Re-read to get computed fields
@@ -243,23 +244,23 @@ func (r *ZvolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	responseToModel(&apiResp, &plan)
+	responseToModel(&apiResp, &plan.ZvolModel)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueString())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *ZvolResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var state ZvolModel
+	var state zvolResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	_, err := r.client.CallJob(ctx, "pool.dataset.delete", state.Name.ValueString(),
-		map[string]any{"recursive": false})
-	if err != nil && !client.IsNotFound(err) {
-		resp.Diagnostics.AddError("Delete zvol failed", err.Error())
-	}
+	// Non-recursive unless force_destroy, with the same pre-check and error as
+	// truenas_dataset: a zvol with snapshots is refused with a message naming
+	// them instead of the server's version-dependent ENOTEMPTY text.
+	force := !state.ForceDestroy.IsNull() && state.ForceDestroy.ValueBool()
+	resp.Diagnostics.Append(dataset.DeleteDataset(ctx, r.client, state.Name.ValueString(), "zvol", force)...)
 }
 
 func (r *ZvolResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -269,7 +270,7 @@ func (r *ZvolResource) ImportState(ctx context.Context, req resource.ImportState
 		return
 	}
 
-	var state ZvolModel
+	var state zvolResourceModel
 	state.Name = types.StringValue(id)
 	state.ID = types.StringValue(id)
 
@@ -285,7 +286,8 @@ func (r *ZvolResource) ImportState(ctx context.Context, req resource.ImportState
 		return
 	}
 
-	responseToModel(&apiResp, &state)
+	responseToModel(&apiResp, &state.ZvolModel)
+	state.ForceDestroy = types.BoolValue(false)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueString())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

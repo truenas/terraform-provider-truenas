@@ -36,7 +36,7 @@ resource "truenas_lxc_config" "this" {
 }
 
 # 2. Resolve the newest available image build for Alpine 3.22.
-#    The upstream registry prunes old builds, so always take
+#    The upstream registry prunes old builds, so create from
 #    latest_version instead of pinning one.
 data "truenas_container_image" "alpine" {
   name = "alpine:3.22:amd64:default"
@@ -56,6 +56,12 @@ resource "truenas_container" "hello" {
   running   = true  # start it now
 
   description = "hello world"
+
+  # The image is used only at create; changing it replaces the container.
+  # Without this, each new registry build (latest_version) would replace it.
+  lifecycle {
+    ignore_changes = [image]
+  }
 }
 
 output "container" {

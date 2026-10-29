@@ -120,12 +120,20 @@ func (r *SnapshotResource) Read(ctx context.Context, req resource.ReadRequest, r
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// Update is required by the resource.Resource interface but should never be
-// reached: all attributes carry RequiresReplace, so any change destroys and
-// re-creates the resource.
-func (r *SnapshotResource) Update(_ context.Context, _ resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Update not supported",
-		"truenas_snapshot is immutable; all attribute changes force replacement.")
+// Update only records "recursive" after import: it is never returned, so it
+// reads back null, and planmod.ReplaceFromKnownBool lets a null prior value be
+// set in place. Every other change replaces the snapshot, so there is nothing
+// to send.
+func (r *SnapshotResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan, state SnapshotModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	state.Recursive = plan.Recursive
+	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueString())...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
 func (r *SnapshotResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -135,7 +143,11 @@ func (r *SnapshotResource) Delete(ctx context.Context, req resource.DeleteReques
 		return
 	}
 
-	_, err := r.client.Call(ctx, "pool.snapshot.delete", state.ID.ValueString())
+	// Delete the way it was created: a recursive snapshot also took
+	// child@snap on every child dataset, and leaving those behind blocks the
+	// (non-recursive) delete of the child datasets themselves.
+	_, err := r.client.Call(ctx, "pool.snapshot.delete", state.ID.ValueString(),
+		map[string]any{"recursive": state.Recursive.ValueBool()})
 	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Delete snapshot failed", err.Error())
 	}

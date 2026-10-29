@@ -24,7 +24,11 @@ func datasourceSchema() schema.Schema {
 			"download later once pruned (observed live: a version the registry still listed in " +
 			"query_registry's response 404'd when container.create tried to download it). \"latest_version\" " +
 			"(the registry's own last-listed entry, oldest-to-newest by build timestamp, confirmed live) is the " +
-			"safest default to reference; a pinned older version carries this pruning risk." +
+			"safest version to create from; a pinned older version carries this pruning risk. The version only " +
+			"matters when the container is created, and changing a truenas_container's image replaces the " +
+			"container (container.update cannot change it), so pair latest_version with " +
+			"lifecycle { ignore_changes = [image] } on the container — otherwise each new registry build " +
+			"replaces it." +
 			"\n\n" +
 			"Requires TrueNAS 26.0 or later (the container namespace does not exist on 25.10, confirmed " +
 			"live — see truenas_container's schema description).",

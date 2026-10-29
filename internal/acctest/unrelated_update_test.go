@@ -1,3 +1,6 @@
+// Copyright TrueNAS 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package acctest_test
 
 import (

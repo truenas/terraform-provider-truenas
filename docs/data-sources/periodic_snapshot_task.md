@@ -36,8 +36,10 @@ Fetches a TrueNAS periodic snapshot task by dataset name.
 
 Read-Only:
 
+- `begin` (String) Start of the daily snapshot window, "HH:MM".
 - `dom` (String)
 - `dow` (String)
+- `end` (String) End of the daily snapshot window, "HH:MM".
 - `hour` (String)
 - `minute` (String)
 - `month` (String)

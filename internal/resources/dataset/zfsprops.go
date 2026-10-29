@@ -33,6 +33,12 @@ func isExplicitSource(source string) bool {
 
 func (z zfsSourced) isExplicit() bool { return isExplicitSource(z.Source) }
 
+// absent reports that get_instance did not return the property at all (the
+// key was missing or null), as for filesystem-only properties on a VOLUME.
+func (z zfsSourced) absent() bool {
+	return z.Source == "" && z.Value == nil && (len(z.Parsed) == 0 || string(z.Parsed) == "null")
+}
+
 // parsedInt decodes the parsed field as an int64, tolerating either a JSON
 // number or a numeric string — pool.dataset.get_instance is not consistent
 // about which it uses for byte-valued properties.
@@ -67,7 +73,16 @@ func (z zfsSourced) parsedInt() (int64, bool) {
 // value is reported verbatim; a non-LOCAL (inherited/default/received) property
 // reads back as "INHERIT" so that value round-trips instead of failing with an
 // inconsistent result. (#38 class; see enum conformance auditor)
+//
+// A property get_instance does not return at all (a VOLUME has no aclmode,
+// atime, exec or snapdir) reads back null, not "INHERIT": the "INHERIT"
+// sentinel was carried into every plan by UseStateForUnknown and re-sent, and
+// pool.dataset.update rejects these fields for a VOLUME ("This field is not
+// valid for VOLUME"), so every in-place update of a volume failed. (B-018)
 func localStringOrInherit(z zfsSourced) types.String {
+	if z.absent() {
+		return types.StringNull()
+	}
 	if z.isExplicit() && z.Value != nil {
 		return types.StringValue(*z.Value)
 	}

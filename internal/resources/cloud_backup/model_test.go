@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -20,13 +21,8 @@ func baseUnsetModel(path, attributesJSON, password string, credentials, keepLast
 		Path:        types.StringValue(path),
 		Credentials: types.Int64Value(credentials),
 		Attributes:  types.StringValue(attributesJSON),
-		Schedule: ScheduleModel{
-			Minute: types.StringNull(),
-			Hour:   types.StringNull(),
-			Dom:    types.StringNull(),
-			Month:  types.StringNull(),
-			Dow:    types.StringNull(),
-		},
+		// An omitted Optional+Computed schedule is unknown in the plan (B-016).
+		Schedule:        types.ObjectUnknown(scheduleAttrTypes),
 		PreScript:       types.StringNull(),
 		PostScript:      types.StringNull(),
 		Snapshot:        types.BoolNull(),
@@ -92,13 +88,13 @@ func TestApiPayload_OptionalFieldsIncludedWhenSet(t *testing.T) {
 	ctx := context.Background()
 	m := baseUnsetModel("/mnt/tank/tf-acc", `{"bucket":"b"}`, "pw", 1, 1)
 	m.Description = types.StringValue("tf-acc-cloud-backup")
-	m.Schedule = ScheduleModel{
-		Minute: types.StringValue("0"),
-		Hour:   types.StringValue("3"),
-		Dom:    types.StringValue("*"),
-		Month:  types.StringValue("*"),
-		Dow:    types.StringValue("*"),
-	}
+	m.Schedule = types.ObjectValueMust(scheduleAttrTypes, map[string]attr.Value{
+		"minute": types.StringValue("0"),
+		"hour":   types.StringValue("3"),
+		"dom":    types.StringValue("*"),
+		"month":  types.StringValue("*"),
+		"dow":    types.StringValue("*"),
+	})
 	m.PreScript = types.StringValue("echo pre")
 	m.PostScript = types.StringValue("echo post")
 	m.Snapshot = types.BoolValue(true)

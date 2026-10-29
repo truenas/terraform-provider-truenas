@@ -39,7 +39,7 @@ func TestAccContainer_basic(t *testing.T) {
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckContainerDestroyed(name),
-		Steps: []resource.TestStep{
+		Steps: append([]resource.TestStep{
 			{
 				// Step 1: create, running=false.
 				Config: acctest.ProviderConfig() + testAccContainerConfig(name, "initial description", false),
@@ -89,7 +89,8 @@ func TestAccContainer_basic(t *testing.T) {
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"image"},
 			},
-		},
+			// Step 6: import then plan the same config: image reads back null and is recorded in place, never a replacement (BUGS B-005).
+		}, acctest.ImportReapplyNoop("truenas_container.test", acctest.ProviderConfig()+testAccContainerConfig(name, "updated description", false), "image")...),
 	})
 }
 

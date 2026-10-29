@@ -73,7 +73,9 @@ func TestResponseToModel(t *testing.T) {
 		File: "QkFTRTY0REFUQQ==",
 	}
 
-	m := &KerberosKeytabModel{}
+	// A file-managed keytab: the prior state holds file (here an older value,
+	// so the refresh must pick up the server's).
+	m := &KerberosKeytabModel{File: types.StringValue("T0xE")}
 	diags := responseToModel(api, m)
 	if diags.HasError() {
 		t.Fatalf("unexpected error: %v", diags)
@@ -129,5 +131,53 @@ func TestFileWriteOnly(t *testing.T) {
 	responseToModel(api, st)
 	if !st.File.IsNull() {
 		t.Errorf("file must stay null in state on the write-only path, got %q", st.File.ValueString())
+	}
+}
+
+// TestResponseToModel_FileSecretHandling covers when "file" is read into
+// state: never on import (null prior, B-172) or for file_wo, and never as the
+// READONLY_ADMIN redaction mask (B-028).
+func TestResponseToModel_FileSecretHandling(t *testing.T) {
+	cases := []struct {
+		name      string
+		prior     KerberosKeytabModel
+		apiFile   string
+		wantNull  bool
+		wantValue string
+	}{
+		{"import (null prior)", KerberosKeytabModel{File: types.StringNull()}, "QkFTRTY0", true, ""},
+		{"file_wo in use", KerberosKeytabModel{File: types.StringNull(), FileWOVersion: types.Int64Value(1)}, "QkFTRTY0", true, ""},
+		{"unknown prior", KerberosKeytabModel{File: types.StringUnknown()}, "QkFTRTY0", true, ""},
+		{"redacted keeps prior", KerberosKeytabModel{File: types.StringValue("QkFTRTY0")}, redactedFile, false, "QkFTRTY0"},
+		{"file refresh", KerberosKeytabModel{File: types.StringValue("T0xE")}, "TkVX", false, "TkVX"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := tc.prior
+			if d := responseToModel(&kerberosKeytabAPI{ID: 1, Name: "x", File: tc.apiFile}, &m); d.HasError() {
+				t.Fatalf("unexpected error: %v", d)
+			}
+			if tc.wantNull {
+				if !m.File.IsNull() {
+					t.Errorf("File = %v, want null", m.File)
+				}
+				return
+			}
+			if m.File.ValueString() != tc.wantValue {
+				t.Errorf("File = %q, want %q", m.File.ValueString(), tc.wantValue)
+			}
+		})
+	}
+}
+
+// TestResponseToDataSourceModel_RedactedIsNull verifies the data source
+// reports null, not the mask, for a READONLY_ADMIN session (B-028).
+func TestResponseToDataSourceModel_RedactedIsNull(t *testing.T) {
+	m := &KerberosKeytabDataSourceModel{}
+	if d := responseToDataSourceModel(&kerberosKeytabAPI{ID: 1, Name: "x", File: redactedFile}, m); d.HasError() {
+		t.Fatalf("unexpected error: %v", d)
+	}
+	if !m.File.IsNull() {
+		t.Errorf("File = %v, want null", m.File)
 	}
 }

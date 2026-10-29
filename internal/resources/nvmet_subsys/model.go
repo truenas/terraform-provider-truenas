@@ -5,6 +5,7 @@ package nvmet_subsys
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -43,15 +44,36 @@ type NVMetSubsysDataSourceModel struct {
 // nvmetSubsysAPI is the JSON wire format for a TrueNAS NVMe-oF subsystem
 // object (nvmet.subsys.*).
 type nvmetSubsysAPI struct {
-	ID           int64   `json:"id"`
-	Name         string  `json:"name"`
-	SubNQN       string  `json:"subnqn"`
-	AllowAnyHost bool    `json:"allow_any_host"`
-	ANA          *bool   `json:"ana"`
-	IEEEOUI      *string `json:"ieee_oui"`
-	PIEnable     *bool   `json:"pi_enable"`
-	QIDMax       *int64  `json:"qid_max"`
-	Serial       string  `json:"serial"`
+	ID           int64      `json:"id"`
+	Name         string     `json:"name"`
+	SubNQN       string     `json:"subnqn"`
+	AllowAnyHost bool       `json:"allow_any_host"`
+	ANA          *bool      `json:"ana"`
+	IEEEOUI      *ouiString `json:"ieee_oui"`
+	PIEnable     *bool      `json:"pi_enable"`
+	QIDMax       *int64     `json:"qid_max"`
+	Serial       string     `json:"serial"`
+}
+
+// ouiString decodes ieee_oui. The API declares it a string, but the database
+// column is INTEGER, so SQLite stores an all-digit value as a number and the
+// server returns a JSON number for it (for example "123456" comes back as
+// 123456, and "005056" as 5056). A number is kept in its decimal form.
+type ouiString string
+
+// UnmarshalJSON accepts a JSON string or a JSON number.
+func (o *ouiString) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		*o = ouiString(s)
+		return nil
+	}
+	var n json.Number
+	if err := json.Unmarshal(b, &n); err != nil {
+		return err
+	}
+	*o = ouiString(n.String())
+	return nil
 }
 
 // responseToModel maps an API response onto a Terraform model. Nil pointer
@@ -72,7 +94,7 @@ func responseToModel(_ context.Context, api *nvmetSubsysAPI, m *NVMetSubsysModel
 	}
 
 	if api.IEEEOUI != nil {
-		m.IEEEOUI = types.StringValue(*api.IEEEOUI)
+		m.IEEEOUI = types.StringValue(string(*api.IEEEOUI))
 	} else {
 		m.IEEEOUI = types.StringValue("")
 	}
@@ -111,7 +133,7 @@ func responseToDataSourceModel(_ context.Context, api *nvmetSubsysAPI, m *NVMetS
 	}
 
 	if api.IEEEOUI != nil {
-		m.IEEEOUI = types.StringValue(*api.IEEEOUI)
+		m.IEEEOUI = types.StringValue(string(*api.IEEEOUI))
 	} else {
 		m.IEEEOUI = types.StringValue("")
 	}

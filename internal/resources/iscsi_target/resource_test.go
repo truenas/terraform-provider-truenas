@@ -222,6 +222,47 @@ func TestISCSITargetApiPayload_NullLists(t *testing.T) {
 	}
 }
 
+// TestISCSITargetApiPayload_UnknownAuthmethod verifies that a group whose
+// authmethod is unset (unknown in the plan) omits the key so the server
+// applies its default (NONE), instead of sending "" which it rejects.
+func TestISCSITargetApiPayload_UnknownAuthmethod(t *testing.T) {
+	ctx := context.Background()
+
+	for _, am := range []types.String{types.StringUnknown(), types.StringNull(), types.StringValue("")} {
+		groupObj, diags := types.ObjectValue(groupsAttrTypes, map[string]attr.Value{
+			"portal":     types.Int64Value(1),
+			"initiator":  types.Int64Unknown(),
+			"auth":       types.Int64Unknown(),
+			"authmethod": am,
+		})
+		if diags.HasError() {
+			t.Fatalf("ObjectValue failed: %v", diags)
+		}
+		groupList, diags := types.ListValue(types.ObjectType{AttrTypes: groupsAttrTypes}, []attr.Value{groupObj})
+		if diags.HasError() {
+			t.Fatalf("ListValue failed: %v", diags)
+		}
+		m := ISCSITargetModel{
+			Name:         types.StringValue("target"),
+			Alias:        types.StringUnknown(),
+			Mode:         types.StringUnknown(),
+			Groups:       groupList,
+			AuthNetworks: types.ListNull(types.StringType),
+		}
+		payload, diags := m.apiPayload(ctx)
+		if diags.HasError() {
+			t.Fatalf("apiPayload returned diagnostic errors: %v", diags)
+		}
+		g := payload["groups"].([]map[string]any)[0]
+		if v, ok := g["authmethod"]; ok {
+			t.Errorf("authmethod %s: payload has authmethod=%q, want key omitted", am, v)
+		}
+		if g["initiator"] != nil || g["auth"] != nil {
+			t.Errorf("authmethod %s: initiator/auth = %v/%v, want nil", am, g["initiator"], g["auth"])
+		}
+	}
+}
+
 // TestISCSITargetResponseToModel verifies that responseToModel populates all
 // fields correctly, including nil pointer handling for alias/initiator/auth.
 func TestISCSITargetResponseToModel(t *testing.T) {

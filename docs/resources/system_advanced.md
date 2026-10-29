@@ -52,7 +52,7 @@ resource "truenas_system_advanced" "config" {
 - `serialspeed` (String) Serial console baud rate: one of 9600, 19200, 38400, 57600, or 115200.
 - `syslog_audit` (Boolean) Whether audit logs are sent to the configured syslog servers.
 - `sysloglevel` (String) Minimum severity of messages sent to syslog: one of F_EMERG, F_ALERT, F_CRIT, F_ERR, F_WARNING, F_NOTICE, F_INFO.
-- `syslogservers` (List of String) Remote syslog servers messages are forwarded to.
+- `syslogservers` (Attributes List) Remote syslog servers messages are forwarded to (at most two). Setting it replaces the whole list on TrueNAS; an empty list removes every remote server. (see [below for nested schema](#nestedatt--syslogservers))
 - `traceback` (Boolean) Whether a Python traceback is displayed on a middleware crash.
 - `uploadcrash` (Boolean) Whether crash dumps and telemetry are automatically uploaded to TrueNAS.
 
@@ -61,3 +61,15 @@ resource "truenas_system_advanced" "config" {
 - `anonstats_token` (String, Sensitive) Token used when submitting anonymous usage statistics. Server-computed; never sent to system.advanced.update. Marked Sensitive so it is not shown in plan output.
 - `id` (String) Fixed identifier for this singleton resource: always "system_advanced".
 - `isolated_gpu_pci_ids` (List of String) PCI IDs of GPUs isolated from the host for passthrough. Server-computed; managed via the separate system.advanced.update_gpu_pci_ids method (out of scope for this resource); never sent to system.advanced.update.
+
+<a id="nestedatt--syslogservers"></a>
+### Nested Schema for `syslogservers`
+
+Required:
+
+- `host` (String) Remote syslog server hostname or IP address. Append ":port" for a nonstandard port (default 514 for UDP/TCP, 6514 for TLS).
+
+Optional:
+
+- `tls_certificate` (Number) ID of the local certificate presented for mutual TLS. Only valid with transport = "TLS" (TrueNAS discards it for UDP/TCP); leave unset for one-way TLS.
+- `transport` (String) Transport protocol: one of UDP, TCP, TLS. Defaults to UDP.

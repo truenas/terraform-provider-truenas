@@ -41,17 +41,26 @@ func responseToModel(ctx context.Context, api *initiatorAPI, m *ISCSIInitiatorMo
 
 // apiPayload builds the map[string]any payload for iscsi.initiator.create /
 // iscsi.initiator.update.
+//
+// comment and initiators are Optional+Computed. An unset attribute is
+// unknown on create (UseStateForUnknown carries the prior value on update);
+// an unknown value is omitted rather than sent as ""/[]. Sending [] for an
+// unset initiators list would turn an allowlist into "allow all initiators".
 func (m *ISCSIInitiatorModel) apiPayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	var initiators []string
-	if !m.Initiators.IsNull() && !m.Initiators.IsUnknown() {
-		diags.Append(m.Initiators.ElementsAs(ctx, &initiators, false)...)
+	payload := map[string]any{}
+	if !m.Comment.IsUnknown() {
+		payload["comment"] = m.Comment.ValueString()
 	}
-	if initiators == nil {
-		initiators = []string{}
+	if !m.Initiators.IsUnknown() {
+		var initiators []string
+		if !m.Initiators.IsNull() {
+			diags.Append(m.Initiators.ElementsAs(ctx, &initiators, false)...)
+		}
+		if initiators == nil {
+			initiators = []string{}
+		}
+		payload["initiators"] = initiators
 	}
-	return map[string]any{
-		"comment":    m.Comment.ValueString(),
-		"initiators": initiators,
-	}, diags
+	return payload, diags
 }

@@ -109,8 +109,10 @@ Read-Only:
 
 Read-Only:
 
+- `begin` (String)
 - `dom` (String)
 - `dow` (String)
+- `end` (String)
 - `hour` (String)
 - `minute` (String)
 - `month` (String)

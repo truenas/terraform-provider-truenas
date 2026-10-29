@@ -395,14 +395,26 @@ func (m *SMBModel) apiPayload(ctx context.Context) (map[string]any, diag.Diagnos
 	}
 
 	p := map[string]any{
-		"path":                           m.Path.ValueString(),
-		"name":                           m.Name.ValueString(),
-		"comment":                        m.Comment.ValueString(),
-		"enabled":                        m.Enabled.ValueBool(),
-		"browsable":                      m.Browsable.ValueBool(),
-		"readonly":                       m.ReadOnly.ValueBool(),
-		"access_based_share_enumeration": m.ABE.ValueBool(),
-		"purpose":                        purpose,
+		"path":    m.Path.ValueString(),
+		"name":    m.Name.ValueString(),
+		"purpose": purpose,
+	}
+	// Optional+Computed top-level fields are sent only when known: an unset
+	// value is planned unknown, and sending its Go zero value would create the
+	// share disabled and hidden (server defaults: enabled and browsable true),
+	// or overwrite the current value on update.
+	if !m.Comment.IsNull() && !m.Comment.IsUnknown() {
+		p["comment"] = m.Comment.ValueString()
+	}
+	for key, v := range map[string]types.Bool{
+		"enabled":                        m.Enabled,
+		"browsable":                      m.Browsable,
+		"readonly":                       m.ReadOnly,
+		"access_based_share_enumeration": m.ABE,
+	} {
+		if !v.IsNull() && !v.IsUnknown() {
+			p[key] = v.ValueBool()
+		}
 	}
 
 	valid := smbOptionFieldsByPurpose[purpose]
@@ -585,6 +597,19 @@ func (m *SMBModel) invalidOptionKeys(ctx context.Context) (string, []string, dia
 		return purpose, nil, diags
 	}
 
+	set := setOptionKeys(&opt)
+	var bad []string
+	for _, key := range set {
+		if !valid[key] {
+			bad = append(bad, key)
+		}
+	}
+	return purpose, bad, diags
+}
+
+// setOptionKeys returns the wire keys of the options fields that are set
+// (known, non-null) in opt, in schema order.
+func setOptionKeys(opt *SMBOptionsModel) []string {
 	setB := func(v types.Bool) bool { return !v.IsNull() && !v.IsUnknown() }
 	setI := func(v types.Int64) bool { return !v.IsNull() && !v.IsUnknown() }
 	setS := func(v types.String) bool { return !v.IsNull() && !v.IsUnknown() }
@@ -619,12 +644,100 @@ func (m *SMBModel) invalidOptionKeys(ctx context.Context) (string, []string, dia
 		{"auto_quota", setI(opt.AutoQuota)},
 		{"remote_path", setL(opt.RemotePath)},
 	}
-
-	var bad []string
+	var keys []string
 	for _, f := range fields {
-		if f.set && !valid[f.key] {
-			bad = append(bad, f.key)
+		if f.set {
+			keys = append(keys, f.key)
 		}
 	}
-	return purpose, bad, diags
+	return keys
+}
+
+// flatLegacyAttr is one flat top-level attribute that mirrors an
+// options.<key> field of the LEGACY_SHARE variant.
+type flatLegacyAttr struct {
+	key   string     // wire key under options (same as the attribute name)
+	value attr.Value // the flat attribute's value in the model
+}
+
+// flatLegacyAttrs returns the flat legacy attributes of m, in schema order.
+// Every key is also an options field name.
+func (m *SMBModel) flatLegacyAttrs() []flatLegacyAttr {
+	return []flatLegacyAttr{
+		{"recyclebin", m.Recyclebin},
+		{"guestok", m.GuestOK},
+		{"hostsallow", m.HostsAllow},
+		{"hostsdeny", m.HostsDeny},
+		{"acl", m.ACL},
+		{"durablehandle", m.DurableHandle},
+		{"streams", m.Streams},
+		{"timemachine", m.TimeMachine},
+		{"timemachine_quota", m.TimeMachineQuota},
+		{"home", m.Home},
+	}
+}
+
+// configuredFlatLegacyKeys returns the keys of the flat legacy attributes that
+// are set (non-null, known or unknown) in m. Used on the config model.
+func (m *SMBModel) configuredFlatLegacyKeys() []string {
+	var keys []string
+	for _, f := range m.flatLegacyAttrs() {
+		if !f.value.IsNull() {
+			keys = append(keys, f.key)
+		}
+	}
+	return keys
+}
+
+// overlayFlatOnOptions returns the plan's options object with every known,
+// non-null flat legacy attribute copied onto the matching options field, and
+// whether that changed anything. sharing.smb.update replaces the whole options
+// object (unsent fields reset to their defaults), so the payload must carry
+// the full object; when options is not configured it is pinned from state,
+// and without this overlay the stale pinned values would win over a changed
+// flat attribute (B-011). Requires m.Options to be known and non-null.
+func (m *SMBModel) overlayFlatOnOptions(ctx context.Context) (types.Object, bool, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	var opt SMBOptionsModel
+	diags.Append(m.Options.As(ctx, &opt, basetypes.ObjectAsOptions{})...)
+	if diags.HasError() {
+		return m.Options, false, diags
+	}
+	known := func(v attr.Value) bool { return !v.IsNull() && !v.IsUnknown() }
+	if known(m.Recyclebin) {
+		opt.Recyclebin = m.Recyclebin
+	}
+	if known(m.GuestOK) {
+		opt.GuestOK = m.GuestOK
+	}
+	if known(m.HostsAllow) {
+		opt.HostsAllow = m.HostsAllow
+	}
+	if known(m.HostsDeny) {
+		opt.HostsDeny = m.HostsDeny
+	}
+	if known(m.ACL) {
+		opt.ACL = m.ACL
+	}
+	if known(m.DurableHandle) {
+		opt.DurableHandle = m.DurableHandle
+	}
+	if known(m.Streams) {
+		opt.Streams = m.Streams
+	}
+	if known(m.TimeMachine) {
+		opt.TimeMachine = m.TimeMachine
+	}
+	if known(m.TimeMachineQuota) {
+		opt.TimeMachineQuota = m.TimeMachineQuota
+	}
+	if known(m.Home) {
+		opt.Home = m.Home
+	}
+	obj, d := types.ObjectValueFrom(ctx, smbOptionsAttrTypes, opt)
+	diags.Append(d...)
+	if diags.HasError() {
+		return m.Options, false, diags
+	}
+	return obj, !obj.Equal(m.Options), diags
 }

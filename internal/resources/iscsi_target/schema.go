@@ -67,7 +67,8 @@ func resourceSchema() schema.Schema {
 						"authmethod": schema.StringAttribute{
 							Optional:    true,
 							Computed:    true,
-							Description: "Authentication method: NONE, CHAP, CHAP_MUTUAL.",
+							Description: "Authentication method: NONE (server default when unset), CHAP, CHAP_MUTUAL.",
+							Validators:  []validator.String{stringvalidator.OneOf("NONE", "CHAP", "CHAP_MUTUAL")},
 						},
 					},
 				},

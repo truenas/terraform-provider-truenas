@@ -68,6 +68,14 @@ type DatasetModel struct {
 	Pool       types.String `tfsdk:"pool"`
 }
 
+// datasetResourceModel is the truenas_dataset resource model: DatasetModel
+// (shared with the data source and the list resource) plus force_destroy, which
+// only the resource has.
+type datasetResourceModel struct {
+	DatasetModel
+	ForceDestroy types.Bool `tfsdk:"force_destroy"`
+}
+
 // apiPayload converts the model to the create/update JSON payload.
 func (m *DatasetModel) apiPayload() map[string]any {
 	p := map[string]any{"name": m.Name.ValueString()}

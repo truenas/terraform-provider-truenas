@@ -125,10 +125,25 @@ func (d *SystemAdvancedDataSource) Schema(_ context.Context, _ datasource.Schema
 				Description: "Minimum severity of messages sent to syslog: one of F_EMERG, F_ALERT, F_CRIT, " +
 					"F_ERR, F_WARNING, F_NOTICE, F_INFO.",
 			},
-			"syslogservers": dschema.ListAttribute{
+			"syslogservers": dschema.ListNestedAttribute{
 				Computed:    true,
-				ElementType: types.StringType,
 				Description: "Remote syslog servers messages are forwarded to.",
+				NestedObject: dschema.NestedAttributeObject{
+					Attributes: map[string]dschema.Attribute{
+						"host": dschema.StringAttribute{
+							Computed:    true,
+							Description: "Remote syslog server hostname or IP address, with an optional \":port\" suffix.",
+						},
+						"transport": dschema.StringAttribute{
+							Computed:    true,
+							Description: "Transport protocol: one of UDP, TCP, TLS.",
+						},
+						"tls_certificate": dschema.Int64Attribute{
+							Computed:    true,
+							Description: "ID of the local certificate presented for mutual TLS, or null for one-way TLS.",
+						},
+					},
+				},
 			},
 			"traceback": dschema.BoolAttribute{
 				Computed:    true,

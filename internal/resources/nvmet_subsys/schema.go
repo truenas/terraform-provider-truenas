@@ -4,11 +4,15 @@
 package nvmet_subsys
 
 import (
+	"regexp"
+
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 func resourceSchema() schema.Schema {
@@ -56,7 +60,16 @@ func resourceSchema() schema.Schema {
 			"ieee_oui": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "IEEE Organizationally Unique Identifier used when generating namespace identifiers.",
+				Description: "IEEE Organizationally Unique Identifier used when generating namespace identifiers, as hex with a `0x` prefix (for example `0x005056`). Set to `\"\"` to clear.",
+				Validators: []validator.String{
+					// The kernel parses the value with base auto-detection: hex
+					// without 0x (AABBCC) is silently ignored, and an all-digit
+					// value is decimal (and the server drops leading zeros), so
+					// "005056" would become OUI 0x0013c0. Only 0x-hex is
+					// unambiguous and round-trips unchanged.
+					stringvalidator.RegexMatches(regexp.MustCompile(`^(0[xX][0-9a-fA-F]{1,6})?$`),
+						"must be a hex OUI with a 0x prefix, such as 0x005056, or \"\" to clear"),
+				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},

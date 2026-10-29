@@ -53,7 +53,7 @@ output "current_be" {
 ### Required
 
 - `name` (String) Name of the new boot environment (clone target).
-- `source` (String) Name of the existing boot environment to clone from.
+- `source` (String) Name of the existing boot environment to clone from. Create-time only: the API never returns it, so it reads back null after import and the configured value is then recorded in place; any later change replaces the boot environment.
 
 ### Optional
 

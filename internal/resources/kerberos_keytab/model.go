@@ -57,15 +57,31 @@ type kerberosKeytabAPI struct {
 	File string `json:"file"`
 }
 
+// redactedFile is the value kerberos.keytab.get_instance/query return for
+// "file" to a session without full-admin rights (a READONLY_ADMIN API key).
+const redactedFile = "********"
+
 // responseToModel maps a kerberosKeytabAPI response onto a
-// KerberosKeytabModel.
+// KerberosKeytabModel. The keytab is a secret, so "file" is read back only
+// when the prior plan/state already holds it (the resource manages it via
+// file):
+//   - file_wo in use: always null (the write-only path keeps it out of state).
+//   - prior file null: left null. This is the import case. Import cannot see
+//     the configuration, so it cannot tell a file-managed keytab from a
+//     file_wo-managed one; reading the keytab here put the secret into state
+//     for file_wo users (B-172). A file-managed keytab instead plans a
+//     one-time in-place update after import that records (re-sends) file.
+//   - the server returned the redaction mask (a READONLY_ADMIN key): the
+//     prior value is kept, so a read-only refresh does not plan writing the
+//     mask back (B-028).
 func responseToModel(api *kerberosKeytabAPI, m *KerberosKeytabModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 	m.ID = types.Int64Value(api.ID)
 	m.Name = types.StringValue(api.Name)
-	if m.usesWriteOnlyFile() {
-		m.File = types.StringNull() // write-only path: do not read the keytab into state
-	} else {
+	switch {
+	case m.usesWriteOnlyFile(), m.File.IsNull(), m.File.IsUnknown():
+		m.File = types.StringNull()
+	case api.File != redactedFile:
 		m.File = types.StringValue(api.File)
 	}
 	return diags
@@ -77,7 +93,13 @@ func responseToDataSourceModel(api *kerberosKeytabAPI, m *KerberosKeytabDataSour
 	var diags diag.Diagnostics
 	m.ID = types.Int64Value(api.ID)
 	m.Name = types.StringValue(api.Name)
-	m.File = types.StringValue(api.File)
+	// A READONLY_ADMIN session gets the redaction mask, not the keytab: report
+	// null rather than the mask as if it were data (B-028).
+	if api.File == redactedFile {
+		m.File = types.StringNull()
+	} else {
+		m.File = types.StringValue(api.File)
+	}
 	return diags
 }
 

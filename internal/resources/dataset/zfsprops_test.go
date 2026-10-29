@@ -123,3 +123,47 @@ func TestResponseToModel_SourceAware(t *testing.T) {
 		t.Errorf("ssbs LOCAL 0 should be 0 (not null), got %v", m.SpecialSmallBlockSize)
 	}
 }
+
+// TestLocalStringOrInherit_AbsentIsNull verifies a property get_instance does
+// not return (aclmode/atime/exec/snapdir on a VOLUME) reads back null rather
+// than the "INHERIT" sentinel, which was re-sent on every update and rejected
+// for a VOLUME (B-018), while a present inherited property still reads
+// "INHERIT".
+func TestLocalStringOrInherit_AbsentIsNull(t *testing.T) {
+	var absent zfsSourced
+	if err := json.Unmarshal([]byte(`null`), &absent); err != nil {
+		t.Fatal(err)
+	}
+	if got := localStringOrInherit(absent); !got.IsNull() {
+		t.Errorf("absent property = %v, want null", got)
+	}
+	if got := localStringOrInherit(sourced("OFF", true, `"off"`, "INHERITED")); got.ValueString() != "INHERIT" {
+		t.Errorf("inherited property = %v, want INHERIT", got)
+	}
+	if got := localStringOrInherit(sourced("ON", true, `"on"`, "LOCAL")); got.ValueString() != "ON" {
+		t.Errorf("local property = %v, want ON", got)
+	}
+
+	// A VOLUME's get_instance has no aclmode/atime/exec/snapdir keys at all:
+	// the update payload built from its read-back state must not carry them.
+	var api apiResponse
+	if err := json.Unmarshal([]byte(`{"name":"p/v","type":"VOLUME","volsize":{"parsed":1073741824},`+
+		`"sync":{"value":"STANDARD","source":"DEFAULT"}}`), &api); err != nil {
+		t.Fatal(err)
+	}
+	m := &DatasetModel{}
+	if d := (&DatasetResource{}).responseToModel(&api, m); d.HasError() {
+		t.Fatalf("responseToModel: %v", d)
+	}
+	for name, v := range map[string]types.String{"aclmode": m.ACLMode, "atime": m.ATime, "exec": m.Exec, "snapdir": m.Snapdir} {
+		if !v.IsNull() {
+			t.Errorf("%s = %v, want null for a VOLUME", name, v)
+		}
+	}
+	p := m.updateAPIPayload(m)
+	for _, k := range []string{"aclmode", "atime", "exec", "snapdir"} {
+		if _, ok := p[k]; ok {
+			t.Errorf("update payload carries %q for a VOLUME: %v", k, p[k])
+		}
+	}
+}

@@ -71,7 +71,7 @@ func TestAccKeychainSSHKeyPair_generated(t *testing.T) {
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckKeychainSSHKeyPairDestroyed,
-		Steps: []resource.TestStep{
+		Steps: append([]resource.TestStep{
 			{
 				Config: acctest.ProviderConfig() + testAccKeychainSSHKeyPairGeneratedConfig(name),
 				Check: resource.ComposeAggregateTestCheckFunc(
@@ -98,7 +98,8 @@ func TestAccKeychainSSHKeyPair_generated(t *testing.T) {
 				// on import (see schema.go / ImportState's doc comments).
 				ImportStateVerifyIgnore: []string{"generate"},
 			},
-		},
+			// Import then plan the same config: generate reads back null and is recorded in place, never a new key (BUGS B-009).
+		}, acctest.ImportReapplyNoop("truenas_keychain_ssh_keypair.test", acctest.ProviderConfig()+testAccKeychainSSHKeyPairGeneratedConfig(renamed), "generate")...),
 	})
 }
 
@@ -127,7 +128,7 @@ func TestAccKeychainSSHKeyPair_supplied(t *testing.T) {
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckKeychainSSHKeyPairDestroyed,
-		Steps: []resource.TestStep{
+		Steps: append([]resource.TestStep{
 			{
 				Config: acctest.ProviderConfig() + testAccKeychainSSHKeyPairSuppliedConfig(name, privateKeyPEM),
 				Check: resource.ComposeAggregateTestCheckFunc(
@@ -151,7 +152,8 @@ func TestAccKeychainSSHKeyPair_supplied(t *testing.T) {
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"generate"},
 			},
-		},
+			// Import then plan the same config (generate unset): must be empty.
+		}, acctest.ImportReapplyNoop("truenas_keychain_ssh_keypair.test", acctest.ProviderConfig()+testAccKeychainSSHKeyPairSuppliedConfig(renamed, privateKeyPEM))...),
 	})
 }
 

@@ -296,8 +296,10 @@ func TestReplicationPayload_ScheduleNull(t *testing.T) {
 		t.Fatalf("apiPayload returned errors: %v", diags)
 	}
 
-	if _, ok := payload["schedule"]; ok {
-		t.Error("payload should not contain 'schedule' key when Schedule is null")
+	// A null schedule is sent as null: an omitted key keeps the server's
+	// schedule, so removing it from config could never clear it (B-014).
+	if v, ok := payload["schedule"]; !ok || v != nil {
+		t.Errorf("payload[schedule] = %v (present %v), want explicit nil", v, ok)
 	}
 }
 
@@ -331,8 +333,72 @@ func TestReplicationPayload_ScheduleSet(t *testing.T) {
 			t.Errorf("payload[schedule] missing key %q", key)
 		}
 	}
+	// begin/end are null here (unset): omitted, so the server defaults apply.
 	if len(sched) != 5 {
 		t.Errorf("payload[schedule] has %d keys, want 5", len(sched))
+	}
+}
+
+// TestReplicationPayload_ScheduleWindowSent: a known begin/end goes out with
+// the cron fields, since the server replaces the whole schedule object.
+func TestReplicationPayload_ScheduleWindowSent(t *testing.T) {
+	ctx := context.Background()
+
+	m := baseModel(ctx, t)
+	schedObj, diags := types.ObjectValueFrom(ctx, scheduleAttrTypes, ScheduleModel{
+		Minute: types.StringValue("0"),
+		Hour:   types.StringValue("*"),
+		Dom:    types.StringValue("*"),
+		Month:  types.StringValue("*"),
+		Dow:    types.StringValue("*"),
+		Begin:  types.StringValue("08:00"),
+		End:    types.StringValue("17:00"),
+	})
+	if diags.HasError() {
+		t.Fatalf("failed to build schedule object: %v", diags)
+	}
+	m.Schedule = schedObj
+
+	payload, pDiags := m.apiPayload(ctx)
+	if pDiags.HasError() {
+		t.Fatalf("apiPayload returned errors: %v", pDiags)
+	}
+	sched := payload["schedule"].(map[string]string)
+	if sched["begin"] != "08:00" || sched["end"] != "17:00" {
+		t.Errorf("payload[schedule] window = %q-%q, want 08:00-17:00", sched["begin"], sched["end"])
+	}
+}
+
+// TestReplicationPayload_RemovedOptionalsCleared: restrict_schedule,
+// properties_override and lifetimes removed from config (null) are sent as
+// their cleared values; the server keeps any omitted value (B-089, B-015).
+func TestReplicationPayload_RemovedOptionalsCleared(t *testing.T) {
+	ctx := context.Background()
+
+	m := baseModel(ctx, t)
+	m.RestrictSchedule = types.ObjectNull(restrictScheduleAttrTypes)
+	m.PropertiesOverride = types.MapNull(types.StringType)
+	m.Lifetimes = types.ListNull(lifetimeObjectType())
+	m.LifetimeValue = types.Int64Null()
+	m.LifetimeUnit = types.StringNull()
+
+	payload, diags := m.apiPayload(ctx)
+	if diags.HasError() {
+		t.Fatalf("apiPayload returned errors: %v", diags)
+	}
+	if v, ok := payload["restrict_schedule"]; !ok || v != nil {
+		t.Errorf("payload[restrict_schedule] = %v (present %v), want explicit nil", v, ok)
+	}
+	if v, ok := payload["properties_override"].(map[string]string); !ok || len(v) != 0 {
+		t.Errorf("payload[properties_override] = %#v, want empty map", payload["properties_override"])
+	}
+	if v, ok := payload["lifetimes"].([]map[string]any); !ok || len(v) != 0 {
+		t.Errorf("payload[lifetimes] = %#v, want empty list", payload["lifetimes"])
+	}
+	for _, k := range []string{"lifetime_value", "lifetime_unit"} {
+		if v, ok := payload[k]; !ok || v != nil {
+			t.Errorf("payload[%s] = %v (present %v), want explicit nil", k, v, ok)
+		}
 	}
 }
 
@@ -471,11 +537,11 @@ func TestResponseToModel_ScheduleNilAndLifetimeNil(t *testing.T) {
 	if !m.Schedule.IsNull() {
 		t.Error("Schedule should be null when API schedule is nil")
 	}
-	if m.LifetimeValue.ValueInt64() != 0 {
-		t.Errorf("LifetimeValue = %v, want 0", m.LifetimeValue.ValueInt64())
+	if !m.LifetimeValue.IsNull() {
+		t.Errorf("LifetimeValue = %v, want null", m.LifetimeValue)
 	}
-	if m.LifetimeUnit.ValueString() != "" {
-		t.Errorf("LifetimeUnit = %q, want empty", m.LifetimeUnit.ValueString())
+	if !m.LifetimeUnit.IsNull() {
+		t.Errorf("LifetimeUnit = %v, want null", m.LifetimeUnit)
 	}
 	if m.NameRegex.ValueString() != "" {
 		t.Errorf("NameRegex = %q, want empty", m.NameRegex.ValueString())
@@ -511,8 +577,10 @@ func TestResponseToModel_ScheduleSetAndEmbeddedTasks(t *testing.T) {
 			Dom    string `json:"dom"`
 			Month  string `json:"month"`
 			Dow    string `json:"dow"`
+			Begin  string `json:"begin"`
+			End    string `json:"end"`
 		}{
-			Minute: "0", Hour: "3", Dom: "*", Month: "*", Dow: "*",
+			Minute: "0", Hour: "3", Dom: "*", Month: "*", Dow: "*", Begin: "00:00", End: "23:59",
 		},
 		LifetimeValue: &lifetimeVal,
 		LifetimeUnit:  &lifetimeUnit,

@@ -321,3 +321,24 @@ func TestResponseToDatasourceModel_AllFields(t *testing.T) {
 		t.Error("UpgradeAvailable = false, want true")
 	}
 }
+
+// TestResponseToModel_CatalogApp: catalog_app is read from metadata.name so
+// import followed by plan does not replace the app (BUGS B-006); a custom app
+// ("custom-app" in metadata) keeps its configured (null) value.
+func TestResponseToModel_CatalogApp(t *testing.T) {
+	api := &appAPI{Name: "myflame"}
+	api.Metadata.Name = "flame"
+	var m AppModel
+	responseToModel(api, &m)
+	if m.CatalogApp.ValueString() != "flame" {
+		t.Errorf("catalog_app = %v, want flame", m.CatalogApp)
+	}
+
+	custom := &appAPI{Name: "mine", CustomApp: true}
+	custom.Metadata.Name = "custom-app"
+	m = AppModel{CatalogApp: types.StringNull()}
+	responseToModel(custom, &m)
+	if !m.CatalogApp.IsNull() {
+		t.Errorf("custom app catalog_app = %v, want null", m.CatalogApp)
+	}
+}

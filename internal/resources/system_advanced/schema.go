@@ -4,12 +4,18 @@
 package system_advanced
 
 import (
+	"context"
+
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -167,12 +173,36 @@ func resourceSchema() schema.Schema {
 					"F_ERR, F_WARNING, F_NOTICE, F_INFO.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
-			"syslogservers": schema.ListAttribute{
-				Optional:      true,
-				Computed:      true,
-				ElementType:   types.StringType,
-				Description:   "Remote syslog servers messages are forwarded to.",
+			"syslogservers": schema.ListNestedAttribute{
+				Optional: true,
+				Computed: true,
+				Description: "Remote syslog servers messages are forwarded to (at most two). Setting it " +
+					"replaces the whole list on TrueNAS; an empty list removes every remote server.",
 				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+				Validators:    []validator.List{listvalidator.SizeAtMost(2)},
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"host": schema.StringAttribute{
+							Required: true,
+							Description: "Remote syslog server hostname or IP address. Append \":port\" for a " +
+								"nonstandard port (default 514 for UDP/TCP, 6514 for TLS).",
+						},
+						"transport": schema.StringAttribute{
+							Optional:    true,
+							Computed:    true,
+							Default:     stringdefault.StaticString("UDP"),
+							Description: "Transport protocol: one of UDP, TCP, TLS. Defaults to UDP.",
+							Validators:  []validator.String{stringvalidator.OneOf("UDP", "TCP", "TLS")},
+						},
+						"tls_certificate": schema.Int64Attribute{
+							Optional: true,
+							Description: "ID of the local certificate presented for mutual TLS. Only valid " +
+								"with transport = \"TLS\" (TrueNAS discards it for UDP/TCP); leave unset for " +
+								"one-way TLS.",
+						},
+					},
+					Validators: []validator.Object{syslogServerTLSCertificateValidator{}},
+				},
 			},
 			"traceback": schema.BoolAttribute{
 				Optional:      true,
@@ -187,18 +217,65 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
 			// Computed-only (server-generated)
+			// anonstats_token and isolated_gpu_pci_ids keep their state value in
+			// the plan: neither is derived from an attribute this resource writes.
+			// Without it, any plan that touches syslogservers while it is unset in
+			// configuration showed them as "known after apply": Terraform proposes
+			// null for a Computed nested list whose elements hold a non-computed
+			// attribute (host), and the framework then marks every Computed
+			// attribute without UseStateForUnknown unknown.
 			"anonstats_token": schema.StringAttribute{
-				Computed:    true,
-				Sensitive:   true,
-				Description: "Token used when submitting anonymous usage statistics. Server-computed; never sent to system.advanced.update. Marked Sensitive so it is not shown in plan output.",
+				Computed:      true,
+				Sensitive:     true,
+				Description:   "Token used when submitting anonymous usage statistics. Server-computed; never sent to system.advanced.update. Marked Sensitive so it is not shown in plan output.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"isolated_gpu_pci_ids": schema.ListAttribute{
-				Computed:    true,
-				ElementType: types.StringType,
+				Computed:      true,
+				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+				ElementType:   types.StringType,
 				Description: "PCI IDs of GPUs isolated from the host for passthrough. Server-computed; managed " +
 					"via the separate system.advanced.update_gpu_pci_ids method (out of scope for this " +
 					"resource); never sent to system.advanced.update.",
 			},
 		},
+	}
+}
+
+// syslogServerTLSCertificateValidator rejects tls_certificate on a
+// syslogservers entry whose transport is not TLS. TrueNAS silently drops the
+// certificate for UDP/TCP (probed on 28.0), which would otherwise surface as
+// an inconsistent result after apply. An unset transport means the UDP
+// default.
+type syslogServerTLSCertificateValidator struct{}
+
+func (v syslogServerTLSCertificateValidator) Description(_ context.Context) string {
+	return "tls_certificate is only valid when transport is TLS"
+}
+
+func (v syslogServerTLSCertificateValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v syslogServerTLSCertificateValidator) ValidateObject(_ context.Context, req validator.ObjectRequest, resp *validator.ObjectResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	attrs := req.ConfigValue.Attributes()
+	cert, ok := attrs["tls_certificate"].(types.Int64)
+	if !ok || cert.IsNull() || cert.IsUnknown() {
+		return
+	}
+	transport, ok := attrs["transport"].(types.String)
+	if !ok || transport.IsUnknown() {
+		return
+	}
+	if transport.IsNull() || transport.ValueString() != "TLS" {
+		resp.Diagnostics.AddAttributeError(
+			req.Path.AtName("tls_certificate"),
+			"tls_certificate requires transport = \"TLS\"",
+			"TrueNAS uses tls_certificate only for TLS syslog connections and discards it for UDP and TCP. "+
+				"Set transport = \"TLS\" or remove tls_certificate.",
+		)
 	}
 }

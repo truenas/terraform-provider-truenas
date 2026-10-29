@@ -36,6 +36,5 @@ var lifecycleRatchet = map[string]lifecyclePhases{
 	"truenas_truecommand_config": {noUpdate: true, reason: "debt: truecommand.update implemented, test is set-and-restore single-config"},
 
 	// --- Import supported but untested (debt: add an ImportState step) ---
-	"truenas_app":               {noImport: true, reason: "debt: ImportState implemented; test needs a stable installed-app fixture"},
 	"truenas_directoryservices": {noImport: true, reason: "debt: ImportState implemented; test needs a joined-directory fixture"},
 }

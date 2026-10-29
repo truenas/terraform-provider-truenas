@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 )
 
 func resourceSchema() schema.Schema {
@@ -27,8 +28,10 @@ func resourceSchema() schema.Schema {
 			},
 			"source": schema.StringAttribute{
 				Required:      true,
-				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
-				Description:   "Name of the existing boot environment to clone from.",
+				PlanModifiers: []planmodifier.String{planmod.ReplaceFromKnownString()},
+				Description: "Name of the existing boot environment to clone from. Create-time only: the API " +
+					"never returns it, so it reads back null after import and the configured value is then " +
+					"recorded in place; any later change replaces the boot environment.",
 			},
 			"activated": schema.BoolAttribute{
 				Optional:      true,

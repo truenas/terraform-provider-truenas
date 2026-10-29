@@ -75,7 +75,7 @@ func TestAccCertificate_imported(t *testing.T) {
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCertificateDestroyed(name, renamed),
-		Steps: []resource.TestStep{
+		Steps: append([]resource.TestStep{
 			{
 				Config: acctest.ProviderConfig() + testAccCertificateImportedConfig(name, certPEM, keyPEM),
 				Check: resource.ComposeTestCheckFunc(
@@ -105,13 +105,13 @@ func TestAccCertificate_imported(t *testing.T) {
 				ResourceName:      "truenas_certificate.test",
 				ImportState:       true,
 				ImportStateVerify: true,
-				// "create_type" is never returned by certificate.query/
-				// get_instance (probed live) and cannot be recovered on
-				// import; "passphrase" is accepted on create but never
-				// echoed back by any read method either.
-				ImportStateVerifyIgnore: []string{"create_type", "passphrase"},
+				// "create_type" is derived on import (IMPORTED here);
+				// "passphrase" is accepted on create but never echoed back
+				// by any read method.
+				ImportStateVerifyIgnore: []string{"passphrase"},
 			},
-		},
+			// Import then plan the same config: create_type is derived, so the plan is empty (BUGS B-008).
+		}, acctest.ImportReapplyNoop("truenas_certificate.test", acctest.ProviderConfig()+testAccCertificateImportedConfig(renamed, certPEM, keyPEM))...),
 	})
 }
 
@@ -256,8 +256,9 @@ func genCSR(t *testing.T, cn string) (csrPEM, keyPEM string) {
 // payload keys "CSR" (uppercase, per the method's own accepts schema) and
 // "privatekey"; "certificate" comes back null (no cert has been signed yet,
 // same as CERTIFICATE_CREATE_CSR); "common"/"san" are parsed back from the
-// CSR's subject/SAN extension; "csr" and "privatekey" both round-trip
-// byte-for-byte through certificate.get_instance (neither masked). Never
+// CSR's subject/SAN extension; "csr" and "privatekey" are both readable
+// through certificate.get_instance (neither masked; the key comes back as
+// PKCS#8, which samePrivateKey treats as the same key). Never
 // touches certificate id 1 (the box's live UI certificate) — this test only
 // ever creates new certificates with random tf-acc-* names.
 func TestAccCertificate_importedCSR(t *testing.T) {
@@ -565,7 +566,7 @@ func TestAccCertificate_generatedCSR(t *testing.T) {
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCertificateDestroyed(name, name+"-rsa"),
-		Steps: []resource.TestStep{
+		Steps: append([]resource.TestStep{
 			{
 				Config: acctest.ProviderConfig() + testAccCertificateGeneratedCSRConfig(name),
 				Check: resource.ComposeTestCheckFunc(
@@ -583,7 +584,8 @@ func TestAccCertificate_generatedCSR(t *testing.T) {
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"create_type", "passphrase", "add_to_trusted_store", "ec_curve"},
 			},
-		},
+			// Import then plan the same config: a CSR's create_type, ec_curve and passphrase are not returned and are recorded in place, never a replacement (BUGS B-008).
+		}, acctest.ImportReapplyNoop("truenas_certificate.test", acctest.ProviderConfig()+testAccCertificateGeneratedCSRConfig(name), "create_type", "ec_curve", "passphrase")...),
 	})
 }
 

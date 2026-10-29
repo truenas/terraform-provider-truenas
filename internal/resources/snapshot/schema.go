@@ -5,9 +5,9 @@ package snapshot
 
 import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 )
 
 func resourceSchema() schema.Schema {
@@ -36,19 +36,31 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"recursive": schema.BoolAttribute{
-				Optional:    true,
-				Description: "Take recursive snapshot of child datasets (write-only; not stored in state).",
+				Optional: true,
+				Description: "Take recursive snapshot of child datasets. Create-time only: the API never returns it, " +
+					"so it reads back null after import and setting it then records the value in place; any later " +
+					"change replaces the snapshot.",
 				PlanModifiers: []planmodifier.Bool{
-					boolplanmodifier.RequiresReplace(),
+					planmod.ReplaceFromKnownBool(),
 				},
 			},
 			"pool": schema.StringAttribute{
 				Computed:    true,
 				Description: "Name of the pool that contains the snapshot.",
+				// Fixed for the snapshot's life; without this the in-place
+				// record of "recursive" after import shows it as unknown.
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"createtxg": schema.StringAttribute{
 				Computed:    true,
 				Description: "ZFS transaction group at which the snapshot was created.",
+				// Fixed for the snapshot's life; without this the in-place
+				// record of "recursive" after import shows it as unknown.
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}

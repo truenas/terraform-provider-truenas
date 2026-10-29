@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
 )
 
 var _ list.ListResource = &ZvolListResource{}
@@ -64,8 +65,9 @@ func (l *ZvolListResource) mapRow(ctx context.Context, req list.ListRequest, raw
 	res.DisplayName = api.Name
 	res.Diagnostics.Append(listing.SetIdentity(ctx, res.Identity, api.Name)...)
 	if req.IncludeResource {
-		var m ZvolModel
-		responseToModel(&api, &m)
+		var m zvolResourceModel
+		responseToModel(&api, &m.ZvolModel)
+		m.ForceDestroy = dataset.ForceDestroyOrFalse(m.ForceDestroy)
 		res.Diagnostics.Append(res.Resource.Set(ctx, &m)...)
 	}
 	return res

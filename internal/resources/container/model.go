@@ -6,6 +6,7 @@ package container
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -73,8 +74,8 @@ type ImageModel struct {
 // pool name, so poolFromDataset recovers it from "dataset" rather than
 // trusting stale plan/state. Image has no such recovery path — it is
 // genuinely unrecoverable after creation, which is why ImportState leaves
-// it null (see resource.go) and the acceptance test's ImportStateVerify
-// must ignore it.
+// it null (see resource.go); planmod.ReplaceFromKnownObject then records
+// the configured image in place instead of replacing the container.
 //
 // Idmap is carried opaquely (as JSON text) rather than modeled field by
 // field: its wire shape is a discriminated union (DefaultIdmapConfiguration
@@ -83,7 +84,7 @@ type ImageModel struct {
 // to validate or diff structurally. It is also container.update-immutable
 // (probed: container.update's accepts list omits "idmap" entirely, unlike
 // "description"/"capabilities_policy"/etc which it does accept) hence
-// RequiresReplace in schema.go. CapabilitiesState is NOT treated this way
+// idmapRequiresReplace in schema.go, which replaces only on a real change. CapabilitiesState is NOT treated this way
 // because its shape is flat (map[string]bool, probed
 // additionalProperties:{type:boolean}) and container.update DOES accept
 // it, so a real types.Map models it precisely with no opaque-JSON caveat
@@ -209,11 +210,47 @@ func idmapResponseValue(planIdmap types.String, apiIdmap json.RawMessage) types.
 // idmapFromAPI converts the raw "idmap" JSON from an API response into a
 // types.String, mapping a JSON null (or an empty/absent value) to a null
 // types.String rather than the literal text "null".
+// The text is re-encoded compactly with sorted keys, the form Terraform's
+// jsonencode() produces, so an import of a container whose config spells idmap
+// with jsonencode reads back the same text (the server sends
+// `{"type": "DEFAULT"}`, with a space). Unparseable text is kept verbatim.
 func idmapFromAPI(apiIdmap json.RawMessage) types.String {
 	if len(apiIdmap) == 0 || string(apiIdmap) == "null" {
 		return types.StringNull()
 	}
+	var v any
+	if err := json.Unmarshal(apiIdmap, &v); err == nil {
+		if b, err := json.Marshal(v); err == nil {
+			return types.StringValue(string(b))
+		}
+	}
 	return types.StringValue(string(apiIdmap))
+}
+
+// idmapEquivalent reports whether two idmap JSON texts describe the same
+// configuration: equal after decoding, ignoring keys whose value is null on
+// either side (`slice = null` asks the server to pick a slice, so it matches
+// the slice the server picked). Unparseable text compares verbatim.
+func idmapEquivalent(a, b string) bool {
+	var ma, mb map[string]any
+	if json.Unmarshal([]byte(a), &ma) != nil || json.Unmarshal([]byte(b), &mb) != nil {
+		return a == b
+	}
+	for k, va := range ma {
+		vb, ok := mb[k]
+		if va == nil || (ok && vb == nil) {
+			continue
+		}
+		if !ok || !reflect.DeepEqual(va, vb) {
+			return false
+		}
+	}
+	for k, vb := range mb {
+		if _, ok := ma[k]; !ok && vb != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // responseToModel maps a containerAPI response onto a ContainerModel.

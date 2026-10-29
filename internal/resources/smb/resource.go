@@ -11,6 +11,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
 )
@@ -19,6 +21,7 @@ var _ resource.Resource = &SMBShareResource{}
 var _ resource.ResourceWithImportState = &SMBShareResource{}
 var _ resource.ResourceWithIdentity = &SMBShareResource{}
 var _ resource.ResourceWithValidateConfig = &SMBShareResource{}
+var _ resource.ResourceWithModifyPlan = &SMBShareResource{}
 
 // SMBShareResource implements the truenas_smb_share resource.
 type SMBShareResource struct{ client *client.Client }
@@ -53,10 +56,17 @@ func (r *SMBShareResource) Configure(_ context.Context, req resource.ConfigureRe
 	r.client = c
 }
 
-// ValidateConfig rejects, at plan time, any options field that is not valid for
-// the share's effective purpose. apiPayload silently drops such fields (they are
-// never sent and read back null), so without this a misfiled or copy-pasted
-// option — e.g. recyclebin on a TIMEMACHINE_SHARE — would apply with no feedback.
+// ValidateConfig rejects, at plan time, config that would otherwise be
+// silently ignored on apply:
+//   - an options field that is not valid for the share's effective purpose
+//     (apiPayload drops it; it is never sent and reads back null), e.g.
+//     recyclebin on a TIMEMACHINE_SHARE;
+//   - a flat legacy attribute (guestok, hostsallow, ...) on a non-LEGACY_SHARE
+//     purpose: apiPayload only sends the flat attributes for LEGACY_SHARE, and
+//     Read reports them as false/empty for every other purpose;
+//   - a flat legacy attribute and its options.<key> twin both set: options
+//     would win and the flat attribute would read back a different value.
+//
 // Validation is skipped when purpose or options are unknown (interpolated).
 func (r *SMBShareResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var cfg SMBModel
@@ -66,7 +76,7 @@ func (r *SMBShareResource) ValidateConfig(ctx context.Context, req resource.Vali
 	}
 	purpose, bad, diags := cfg.invalidOptionKeys(ctx)
 	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() || len(bad) == 0 {
+	if resp.Diagnostics.HasError() {
 		return
 	}
 	validList := strings.Join(sortedValidOptions(purpose), ", ")
@@ -78,6 +88,89 @@ func (r *SMBShareResource) ValidateConfig(ctx context.Context, req resource.Vali
 				"Remove it, or change purpose. Valid options for %s: %s.", key, purpose, purpose, validList),
 		)
 	}
+
+	if cfg.Purpose.IsUnknown() {
+		return
+	}
+	flat := cfg.configuredFlatLegacyKeys()
+	if purpose != legacySharePurpose {
+		for _, key := range flat {
+			hint := "Remove it, or set purpose = \"LEGACY_SHARE\"."
+			if smbOptionFieldsByPurpose[purpose][key] {
+				hint = fmt.Sprintf("Set options.%s instead, or set purpose = \"LEGACY_SHARE\".", key)
+			}
+			resp.Diagnostics.AddAttributeError(
+				path.Root(key),
+				"Attribute only valid for LEGACY_SHARE",
+				fmt.Sprintf("%s is a LEGACY_SHARE attribute and is not applied for purpose %q; it would be silently ignored. %s",
+					key, purpose, hint),
+			)
+		}
+		return
+	}
+	if cfg.Options.IsNull() || cfg.Options.IsUnknown() || len(flat) == 0 {
+		return
+	}
+	var opt SMBOptionsModel
+	resp.Diagnostics.Append(cfg.Options.As(ctx, &opt, basetypes.ObjectAsOptions{})...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	inOptions := map[string]bool{}
+	for _, key := range setOptionKeys(&opt) {
+		inOptions[key] = true
+	}
+	for _, key := range flat {
+		if inOptions[key] {
+			resp.Diagnostics.AddAttributeError(
+				path.Root(key),
+				"Attribute set twice",
+				fmt.Sprintf("%s and options.%s are the same share setting; set only one of them.", key, key),
+			)
+		}
+	}
+}
+
+// ModifyPlan keeps the computed `options` and `vuid` in step with the inputs
+// they are derived from (both are pinned from state by UseStateForUnknown):
+//   - purpose change: the server returns the new purpose's options shape and
+//     a vuid only for LEGACY_SHARE/TIMEMACHINE_SHARE, so the pinned values are
+//     stale. When options is not configured, mark it unknown (only the flat
+//     attributes and purpose are sent; the server applies the new purpose's
+//     defaults); vuid is always marked unknown.
+//   - same LEGACY_SHARE purpose, options not configured: copy the configured
+//     flat attributes onto the pinned options so the payload (which must carry
+//     the whole options object) sends the new values, and the plan shows them.
+func (r *SMBShareResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() || req.State.Raw.IsNull() {
+		return
+	}
+	var plan, state, cfg SMBModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	newPurpose := resolveEffectivePurpose(&plan)
+	if newPurpose != state.Purpose.ValueString() {
+		if cfg.Options.IsNull() {
+			resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("options"), types.ObjectUnknown(smbOptionsAttrTypes))...)
+		}
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("vuid"), types.StringUnknown())...)
+		return
+	}
+
+	if newPurpose != legacySharePurpose || !cfg.Options.IsNull() || plan.Options.IsNull() || plan.Options.IsUnknown() {
+		return
+	}
+	opts, changed, diags := plan.overlayFlatOnOptions(ctx)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() || !changed {
+		return
+	}
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("options"), opts)...)
 }
 
 func (r *SMBShareResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

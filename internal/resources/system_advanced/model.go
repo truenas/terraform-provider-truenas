@@ -6,6 +6,7 @@ package system_advanced
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
@@ -64,7 +65,7 @@ type SystemAdvancedModel struct {
 	Serialspeed        types.String `tfsdk:"serialspeed"`
 	SyslogAudit        types.Bool   `tfsdk:"syslog_audit"`
 	Sysloglevel        types.String `tfsdk:"sysloglevel"`
-	Syslogservers      types.List   `tfsdk:"syslogservers"` // List[String]
+	Syslogservers      types.List   `tfsdk:"syslogservers"` // List[Object] (syslogServerAttrTypes)
 	Traceback          types.Bool   `tfsdk:"traceback"`
 	Uploadcrash        types.Bool   `tfsdk:"uploadcrash"`
 
@@ -116,33 +117,76 @@ type SystemAdvancedDataSourceModel struct {
 // sed_passwd deliberately has NO field here: TrueNAS never returns a usable
 // value for it, so it must never be decodable from a response.
 type systemAdvancedAPI struct {
-	ID                 int64    `json:"id"`
-	Advancedmode       bool     `json:"advancedmode"`
-	Anonstats          bool     `json:"anonstats"`
-	AnonstatsToken     string   `json:"anonstats_token"`
-	Autotune           bool     `json:"autotune"`
-	BootScrub          int64    `json:"boot_scrub"`
-	Consolemenu        bool     `json:"consolemenu"`
-	Consolemsg         bool     `json:"consolemsg"`
-	Debugkernel        bool     `json:"debugkernel"`
-	FqdnSyslog         bool     `json:"fqdn_syslog"`
-	IsolatedGpuPciIds  []string `json:"isolated_gpu_pci_ids"`
-	KdumpEnabled       bool     `json:"kdump_enabled"`
-	KernelExtraOptions string   `json:"kernel_extra_options"`
-	LoginBanner        string   `json:"login_banner"`
-	Motd               string   `json:"motd"`
-	Nvidia             bool     `json:"nvidia"`
-	Overprovision      *int64   `json:"overprovision"`
-	Powerdaemon        bool     `json:"powerdaemon"`
-	SedUser            string   `json:"sed_user"`
-	Serialconsole      bool     `json:"serialconsole"`
-	Serialport         string   `json:"serialport"`
-	Serialspeed        string   `json:"serialspeed"`
-	SyslogAudit        bool     `json:"syslog_audit"`
-	Sysloglevel        string   `json:"sysloglevel"`
-	Syslogservers      []string `json:"syslogservers"`
-	Traceback          bool     `json:"traceback"`
-	Uploadcrash        bool     `json:"uploadcrash"`
+	ID                 int64             `json:"id"`
+	Advancedmode       bool              `json:"advancedmode"`
+	Anonstats          bool              `json:"anonstats"`
+	AnonstatsToken     string            `json:"anonstats_token"`
+	Autotune           bool              `json:"autotune"`
+	BootScrub          int64             `json:"boot_scrub"`
+	Consolemenu        bool              `json:"consolemenu"`
+	Consolemsg         bool              `json:"consolemsg"`
+	Debugkernel        bool              `json:"debugkernel"`
+	FqdnSyslog         bool              `json:"fqdn_syslog"`
+	IsolatedGpuPciIds  []string          `json:"isolated_gpu_pci_ids"`
+	KdumpEnabled       bool              `json:"kdump_enabled"`
+	KernelExtraOptions string            `json:"kernel_extra_options"`
+	LoginBanner        string            `json:"login_banner"`
+	Motd               string            `json:"motd"`
+	Nvidia             bool              `json:"nvidia"`
+	Overprovision      *int64            `json:"overprovision"`
+	Powerdaemon        bool              `json:"powerdaemon"`
+	SedUser            string            `json:"sed_user"`
+	Serialconsole      bool              `json:"serialconsole"`
+	Serialport         string            `json:"serialport"`
+	Serialspeed        string            `json:"serialspeed"`
+	SyslogAudit        bool              `json:"syslog_audit"`
+	Sysloglevel        string            `json:"sysloglevel"`
+	Syslogservers      []syslogServerAPI `json:"syslogservers"`
+	Traceback          bool              `json:"traceback"`
+	Uploadcrash        bool              `json:"uploadcrash"`
+}
+
+// syslogServerAPI is one entry of the syslogservers array. The API models it
+// as an object (SyslogServer: host, transport, tls_certificate) on every
+// supported release (25.10, 26.0, 28.0); tls_certificate is a nullable
+// certificate id.
+type syslogServerAPI struct {
+	Host           string `json:"host"`
+	Transport      string `json:"transport"`
+	TLSCertificate *int64 `json:"tls_certificate"`
+}
+
+// syslogServerAttrTypes describes one element of the syslogservers list, for
+// both the resource and the data source.
+var syslogServerAttrTypes = map[string]attr.Type{
+	"host":            types.StringType,
+	"transport":       types.StringType,
+	"tls_certificate": types.Int64Type,
+}
+
+// syslogServerModel is the Terraform-side shape of one syslogservers entry.
+type syslogServerModel struct {
+	Host           types.String `tfsdk:"host"`
+	Transport      types.String `tfsdk:"transport"`
+	TLSCertificate types.Int64  `tfsdk:"tls_certificate"`
+}
+
+// syslogserversListValue converts the API's syslogservers array into the
+// list value stored in state. A nil array maps to an empty (non-null) list.
+func syslogserversListValue(ctx context.Context, servers []syslogServerAPI) (types.List, diag.Diagnostics) {
+	models := make([]syslogServerModel, 0, len(servers))
+	for _, s := range servers {
+		m := syslogServerModel{
+			Host:           types.StringValue(s.Host),
+			Transport:      types.StringValue(s.Transport),
+			TLSCertificate: types.Int64Null(),
+		}
+		if s.TLSCertificate != nil {
+			m.TLSCertificate = types.Int64Value(*s.TLSCertificate)
+		}
+		models = append(models, m)
+	}
+	return types.ListValueFrom(ctx, types.ObjectType{AttrTypes: syslogServerAttrTypes}, models)
 }
 
 // responseToModel maps an API response onto a Terraform model. The nil
@@ -196,11 +240,7 @@ func responseToModel(ctx context.Context, api *systemAdvancedAPI, m *SystemAdvan
 	diags.Append(d...)
 	m.IsolatedGpuPciIds = isolatedGpuPciIdsList
 
-	syslogservers := api.Syslogservers
-	if syslogservers == nil {
-		syslogservers = []string{}
-	}
-	syslogserversList, d := types.ListValueFrom(ctx, types.StringType, syslogservers)
+	syslogserversList, d := syslogserversListValue(ctx, api.Syslogservers)
 	diags.Append(d...)
 	m.Syslogservers = syslogserversList
 
@@ -252,11 +292,7 @@ func responseToDataSourceModel(ctx context.Context, api *systemAdvancedAPI, m *S
 	diags.Append(d...)
 	m.IsolatedGpuPciIds = isolatedGpuPciIdsList
 
-	syslogservers := api.Syslogservers
-	if syslogservers == nil {
-		syslogservers = []string{}
-	}
-	syslogserversList, d := types.ListValueFrom(ctx, types.StringType, syslogservers)
+	syslogserversList, d := syslogserversListValue(ctx, api.Syslogservers)
 	diags.Append(d...)
 	m.Syslogservers = syslogserversList
 
@@ -271,10 +307,10 @@ func responseToDataSourceModel(ctx context.Context, api *systemAdvancedAPI, m *S
 // scope for this resource). overprovision is nullable on the wire: it is
 // omitted entirely when null/unknown, sent as JSON nil when the model holds
 // an explicit 0 (clearing overprovision), and sent as its value otherwise.
-// syslogservers is only included when known, with a nil ElementsAs guard so
-// a null/unknown list never panics; it is normalized to an empty slice when
-// nil so an explicitly-set-but-empty list clears the value on TrueNAS rather
-// than being omitted. sed_passwd is a write-only secret: it is included only
+// syslogservers is only included when known; each entry is sent as a
+// SyslogServer object (tls_certificate as an explicit null when unset), and
+// an explicitly-set-but-empty list is sent as an empty array so it clears
+// the value on TrueNAS rather than being omitted. sed_passwd is a write-only secret: it is included only
 // when known and non-null (a null/unknown value means "leave the current
 // value alone" — never send an empty string or nil for it). nvidia is
 // intentionally NOT handled here: it needs its own version-gated handling
@@ -354,10 +390,20 @@ func (m *SystemAdvancedModel) updatePayload(ctx context.Context) (map[string]any
 		p["sysloglevel"] = m.Sysloglevel.ValueString()
 	}
 	if !m.Syslogservers.IsNull() && !m.Syslogservers.IsUnknown() {
-		var v []string
-		diags.Append(m.Syslogservers.ElementsAs(ctx, &v, false)...)
-		if v == nil {
-			v = []string{}
+		var servers []syslogServerModel
+		diags.Append(m.Syslogservers.ElementsAs(ctx, &servers, false)...)
+		v := make([]map[string]any, 0, len(servers))
+		for _, s := range servers {
+			e := map[string]any{"host": s.Host.ValueString()}
+			if !s.Transport.IsNull() && !s.Transport.IsUnknown() {
+				e["transport"] = s.Transport.ValueString()
+			}
+			if !s.TLSCertificate.IsNull() && !s.TLSCertificate.IsUnknown() {
+				e["tls_certificate"] = s.TLSCertificate.ValueInt64()
+			} else {
+				e["tls_certificate"] = nil
+			}
+			v = append(v, e)
 		}
 		p["syslogservers"] = v
 	}

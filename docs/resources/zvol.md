@@ -3,12 +3,12 @@
 page_title: "truenas_zvol Resource - truenas"
 subcategory: "Storage"
 description: |-
-  Manages a ZFS volume (zvol/block device) on TrueNAS.
+  Manages a ZFS volume (zvol/block device) on TrueNAS. While the zvol has snapshots, destroying it fails and lists them, unless force_destroy = true.
 ---
 
 # truenas_zvol (Resource)
 
-Manages a ZFS volume (zvol/block device) on TrueNAS.
+Manages a ZFS volume (zvol/block device) on TrueNAS. While the zvol has snapshots, destroying it fails and lists them, unless force_destroy = true.
 
 ## Example Usage
 
@@ -41,6 +41,7 @@ resource "truenas_zvol" "iso" {
 - `encryption_generate_key` (Boolean) Automatically generate the encryption key (key-based encryption). Create-only.
 - `encryption_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) 64-character hex key for key-based encryption. Write-only: never stored in state. Create-only.
 - `encryption_passphrase` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Passphrase for passphrase-based encryption (minimum 8 characters). Write-only: never stored in state. Create-only.
+- `force_destroy` (Boolean) When true, destroying (or replacing) this zvol also deletes all of its snapshots. Default false: the delete is non-recursive, and while any of those exist it fails and lists them. Changing it updates state only. It takes effect only once applied, so set it and apply before the destroy or replacement that needs it. Import sets it to false.
 - `inherit_encryption` (Boolean) Whether this zvol inherits its encryption from the parent dataset rather than owning its own key. Create-only. Computed: reconciled from the zvol's encryption root on read, so it reflects reality even when left unset.
 - `readonly` (String) Mount read-only: ON or OFF. Null inherits.
 - `refreservation` (Number) Referenced reservation in bytes (space guaranteed to the volume, excluding snapshots). Null (unset) inherits.

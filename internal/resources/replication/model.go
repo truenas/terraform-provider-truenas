@@ -12,8 +12,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
 
-// scheduleAttrTypes describes the attribute types of the nested "schedule" object.
-var scheduleAttrTypes = map[string]attr.Type{
+// cronAttrTypes describes a plain cron object (the schedule of a "lifetimes"
+// rule, which has no begin/end window on the API).
+var cronAttrTypes = map[string]attr.Type{
 	"minute": types.StringType,
 	"hour":   types.StringType,
 	"dom":    types.StringType,
@@ -21,8 +22,22 @@ var scheduleAttrTypes = map[string]attr.Type{
 	"dow":    types.StringType,
 }
 
+// scheduleAttrTypes describes the nested "schedule" object: cron fields plus
+// the begin/end window. The server replaces the whole object on update and
+// fills any key not sent with its default, so begin/end are modeled and sent
+// back; otherwise every update reset the window to 00:00-23:59.
+var scheduleAttrTypes = map[string]attr.Type{
+	"minute": types.StringType,
+	"hour":   types.StringType,
+	"dom":    types.StringType,
+	"month":  types.StringType,
+	"dow":    types.StringType,
+	"begin":  types.StringType,
+	"end":    types.StringType,
+}
+
 // restrictScheduleAttrTypes is the cron object used by restrict_schedule; it
-// adds begin/end to the base schedule fields.
+// has the same shape as schedule (cron fields plus begin/end).
 var restrictScheduleAttrTypes = map[string]attr.Type{
 	"minute": types.StringType,
 	"hour":   types.StringType,
@@ -36,7 +51,7 @@ var restrictScheduleAttrTypes = map[string]attr.Type{
 // lifetimeAttrTypes is one entry of the "lifetimes" list (a per-schedule
 // snapshot retention rule, used with retention_policy = CUSTOM).
 var lifetimeAttrTypes = map[string]attr.Type{
-	"schedule":       types.ObjectType{AttrTypes: scheduleAttrTypes},
+	"schedule":       types.ObjectType{AttrTypes: cronAttrTypes},
 	"lifetime_value": types.Int64Type,
 	"lifetime_unit":  types.StringType,
 }
@@ -63,6 +78,17 @@ type RestrictScheduleModel struct {
 
 // ScheduleModel maps to the nested "schedule" attribute.
 type ScheduleModel struct {
+	Minute types.String `tfsdk:"minute"`
+	Hour   types.String `tfsdk:"hour"`
+	Dom    types.String `tfsdk:"dom"`
+	Month  types.String `tfsdk:"month"`
+	Dow    types.String `tfsdk:"dow"`
+	Begin  types.String `tfsdk:"begin"`
+	End    types.String `tfsdk:"end"`
+}
+
+// CronModel maps to the schedule of one "lifetimes" entry.
+type CronModel struct {
 	Minute types.String `tfsdk:"minute"`
 	Hour   types.String `tfsdk:"hour"`
 	Dom    types.String `tfsdk:"dom"`
@@ -99,8 +125,8 @@ type ReplicationModel struct {
 	Auto                            types.Bool   `tfsdk:"auto"`
 	Schedule                        types.Object `tfsdk:"schedule"`         // optional nested; null when unset
 	RetentionPolicy                 types.String `tfsdk:"retention_policy"` // SOURCE, CUSTOM, NONE
-	LifetimeValue                   types.Int64  `tfsdk:"lifetime_value"`   // 0 = unset -> null
-	LifetimeUnit                    types.String `tfsdk:"lifetime_unit"`    // "" = unset -> null
+	LifetimeValue                   types.Int64  `tfsdk:"lifetime_value"`   // null unless retention_policy = CUSTOM
+	LifetimeUnit                    types.String `tfsdk:"lifetime_unit"`    // null unless retention_policy = CUSTOM
 	Readonly                        types.String `tfsdk:"readonly"`         // SET, REQUIRE, IGNORE
 	Enabled                         types.Bool   `tfsdk:"enabled"`
 	Retries                         types.Int64  `tfsdk:"retries"`
@@ -167,6 +193,8 @@ type replicationAPI struct {
 		Dom    string `json:"dom"`
 		Month  string `json:"month"`
 		Dow    string `json:"dow"`
+		Begin  string `json:"begin"`
+		End    string `json:"end"`
 	} `json:"schedule"`
 	RetentionPolicy string  `json:"retention_policy"`
 	LifetimeValue   *int64  `json:"lifetime_value"`
@@ -262,6 +290,14 @@ func stringPtrToValue(p *string) types.String {
 		return types.StringNull()
 	}
 	return types.StringValue(*p)
+}
+
+// nullIfEmpty maps an empty API string to null.
+func nullIfEmpty(s string) types.String {
+	if s == "" {
+		return types.StringNull()
+	}
+	return types.StringValue(s)
 }
 
 // int64PtrToValue maps a nullable API integer to a types.Int64 (null when nil).
@@ -369,6 +405,8 @@ func responseToModel(ctx context.Context, api *replicationAPI, m *ReplicationMod
 			Dom:    types.StringValue(api.Schedule.Dom),
 			Month:  types.StringValue(api.Schedule.Month),
 			Dow:    types.StringValue(api.Schedule.Dow),
+			Begin:  nullIfEmpty(api.Schedule.Begin),
+			End:    nullIfEmpty(api.Schedule.End),
 		})
 		diags.Append(d6...)
 		m.Schedule = schedObj
@@ -378,17 +416,11 @@ func responseToModel(ctx context.Context, api *replicationAPI, m *ReplicationMod
 
 	m.RetentionPolicy = types.StringValue(api.RetentionPolicy)
 
-	if api.LifetimeValue != nil {
-		m.LifetimeValue = types.Int64Value(*api.LifetimeValue)
-	} else {
-		m.LifetimeValue = types.Int64Value(0)
-	}
-
-	if api.LifetimeUnit != nil {
-		m.LifetimeUnit = types.StringValue(*api.LifetimeUnit)
-	} else {
-		m.LifetimeUnit = types.StringValue("")
-	}
+	// Null unless retention_policy = CUSTOM. They are Optional (not
+	// Computed), so removing them from config plans null and the payload
+	// clears them, which is what switching CUSTOM -> SOURCE/NONE needs.
+	m.LifetimeValue = int64PtrToValue(api.LifetimeValue)
+	m.LifetimeUnit = stringPtrToValue(api.LifetimeUnit)
 
 	m.Readonly = types.StringValue(api.Readonly)
 	m.Enabled = types.BoolValue(api.Enabled)
@@ -422,12 +454,6 @@ func responseToModel(ctx context.Context, api *replicationAPI, m *ReplicationMod
 	m.EncryptionKeyLocation = stringPtrToValue(api.EncryptionKeyLocation)
 
 	if api.RestrictSchedule != nil {
-		nullIfEmpty := func(s string) types.String {
-			if s == "" {
-				return types.StringNull()
-			}
-			return types.StringValue(s)
-		}
 		rsObj, drs := types.ObjectValueFrom(ctx, restrictScheduleAttrTypes, RestrictScheduleModel{
 			Minute: types.StringValue(api.RestrictSchedule.Minute),
 			Hour:   types.StringValue(api.RestrictSchedule.Hour),
@@ -455,7 +481,7 @@ func responseToModel(ctx context.Context, api *replicationAPI, m *ReplicationMod
 
 	lifetimes := make([]LifetimeModel, 0, len(api.Lifetimes))
 	for _, lt := range api.Lifetimes {
-		schedObj, dsc := types.ObjectValueFrom(ctx, scheduleAttrTypes, ScheduleModel{
+		schedObj, dsc := types.ObjectValueFrom(ctx, cronAttrTypes, CronModel{
 			Minute: types.StringValue(lt.Schedule.Minute),
 			Hour:   types.StringValue(lt.Schedule.Hour),
 			Dom:    types.StringValue(lt.Schedule.Dom),
@@ -470,7 +496,7 @@ func responseToModel(ctx context.Context, api *replicationAPI, m *ReplicationMod
 		})
 	}
 	// Keep an empty lifetimes null (Optional, non-Computed) to avoid drift
-	// against an unset config.
+	// against an unset config. An explicit [] is rejected by the schema.
 	if len(lifetimes) == 0 {
 		m.Lifetimes = types.ListNull(lifetimeObjectType())
 	} else {
@@ -602,26 +628,20 @@ func (m *ReplicationModel) apiPayload(ctx context.Context) (map[string]any, diag
 		p["encryption_key_location"] = m.EncryptionKeyLocation.ValueString()
 	}
 
-	if !m.RestrictSchedule.IsNull() && !m.RestrictSchedule.IsUnknown() {
+	// restrict_schedule, properties_override, lifetimes and schedule are
+	// Optional without Computed: a null plan means the user removed them, and
+	// the server keeps a value that is omitted from an update, so null is sent
+	// as the cleared value (null, {}, [], null) instead of being omitted.
+	if m.RestrictSchedule.IsNull() {
+		p["restrict_schedule"] = nil
+	} else if !m.RestrictSchedule.IsUnknown() {
 		var rs RestrictScheduleModel
 		diags.Append(m.RestrictSchedule.As(ctx, &rs, basetypes.ObjectAsOptions{})...)
-		sched := map[string]string{
-			"minute": rs.Minute.ValueString(),
-			"hour":   rs.Hour.ValueString(),
-			"dom":    rs.Dom.ValueString(),
-			"month":  rs.Month.ValueString(),
-			"dow":    rs.Dow.ValueString(),
-		}
-		// begin/end are optional; only include when set.
-		if !rs.Begin.IsNull() && !rs.Begin.IsUnknown() && rs.Begin.ValueString() != "" {
-			sched["begin"] = rs.Begin.ValueString()
-		}
-		if !rs.End.IsNull() && !rs.End.IsUnknown() && rs.End.ValueString() != "" {
-			sched["end"] = rs.End.ValueString()
-		}
-		p["restrict_schedule"] = sched
+		p["restrict_schedule"] = cronWithWindow(rs.Minute, rs.Hour, rs.Dom, rs.Month, rs.Dow, rs.Begin, rs.End)
 	}
-	if !m.PropertiesOverride.IsNull() && !m.PropertiesOverride.IsUnknown() {
+	if m.PropertiesOverride.IsNull() {
+		p["properties_override"] = map[string]string{}
+	} else if !m.PropertiesOverride.IsUnknown() {
 		var po map[string]string
 		diags.Append(m.PropertiesOverride.ElementsAs(ctx, &po, false)...)
 		if po == nil {
@@ -629,12 +649,14 @@ func (m *ReplicationModel) apiPayload(ctx context.Context) (map[string]any, diag
 		}
 		p["properties_override"] = po
 	}
-	if !m.Lifetimes.IsNull() && !m.Lifetimes.IsUnknown() {
+	if m.Lifetimes.IsNull() {
+		p["lifetimes"] = []map[string]any{}
+	} else if !m.Lifetimes.IsUnknown() {
 		var lts []LifetimeModel
 		diags.Append(m.Lifetimes.ElementsAs(ctx, &lts, false)...)
 		out := make([]map[string]any, 0, len(lts))
 		for _, lt := range lts {
-			var sched ScheduleModel
+			var sched CronModel
 			diags.Append(lt.Schedule.As(ctx, &sched, basetypes.ObjectAsOptions{})...)
 			out = append(out, map[string]any{
 				"schedule": map[string]string{
@@ -721,31 +743,49 @@ func (m *ReplicationModel) apiPayload(ctx context.Context) (map[string]any, diag
 		p["also_include_naming_schema"] = alsoInclude
 	}
 
-	// lifetime_value / lifetime_unit: 0/"" -> null.
-	if v := m.LifetimeValue.ValueInt64(); v != 0 {
-		p["lifetime_value"] = v
+	// lifetime_value / lifetime_unit: null (or the legacy 0/"" from state
+	// written by older versions) -> null, which clears them.
+	if v := m.LifetimeValue; !v.IsNull() && !v.IsUnknown() && v.ValueInt64() != 0 {
+		p["lifetime_value"] = v.ValueInt64()
 	} else {
 		p["lifetime_value"] = nil
 	}
-	if v := m.LifetimeUnit.ValueString(); v != "" {
-		p["lifetime_unit"] = v
+	if v := m.LifetimeUnit; !v.IsNull() && !v.IsUnknown() && v.ValueString() != "" {
+		p["lifetime_unit"] = v.ValueString()
 	} else {
 		p["lifetime_unit"] = nil
 	}
 
-	// schedule: send map only when the Schedule object is non-null; else
-	// omit the key entirely.
-	if !m.Schedule.IsNull() && !m.Schedule.IsUnknown() {
+	// schedule: null clears it (required to turn auto-run off: the server
+	// rejects a schedule on a task with auto = false). begin/end go out with
+	// the cron fields whenever known (see scheduleAttrTypes).
+	if m.Schedule.IsNull() {
+		p["schedule"] = nil
+	} else if !m.Schedule.IsUnknown() {
 		var sched ScheduleModel
 		diags.Append(m.Schedule.As(ctx, &sched, basetypes.ObjectAsOptions{})...)
-		p["schedule"] = map[string]string{
-			"minute": sched.Minute.ValueString(),
-			"hour":   sched.Hour.ValueString(),
-			"dom":    sched.Dom.ValueString(),
-			"month":  sched.Month.ValueString(),
-			"dow":    sched.Dow.ValueString(),
-		}
+		p["schedule"] = cronWithWindow(sched.Minute, sched.Hour, sched.Dom, sched.Month, sched.Dow, sched.Begin, sched.End)
 	}
 
 	return p, diags
+}
+
+// cronWithWindow builds a schedule/restrict_schedule wire object. begin/end
+// are included only when known: unknown means unset on create, and the
+// server then fills 00:00/23:59.
+func cronWithWindow(minute, hour, dom, month, dow, begin, end types.String) map[string]string {
+	sched := map[string]string{
+		"minute": minute.ValueString(),
+		"hour":   hour.ValueString(),
+		"dom":    dom.ValueString(),
+		"month":  month.ValueString(),
+		"dow":    dow.ValueString(),
+	}
+	if !begin.IsNull() && !begin.IsUnknown() && begin.ValueString() != "" {
+		sched["begin"] = begin.ValueString()
+	}
+	if !end.IsNull() && !end.IsUnknown() && end.ValueString() != "" {
+		sched["end"] = end.ValueString()
+	}
+	return sched
 }

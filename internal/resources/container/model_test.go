@@ -72,12 +72,41 @@ func TestIdmapFromAPI(t *testing.T) {
 			t.Errorf("idmapFromAPI(nil) = %#v, want null", got)
 		}
 	})
-	t.Run("object passes through verbatim", func(t *testing.T) {
-		got := idmapFromAPI(json.RawMessage(`{"type":"DEFAULT"}`))
-		if got.ValueString() != `{"type":"DEFAULT"}` {
-			t.Errorf("idmapFromAPI = %q, want verbatim passthrough", got.ValueString())
+	t.Run("server spelling is re-encoded like jsonencode", func(t *testing.T) {
+		got := idmapFromAPI(json.RawMessage(`{"type": "ISOLATED", "slice": 5}`))
+		if got.ValueString() != `{"slice":5,"type":"ISOLATED"}` {
+			t.Errorf("idmapFromAPI = %q, want compact sorted-key JSON", got.ValueString())
 		}
 	})
+	t.Run("unparseable text is kept verbatim", func(t *testing.T) {
+		got := idmapFromAPI(json.RawMessage(`{bad`))
+		if got.ValueString() != `{bad` {
+			t.Errorf("idmapFromAPI = %q, want verbatim", got.ValueString())
+		}
+	})
+}
+
+func TestIdmapEquivalent(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want bool
+	}{
+		{`{"type": "DEFAULT"}`, `{"type":"DEFAULT"}`, true},
+		{`{"slice":5,"type":"ISOLATED"}`, `{"type":"ISOLATED","slice":null}`, true},
+		{`{"slice":5,"type":"ISOLATED"}`, `{"type":"ISOLATED"}`, false},
+		{`{"slice":5,"type":"ISOLATED"}`, `{"slice":6,"type":"ISOLATED"}`, false},
+		{`{"type":"DEFAULT"}`, `{"slice":null,"type":"ISOLATED"}`, false},
+		{`{bad`, `{bad`, true},
+		{`{bad`, `{"type":"DEFAULT"}`, false},
+	}
+	for _, c := range cases {
+		if got := idmapEquivalent(c.a, c.b); got != c.want {
+			t.Errorf("idmapEquivalent(%s, %s) = %v, want %v", c.a, c.b, got, c.want)
+		}
+		if got := idmapEquivalent(c.b, c.a); got != c.want {
+			t.Errorf("idmapEquivalent(%s, %s) = %v, want %v (reversed)", c.b, c.a, got, c.want)
+		}
+	}
 }
 
 func TestIdmapResponseValue_KnownPlanPreserved(t *testing.T) {

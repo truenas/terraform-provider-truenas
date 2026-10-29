@@ -67,14 +67,15 @@ func TestAccKerberosKeytab_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("truenas_kerberos_keytab.test", "file", fileB64),
 				),
 			},
-			// Import by numeric id. "file" is a normal Sensitive attribute
-			// (not WriteOnly — the probe showed kerberos.keytab.query
-			// returns it intact), so it is verified like any other
-			// attribute rather than ignored.
+			// Import by numeric id. Import never reads "file" into state: it
+			// cannot see whether the configuration uses file or the
+			// write-only file_wo (B-172; TestAccKerberosKeytab_importFile
+			// covers the in-place re-record of file after import).
 			{
-				ResourceName:      "truenas_kerberos_keytab.test",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            "truenas_kerberos_keytab.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"file"},
 			},
 		},
 	})

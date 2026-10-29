@@ -8,9 +8,24 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
+
+// scheduleAttrTypes describes the attribute types of the nested "schedule"
+// object. The model holds schedule as a types.Object, not a plain struct: the
+// resource's schedule is Optional+Computed (unknown in the plan when omitted)
+// and the data source's is Computed (null in config), and a plain struct can
+// hold neither, so both failed with a Value Conversion Error.
+var scheduleAttrTypes = map[string]attr.Type{
+	"minute": types.StringType,
+	"hour":   types.StringType,
+	"dom":    types.StringType,
+	"month":  types.StringType,
+	"dow":    types.StringType,
+}
 
 // ScheduleModel maps to the nested "schedule" attribute.
 type ScheduleModel struct {
@@ -26,19 +41,19 @@ type ScheduleModel struct {
 // line up with both schemas, differing only in Required/Computed markers
 // declared in schema.go / datasource.go.
 type CloudBackupModel struct {
-	ID          types.Int64   `tfsdk:"id"`
-	Description types.String  `tfsdk:"description"`
-	Path        types.String  `tfsdk:"path"`
-	Credentials types.Int64   `tfsdk:"credentials"`
-	Attributes  types.String  `tfsdk:"attributes"` // JSON: {"bucket": "...", "folder": "..."}
-	Schedule    ScheduleModel `tfsdk:"schedule"`
-	PreScript   types.String  `tfsdk:"pre_script"`
-	PostScript  types.String  `tfsdk:"post_script"`
-	Snapshot    types.Bool    `tfsdk:"snapshot"`
-	Include     types.List    `tfsdk:"include"` // List[String]
-	Exclude     types.List    `tfsdk:"exclude"` // List[String]
-	Enabled     types.Bool    `tfsdk:"enabled"`
-	Password    types.String  `tfsdk:"password"`
+	ID          types.Int64  `tfsdk:"id"`
+	Description types.String `tfsdk:"description"`
+	Path        types.String `tfsdk:"path"`
+	Credentials types.Int64  `tfsdk:"credentials"`
+	Attributes  types.String `tfsdk:"attributes"` // JSON: {"bucket": "...", "folder": "..."}
+	Schedule    types.Object `tfsdk:"schedule"`   // ScheduleModel
+	PreScript   types.String `tfsdk:"pre_script"`
+	PostScript  types.String `tfsdk:"post_script"`
+	Snapshot    types.Bool   `tfsdk:"snapshot"`
+	Include     types.List   `tfsdk:"include"` // List[String]
+	Exclude     types.List   `tfsdk:"exclude"` // List[String]
+	Enabled     types.Bool   `tfsdk:"enabled"`
+	Password    types.String `tfsdk:"password"`
 	// PasswordWO is a write-only alternative to Password: it is read from
 	// config on create/update and never stored in state; refresh does not read
 	// the password back when it is used. PasswordWOVersion is the trigger the
@@ -62,24 +77,24 @@ func (m *CloudBackupModel) usesWriteOnlyPassword() bool {
 // CloudBackupDataSourceModel is the read-only lookup model for the
 // truenas_cloud_backup datasource.
 type CloudBackupDataSourceModel struct {
-	ID              types.Int64   `tfsdk:"id"`
-	Description     types.String  `tfsdk:"description"`
-	Path            types.String  `tfsdk:"path"`
-	Credentials     types.Int64   `tfsdk:"credentials"`
-	Attributes      types.String  `tfsdk:"attributes"`
-	Schedule        ScheduleModel `tfsdk:"schedule"`
-	PreScript       types.String  `tfsdk:"pre_script"`
-	PostScript      types.String  `tfsdk:"post_script"`
-	Snapshot        types.Bool    `tfsdk:"snapshot"`
-	Include         types.List    `tfsdk:"include"`
-	Exclude         types.List    `tfsdk:"exclude"`
-	Enabled         types.Bool    `tfsdk:"enabled"`
-	Password        types.String  `tfsdk:"password"`
-	KeepLast        types.Int64   `tfsdk:"keep_last"`
-	TransferSetting types.String  `tfsdk:"transfer_setting"`
-	AbsolutePaths   types.Bool    `tfsdk:"absolute_paths"`
-	CachePath       types.String  `tfsdk:"cache_path"`
-	RateLimit       types.Int64   `tfsdk:"rate_limit"`
+	ID              types.Int64  `tfsdk:"id"`
+	Description     types.String `tfsdk:"description"`
+	Path            types.String `tfsdk:"path"`
+	Credentials     types.Int64  `tfsdk:"credentials"`
+	Attributes      types.String `tfsdk:"attributes"`
+	Schedule        types.Object `tfsdk:"schedule"` // ScheduleModel
+	PreScript       types.String `tfsdk:"pre_script"`
+	PostScript      types.String `tfsdk:"post_script"`
+	Snapshot        types.Bool   `tfsdk:"snapshot"`
+	Include         types.List   `tfsdk:"include"`
+	Exclude         types.List   `tfsdk:"exclude"`
+	Enabled         types.Bool   `tfsdk:"enabled"`
+	Password        types.String `tfsdk:"password"`
+	KeepLast        types.Int64  `tfsdk:"keep_last"`
+	TransferSetting types.String `tfsdk:"transfer_setting"`
+	AbsolutePaths   types.Bool   `tfsdk:"absolute_paths"`
+	CachePath       types.String `tfsdk:"cache_path"`
+	RateLimit       types.Int64  `tfsdk:"rate_limit"`
 }
 
 // cloudBackupAPI is the JSON shape returned by cloud_backup.* methods.
@@ -261,13 +276,15 @@ func (m *CloudBackupModel) apiPayload(ctx context.Context) (map[string]any, diag
 	if !m.Description.IsNull() && !m.Description.IsUnknown() {
 		p["description"] = m.Description.ValueString()
 	}
-	if !m.Schedule.Minute.IsNull() && !m.Schedule.Minute.IsUnknown() {
+	if !m.Schedule.IsNull() && !m.Schedule.IsUnknown() {
+		var sched ScheduleModel
+		diags.Append(m.Schedule.As(ctx, &sched, basetypes.ObjectAsOptions{})...)
 		p["schedule"] = map[string]string{
-			"minute": m.Schedule.Minute.ValueString(),
-			"hour":   m.Schedule.Hour.ValueString(),
-			"dom":    m.Schedule.Dom.ValueString(),
-			"month":  m.Schedule.Month.ValueString(),
-			"dow":    m.Schedule.Dow.ValueString(),
+			"minute": sched.Minute.ValueString(),
+			"hour":   sched.Hour.ValueString(),
+			"dom":    sched.Dom.ValueString(),
+			"month":  sched.Month.ValueString(),
+			"dow":    sched.Dow.ValueString(),
 		}
 	}
 	if !m.PreScript.IsNull() && !m.PreScript.IsUnknown() {
@@ -328,15 +345,15 @@ func (m *CloudBackupModel) updatePayload(ctx context.Context) (map[string]any, d
 	return p, diags
 }
 
-// scheduleFromAPI builds a ScheduleModel from an API response.
-func scheduleFromAPI(api scheduleAPI) ScheduleModel {
-	return ScheduleModel{
+// scheduleFromAPI builds the "schedule" object value from an API response.
+func scheduleFromAPI(ctx context.Context, api scheduleAPI) (types.Object, diag.Diagnostics) {
+	return types.ObjectValueFrom(ctx, scheduleAttrTypes, ScheduleModel{
 		Minute: types.StringValue(api.Minute),
 		Hour:   types.StringValue(api.Hour),
 		Dom:    types.StringValue(api.Dom),
 		Month:  types.StringValue(api.Month),
 		Dow:    types.StringValue(api.Dow),
-	}
+	})
 }
 
 // responseToModel maps a cloudBackupAPI response into a CloudBackupModel.
@@ -357,7 +374,9 @@ func responseToModel(ctx context.Context, api *cloudBackupAPI, m *CloudBackupMod
 	}
 	m.Credentials = types.Int64Value(credID)
 
-	m.Schedule = scheduleFromAPI(api.Schedule)
+	sched, d := scheduleFromAPI(ctx, api.Schedule)
+	diags.Append(d...)
+	m.Schedule = sched
 	m.PreScript = types.StringValue(api.PreScript)
 	m.PostScript = types.StringValue(api.PostScript)
 	m.Snapshot = types.BoolValue(api.Snapshot)
@@ -404,7 +423,9 @@ func responseToDataSourceModel(ctx context.Context, api *cloudBackupAPI, m *Clou
 	}
 	m.Credentials = types.Int64Value(credID)
 
-	m.Schedule = scheduleFromAPI(api.Schedule)
+	sched, d := scheduleFromAPI(ctx, api.Schedule)
+	diags.Append(d...)
+	m.Schedule = sched
 	m.PreScript = types.StringValue(api.PreScript)
 	m.PostScript = types.StringValue(api.PostScript)
 	m.Snapshot = types.BoolValue(api.Snapshot)

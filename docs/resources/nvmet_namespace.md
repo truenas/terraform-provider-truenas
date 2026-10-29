@@ -25,12 +25,12 @@ resource "truenas_nvmet_namespace" "disk" {
 
 ### Required
 
-- `device_path` (String) Path of the backing device, e.g. "zvol/tank/vms/vm1".
+- `device_path` (String) Path of the backing device, e.g. "zvol/tank/vms/vm1" or a file path on a dataset. Changing it (or device_type) on an enabled namespace briefly disables the namespace while the device is switched, because TrueNAS refuses the change on an active namespace; device_uuid and device_nguid are kept.
 - `subsys_id` (Number) ID of the NVMe-oF subsystem this namespace belongs to.
 
 ### Optional
 
-- `device_type` (String) Backing device type: ZVOL or FILE.
+- `device_type` (String) Backing device type: ZVOL or FILE. The API requires it; when omitted it is derived from device_path (ZVOL for a `zvol/` path, FILE otherwise).
 - `enabled` (Boolean) Whether the namespace is enabled.
 - `filesize` (Number) Size in bytes of the backing file. Only applicable for FILE device_type.
 - `nsid` (Number) Namespace ID within the subsystem. Auto-assigned by TrueNAS when unset. Immutable after creation.

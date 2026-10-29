@@ -45,6 +45,8 @@ func (d *PeriodicSnapshotDataSource) Schema(_ context.Context, _ datasource.Sche
 					"dom":    dschema.StringAttribute{Computed: true},
 					"month":  dschema.StringAttribute{Computed: true},
 					"dow":    dschema.StringAttribute{Computed: true},
+					"begin":  dschema.StringAttribute{Computed: true, Description: "Start of the daily snapshot window, \"HH:MM\"."},
+					"end":    dschema.StringAttribute{Computed: true, Description: "End of the daily snapshot window, \"HH:MM\"."},
 				},
 			},
 			"allow_empty": dschema.BoolAttribute{Computed: true},
