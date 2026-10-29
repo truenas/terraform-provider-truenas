@@ -119,9 +119,10 @@ func TestLifecycleCoverage_Audit(t *testing.T) {
 }
 
 // reImportStep matches an import step: an inline `ImportState: true` TestStep,
-// or a call to the ImportReapplyNoop helper (which builds an import step plus
-// an empty-plan re-apply — see acctest/import_steps.go).
-var reImportStep = regexp.MustCompile(`(?m)\bImportState:\s*true\b|\bImportReapplyNoop\(`)
+// a call to the ImportReapplyNoop helper (which builds an import step plus
+// an empty-plan re-apply — see acctest/import_steps.go), or a config-driven
+// `import {` block in a step's HCL.
+var reImportStep = regexp.MustCompile(`(?m)\bImportState:\s*true\b|\bImportReapplyNoop\(|^\s*import\s*\{`)
 
 // countConfigSteps counts `Config:` TestStep fields in one test-func body. A
 // func with 2+ is a multi-apply (update) test; 1 is create-only.
@@ -137,9 +138,18 @@ func countConfigSteps(funcBody string) int {
 // fixture in another package's update test is not falsely credited.
 func acceptanceTestFuncs(t *testing.T, root string) map[string][]string {
 	t.Helper()
-	files, err := filepath.Glob(filepath.Join(root, "internal", "resources", "*", "acceptance_test.go"))
+	// Every resource-package test file counts (acceptance tests are split
+	// across files such as force_destroy_test.go); hunt_* files reproduce
+	// known bugs and are not coverage.
+	all, err := filepath.Glob(filepath.Join(root, "internal", "resources", "*", "*_test.go"))
 	if err != nil {
 		t.Fatalf("glob: %v", err)
+	}
+	var files []string
+	for _, f := range all {
+		if !strings.HasPrefix(filepath.Base(f), "hunt_") {
+			files = append(files, f)
+		}
 	}
 	out := map[string][]string{}
 	for _, f := range files {

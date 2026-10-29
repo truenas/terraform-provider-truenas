@@ -117,7 +117,7 @@ func TestAccRsyncTask_coverage(t *testing.T) {
 					resource.TestCheckResourceAttr(r, "extra.#", "2"),
 					resource.TestCheckResourceAttr(r, "extra.0", "--bwlimit=100"),
 					resource.TestCheckResourceAttr(r, "extra.1", "--exclude=*.tmp"),
-					resource.TestCheckResourceAttr(r, "ssh_keyscan", "false"),
+					resource.TestCheckNoResourceAttr(r, "ssh_keyscan"), // write-only: never in state
 				),
 			},
 			{

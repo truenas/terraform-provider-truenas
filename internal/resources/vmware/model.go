@@ -131,19 +131,24 @@ func stateObjectValue(ctx context.Context, api stateAPI) (types.Object, diag.Dia
 // "hostname", "username", "password") are Required in the schema (both on
 // create and — per vmware.update's own accepts schema, probed identical on
 // both releases — every field remains individually settable on update too,
-// with no immutable/RequiresReplace field), so all five are always
+// with no immutable/RequiresReplace field), so the other four are always
 // included. "password" is Required + WriteOnly: its live value is only
 // available via req.Config (the terraform-plugin-framework nulls WriteOnly
 // attributes in req.Plan), so callers pass it in explicitly rather than
-// reading m.Password — mirrors app_registry's apiPayload.
+// reading m.Password — mirrors app_registry's apiPayload. Update passes a
+// null password unless password_wo_version changed (B-141); it is then left
+// out, and vmware.update keeps the stored password.
 func (m *VMwareModel) apiPayload(cfgPassword types.String) map[string]any {
-	return map[string]any{
+	p := map[string]any{
 		"datastore":  m.Datastore.ValueString(),
 		"filesystem": m.Filesystem.ValueString(),
 		"hostname":   m.Hostname.ValueString(),
 		"username":   m.Username.ValueString(),
-		"password":   cfgPassword.ValueString(),
 	}
+	if !cfgPassword.IsNull() && !cfgPassword.IsUnknown() {
+		p["password"] = cfgPassword.ValueString()
+	}
+	return p
 }
 
 // responseToModel maps a vmwareAPI response onto a VMwareModel. Password is

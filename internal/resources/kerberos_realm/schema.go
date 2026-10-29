@@ -4,11 +4,12 @@
 package kerberos_realm
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -32,12 +33,11 @@ func resourceSchema() schema.Schema {
 			},
 			"primary_kdc": schema.StringAttribute{
 				Optional: true,
-				Computed: true,
 				Description: "The master Kerberos domain controller for this realm, used as a fallback when " +
 					"TrueNAS cannot get credentials because of an invalid password (helpful in hub-and-spoke " +
-					"topologies). Null (the default) if unset.",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					"topologies). Null (the default) if unset; removing it from configuration clears it.",
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
 				},
 			},
 			"kdc": schema.ListAttribute{

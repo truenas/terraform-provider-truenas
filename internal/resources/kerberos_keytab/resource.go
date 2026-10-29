@@ -150,7 +150,11 @@ func (r *KerberosKeytabResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 	payload := plan.apiPayload()
-	injectWriteOnlyFile(payload, &cfg)
+	// The write-only file_wo is sent only when file_wo_version changed;
+	// kerberos.keytab.update keeps the stored keytab when file is absent. (B-141)
+	if !plan.FileWOVersion.Equal(state.FileWOVersion) {
+		injectWriteOnlyFile(payload, &cfg)
+	}
 
 	raw, err := r.client.Call(ctx, "kerberos.keytab.update", state.ID.ValueInt64(), payload)
 	if err != nil {

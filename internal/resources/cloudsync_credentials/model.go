@@ -5,10 +5,10 @@ package cloudsync_credentials
 
 import (
 	"encoding/json"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 	"github.com/truenas/terraform-provider-truenas/internal/writeonly"
 )
 
@@ -79,69 +79,93 @@ func combinedProviderMap(api *credentialsAPI) map[string]any {
 	return api.Provider
 }
 
-// providerDrifted reports whether any key present in stateProvider has a
-// different value in apiProvider. API-added keys are ignored (not drift)
-// since the API may normalize/expand the provider config with defaults.
-//
-// This mirrors internal/resources/vm_device/model.go's attributesDrifted
-// helper.
-func providerDrifted(stateProvider, apiProvider map[string]any) bool {
-	for k, v := range stateProvider {
-		av, ok := apiProvider[k]
-		if !ok {
-			return true
-		}
-		// TrueNAS normalizes the S3 "endpoint" by appending a trailing slash
-		// on read-back (e.g. "http://host:9000" -> "http://host:9000/"). A
-		// slash-only difference is server normalization, not real drift — so
-		// any custom-endpoint S3 credential (MinIO, SeaweedFS, Wasabi, …)
-		// would otherwise never converge.
-		if k == "endpoint" {
-			if sv, sok := v.(string); sok {
-				if avs, aok := av.(string); aok {
-					if strings.TrimRight(sv, "/") != strings.TrimRight(avs, "/") {
-						return true
-					}
-					continue
-				}
-			}
-		}
-		sb, _ := json.Marshal(v)
-		ab, _ := json.Marshal(av)
-		if string(sb) != string(ab) {
-			return true
-		}
+// urlKeys are the provider_config keys holding a URL. The server normalizes
+// them (S3/AZUREBLOB/STORJ "endpoint" gets a trailing slash and its default
+// port dropped; HTTP/WEBDAV "url" likewise), so they compare with
+// normalize.EqualURL (#52, B-085).
+var urlKeys = normalize.KeyEqual(map[string]func(a, b string) bool{
+	"url":      normalize.EqualURL,
+	"endpoint": normalize.EqualURL,
+})
+
+// toTree round-trips v through JSON into the normalize decode form (numbers
+// as json.Number), so both sides of a comparison have the same Go types.
+func toTree(v any) (any, bool) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, false
 	}
-	return false
+	t, err := normalize.DecodeJSON(string(b))
+	return t, err == nil
 }
 
-// projectProviderPreservingEndpointSlash projects the live provider values onto
-// the keys already in stateJSON (the write-only overlay: secret keys live in
-// provider_secrets_wo and are never read back), but keeps a configured
-// "endpoint" that differs from the live value only by a trailing slash. TrueNAS
-// appends a slash to the S3 endpoint on read-back, and the non-write-only Read
-// path already tolerates that via providerDrifted; without this, the write-only
-// path copied the slashed live value verbatim and a custom-endpoint S3
-// credential (MinIO, Wasabi, …) re-planned forever. (#52)
-func projectProviderPreservingEndpointSlash(stateJSON string, live map[string]any) string {
-	projected := writeonly.ProjectOntoKeys(stateJSON, live)
+// providerDrifted reports whether a configured (state) provider value is NOT
+// contained in the server's: every configured key must be present with an
+// equal value (URLs compared with normalize.EqualURL, nested objects and
+// lists recursively). Server-added keys are not drift.
+func providerDrifted(stateProvider, apiProvider map[string]any) bool {
+	want, ok1 := toTree(stateProvider)
+	got, ok2 := toTree(apiProvider)
+	if !ok1 || !ok2 {
+		return true
+	}
+	return !normalize.EqualTreeFunc(want, got, true, urlKeys)
+}
 
-	var base, proj map[string]any
-	if err := json.Unmarshal([]byte(stateJSON), &base); err != nil {
-		return projected
+// providerJSONEquivalent is providerDrifted's negation for two JSON strings
+// (config and state), used at plan time.
+func providerJSONEquivalent(configured, state string) bool {
+	var c, s map[string]any
+	if json.Unmarshal([]byte(configured), &c) != nil || json.Unmarshal([]byte(state), &s) != nil {
+		return false
 	}
-	if err := json.Unmarshal([]byte(projected), &proj); err != nil {
-		return projected
-	}
-	be, bok := base["endpoint"].(string)
-	pe, pok := proj["endpoint"].(string)
-	if bok && pok && be != pe && strings.TrimRight(be, "/") == strings.TrimRight(pe, "/") {
-		proj["endpoint"] = be
-		if out, err := json.Marshal(proj); err == nil {
-			return string(out)
+	return !providerDrifted(c, s)
+}
+
+// redactedValue is what the middleware returns in place of a secret to a
+// session without the write role (a READONLY_ADMIN API key).
+const redactedValue = "********"
+
+// unmaskRedacted returns a copy of api in which every top-level value that the
+// server redacted to "********" is replaced by the prior (state) value of the
+// same key, or dropped when prior has no such key.
+func unmaskRedacted(api map[string]any, prior map[string]any) map[string]any {
+	out := make(map[string]any, len(api))
+	for k, v := range api {
+		if s, ok := v.(string); ok && s == redactedValue {
+			if pv, ok := prior[k]; ok {
+				out[k] = pv
+			}
+			continue
 		}
+		out[k] = v
 	}
-	return projected
+	return out
+}
+
+// readProvider is the provider_config value Read stores. When the prior value
+// is contained in the server document (server-added keys, URL spelling, any
+// JSON spelling) the prior string is kept verbatim (B-085). Otherwise it is the
+// server document, or, with the write-only overlay, the server document
+// projected onto the prior keys so secret keys stay out of state. A
+// read-only session's "********" values are replaced by the prior values.
+func readProvider(live map[string]any, prior string, writeOnly bool) (string, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	var priorMap map[string]any
+	_ = json.Unmarshal([]byte(prior), &priorMap)
+	live = unmaskRedacted(live, priorMap)
+	if prior != "" && priorMap != nil && !providerDrifted(priorMap, live) {
+		return prior, diags
+	}
+	if writeOnly && prior != "" {
+		return writeonly.ProjectOntoKeys(prior, live), diags
+	}
+	b, err := json.Marshal(live)
+	if err != nil {
+		diags.AddError("Failed to marshal provider config", err.Error())
+		return "", diags
+	}
+	return string(b), diags
 }
 
 // responseToModel maps credentialsAPI onto CredentialsModel. ID and Name are
@@ -195,11 +219,44 @@ func responseToDataSourceModel(api *credentialsAPI, m *CredentialsDataSourceMode
 	var diags diag.Diagnostics
 	m.ID = types.Int64Value(api.ID)
 	m.Name = types.StringValue(api.Name)
-	providerJSON, jsonDiags := apiProviderJSON(api)
+	// A read-only session sees secrets as "********"; report them as null,
+	// not as data (B-035).
+	masked := make(map[string]any, len(api.Provider))
+	for k, v := range api.Provider {
+		if s, ok := v.(string); ok && s == redactedValue {
+			v = nil
+		}
+		masked[k] = v
+	}
+	providerJSON, jsonDiags := apiProviderJSON(&credentialsAPI{ID: api.ID, Name: api.Name, Provider: masked})
 	diags.Append(jsonDiags...)
 	if diags.HasError() {
 		return diags
 	}
 	m.Provider = types.StringValue(providerJSON)
 	return diags
+}
+
+// storedSecretsOverlay returns the write-only overlay with each key's value
+// replaced by the value TrueNAS has stored for it, when it has one (not null
+// and not the read-only redaction mask). cloudsync.credentials.update replaces `provider` as a whole, so
+// every update must carry the secret keys; when provider_secrets_wo_version did not change, the
+// provider sends the stored secrets rather than the configured ones, so a
+// secret changed in config without a version bump is not applied and the
+// stored one is kept. A key with no stored value is sent from config. (B-141)
+func storedSecretsOverlay(overlayJSON string, stored map[string]any) string {
+	var overlay map[string]any
+	if json.Unmarshal([]byte(overlayJSON), &overlay) != nil {
+		return overlayJSON // injection reports the parse error
+	}
+	for k := range overlay {
+		if v, ok := stored[k]; ok && v != nil && v != "********" {
+			overlay[k] = v
+		}
+	}
+	b, err := json.Marshal(overlay)
+	if err != nil {
+		return overlayJSON
+	}
+	return string(b)
 }

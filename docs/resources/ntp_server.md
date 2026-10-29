@@ -54,8 +54,10 @@ output "debian_pool_id" {
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `burst` (Boolean) Send a burst of packets when the server is reachable, improving initial synchronization.
-- `force` (Boolean) Bypass validation that checks whether the server is reachable. Write-only: not stored, not read back.
+- `force` (Boolean, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Bypass validation that checks whether the server is reachable. A per-apply directive: write-only (never stored in state, so an imported server plans no change for it). Sent on every create and update where it is set. Requires Terraform >= 1.11.
 - `iburst` (Boolean) Send a burst of packets when the server is unreachable, speeding up initial synchronization.
 - `maxpoll` (Number) Maximum polling interval, as a power of 2 in seconds.
 - `minpoll` (Number) Minimum polling interval, as a power of 2 in seconds.

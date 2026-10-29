@@ -38,7 +38,7 @@ output "automation_key" {
 
 ### Optional
 
-- `expires_at` (String) RFC3339 timestamp after which the key expires (e.g. "2030-01-01T00:00:00Z"); null/unset means the key never expires. The provider always reads this back as a UTC, 'Z'-suffixed RFC3339 string, so configure it that way to avoid a permanent diff against a differently-formatted (but equivalent) input.
+- `expires_at` (String) RFC3339 timestamp after which the key expires (e.g. "2030-01-01T00:00:00Z"); null/unset means the key never expires, and removing the attribute from configuration makes an expiring key non-expiring again. Any offset or fractional-second spelling of the same instant (to the second) matches the server's UTC read-back.
 
 ### Read-Only
 

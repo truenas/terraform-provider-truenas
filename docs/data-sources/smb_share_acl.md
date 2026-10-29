@@ -22,7 +22,7 @@ Reads the share-level ACL of an existing SMB share via sharing.smb.getacl.
 ### Read-Only
 
 - `id` (String) Same as "share_name".
-- `share_acl` (Attributes List) Ordered list of share ACL entries. Each entry carries whichever principal selector the server resolved (SID preferred, then Unix ID, then name). (see [below for nested schema](#nestedatt--share_acl))
+- `share_acl` (Attributes List) Ordered list of share ACL entries. Each entry carries every principal field the server resolved: SID, Unix ID (null when the SID maps to none) and name. (see [below for nested schema](#nestedatt--share_acl))
 
 <a id="nestedatt--share_acl"></a>
 ### Nested Schema for `share_acl`
@@ -31,9 +31,9 @@ Read-Only:
 
 - `ae_perm` (String) Permission level: FULL, CHANGE, READ, or CUSTOM.
 - `ae_type` (String) ALLOWED or DENIED.
-- `ae_who_id` (Attributes) Principal Unix ID, if identified by Unix ID. (see [below for nested schema](#nestedatt--share_acl--ae_who_id))
-- `ae_who_sid` (String) Principal SID, if identified by SID.
-- `ae_who_str` (String) Principal user/group name, if identified by name.
+- `ae_who_id` (Attributes) Principal Unix ID, or null when the SID maps to none. (see [below for nested schema](#nestedatt--share_acl--ae_who_id))
+- `ae_who_sid` (String) Principal SID.
+- `ae_who_str` (String) Principal user or group name, or null when it does not resolve.
 
 <a id="nestedatt--share_acl--ae_who_id"></a>
 ### Nested Schema for `share_acl.ae_who_id`

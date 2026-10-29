@@ -703,6 +703,80 @@ func needsServiceTypeReset(plan *DirectoryServicesModel, existing *directoryServ
 	return *existing.ServiceType != plan.ServiceType.ValueString()
 }
 
+// importedLDAPCredential decodes the stored credential from a raw
+// directoryservices.config response for ImportState. Only the LDAP credential
+// types are returned (with their non-secret binddn/client_certificate); any
+// other type, or no credential, gives a null object. See ImportState.
+func importedLDAPCredential(raw json.RawMessage) (types.Object, diag.Diagnostics) {
+	var wire struct {
+		Credential *struct {
+			CredentialType    string  `json:"credential_type"`
+			BindDN            *string `json:"binddn"`
+			ClientCertificate *string `json:"client_certificate"`
+		} `json:"credential"`
+	}
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		var diags diag.Diagnostics
+		diags.AddError("Parse directoryservices.config response", err.Error())
+		return types.ObjectNull(credentialAttrTypes), diags
+	}
+	c := wire.Credential
+	if c == nil {
+		return types.ObjectNull(credentialAttrTypes), nil
+	}
+	vals := map[string]attr.Value{
+		"credential_type":    types.StringValue(c.CredentialType),
+		"username":           types.StringNull(),
+		"password":           types.StringNull(),
+		"binddn":             types.StringNull(),
+		"bindpw":             types.StringNull(),
+		"client_certificate": types.StringNull(),
+		"principal":          types.StringNull(),
+	}
+	switch c.CredentialType {
+	case "LDAP_PLAIN":
+		vals["binddn"] = types.StringPointerValue(c.BindDN)
+	case "LDAP_MTLS":
+		vals["client_certificate"] = types.StringPointerValue(c.ClientCertificate)
+	case "LDAP_ANONYMOUS":
+	default:
+		return types.ObjectNull(credentialAttrTypes), nil
+	}
+	return types.ObjectValue(credentialAttrTypes, vals)
+}
+
+// needsDisableForChange reports whether an update to an ENABLED directory
+// service changes more than TrueNAS allows while it stays enabled. The server
+// rejects such an update with "Permitted changes while directory services are
+// enabled are limited to account caching, DNS updates, and timeouts", so the
+// caller must disable first, then send the full enabling update (the same
+// sequence as destroying and re-creating the resource, which keeps an AD/IPA
+// machine account). Only the top-level enable_account_cache,
+// enable_dns_updates, and timeout may change in place; any difference between
+// prior and planned kerberos_realm or configuration_* needs the toggle. An
+// unknown planned value counts as a change. A service_type switch is handled by
+// needsServiceTypeReset instead. (B-049)
+func needsDisableForChange(plan, prior *DirectoryServicesModel, existing *directoryServicesAPI) bool {
+	if existing == nil || !existing.Enable || prior == nil {
+		return false
+	}
+	if !plan.Enable.ValueBool() {
+		return false
+	}
+	pairs := [][2]attr.Value{
+		{plan.KerberosRealm, prior.KerberosRealm},
+		{plan.ConfigurationActiveDirectory, prior.ConfigurationActiveDirectory},
+		{plan.ConfigurationLDAP, prior.ConfigurationLDAP},
+		{plan.ConfigurationIPA, prior.ConfigurationIPA},
+	}
+	for _, p := range pairs {
+		if p[0].IsUnknown() || !p[0].Equal(p[1]) {
+			return true
+		}
+	}
+	return false
+}
+
 // adIdmapToModel builds a types.Object (idmapAttrTypes) from a probed
 // directoryServicesADIdmapAPI, or types.ObjectNull(idmapAttrTypes) if api is
 // nil (no idmap configuration returned — shouldn't normally happen once

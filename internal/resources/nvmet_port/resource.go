@@ -148,9 +148,33 @@ func (r *NVMetPortResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
+	// While the NVMe-oF target runs, TrueNAS rejects any change except
+	// enabled on an enabled port that has subsystems attached ("Cannot
+	// change <key> on an active port. Disable first to allow change."), and
+	// it checks the stored enabled flag, so enabled=false in the same call
+	// does not help. Disable first, then send the full payload (which
+	// re-enables when planned). If that fails, restore enabled so a rejected
+	// change does not leave the port offline. A port with no subsystems
+	// serves nothing, so the brief disable costs nothing there.
+	disabled := false
+	if state.Enabled.ValueBool() && portSettingsChanged(payload, &state) {
+		if _, err := r.client.Call(ctx, "nvmet.port.update", plan.ID.ValueInt64(), map[string]any{"enabled": false}); err != nil {
+			resp.Diagnostics.AddError("Update NVMe-oF port failed",
+				"Disabling the port before changing it failed: "+err.Error())
+			return
+		}
+		disabled = true
+	}
+
 	_, err := r.client.Call(ctx, "nvmet.port.update", plan.ID.ValueInt64(), payload)
 	if err != nil {
-		resp.Diagnostics.AddError("Update NVMe-oF port failed", err.Error())
+		msg := err.Error()
+		if disabled {
+			if _, rerr := r.client.Call(ctx, "nvmet.port.update", plan.ID.ValueInt64(), map[string]any{"enabled": true}); rerr != nil {
+				msg += "\n\nThe port was disabled to apply the change and re-enabling it also failed: " + rerr.Error()
+			}
+		}
+		resp.Diagnostics.AddError("Update NVMe-oF port failed", msg)
 		return
 	}
 

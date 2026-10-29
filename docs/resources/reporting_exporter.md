@@ -51,8 +51,8 @@ Required:
 
 Optional:
 
-- `buffer_on_failures` (Number) Number of updates to buffer when the Graphite server is unavailable. Defaults to 10.
-- `matching_charts` (String) Pattern to match charts for export (supports wildcards). Defaults to "*".
-- `prefix` (String) Prefix to prepend to all metric names. Defaults to "scale".
-- `send_names_instead_of_ids` (Boolean) Whether to send human-readable names instead of internal IDs. Defaults to true.
-- `update_every` (Number) Interval in seconds between metric updates. Defaults to 1.
+- `buffer_on_failures` (Number) Number of updates to buffer when the Graphite server is unavailable. Defaults to 10 (also when removed from the configuration).
+- `matching_charts` (String) Pattern to match charts for export (supports wildcards). Defaults to "*" (also when removed from the configuration).
+- `prefix` (String) Prefix to prepend to all metric names. Defaults to "scale"; removing it from the configuration sets it back to "scale".
+- `send_names_instead_of_ids` (Boolean) Whether to send human-readable names instead of internal IDs. Defaults to true (also when removed from the configuration).
+- `update_every` (Number) Interval in seconds between metric updates. Defaults to 1 (also when removed from the configuration).

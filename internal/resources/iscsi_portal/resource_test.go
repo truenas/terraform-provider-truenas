@@ -79,8 +79,10 @@ func TestISCSIPortalSchema(t *testing.T) {
 	if !ok {
 		t.Fatalf("'listen.port' attribute is %T, want schema.Int64Attribute", portAttr)
 	}
-	if !portInt64.IsOptional() || !portInt64.IsComputed() {
-		t.Error("'listen.port' should be Optional and Computed")
+	// B-101: no supported release accepts a per-listen port, so it is
+	// Computed-only.
+	if portInt64.IsOptional() || !portInt64.IsComputed() {
+		t.Error("'listen.port' should be Computed-only")
 	}
 
 	// tag must be Computed-only.
@@ -348,5 +350,25 @@ func TestISCSIPortalResponseToModel_NilListen(t *testing.T) {
 	}
 	if len(listenItems) != 0 {
 		t.Errorf("Listen has %d items, want 0", len(listenItems))
+	}
+}
+
+// TestOrderListen covers B-102: the server's listen order is replaced by the
+// model's order when the IPs match, and kept otherwise.
+func TestOrderListen(t *testing.T) {
+	api := []listenAPI{{IP: "0.0.0.0", Port: 3260}, {IP: "::", Port: 3260}}
+	got := orderListen(api, []string{"::", "0.0.0.0"})
+	if got[0].IP != "::" || got[1].IP != "0.0.0.0" {
+		t.Errorf("reorder: got %v", got)
+	}
+	if got := orderListen(api, []string{"::", "10.0.0.1"}); got[0].IP != "0.0.0.0" {
+		t.Errorf("different IPs must keep server order, got %v", got)
+	}
+	if got := orderListen(api, nil); got[0].IP != "0.0.0.0" {
+		t.Errorf("no model order must keep server order, got %v", got)
+	}
+	dup := []listenAPI{{IP: "::"}, {IP: "::"}}
+	if got := orderListen(dup, []string{"::", "0.0.0.0"}); len(got) != 2 || got[1].IP != "::" {
+		t.Errorf("multiset mismatch must keep server order, got %v", got)
 	}
 }

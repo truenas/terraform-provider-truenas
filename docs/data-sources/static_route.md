@@ -3,12 +3,12 @@
 page_title: "truenas_static_route Data Source - truenas"
 subcategory: "Networking"
 description: |-
-  Fetches a TrueNAS static route by destination.
+  Fetches a TrueNAS static route by destination. The destination matches semantically (any IPv6 spelling, a bare address as /32 or /128, a dotted netmask); more than one matching route is an error.
 ---
 
 # truenas_static_route (Data Source)
 
-Fetches a TrueNAS static route by destination.
+Fetches a TrueNAS static route by destination. The destination matches semantically (any IPv6 spelling, a bare address as /32 or /128, a dotted netmask); more than one matching route is an error.
 
 
 

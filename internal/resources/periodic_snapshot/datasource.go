@@ -36,7 +36,7 @@ func (d *PeriodicSnapshotDataSource) Schema(_ context.Context, _ datasource.Sche
 			"exclude":        dschema.ListAttribute{Computed: true, ElementType: types.StringType},
 			"lifetime_value": dschema.Int64Attribute{Computed: true},
 			"lifetime_unit":  dschema.StringAttribute{Computed: true},
-			"naming_schema":  dschema.StringAttribute{Computed: true},
+			"naming_schema":  dschema.StringAttribute{Optional: true, Computed: true, Description: "Naming schema to look up, together with dataset. Set it when the dataset has more than one task."},
 			"schedule": dschema.SingleNestedAttribute{
 				Computed: true,
 				Attributes: map[string]dschema.Attribute{
@@ -74,8 +74,11 @@ func (d *PeriodicSnapshotDataSource) Read(ctx context.Context, req datasource.Re
 		return
 	}
 
-	raw, err := d.client.CallRead(ctx, "pool.snapshottask.query",
-		[]any{[]any{"dataset", "=", state.Dataset.ValueString()}})
+	filters := []any{[]any{"dataset", "=", state.Dataset.ValueString()}}
+	if !state.NamingSchema.IsNull() && !state.NamingSchema.IsUnknown() {
+		filters = append(filters, []any{"naming_schema", "=", state.NamingSchema.ValueString()})
+	}
+	raw, err := d.client.CallRead(ctx, "pool.snapshottask.query", filters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query periodic snapshot tasks failed", err.Error())
 		return
@@ -91,6 +94,15 @@ func (d *PeriodicSnapshotDataSource) Read(ctx context.Context, req datasource.Re
 		resp.Diagnostics.AddError(
 			"Periodic snapshot task not found",
 			fmt.Sprintf("no task found for dataset %q", state.Dataset.ValueString()),
+		)
+		return
+	}
+
+	// More than one match used to return the first silently (B-131).
+	if len(results) > 1 {
+		resp.Diagnostics.AddError(
+			"Ambiguous lookup",
+			fmt.Sprintf("%d periodic snapshot tasks match dataset %q; the lookup must match exactly one. Set naming_schema to pick one (hourly and daily tasks on one dataset are common).", len(results), state.Dataset.ValueString()),
 		)
 		return
 	}

@@ -33,7 +33,7 @@ Reads the current TrueNAS SMB service configuration. Takes no arguments: there i
 - `netbiosalias` (List of String) NetBIOS aliases for the server.
 - `netbiosname` (String) NetBIOS name of the server.
 - `ntlmv1_auth` (Boolean) Whether the insecure NTLMv1 authentication protocol is allowed.
-- `search_protocols` (List of String) Additional network protocols used for server discovery (e.g. WSD, NSD). Reports an empty list on TrueNAS releases below 26.0 (the field does not exist there); writable (via the truenas_smb_config resource) only on TrueNAS 26.0 and later.
+- `search_protocols` (List of String) Search protocols the SMB server offers to clients (SPOTLIGHT is the only value TrueNAS accepts). Reports an empty list on TrueNAS releases below 26.0 (the field does not exist there); writable (via the truenas_smb_config resource) only on TrueNAS 26.0 and later.
 - `server_sid` (String) Server SID (security identifier). Server-assigned and stable.
 - `smb_options` (String) Additional smb.conf options, appended verbatim.
 - `stateful_failover` (Boolean) Whether stateful SMB failover support is enabled. Reports false on TrueNAS releases below 26.0 (the field does not exist there); writable (via the truenas_smb_config resource) only on TrueNAS 26.0 and later.

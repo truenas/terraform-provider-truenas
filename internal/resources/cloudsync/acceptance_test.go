@@ -4,11 +4,16 @@
 package cloudsync_test
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfversion"
 	"github.com/truenas/terraform-provider-truenas/internal/acctest"
 )
 
@@ -83,4 +88,48 @@ resource "truenas_cloudsync_task" "test" {
   }
 }
 `, path, credsID, enabled)
+}
+
+// TestAccCloudSync_encryptionPasswordRotation: encryption_password/salt are
+// write-only, so a changed value was never sent (B-026). Bumping
+// encryption_wo_version sends them.
+func TestAccCloudSync_encryptionPasswordRotation(t *testing.T) {
+	name := acctest.RandName("tffix3shtasks-cs")
+	check := func(wantPW, wantSalt string) resource.TestCheckFunc {
+		return func(s *terraform.State) error {
+			id, _ := strconv.ParseInt(s.RootModule().Resources["truenas_cloudsync_task.test"].Primary.ID, 10, 64)
+			raw, err := acctest.Client().Call(context.Background(), "cloudsync.get_instance", id)
+			if err != nil {
+				return err
+			}
+			var got struct {
+				Password string `json:"encryption_password"`
+				Salt     string `json:"encryption_salt"`
+			}
+			if err := json.Unmarshal(raw, &got); err != nil {
+				return err
+			}
+			if got.Password != wantPW || got.Salt != wantSalt {
+				return fmt.Errorf("server encryption_password/salt = %q/%q, want %q/%q", got.Password, got.Salt, wantPW, wantSalt)
+			}
+			return nil
+		}
+	}
+	body := func(pw, salt string, version int) string {
+		return fmt.Sprintf(`
+  encryption            = true
+  encryption_password   = %q
+  encryption_salt       = %q
+  encryption_wo_version = %d
+`, pw, salt, version)
+	}
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		TerraformVersionChecks:   []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_11_0)},
+		Steps: []resource.TestStep{
+			{Config: acctest.ProviderConfig() + cloudSyncS3Config(name, body("tffix3pw1", "tffix3salt1", 1)), Check: check("tffix3pw1", "tffix3salt1")},
+			{Config: acctest.ProviderConfig() + cloudSyncS3Config(name, body("tffix3pw2", "tffix3salt2", 2)), Check: check("tffix3pw2", "tffix3salt2")},
+		},
+	})
 }

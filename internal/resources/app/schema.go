@@ -43,7 +43,10 @@ func resourceSchema() schema.Schema {
 				Optional:      true,
 				Computed:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
-				Description:   "App version to install (default \"latest\").",
+				Description: "App version to install (default \"latest\"). Changing it to a specific version " +
+					"upgrades the app. \"latest\" installs the newest catalog version at create time and is kept " +
+					"as written in state (it does not upgrade the app later; the installed version is in " +
+					"human_version).",
 			},
 			"values": schema.StringAttribute{
 				Optional: true,
@@ -96,11 +99,20 @@ func resourceSchema() schema.Schema {
 				Description:   "Whether the app should be running. Set false to stop.",
 			},
 			"state": schema.StringAttribute{
-				Computed:    true,
-				Description: "Current app state (RUNNING, STOPPED, DEPLOYING, ...).",
+				Computed:      true,
+				PlanModifiers: []planmodifier.String{keepSettledState{}},
+				Description:   "Current app state (RUNNING, STOPPED, DEPLOYING, ...).",
 			},
-			"human_version":     schema.StringAttribute{Computed: true},
-			"upgrade_available": schema.BoolAttribute{Computed: true},
+			"human_version": schema.StringAttribute{
+				Computed:      true,
+				PlanModifiers: []planmodifier.String{keepVersionDerivedString{}},
+				Description:   "Installed app version as shown in the UI (app version and catalog version).",
+			},
+			"upgrade_available": schema.BoolAttribute{
+				Computed:      true,
+				PlanModifiers: []planmodifier.Bool{keepVersionDerivedBool{}},
+				Description:   "Whether a newer catalog version is available.",
+			},
 		},
 	}
 }

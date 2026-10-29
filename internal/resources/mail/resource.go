@@ -150,7 +150,16 @@ func (r *MailResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	plan.Pass = cfg.Pass
+	var state MailModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	// The write-only pass is sent only when pass_wo_version changed; mail.update
+	// keeps the stored password when pass is absent. (B-141)
+	if !plan.PassWOVersion.Equal(state.PassWOVersion) {
+		plan.Pass = cfg.Pass
+	}
 
 	// See Create: mail.update requires several fields on every call, so the
 	// live config is fetched first and merged with the plan's known values.

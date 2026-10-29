@@ -27,7 +27,7 @@ resource "truenas_resilver_config" "config" {
 
 ### Optional
 
-- `begin` (String) Time when the resilver operations window begins, 24-hour "HH:MM" format (e.g. "18:00").
+- `begin` (String) Time when the resilver operations window begins, 24-hour "HH:MM" format (e.g. "18:00"; "8:00" is accepted and equals "08:00").
 - `enabled` (Boolean) Whether the resilver schedule is enabled.
 - `end` (String) Time when the resilver operations window ends, 24-hour "HH:MM" format (e.g. "09:00"). If earlier than begin, the window rolls over midnight.
 - `weekday` (List of Number) Weekdays when resilver operations are allowed, crontab(5) values 1 (Monday) through 7 (Sunday).

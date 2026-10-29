@@ -5,6 +5,7 @@ package webshare_config
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -310,5 +311,37 @@ func TestDeleteWarningDiagnostics(t *testing.T) {
 	}
 	if diags[0].Severity().String() != "Warning" {
 		t.Errorf("severity = %v, want Warning", diags[0].Severity())
+	}
+}
+
+// TestMCPFields guards B-155: the 28.0 MCP settings round-trip, read as null
+// on 26.0 (absent from webshare.config), and are rejected below 28.0.
+func TestMCPFields(t *testing.T) {
+	ctx := context.Background()
+	var api28, api26 webshareConfigAPI
+	if err := json.Unmarshal([]byte(`{"id":1,"bindip":[],"groups":[],"passkey":"ENABLED","search":true,"mcp_enabled":true,"mcp_allowed_groups":["truenas_webshare"],"mcp_allow_write":false}`), &api28); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(`{"id":1,"bindip":[],"groups":[],"passkey":"DISABLED","search":false}`), &api26); err != nil {
+		t.Fatal(err)
+	}
+	var m28, m26 WebshareConfigModel
+	responseToModel(ctx, &api28, &m28)
+	responseToModel(ctx, &api26, &m26)
+	if !m28.MCPEnabled.ValueBool() || len(m28.MCPAllowedGroups.Elements()) != 1 || m28.MCPAllowWrite.ValueBool() {
+		t.Errorf("28.0 MCP fields not read: %+v", m28)
+	}
+	if !m26.MCPEnabled.IsNull() || !m26.MCPAllowedGroups.IsNull() || !m26.MCPAllowWrite.IsNull() {
+		t.Errorf("26.0 MCP fields must be null: %+v", m26)
+	}
+	p, d := m28.updatePayload(ctx)
+	if d.HasError() || p["mcp_enabled"] != true || p["mcp_allow_write"] != false {
+		t.Errorf("payload = %v (%v)", p, d)
+	}
+	if d := mcpGateDiagnostics("26.0.0", p); len(d) != 3 {
+		t.Errorf("26.0 gate returned %d diagnostics, want 3", len(d))
+	}
+	if d := mcpGateDiagnostics("28.0.0-MASTER", p); d.HasError() {
+		t.Errorf("28.0 gate rejected the fields: %v", d)
 	}
 }

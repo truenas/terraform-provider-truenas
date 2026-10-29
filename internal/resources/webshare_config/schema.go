@@ -59,6 +59,29 @@ func resourceSchema() schema.Schema {
 				Description:   "List of AD/LDAP group names whose members are granted access to Webshare.",
 				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
 			},
+			"mcp_enabled": schema.BoolAttribute{
+				Optional: true,
+				Computed: true,
+				Description: "Enable the Webshare Model Context Protocol (MCP) server, which lets users connect an " +
+					"AI assistant to their Webshare files. Requires mcp_allowed_groups. TrueNAS 28.0 and later " +
+					"only (null below; setting it there is an apply-time error).",
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+			},
+			"mcp_allowed_groups": schema.ListAttribute{
+				Optional:    true,
+				Computed:    true,
+				ElementType: types.StringType,
+				Description: "Groups whose members may connect an AI assistant to Webshare. Each group must also " +
+					"grant Webshare access (truenas_webshare or a group in \"groups\"). TrueNAS 28.0 and later only.",
+				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+			},
+			"mcp_allow_write": schema.BoolAttribute{
+				Optional: true,
+				Computed: true,
+				Description: "Allow the AI assistant to create new files and directories (it can never overwrite, " +
+					"delete or rename existing files). TrueNAS 28.0 and later only.",
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+			},
 		},
 	}
 }

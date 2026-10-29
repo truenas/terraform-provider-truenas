@@ -107,6 +107,7 @@ func (r *AcmeDnsAuthenticatorResource) Create(ctx context.Context, req resource.
 	// the API may echo back a normalized/expanded attributes document.
 	responseToModel(&apiResp, &plan)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
+	resp.Diagnostics.Append(setImported(ctx, resp.Private, false)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -135,43 +136,12 @@ func (r *AcmeDnsAuthenticatorResource) Read(ctx context.Context, req resource.Re
 
 	responseToModel(&apiResp, &state)
 
-	if state.usesWriteOnlyAttributes() && !state.Attributes.IsNull() && state.Attributes.ValueString() != "" {
-		// Write-only secrets overlay in use: project the live attributes onto the
-		// keys already in state so secret keys (only in the overlay) are not read
-		// back into state.
-		state.Attributes = types.StringValue(writeonly.ProjectOntoKeys(state.Attributes.ValueString(), apiResp.Attributes))
-		resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueInt64())...)
-		resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+	attrs, diags := readAttributes(apiResp.Attributes, state.Attributes.ValueString(), state.usesWriteOnlyAttributes())
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	// Drift-aware attributes handling (mirrors alert_service/resource.go):
-	// only overwrite the state string when a user-set key's value differs
-	// in the API response. API-added keys are not considered drift. If the
-	// state string is empty/null (as on import), populate it directly from
-	// the API JSON.
-	if state.Attributes.IsNull() || state.Attributes.ValueString() == "" {
-		attrsJSON, diags := apiAttributesJSON(&apiResp)
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		state.Attributes = types.StringValue(attrsJSON)
-	} else {
-		var stateAttrs map[string]any
-		if err := json.Unmarshal([]byte(state.Attributes.ValueString()), &stateAttrs); err != nil {
-			resp.Diagnostics.AddError("Parse state attributes JSON", err.Error())
-			return
-		}
-		if attributesDrifted(stateAttrs, apiResp.Attributes) {
-			attrsJSON, diags := apiAttributesJSON(&apiResp)
-			resp.Diagnostics.Append(diags...)
-			if resp.Diagnostics.HasError() {
-				return
-			}
-			state.Attributes = types.StringValue(attrsJSON)
-		}
-	}
+	state.Attributes = attrs
 
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueInt64())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -201,6 +171,21 @@ func (r *AcmeDnsAuthenticatorResource) Update(ctx context.Context, req resource.
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if plan.AttributesSecretsWOVersion.Equal(state.AttributesSecretsWOVersion) &&
+		!cfg.AttributesSecretsWO.IsNull() && !cfg.AttributesSecretsWO.IsUnknown() && cfg.AttributesSecretsWO.ValueString() != "" {
+		// Version unchanged: keep the stored secrets (see storedSecretsOverlay).
+		rawStored, err := r.client.CallRead(ctx, "acme.dns.authenticator.get_instance", plan.ID.ValueInt64())
+		if err != nil {
+			resp.Diagnostics.AddError("Read stored secrets before update failed", err.Error())
+			return
+		}
+		var stored acmeDnsAuthenticatorAPI
+		if err := json.Unmarshal(rawStored, &stored); err != nil {
+			resp.Diagnostics.AddError("Parse get_instance response", err.Error())
+			return
+		}
+		cfg.AttributesSecretsWO = types.StringValue(storedSecretsOverlay(cfg.AttributesSecretsWO.ValueString(), stored.Attributes.M))
+	}
 	injectAttributesSecrets(payload, &cfg, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -221,6 +206,7 @@ func (r *AcmeDnsAuthenticatorResource) Update(ctx context.Context, req resource.
 	// Keep the plan's attributes JSON string in state (write-what-you-said).
 	responseToModel(&apiResp, &plan)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
+	resp.Diagnostics.Append(setImported(ctx, resp.Private, false)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -258,13 +244,20 @@ func (r *AcmeDnsAuthenticatorResource) ImportState(ctx context.Context, req reso
 
 	var state AcmeDnsAuthenticatorModel
 	responseToModel(&apiResp, &state)
-	attrsJSON, diags := apiAttributesJSON(&apiResp)
+	if apiResp.Attributes.Redacted {
+		resp.Diagnostics.AddError("ACME DNS authenticator attributes are redacted",
+			"TrueNAS returned \"attributes\" as \"********\": the session lacks the write role needed to "+
+				"read them, so the authenticator cannot be imported. Import with a full-admin API key.")
+		return
+	}
+	attrs, diags := readAttributes(apiResp.Attributes, "", false)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	state.Attributes = types.StringValue(attrsJSON)
+	state.Attributes = attrs
 
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, id)...)
+	resp.Diagnostics.Append(setImported(ctx, resp.Private, true)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

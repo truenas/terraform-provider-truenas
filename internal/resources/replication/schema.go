@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
@@ -19,6 +20,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func resourceSchema() schema.Schema {
@@ -161,8 +163,10 @@ func resourceSchema() schema.Schema {
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.Int64Type,
-				Description: "IDs of periodic snapshot tasks that feed this replication task.",
+				CustomType:  normalize.UnorderedListOf(types.Int64Type),
+				Description: "IDs of periodic snapshot tasks that feed this replication task. Order does not matter (the server sorts them).",
 				PlanModifiers: []planmodifier.List{
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.Int64Type)),
 					listplanmodifier.UseStateForUnknown(),
 				},
 			},
@@ -286,7 +290,17 @@ func resourceSchema() schema.Schema {
 				Optional:    true,
 				Sensitive:   true,
 				WriteOnly:   true,
-				Description: "Encryption key (hex string, or passphrase per encryption_key_format). Write-only: never stored in Terraform state or read back. Requires Terraform >= 1.11.",
+				Description: "Encryption key (hex string, or passphrase per encryption_key_format). Write-only: never stored in Terraform state or read back; to change it, also bump encryption_key_wo_version. Requires Terraform >= 1.11.",
+			},
+			"encryption_key_wo_version": schema.Int64Attribute{
+				Optional: true,
+				Description: "Version trigger for encryption_key. It is write-only, so changing it alone is not a " +
+					"change Terraform can see; bump this to send the new key. The key is sent on create and, after that, " +
+					"only when this integer changes or encryption with its own key (not inherited) is turned on; other " +
+					"updates leave the stored key alone.",
+				Validators: []validator.Int64{
+					int64validator.AlsoRequires(path.MatchRoot("encryption_key")),
+				},
 			},
 			"encryption_key_format": schema.StringAttribute{
 				Validators:  []validator.String{stringvalidator.OneOf("HEX", "PASSPHRASE")},

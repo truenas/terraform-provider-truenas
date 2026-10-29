@@ -48,13 +48,36 @@ data "truenas_smb_config" "test" {}
 	})
 }
 
-// smbConfigOriginal captures the one field TestAccSMBConfig_setAndRestore
-// touches.
+// smbConfigOriginal captures every smb.config field
+// TestAccSMBConfig_setAndRestore writes. The test configuration sets each of
+// them to the box's own value (only description changes), and the cleanup
+// writes all of them back, so the test can never leave a setting such as
+// netbiosname behind. (An earlier version hard-coded netbiosname =
+// "TFTESTNAS", workgroup, masks and so on, and restored only description.)
 type smbConfigOriginal struct {
-	Description string `json:"description"`
+	Description      string   `json:"description"`
+	AaplExtensions   bool     `json:"aapl_extensions"`
+	AdminGroup       *string  `json:"admin_group"`
+	BindIP           []string `json:"bindip"`
+	Debug            bool     `json:"debug"`
+	Dirmask          string   `json:"dirmask"`
+	Encryption       string   `json:"encryption"`
+	Filemask         string   `json:"filemask"`
+	Guest            string   `json:"guest"`
+	Localmaster      bool     `json:"localmaster"`
+	Multichannel     bool     `json:"multichannel"`
+	NetbiosAlias     []string `json:"netbiosalias"`
+	NetbiosName      string   `json:"netbiosname"`
+	NTLMv1Auth       bool     `json:"ntlmv1_auth"`
+	SMBOptions       string   `json:"smb_options"`
+	Syslog           bool     `json:"syslog"`
+	UnixCharset      string   `json:"unixcharset"`
+	Workgroup        string   `json:"workgroup"`
+	MinimumProtocol  *string  `json:"minimum_protocol"`
+	StatefulFailover *bool    `json:"stateful_failover"`
 }
 
-// readSMBConfigOriginal reads the box's current description via
+// readSMBConfigOriginal reads the box's current SMB configuration via
 // acctest.RestoreCall (smb.update is job:false, probed live), so the test
 // can restore it exactly afterward.
 func readSMBConfigOriginal(t *testing.T) smbConfigOriginal {
@@ -70,32 +93,52 @@ func readSMBConfigOriginal(t *testing.T) smbConfigOriginal {
 	return orig
 }
 
-// restoreSMBConfig sends only description back to its original value via
-// smb.update, through acctest.RestoreCall so a t.Cleanup-time stale
-// connection on the long-lived acctest.Client() (see RestoreCall's doc
-// comment) is retried and reconnected rather than failing the whole test
-// with "not connected". It runs from t.Cleanup, so it restores the box
-// even if the Terraform steps themselves fail partway through. workgroup,
-// netbiosname, minimum_protocol, bindip, and admin_group are never touched
-// by this test.
+// restoreSMBConfig writes every field the test sets back to its original
+// value via smb.update, through acctest.RestoreCall so a t.Cleanup-time
+// stale connection is retried and reconnected. It runs from t.Cleanup, so it
+// restores the box even if the Terraform steps fail partway through.
 func restoreSMBConfig(t *testing.T, orig smbConfigOriginal) {
 	t.Helper()
-	if _, err := acctest.RestoreCall(context.Background(), "smb.update", map[string]any{
-		"description": orig.Description,
-	}); err != nil {
-		t.Fatalf("error restoring smb description: %v", err)
+	p := map[string]any{
+		"description": orig.Description, "aapl_extensions": orig.AaplExtensions, "admin_group": orig.AdminGroup,
+		"bindip": nonNil(orig.BindIP), "debug": orig.Debug, "dirmask": orig.Dirmask, "encryption": orig.Encryption,
+		"filemask": orig.Filemask, "guest": orig.Guest, "localmaster": orig.Localmaster,
+		"multichannel": orig.Multichannel, "netbiosalias": nonNil(orig.NetbiosAlias), "netbiosname": orig.NetbiosName,
+		"ntlmv1_auth": orig.NTLMv1Auth, "smb_options": orig.SMBOptions, "syslog": orig.Syslog,
+		"unixcharset": orig.UnixCharset, "workgroup": orig.Workgroup,
 	}
+	if orig.MinimumProtocol != nil {
+		p["minimum_protocol"] = *orig.MinimumProtocol
+	}
+	if orig.StatefulFailover != nil {
+		p["stateful_failover"] = *orig.StatefulFailover
+	}
+	if _, err := acctest.RestoreCall(context.Background(), "smb.update", p); err != nil {
+		t.Fatalf("error restoring smb config: %v", err)
+	}
+}
+
+func nonNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
+}
+
+func hclList(s []string) string {
+	b, _ := json.Marshal(nonNil(s))
+	return string(b)
 }
 
 // TestAccSMBConfig_setAndRestore drives the singleton truenas_smb_config
 // resource's "description" field (an inert, cosmetic label) through a test
 // value and back to the value read from the box before the test ran, then
-// imports it. It requires TF_ACC=1 and TRUENAS_DISRUPTIVE=1
+// imports it. Every other attribute is written with the box's own current
+// value, so the full attribute surface round-trips without changing SMB
+// behavior. It requires TF_ACC=1 and TRUENAS_DISRUPTIVE=1
 // (acctest.DisruptiveCheck), since it mutates the box's live SMB
-// configuration; a t.Cleanup-registered API restore is the safety net if the
-// Terraform steps fail. workgroup, netbiosname, minimum_protocol, bindip,
-// and admin_group are never touched: changing those on a live system can
-// disrupt SMB clients or domain membership.
+// configuration; a t.Cleanup-registered API restore of every written field is
+// the safety net if the Terraform steps fail.
 func TestAccSMBConfig_setAndRestore(t *testing.T) {
 	acctest.DisruptiveCheck(t)
 
@@ -111,14 +154,15 @@ func TestAccSMBConfig_setAndRestore(t *testing.T) {
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: acctest.ProviderConfig() + testAccSMBConfigConfig(testValue, v26),
+				Config: acctest.ProviderConfig() + testAccSMBConfigConfig(testValue, orig, v26),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_smb_config.test", "id", "smb_config"),
 					resource.TestCheckResourceAttr("truenas_smb_config.test", "description", testValue),
+					resource.TestCheckResourceAttr("truenas_smb_config.test", "netbiosname", orig.NetbiosName),
 				),
 			},
 			{
-				Config: acctest.ProviderConfig() + testAccSMBConfigConfig(orig.Description, v26),
+				Config: acctest.ProviderConfig() + testAccSMBConfigConfig(orig.Description, orig, v26),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_smb_config.test", "description", orig.Description),
 				),
@@ -133,34 +177,40 @@ func TestAccSMBConfig_setAndRestore(t *testing.T) {
 	})
 }
 
-func testAccSMBConfigConfig(description string, v26 bool) string {
+func testAccSMBConfigConfig(description string, o smbConfigOriginal, v26 bool) string {
 	v26Fields := ""
-	if v26 {
-		v26Fields = `
-  minimum_protocol  = "SMB2"
-  stateful_failover = false`
+	if v26 && o.MinimumProtocol != nil && o.StatefulFailover != nil {
+		v26Fields = fmt.Sprintf(`
+  minimum_protocol  = %q
+  stateful_failover = %t`, *o.MinimumProtocol, *o.StatefulFailover)
+	}
+	adminGroup := ""
+	if o.AdminGroup != nil {
+		adminGroup = *o.AdminGroup
 	}
 	return fmt.Sprintf(`
 resource "truenas_smb_config" "test" {
   description = %q
 
-  aapl_extensions   = true
-  admin_group       = ""
-  bindip            = []
-  debug             = false
-  dirmask           = "0775"
-  encryption        = "DEFAULT"
-  filemask          = "0664"
-  guest             = "nobody"
-  localmaster       = false
-  multichannel      = false
-  netbiosalias      = []
-  netbiosname       = "TFTESTNAS"
-  ntlmv1_auth       = false
-  smb_options       = ""
-  syslog            = false
-  unixcharset       = "UTF-8"
-  workgroup         = "WORKGROUP"%s
+  aapl_extensions   = %t
+  admin_group       = %q
+  bindip            = %s
+  debug             = %t
+  dirmask           = %q
+  encryption        = %q
+  filemask          = %q
+  guest             = %q
+  localmaster       = %t
+  multichannel      = %t
+  netbiosalias      = %s
+  netbiosname       = %q
+  ntlmv1_auth       = %t
+  smb_options       = %q
+  syslog            = %t
+  unixcharset       = %q
+  workgroup         = %q%s
 }
-`, description, v26Fields)
+`, description, o.AaplExtensions, adminGroup, hclList(o.BindIP), o.Debug, o.Dirmask, o.Encryption, o.Filemask,
+		o.Guest, o.Localmaster, o.Multichannel, hclList(o.NetbiosAlias), o.NetbiosName, o.NTLMv1Auth, o.SMBOptions,
+		o.Syslog, o.UnixCharset, o.Workgroup, v26Fields)
 }

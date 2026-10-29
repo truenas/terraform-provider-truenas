@@ -89,7 +89,8 @@ func resourceSchema() schema.Schema {
 				Optional: true,
 				Description: "Version trigger for api_key_wo. Bump to re-send a rotated api_key_wo (a " +
 					"write-only value is absent from state, so its change cannot be detected automatically). " +
-					"Required when api_key_wo is set.",
+					"api_key_wo is sent on the first apply and, after that, only when this integer changes; other " +
+					"updates leave the stored key alone. Required when api_key_wo is set.",
 				Validators: []validator.Int64{
 					int64validator.AlsoRequires(path.MatchRoot("api_key_wo")),
 				},

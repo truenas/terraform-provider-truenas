@@ -60,14 +60,14 @@ resource "truenas_container" "hello" {
 - `autostart` (Boolean) Automatically start the container on boot. Defaults to true server-side.
 - `capabilities_policy` (String) Default Linux capabilities policy: DEFAULT (drop sys_module, sys_time, mknod, audit_control, mac_admin), ALLOW (keep all), or DENY (drop all). Defaults to DEFAULT.
 - `capabilities_state` (Map of Boolean) Per-capability overrides on top of capabilities_policy. Defaults to an empty map.
-- `cpuset` (String) Physical CPU numbers the container's domain process and virtual CPUs may be pinned to (e.g. "0-3"), or null for no pinning.
+- `cpuset` (String) Physical CPU numbers the container's domain process and virtual CPUs may be pinned to (e.g. "0-3"). Unset means no pinning: removing it from the configuration clears it.
 - `description` (String) Container description. Defaults to an empty string.
 - `idmap` (String) Idmap configuration as a JSON-encoded string, passed through opaquely: either jsonencode({type = "DEFAULT"}) (the server default — offsets container UIDs starting from root at host UID 2147000001) or jsonencode({type = "ISOLATED", slice = N}) (same offset scheme plus a unique slice number per container, or slice = null to let the server pick one). Immutable: container.update does not accept "idmap" (probed live), so changing it replaces the container.
 - `init` (String) "init" process command line. Defaults to "/sbin/init".
-- `initdir` (String) "init" process working directory, or null for the image default.
+- `initdir` (String) "init" process working directory. Unset means the image default: removing it from the configuration clears it.
 - `initenv` (Map of String) "init" process environment variables. Defaults to an empty map.
-- `initgroup` (String) "init" process group, or null for the image default.
-- `inituser` (String) "init" process username, or null for the image default.
+- `initgroup` (String) "init" process group. Unset means the image default: removing it from the configuration clears it.
+- `inituser` (String) "init" process username. Unset means the image default: removing it from the configuration clears it.
 - `running` (Boolean) Whether the container is currently running. Set to true to start, false to stop.
 - `shutdown_timeout` (Number) Seconds to wait for the container to shut down gracefully before killing it (5-300). Defaults to 90.
 - `time` (String) Container clock: LOCAL or UTC. Defaults to LOCAL.

@@ -47,13 +47,17 @@ data "truenas_nvmet_global" "test" {}
 	})
 }
 
-// nvmetGlobalOriginal captures the one field
-// TestAccNVMeTGlobal_setAndRestore touches.
+// nvmetGlobalOriginal captures every writable field of the singleton, so
+// the test can put the box back exactly as it found it.
 type nvmetGlobalOriginal struct {
-	XportReferral bool `json:"xport_referral"`
+	Basenqn       string `json:"basenqn"`
+	ANA           bool   `json:"ana"`
+	Kernel        bool   `json:"kernel"`
+	RDMA          bool   `json:"rdma"`
+	XportReferral bool   `json:"xport_referral"`
 }
 
-// readNVMeTGlobalOriginal reads the box's current xport_referral via
+// readNVMeTGlobalOriginal reads the box's current NVMe-oF global config via
 // nvmet.global.config, so the test can restore it exactly afterward.
 func readNVMeTGlobalOriginal(t *testing.T) nvmetGlobalOriginal {
 	t.Helper()
@@ -68,16 +72,23 @@ func readNVMeTGlobalOriginal(t *testing.T) nvmetGlobalOriginal {
 	return orig
 }
 
-// restoreNVMeTGlobal sends only xport_referral back to its original value
-// via nvmet.global.update. It runs from t.Cleanup, so it restores the box
-// even if the Terraform steps themselves fail partway through. basenqn,
-// ana, kernel, and rdma are never touched by this test.
+// restoreNVMeTGlobal sends every writable field back to its original value
+// via nvmet.global.update, then reads the config back and fails the test if
+// anything differs. It runs from t.Cleanup, so it restores the box even if
+// the Terraform steps themselves fail partway through.
 func restoreNVMeTGlobal(t *testing.T, orig nvmetGlobalOriginal) {
 	t.Helper()
-	if _, err := acctest.Client().Call(context.Background(), "nvmet.global.update", map[string]any{
+	if _, err := acctest.RestoreCall(context.Background(), "nvmet.global.update", map[string]any{
+		"basenqn":        orig.Basenqn,
+		"ana":            orig.ANA,
+		"kernel":         orig.Kernel,
+		"rdma":           orig.RDMA,
 		"xport_referral": orig.XportReferral,
 	}); err != nil {
-		t.Fatalf("error restoring nvmet global xport_referral: %v", err)
+		t.Fatalf("error restoring nvmet global config: %v", err)
+	}
+	if now := readNVMeTGlobalOriginal(t); now != orig {
+		t.Fatalf("nvmet global config not restored: got %+v, want %+v", now, orig)
 	}
 }
 
@@ -91,10 +102,11 @@ func restoreNVMeTGlobal(t *testing.T, orig nvmetGlobalOriginal) {
 //
 // Safety: xport_referral only controls whether NVMe-oF discovery responses
 // advertise port referrals (an advisory discovery-log hint), and does not
-// gate or restart any port or subsystem; the box's NVMe-oF ports and
-// subsystems used by other acceptance tests in this suite are unaffected by
-// toggling it. basenqn, ana, kernel, and rdma (which can disrupt active
-// NVMe-oF connections or discovery) are never touched.
+// gate or restart any port or subsystem. The config pins basenqn, ana,
+// kernel and rdma to the values read from the box, so they never change
+// (the test used to hardcode rdma = false, which turned RDMA off on a box
+// serving an RDMA port and left it off), and the cleanup restores and
+// verifies all five fields.
 func TestAccNVMeTGlobal_setAndRestore(t *testing.T) {
 	acctest.DisruptiveCheck(t)
 
@@ -107,14 +119,14 @@ func TestAccNVMeTGlobal_setAndRestore(t *testing.T) {
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: acctest.ProviderConfig() + testAccNVMeTGlobalConfig(testValue),
+				Config: acctest.ProviderConfig() + testAccNVMeTGlobalConfig(orig, testValue),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_nvmet_global.test", "id", "nvmet_global"),
 					resource.TestCheckResourceAttr("truenas_nvmet_global.test", "xport_referral", fmt.Sprintf("%t", testValue)),
 				),
 			},
 			{
-				Config: acctest.ProviderConfig() + testAccNVMeTGlobalConfig(orig.XportReferral),
+				Config: acctest.ProviderConfig() + testAccNVMeTGlobalConfig(orig, orig.XportReferral),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_nvmet_global.test", "xport_referral", fmt.Sprintf("%t", orig.XportReferral)),
 				),
@@ -129,15 +141,17 @@ func TestAccNVMeTGlobal_setAndRestore(t *testing.T) {
 	})
 }
 
-func testAccNVMeTGlobalConfig(xportReferral bool) string {
+// testAccNVMeTGlobalConfig sets xport_referral and keeps every other field
+// at the box's original value.
+func testAccNVMeTGlobalConfig(orig nvmetGlobalOriginal, xportReferral bool) string {
 	return fmt.Sprintf(`
 resource "truenas_nvmet_global" "test" {
   xport_referral = %t
 
-  ana     = false
-  basenqn = "nqn.2011-06.com.truenas"
-  kernel  = true
-  rdma    = false
+  ana     = %t
+  basenqn = %q
+  kernel  = %t
+  rdma    = %t
 }
-`, xportReferral)
+`, xportReferral, orig.ANA, orig.Basenqn, orig.Kernel, orig.RDMA)
 }

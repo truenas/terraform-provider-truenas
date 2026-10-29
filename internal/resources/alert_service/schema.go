@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func resourceSchema() schema.Schema {
@@ -43,9 +44,13 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"attributes": schema.StringAttribute{
-				Required:    true,
-				Sensitive:   true,
-				Description: "JSON document of service settings. Must include \"type\" (e.g. Mail, SNMPTrap, Slack, PagerDuty). May contain secrets such as webhook URLs or SNMP v3 keys; use attributes_secrets_wo to keep secret keys out of state.",
+				Required:   true,
+				Sensitive:  true,
+				CustomType: normalize.JSONSubsetType{},
+				PlanModifiers: []planmodifier.String{
+					keepImportedIfEquivalent{},
+				},
+				Description: "JSON document of service settings. Must include \"type\" (e.g. Mail, SNMPTrap, Slack, PagerDuty). May contain secrets such as webhook URLs or SNMP v3 keys; use attributes_secrets_wo to keep secret keys out of state. Compared as JSON: any spelling (jsonencode, heredoc) works, and keys the server adds with defaults are not a change. Generated configuration (`terraform plan -generate-config-out`) has this as null, because Terraform never writes sensitive or write-only values there; fill it in before applying.",
 			},
 			"attributes_secrets_wo": schema.StringAttribute{
 				Optional:  true,
@@ -61,7 +66,9 @@ func resourceSchema() schema.Schema {
 			"attributes_secrets_wo_version": schema.Int64Attribute{
 				Optional: true,
 				Description: "Version trigger for attributes_secrets_wo. Bump to re-send a changed " +
-					"write-only secret overlay. Required when attributes_secrets_wo is set.",
+					"write-only secret overlay. The overlay is sent on create and when this integer changes; " +
+					"other updates send the secret values TrueNAS already has (the API needs the whole object), so a " +
+					"changed secret is applied only with a version bump. Required when attributes_secrets_wo is set.",
 				Validators: []validator.Int64{
 					int64validator.AlsoRequires(path.MatchRoot("attributes_secrets_wo")),
 				},

@@ -45,7 +45,7 @@ func resourceSchema() schema.Schema {
 					"to keep the keytab out of state. Import never reads the keytab into state, since it cannot " +
 					"tell whether the configuration uses file or file_wo: after importing a file-managed keytab, " +
 					"the next apply records file with a one-time in-place update. Exactly one of file or file_wo " +
-					"must be set.",
+					"must be set. Generated configuration (`terraform plan -generate-config-out`) has this as null, because Terraform never writes sensitive or write-only values there; fill it in before applying.",
 			},
 			"file_wo": schema.StringAttribute{
 				Optional:  true,
@@ -61,8 +61,9 @@ func resourceSchema() schema.Schema {
 			"file_wo_version": schema.Int64Attribute{
 				Optional: true,
 				Description: "Version trigger for file_wo. Bump to re-send a changed file_wo (a write-only " +
-					"value is absent from state, so its change cannot be detected automatically). Required when " +
-					"file_wo is set.",
+					"value is absent from state, so its change cannot be detected automatically). file_wo is sent on " +
+					"create and, after that, only when this integer changes; other updates (a rename) leave the stored " +
+					"keytab alone. Required when file_wo is set.",
 				Validators: []validator.Int64{
 					int64validator.AlsoRequires(path.MatchRoot("file_wo")),
 				},

@@ -8,15 +8,18 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/filesystem_acl"
 )
 
 var _ resource.Resource = &AclTemplateResource{}
 var _ resource.ResourceWithImportState = &AclTemplateResource{}
 var _ resource.ResourceWithIdentity = &AclTemplateResource{}
+var _ resource.ResourceWithModifyPlan = &AclTemplateResource{}
 
 // AclTemplateResource implements the truenas_acl_template resource.
 type AclTemplateResource struct{ client *client.Client }
@@ -55,6 +58,18 @@ func (r *AclTemplateResource) Configure(_ context.Context, req resource.Configur
 // job:false (synchronous), probed via core.get_methods and confirmed by a
 // live create/query/get_instance/update/delete round trip.
 
+// ModifyPlan keeps the acl text in state when the configured acl is the same
+// template content (filesystem_acl.EntriesDiffer): after an import (state
+// holds the server's canonical JSON) or a spelling-only edit (id = -1 / who =
+// null, a partial bag, key order) the plan is empty instead of an update.
+// (B-121, B-092)
+func (r *AclTemplateResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if r.client == nil {
+		return
+	}
+	resp.Diagnostics.Append(filesystem_acl.KeepEquivalentEntries(ctx, r.client, req, resp, path.Root("acl"))...)
+}
+
 func (r *AclTemplateResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan AclTemplateModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -62,7 +77,7 @@ func (r *AclTemplateResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	payload, diags := plan.apiPayload()
+	payload, diags := plan.apiPayload(ctx, r.client)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -119,7 +134,7 @@ func (r *AclTemplateResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	drifted, diags := aclDrifted(state.ACL.ValueString(), apiResp.ACL)
+	drifted, diags := aclDrifted(ctx, r.client, state.ACL.ValueString(), apiResp.ACL)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -151,7 +166,7 @@ func (r *AclTemplateResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 	plan.ID = state.ID
 
-	payload, diags := plan.apiPayload()
+	payload, diags := plan.apiPayload(ctx, r.client)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return

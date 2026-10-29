@@ -6,6 +6,7 @@ package nvmet_namespace
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -474,5 +475,16 @@ func TestDeviceChanged(t *testing.T) {
 		if got := deviceChanged(&plan, &state); got != tc.wantChange {
 			t.Errorf("%s: deviceChanged = %v, want %v", tc.name, got, tc.wantChange)
 		}
+	}
+}
+
+// TestIsDeviceMissing pins the server error text the create/update retry
+// waits on (B-048).
+func TestIsDeviceMissing(t *testing.T) {
+	if !isDeviceMissing(errors.New("[EINVAL] nvmet_namespace_create.device_path: ZVOL device_path must be a block device: zvol/tank/x")) {
+		t.Error("block-device error not recognized")
+	}
+	if isDeviceMissing(errors.New("[EINVAL] nvmet_namespace_create.device_path: ZVOL device_path must start with \"zvol/\": /dev/zvol/x")) || isDeviceMissing(nil) {
+		t.Error("unrelated error recognized")
 	}
 }

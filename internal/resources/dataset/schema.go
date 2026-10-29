@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 )
 
@@ -28,6 +29,11 @@ func zfsEnumAttr(desc string, values ...string) schema.StringAttribute {
 		PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 	}
 }
+
+// RecordSizes are the recordsize values in the form pool.dataset.get_instance
+// reports them (pool.dataset.recordsize_choices without the "512B" alias,
+// which reads back as "512"; identical on 25.10, 26.0 and 28.0).
+var RecordSizes = []string{"512", "1K", "2K", "4K", "8K", "16K", "32K", "64K", "128K", "256K", "512K", "1M", "2M", "4M", "8M", "16M"}
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
@@ -61,7 +67,7 @@ func resourceSchema() schema.Schema {
 				Optional:    true,
 				Computed:    true,
 				Description: "Compression algorithm. Case-insensitive: lz4, zstd, off, inherit, etc.",
-				Validators:  []validator.String{stringvalidator.OneOfCaseInsensitive("ON", "OFF", "LZ4", "GZIP", "GZIP-1", "GZIP-9", "ZSTD", "ZSTD-FAST", "ZLE", "LZJB", "ZSTD-1", "ZSTD-2", "ZSTD-3", "ZSTD-4", "ZSTD-5", "ZSTD-6", "ZSTD-7", "ZSTD-8", "ZSTD-9", "ZSTD-10", "ZSTD-11", "ZSTD-12", "ZSTD-13", "ZSTD-14", "ZSTD-15", "ZSTD-16", "ZSTD-17", "ZSTD-18", "ZSTD-19", "ZSTD-FAST-1", "ZSTD-FAST-2", "ZSTD-FAST-3", "ZSTD-FAST-4", "ZSTD-FAST-5", "ZSTD-FAST-6", "ZSTD-FAST-7", "ZSTD-FAST-8", "ZSTD-FAST-9", "ZSTD-FAST-10", "ZSTD-FAST-20", "ZSTD-FAST-30", "ZSTD-FAST-40", "ZSTD-FAST-50", "ZSTD-FAST-60", "ZSTD-FAST-70", "ZSTD-FAST-80", "ZSTD-FAST-90", "ZSTD-FAST-100", "ZSTD-FAST-500", "ZSTD-FAST-1000", "INHERIT")},
+				Validators:  []validator.String{stringvalidator.OneOfCaseInsensitive("ON", "OFF", "LZ4", "GZIP", "GZIP-1", "GZIP-2", "GZIP-3", "GZIP-4", "GZIP-5", "GZIP-6", "GZIP-7", "GZIP-8", "GZIP-9", "ZSTD", "ZSTD-FAST", "ZLE", "LZJB", "ZSTD-1", "ZSTD-2", "ZSTD-3", "ZSTD-4", "ZSTD-5", "ZSTD-6", "ZSTD-7", "ZSTD-8", "ZSTD-9", "ZSTD-10", "ZSTD-11", "ZSTD-12", "ZSTD-13", "ZSTD-14", "ZSTD-15", "ZSTD-16", "ZSTD-17", "ZSTD-18", "ZSTD-19", "ZSTD-FAST-1", "ZSTD-FAST-2", "ZSTD-FAST-3", "ZSTD-FAST-4", "ZSTD-FAST-5", "ZSTD-FAST-6", "ZSTD-FAST-7", "ZSTD-FAST-8", "ZSTD-FAST-9", "ZSTD-FAST-10", "ZSTD-FAST-20", "ZSTD-FAST-30", "ZSTD-FAST-40", "ZSTD-FAST-50", "ZSTD-FAST-60", "ZSTD-FAST-70", "ZSTD-FAST-80", "ZSTD-FAST-90", "ZSTD-FAST-100", "ZSTD-FAST-500", "ZSTD-FAST-1000", "INHERIT")},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -146,8 +152,15 @@ func resourceSchema() schema.Schema {
 			"recordsize": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Suggested block size for files, e.g. \"128K\" or \"1M\". Null (unset) inherits from the parent. Use the ZFS form (uppercase suffix) to avoid drift.",
+				Description: "Suggested block size for files: 512, 1K, 2K, 4K, 8K, 16K, 32K, 64K, 128K, 256K, 512K, 1M, 2M, 4M, 8M or 16M. Case-insensitive. Null (unset) inherits from the parent.",
+				// 28.0 accepts "1m" and stores "1M", which failed the apply with
+				// an inconsistent result; 25.10/26.0 reject lower case. The value
+				// is sent in upper case and compared case-insensitively, and a
+				// byte count ("1048576") is rejected here. (B-126)
+				CustomType: normalize.CaseInsensitiveType{},
+				Validators: []validator.String{stringvalidator.OneOfCaseInsensitive(RecordSizes...)},
 				PlanModifiers: []planmodifier.String{
+					normalize.KeepStateIfEquivalent(normalize.CaseInsensitiveType{}),
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
@@ -171,9 +184,10 @@ func resourceSchema() schema.Schema {
 			"refreservation": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Referenced reservation in bytes (space guaranteed to this dataset, excluding descendants/snapshots). Null (unset) inherits.",
+				Description: "Referenced reservation in bytes (space guaranteed to this dataset, excluding descendants/snapshots). Null (unset) inherits. For a thick VOLUME left unset, ZFS sets it and grows it with volsize.",
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.UseStateForUnknown(),
+					RefreservationFollowsVolsize(),
 				},
 			},
 			"xattr": schema.StringAttribute{

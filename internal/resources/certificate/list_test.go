@@ -28,3 +28,33 @@ func TestCertificateIdentitySchema(t *testing.T) {
 		t.Error("identity schema missing 'id' attribute")
 	}
 }
+
+// TestListCreateType: generated configuration must never carry a null
+// create_type (Required); a CSR lists as CERTIFICATE_CREATE_CSR (B-138).
+func TestListCreateType(t *testing.T) {
+	uri := "https://acme.example/dir"
+	cases := []struct {
+		api  certificateAPI
+		want string
+	}{
+		{certificateAPI{CertTypeCSR: true}, CreateTypeCSR},
+		{certificateAPI{AcmeURI: &uri}, CreateTypeACME},
+		{certificateAPI{}, CreateTypeImported},
+	}
+	for _, c := range cases {
+		if got := listCreateType(&c.api); got.ValueString() != c.want {
+			t.Errorf("%+v: got %v, want %s", c.api, got, c.want)
+		}
+	}
+}
+
+// TestSanPayload: bare IPs are sent "IP:"-prefixed (25.10 mangles a bare IPv6).
+func TestSanPayload(t *testing.T) {
+	got := sanPayload([]string{"a.example.com", "10.0.0.1", "2001:db8::7", "IP:10.0.0.2", "DNS:b.example.com"})
+	want := []string{"a.example.com", "IP:10.0.0.1", "IP:2001:db8::7", "IP:10.0.0.2", "DNS:b.example.com"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("entry %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}

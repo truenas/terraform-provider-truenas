@@ -5,6 +5,7 @@ package iscsi_extent
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -199,8 +200,8 @@ func TestISCSIExtentApiPayload_AvailThreshold(t *testing.T) {
 	if diags.HasError() {
 		t.Fatalf("apiPayload returned diagnostic errors: %v", diags)
 	}
-	if payload["avail_threshold"] != (*int64)(nil) {
-		t.Errorf("avail_threshold=0 should produce nil, got %v (%T)", payload["avail_threshold"], payload["avail_threshold"])
+	if v, ok := payload["avail_threshold"]; !ok || v != nil {
+		t.Errorf("avail_threshold=0 should send explicit nil, got %v (present=%v)", v, ok)
 	}
 
 	// Non-zero value → should send the value.
@@ -209,12 +210,8 @@ func TestISCSIExtentApiPayload_AvailThreshold(t *testing.T) {
 	if diags.HasError() {
 		t.Fatalf("apiPayload returned diagnostic errors: %v", diags)
 	}
-	avail, ok := payload["avail_threshold"].(*int64)
-	if !ok {
-		t.Fatalf("avail_threshold is %T, want *int64", payload["avail_threshold"])
-	}
-	if avail == nil || *avail != 80 {
-		t.Errorf("avail_threshold = %v, want pointer to 80", avail)
+	if payload["avail_threshold"] != int64(80) {
+		t.Errorf("avail_threshold = %v (%T), want int64 80", payload["avail_threshold"], payload["avail_threshold"])
 	}
 }
 
@@ -263,8 +260,10 @@ func TestISCSIExtentApiPayload_OmitsUnsetOptionalFields(t *testing.T) {
 	if payload["disk"] != "zvol/tank/myvol" {
 		t.Errorf("payload[disk] = %v, want zvol/tank/myvol", payload["disk"])
 	}
-	if payload["avail_threshold"] != (*int64)(nil) {
-		t.Errorf("payload[avail_threshold] = %v, want nil (unknown AvailThreshold treated as unset)", payload["avail_threshold"])
+	// B-105: unknown avail_threshold is omitted, not sent as null (null
+	// would clear a value set outside Terraform).
+	if v, ok := payload["avail_threshold"]; ok {
+		t.Errorf("payload should omit avail_threshold when unknown, got %v", v)
 	}
 }
 
@@ -483,5 +482,23 @@ func TestISCSIExtentResponseToModel_Filesize(t *testing.T) {
 				t.Errorf("Filesize = %d, want %d", m.Filesize.ValueInt64(), tc.want)
 			}
 		})
+	}
+}
+
+// TestIsDeviceMissing pins the server error text the create/update retry
+// waits on (B-048, issue #40), and the zvol name mapping used to reset
+// readonly on delete (B-040).
+func TestIsDeviceMissing(t *testing.T) {
+	if !isDeviceMissing(errors.New("[EINVAL] iscsi_extent_create.disk: Device '/dev/zvol/tank/a.b' for volume 'tank/a.b' does not exist")) {
+		t.Error("missing-device error not recognized")
+	}
+	if isDeviceMissing(errors.New("[EINVAL] iscsi_extent_create.disk: Disk currently in use by extent x")) || isDeviceMissing(nil) {
+		t.Error("unrelated error recognized")
+	}
+	for in, want := range map[string]string{"zvol/tank/v": "tank/v", "zvol/tank/a+b": "tank/a b", "zvol/tank/v@s": "", "/mnt/x": ""} {
+		got, ok := zvolName(in)
+		if got != want || ok != (want != "") {
+			t.Errorf("zvolName(%q) = %q, %v; want %q", in, got, ok, want)
+		}
 	}
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // VMDeviceModel is the Terraform state model for truenas_vm_device.
@@ -63,23 +64,56 @@ func (m *VMDeviceModel) attributesMap() (map[string]any, diag.Diagnostics) {
 	return attrs, diags
 }
 
-// attributesDrifted reports whether any key present in stateAttrs has a
-// different value in apiAttrs. API-added default keys are ignored (not
-// drift) since the API may normalize/expand attributes with defaults.
-func attributesDrifted(stateAttrs, apiAttrs map[string]any) bool {
-	for k, v := range stateAttrs {
-		av, ok := apiAttrs[k]
-		if !ok {
-			return true
+// secretAttributeKeys are the device attributes TrueNAS treats as secrets
+// (Secret[str] in the API): the DISPLAY device's password is the only one in
+// every device type on 25.10, 26.0 and 28.0. They belong in the write-only
+// attributes_secrets_wo, never in attributes: the configuration is rejected
+// at plan time when attributes holds one (validateNoSecretAttributes), and
+// every read drops them, so attributes in state, plans and generated
+// configuration never carries a secret. (B-159)
+var secretAttributeKeys = []string{"password"}
+
+// dropSecretAttributes removes the secret keys from a device attributes map
+// read from the API.
+func dropSecretAttributes(attrs map[string]any) {
+	for _, k := range secretAttributeKeys {
+		delete(attrs, k)
+	}
+}
+
+// redactedValue is what vm.device.query/get_instance return in place of a
+// secret attribute (the DISPLAY password, Secret[str] in the API) for a
+// session without write access, e.g. a READONLY_ADMIN API key. (#57 class)
+const redactedValue = "********"
+
+// scrubRedacted replaces each redacted value in apiAttrs with the value known
+// for that key (prior state, or the configuration), or drops the key when
+// none is known, so the mask is never compared with or stored as real data.
+// known may be nil. (BUGS B-033)
+func scrubRedacted(apiAttrs, known map[string]any) {
+	for k, v := range apiAttrs {
+		if v != redactedValue {
+			continue
 		}
-		sb, _ := json.Marshal(v)
-		ab, _ := json.Marshal(av)
-		if string(sb) != string(ab) {
-			return true
+		if kv, ok := known[k]; ok {
+			apiAttrs[k] = kv
+		} else {
+			delete(apiAttrs, k)
 		}
 	}
-	return false
 }
+
+// attributesDrifted reports whether any key present in stateAttrs has a
+// different value in apiAttrs. API-added default keys are ignored (not
+// drift), at every nesting level, since the API may normalize/expand
+// attributes with defaults. A NIC "mac" compares as a MAC address: the server
+// stores it in lower case (BUGS B-082, B-083).
+func attributesDrifted(stateAttrs, apiAttrs map[string]any) bool {
+	return !normalize.EqualTreeFunc(stateAttrs, apiAttrs, true, attributeLeafEqual)
+}
+
+// attributeLeafEqual compares the attribute values the server normalizes.
+var attributeLeafEqual = normalize.KeyEqual(map[string]func(a, b string) bool{"mac": normalize.EqualMAC})
 
 // responseToModel maps deviceAPI onto VMDeviceModel. ID, VM, and Order are
 // always taken from the API; Attributes is left untouched by this function
@@ -91,8 +125,10 @@ func responseToModel(api *deviceAPI, m *VMDeviceModel) {
 }
 
 // apiAttributesJSON marshals api.Attributes to a canonical JSON string.
+// Secret keys are dropped (see secretAttributeKeys).
 func apiAttributesJSON(api *deviceAPI) (string, diag.Diagnostics) {
 	var diags diag.Diagnostics
+	dropSecretAttributes(api.Attributes)
 	b, err := json.Marshal(api.Attributes)
 	if err != nil {
 		diags.AddError("Failed to marshal device attributes", err.Error())
@@ -139,6 +175,19 @@ func responseToDataSourceModel(api *deviceAPI, m *VMDeviceDataSourceModel) diag.
 	m.ID = types.Int64Value(api.ID)
 	m.VM = types.Int64Value(api.VM)
 	m.Order = types.Int64Value(api.Order)
+	// A redacted value is not data: report it as null (BUGS B-033). Secret
+	// keys are reported as null whatever the server returned, so the data
+	// source never puts a secret into state. (B-159)
+	for k, v := range api.Attributes {
+		if v == redactedValue {
+			api.Attributes[k] = nil
+		}
+	}
+	for _, k := range secretAttributeKeys {
+		if _, ok := api.Attributes[k]; ok {
+			api.Attributes[k] = nil
+		}
+	}
 	b, err := json.Marshal(api.Attributes)
 	if err != nil {
 		diags.AddError("Failed to marshal device attributes", err.Error())

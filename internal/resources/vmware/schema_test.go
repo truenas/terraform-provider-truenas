@@ -137,3 +137,14 @@ func TestVMwareSchema_StateIsNestedComputed(t *testing.T) {
 		}
 	}
 }
+
+// TestVMwareSchema_StateNotPinned guards B-069: vmware.update resets the
+// state to PENDING (and snapshot runs set SUCCESS/ERROR), so "state" must
+// not carry its prior value into an update plan with UseStateForUnknown.
+func TestVMwareSchema_StateNotPinned(t *testing.T) {
+	s := resourceSchema()
+	nested := s.Attributes["state"].(schema.SingleNestedAttribute)
+	if len(nested.PlanModifiers) != 0 {
+		t.Errorf("state has plan modifiers %v; it must be planned unknown on update", nested.PlanModifiers)
+	}
+}

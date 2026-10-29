@@ -20,5 +20,8 @@ Reads the current TrueNAS Webshare service configuration. Takes no arguments: th
 - `bindip` (List of String) List of IP addresses the Webshare HTTP server binds to. An empty list means it binds to all addresses.
 - `groups` (List of String) List of AD/LDAP group names whose members are granted access to Webshare.
 - `id` (String) Fixed identifier for this singleton: always "webshare_config".
+- `mcp_allow_write` (Boolean) Whether the AI assistant may create files and directories. Null below TrueNAS 28.0.
+- `mcp_allowed_groups` (List of String) Groups whose members may connect an AI assistant to Webshare. Null below TrueNAS 28.0.
+- `mcp_enabled` (Boolean) Whether the Webshare MCP server is enabled. Null below TrueNAS 28.0.
 - `passkey` (String) Passkey authentication mode: ENABLED, DISABLED, or REQUIRED.
 - `search` (Boolean) Whether search indexing is enabled for Webshare-exposed content.

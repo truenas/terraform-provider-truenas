@@ -96,8 +96,17 @@ func (r *EnclosureLabelResource) lookupEnclosure(ctx context.Context, id string)
 // managing the enclosure" guarantee. Private state values must be valid
 // JSON (framework requirement), hence json.Marshal rather than storing the
 // raw string bytes directly.
+//
+// An enclosure without a user label reports its name as the label
+// (enclosure2.query: label = user label or name). That is captured as "" (no
+// label), which enclosure.label.set restores as "no user label"; capturing the
+// name instead stored it as a user label on destroy. (B-132)
 func captureOriginalLabel(ctx context.Context, private privateSetter, api *enclosureLabelAPI) error {
-	origBytes, err := json.Marshal(api.Label)
+	original := api.Label
+	if original == api.Name {
+		original = ""
+	}
+	origBytes, err := json.Marshal(original)
 	if err != nil {
 		return fmt.Errorf("encode original label: %w", err)
 	}

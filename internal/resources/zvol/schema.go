@@ -65,7 +65,7 @@ func resourceSchema() schema.Schema {
 				Optional:    true,
 				Computed:    true,
 				Description: "Compression algorithm. Case-insensitive: lz4, zstd, off, inherit, etc.",
-				Validators:  []validator.String{stringvalidator.OneOfCaseInsensitive("ON", "OFF", "LZ4", "GZIP", "GZIP-1", "GZIP-9", "ZSTD", "ZSTD-FAST", "ZLE", "LZJB", "ZSTD-1", "ZSTD-2", "ZSTD-3", "ZSTD-4", "ZSTD-5", "ZSTD-6", "ZSTD-7", "ZSTD-8", "ZSTD-9", "ZSTD-10", "ZSTD-11", "ZSTD-12", "ZSTD-13", "ZSTD-14", "ZSTD-15", "ZSTD-16", "ZSTD-17", "ZSTD-18", "ZSTD-19", "ZSTD-FAST-1", "ZSTD-FAST-2", "ZSTD-FAST-3", "ZSTD-FAST-4", "ZSTD-FAST-5", "ZSTD-FAST-6", "ZSTD-FAST-7", "ZSTD-FAST-8", "ZSTD-FAST-9", "ZSTD-FAST-10", "ZSTD-FAST-20", "ZSTD-FAST-30", "ZSTD-FAST-40", "ZSTD-FAST-50", "ZSTD-FAST-60", "ZSTD-FAST-70", "ZSTD-FAST-80", "ZSTD-FAST-90", "ZSTD-FAST-100", "ZSTD-FAST-500", "ZSTD-FAST-1000", "INHERIT")},
+				Validators:  []validator.String{stringvalidator.OneOfCaseInsensitive("ON", "OFF", "LZ4", "GZIP", "GZIP-1", "GZIP-2", "GZIP-3", "GZIP-4", "GZIP-5", "GZIP-6", "GZIP-7", "GZIP-8", "GZIP-9", "ZSTD", "ZSTD-FAST", "ZLE", "LZJB", "ZSTD-1", "ZSTD-2", "ZSTD-3", "ZSTD-4", "ZSTD-5", "ZSTD-6", "ZSTD-7", "ZSTD-8", "ZSTD-9", "ZSTD-10", "ZSTD-11", "ZSTD-12", "ZSTD-13", "ZSTD-14", "ZSTD-15", "ZSTD-16", "ZSTD-17", "ZSTD-18", "ZSTD-19", "ZSTD-FAST-1", "ZSTD-FAST-2", "ZSTD-FAST-3", "ZSTD-FAST-4", "ZSTD-FAST-5", "ZSTD-FAST-6", "ZSTD-FAST-7", "ZSTD-FAST-8", "ZSTD-FAST-9", "ZSTD-FAST-10", "ZSTD-FAST-20", "ZSTD-FAST-30", "ZSTD-FAST-40", "ZSTD-FAST-50", "ZSTD-FAST-60", "ZSTD-FAST-70", "ZSTD-FAST-80", "ZSTD-FAST-90", "ZSTD-FAST-100", "ZSTD-FAST-500", "ZSTD-FAST-1000", "INHERIT")},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -75,8 +75,13 @@ func resourceSchema() schema.Schema {
 			"dedup": zfsEnumAttr("Deduplication: ON, VERIFY, or OFF. INHERIT inherits from the parent.",
 				"ON", "VERIFY", "OFF"),
 			"sparse": schema.BoolAttribute{
-				Optional:    true,
-				Description: "Sparse provisioning (write-only; not returned by API).",
+				Optional: true,
+				Computed: true,
+				Description: "Sparse (thin) provisioning: the zvol gets no refreservation. Applied only at " +
+					"creation; changing it on an existing zvol is a plan error (set refreservation instead, or " +
+					"replace the zvol). When unset, and on import, it is read from the zvol's refreservation " +
+					"(0 = sparse).",
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
 			"comments": schema.StringAttribute{
 				Optional:    true,
@@ -111,8 +116,8 @@ func resourceSchema() schema.Schema {
 			"refreservation": schema.Int64Attribute{
 				Optional:      true,
 				Computed:      true,
-				Description:   "Referenced reservation in bytes (space guaranteed to the volume, excluding snapshots). Null (unset) inherits.",
-				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
+				Description:   "Referenced reservation in bytes (space guaranteed to the volume, excluding snapshots). 0 makes the zvol thin. When unset, ZFS sets it for a thick zvol and grows it with volsize.",
+				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown(), dataset.RefreservationFollowsVolsize()},
 			},
 			"pool": schema.StringAttribute{
 				Computed: true,

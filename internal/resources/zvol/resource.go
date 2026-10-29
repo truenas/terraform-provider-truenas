@@ -7,7 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -22,6 +22,7 @@ var _ resource.Resource = &ZvolResource{}
 var _ resource.ResourceWithImportState = &ZvolResource{}
 var _ resource.ResourceWithIdentity = &ZvolResource{}
 var _ resource.ResourceWithValidateConfig = &ZvolResource{}
+var _ resource.ResourceWithModifyPlan = &ZvolResource{}
 
 // ValidateConfig rejects setting `encryption` together with
 // `inherit_encryption = true`: with inheritance the parent determines
@@ -43,6 +44,59 @@ func (r *ZvolResource) ValidateConfig(ctx context.Context, req resource.Validate
 				"or set inherit_encryption = false to manage encryption on this zvol.",
 		)
 	}
+	// A sparse zvol has no refreservation: the server overrides a configured
+	// one with 0, which then reads back different from the plan.
+	if !cfg.Sparse.IsNull() && !cfg.Sparse.IsUnknown() && cfg.Sparse.ValueBool() &&
+		!cfg.RefReservation.IsNull() && !cfg.RefReservation.IsUnknown() && cfg.RefReservation.ValueInt64() > 0 {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("refreservation"),
+			"Conflicting provisioning configuration",
+			"refreservation cannot be above 0 when sparse = true: a sparse zvol has no refreservation. "+
+				"Remove refreservation or sparse.",
+		)
+	}
+}
+
+// ModifyPlan rejects at plan time what cannot be applied: an encryption
+// algorithm the release cannot create (dataset.CheckEncryptionAlgorithm), and a
+// change of sparse on an existing zvol.
+//
+// sparse only takes effect at creation (pool.dataset.update has no sparse, and
+// making a thin zvol thick needs the reservation ZFS computes at create). A
+// change used to be planned as an in-place update that changed nothing on the
+// server. (B-109) It is now an error that says how to change provisioning
+// in place.
+func (r *ZvolResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	resp.Diagnostics.Append(dataset.CheckEncryptionAlgorithm(ctx, r.client, req)...)
+	// A zvol being replaced anyway is created with the configured sparse.
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() || len(resp.RequiresReplace) > 0 {
+		return
+	}
+	var cfg, state zvolResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() || cfg.Sparse.IsNull() || cfg.Sparse.IsUnknown() {
+		return
+	}
+	current := state.Sparse
+	if current.IsNull() || current.IsUnknown() {
+		// State from before sparse was read back: derive it the way an
+		// import does, from the refreservation.
+		current = types.BoolValue(state.RefReservation.IsNull() || state.RefReservation.ValueInt64() == 0)
+	}
+	if cfg.Sparse.ValueBool() == current.ValueBool() {
+		return
+	}
+	resp.Diagnostics.AddAttributeError(
+		path.Root("sparse"),
+		"sparse cannot be changed on an existing zvol",
+		fmt.Sprintf("sparse is applied only when a zvol is created; TrueNAS cannot change it later. %s was "+
+			"created %s, so keep sparse = %t. To change its provisioning in place, set refreservation (0 = "+
+			"thin, or the number of bytes to guarantee); to recreate it with the other provisioning (its data "+
+			"is lost), use terraform apply -replace.",
+			state.Name.ValueString(), map[bool]string{true: "sparse", false: "thick"}[current.ValueBool()],
+			current.ValueBool()),
+	)
 }
 
 type ZvolResource struct {
@@ -83,7 +137,7 @@ func (r *ZvolResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	payload := plan.apiPayload()
+	payload := plan.createAPIPayload()
 	// encryption_passphrase / encryption_key are write-only: read from config
 	// (null in plan/state) and inject into encryption_options.
 	var cfg zvolResourceModel
@@ -123,15 +177,47 @@ func (r *ZvolResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
+	// TrueNAS 25.10 creates a thick zvol with the refreservation ZFS computes
+	// for its volsize whatever refreservation was sent, so a configured one
+	// read back different and failed the apply. Set it with an update. (found
+	// while verifying B-038)
+	if want := plan.RefReservation; !want.IsNull() && !want.IsUnknown() {
+		got, _ := apiResp.RefReservP.parsedInt()
+		if got != want.ValueInt64() {
+			if _, err := r.client.Call(ctx, "pool.dataset.update", plan.Name.ValueString(),
+				map[string]any{"refreservation": want.ValueInt64()}); err != nil {
+				resp.Diagnostics.AddError("Set refreservation after create failed", err.Error())
+				return
+			}
+			raw, err = r.client.CallRead(ctx, "pool.dataset.get_instance", plan.Name.ValueString())
+			if err == nil {
+				apiResp = zvolAPI{}
+				err = json.Unmarshal(raw, &apiResp)
+			}
+			if err != nil {
+				resp.Diagnostics.AddError("Read after create failed", err.Error())
+				return
+			}
+		}
+	}
+
 	// pool.dataset.create returns before udev has created the zvol's
 	// /dev/zvol/<name> device node, so a dependent resource created in the same
 	// apply — an iSCSI extent (disk = zvol/<name>) or an NVMe-oF namespace — can
 	// fail its server-side device-exists check with "Device ... does not exist"
 	// and only succeed on a re-apply once the node has appeared. Block here until
 	// the node is present so every consumer is safe. (#40)
-	waitForZvolDevice(ctx, r.client, plan.Name.ValueString())
+	if !waitForZvolDevice(ctx, r.client, plan.Name.ValueString()) {
+		resp.Diagnostics.AddWarning("Zvol device node not ready",
+			fmt.Sprintf("%s did not appear within %s after the zvol was created. A resource that uses the "+
+				"device in this apply (iSCSI extent, NVMe-oF namespace, VM disk) may fail; re-run the apply.",
+				zvolDevicePath(plan.Name.ValueString()), zvolDeviceWaitTimeout))
+	}
 
 	responseToModel(&apiResp, &plan.ZvolModel)
+	if plan.Sparse.IsUnknown() || plan.Sparse.IsNull() {
+		plan.Sparse = types.BoolValue(sparseFromAPI(&apiResp))
+	}
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueString())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -162,22 +248,32 @@ var (
 // genuinely slow device still lets the create finish rather than orphaning the
 // just-created zvol — the dependent resource would at worst retry on the next
 // apply, as it did before this wait existed. (#40)
-func waitForZvolDevice(ctx context.Context, c deviceStater, name string) {
-	devPath := "/dev/zvol/" + name
+//
+// It reports whether the node appeared, so Create can warn when it did not.
+func waitForZvolDevice(ctx context.Context, c deviceStater, name string) bool {
+	devPath := zvolDevicePath(name)
 	deadline := time.Now().Add(zvolDeviceWaitTimeout)
 	for {
 		if _, err := c.CallRead(ctx, "filesystem.stat", devPath); err == nil {
-			return
+			return true
 		}
 		if ctx.Err() != nil || time.Now().After(deadline) {
-			return
+			return false
 		}
 		select {
 		case <-ctx.Done():
-			return
+			return false
 		case <-time.After(zvolDevicePollInterval):
 		}
 	}
+}
+
+// zvolDevicePath is the /dev/zvol node udev creates for a zvol. Spaces in the
+// name become "+" (the middleware's zvol_name_to_path); without that mapping
+// a zvol whose name has a space waited the full timeout for a node that never
+// appears under that path. (B-160)
+func zvolDevicePath(name string) string {
+	return "/dev/zvol/" + strings.ReplaceAll(name, " ", "+")
 }
 
 func (r *ZvolResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -204,6 +300,12 @@ func (r *ZvolResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	}
 
 	responseToModel(&apiResp, &state.ZvolModel)
+	// State written before sparse was Computed has it null when the
+	// configuration never set it; fill it from the zvol so the upgrade does not
+	// plan sparse as (known after apply).
+	if state.Sparse.IsNull() {
+		state.Sparse = types.BoolValue(sparseFromAPI(&apiResp))
+	}
 	// State written before force_destroy existed has it null; read it as the
 	// default so the upgrade plans no change.
 	state.ForceDestroy = dataset.ForceDestroyOrFalse(state.ForceDestroy)
@@ -219,11 +321,10 @@ func (r *ZvolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	payload := plan.updateAPIPayload()
-	// Skip the API call when the payload is what prior state would send: only
-	// state-only attributes changed (force_destroy, sparse, a letter-case
-	// change). Sending it anyway would rewrite properties for nothing.
-	if !reflect.DeepEqual(payload, state.updateAPIPayload()) {
+	payload := plan.updateAPIPayload(&state.ZvolModel)
+	// Skip the API call when nothing the server stores changed: only
+	// state-only attributes changed (force_destroy, a letter-case change).
+	if len(payload) > 0 {
 		_, err := r.client.Call(ctx, "pool.dataset.update", plan.Name.ValueString(), payload)
 		if err != nil {
 			resp.Diagnostics.AddError("Update zvol failed", err.Error())
@@ -287,6 +388,9 @@ func (r *ZvolResource) ImportState(ctx context.Context, req resource.ImportState
 	}
 
 	responseToModel(&apiResp, &state.ZvolModel)
+	// sparse is not returned by the API; derive it from the refreservation so
+	// an imported zvol matches a configuration that sets it. (B-109)
+	state.Sparse = types.BoolValue(sparseFromAPI(&apiResp))
 	state.ForceDestroy = types.BoolValue(false)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueString())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)

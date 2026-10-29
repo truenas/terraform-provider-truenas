@@ -8,15 +8,17 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
+	"github.com/truenas/terraform-provider-truenas/internal/writeonly"
 )
 
 // AlertServiceModel is the Terraform state model for truenas_alert_service.
 type AlertServiceModel struct {
-	ID         types.Int64  `tfsdk:"id"`
-	Name       types.String `tfsdk:"name"`
-	Level      types.String `tfsdk:"level"` // INFO, NOTICE, WARNING, ERROR, CRITICAL, ALERT, EMERGENCY
-	Enabled    types.Bool   `tfsdk:"enabled"`
-	Attributes types.String `tfsdk:"attributes"` // JSON doc with "type" key
+	ID         types.Int64          `tfsdk:"id"`
+	Name       types.String         `tfsdk:"name"`
+	Level      types.String         `tfsdk:"level"` // INFO, NOTICE, WARNING, ERROR, CRITICAL, ALERT, EMERGENCY
+	Enabled    types.Bool           `tfsdk:"enabled"`
+	Attributes normalize.JSONSubset `tfsdk:"attributes"` // JSON doc with "type" key
 	// AttributesSecretsWO is a write-only JSON object (e.g. Slack/PagerDuty/AWS
 	// credentials) merged over attributes when sending, never stored in state;
 	// AttributesSecretsWOVersion triggers re-send. (#36/#37 secrets-out-of-state)
@@ -65,25 +67,50 @@ func (m *AlertServiceModel) attributesMap() (map[string]any, diag.Diagnostics) {
 	return attrs, diags
 }
 
-// attributesDrifted reports whether any key present in stateAttrs has a
-// different value in apiAttrs. API-added keys are ignored (not drift) since
-// the API may normalize/expand the attributes with defaults.
-//
-// This mirrors internal/resources/cloudsync_credentials/model.go's
-// providerDrifted helper.
-func attributesDrifted(stateAttrs, apiAttrs map[string]any) bool {
-	for k, v := range stateAttrs {
-		av, ok := apiAttrs[k]
-		if !ok {
-			return true
+// redactedValue is what the middleware returns in place of a secret
+// attribute (e.g. SNMP v3_authkey/v3_privkey) to a session without the
+// write role (a READONLY_ADMIN API key).
+const redactedValue = "********"
+
+// unmaskRedacted returns a copy of api in which every top-level value that the
+// server redacted to "********" is replaced by the prior (state) value of the
+// same key, or dropped when prior has no such key. A read-only session then
+// neither reads the mask into state nor plans to overwrite the real secret
+// with it (B-034).
+func unmaskRedacted(api map[string]any, priorJSON string) map[string]any {
+	var prior map[string]any
+	_ = json.Unmarshal([]byte(priorJSON), &prior)
+	out := make(map[string]any, len(api))
+	for k, v := range api {
+		if s, ok := v.(string); ok && s == redactedValue {
+			if pv, ok := prior[k]; ok {
+				out[k] = pv
+			}
+			continue
 		}
-		sb, _ := json.Marshal(v)
-		ab, _ := json.Marshal(av)
-		if string(sb) != string(ab) {
-			return true
-		}
+		out[k] = v
 	}
-	return false
+	return out
+}
+
+// readAttributes is the attributes value Read stores: the server document
+// (redacted secrets unmasked from prior), or, when the write-only overlay is
+// in use, the server document projected onto the keys in prior so secret keys
+// stay out of state. normalize.JSONSubset keeps prior's spelling when every
+// configured value matches (heredoc/jsonencode spelling, server-added keys:
+// B-061, B-120).
+func readAttributes(api map[string]any, prior string, writeOnly bool) (normalize.JSONSubset, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	live := unmaskRedacted(api, prior)
+	if writeOnly && prior != "" {
+		return normalize.NewJSONSubsetValue(writeonly.ProjectOntoKeys(prior, live)), diags
+	}
+	b, err := json.Marshal(live)
+	if err != nil {
+		diags.AddError("Failed to marshal attributes", err.Error())
+		return normalize.NewJSONSubsetNull(), diags
+	}
+	return normalize.NewJSONSubsetValue(string(b)), diags
 }
 
 // responseToModel maps alertServiceAPI onto AlertServiceModel. ID, Name,
@@ -147,11 +174,44 @@ func responseToDataSourceModel(api *alertServiceAPI, m *AlertServiceDataSourceMo
 	m.Name = types.StringValue(api.Name)
 	m.Level = types.StringValue(api.Level)
 	m.Enabled = types.BoolValue(api.Enabled)
-	b, err := json.Marshal(api.Attributes)
+	// A read-only session sees secrets as "********"; report them as null,
+	// not as data (B-034).
+	attrs := make(map[string]any, len(api.Attributes))
+	for k, v := range api.Attributes {
+		if s, ok := v.(string); ok && s == redactedValue {
+			v = nil
+		}
+		attrs[k] = v
+	}
+	b, err := json.Marshal(attrs)
 	if err != nil {
 		diags.AddError("Failed to marshal attributes", err.Error())
 		return diags
 	}
 	m.Attributes = types.StringValue(string(b))
 	return diags
+}
+
+// storedSecretsOverlay returns the write-only overlay with each key's value
+// replaced by the value TrueNAS has stored for it, when it has one (not null
+// and not the read-only redaction mask). alertservice.update replaces `attributes` as a whole, so
+// every update must carry the secret keys; when attributes_secrets_wo_version did not change, the
+// provider sends the stored secrets rather than the configured ones, so a
+// secret changed in config without a version bump is not applied and the
+// stored one is kept. A key with no stored value is sent from config. (B-141)
+func storedSecretsOverlay(overlayJSON string, stored map[string]any) string {
+	var overlay map[string]any
+	if json.Unmarshal([]byte(overlayJSON), &overlay) != nil {
+		return overlayJSON // injection reports the parse error
+	}
+	for k := range overlay {
+		if v, ok := stored[k]; ok && v != nil && v != "********" {
+			overlay[k] = v
+		}
+	}
+	b, err := json.Marshal(overlay)
+	if err != nil {
+		return overlayJSON
+	}
+	return string(b)
 }

@@ -69,6 +69,24 @@ func (r *WebshareConfigResource) checkVersion(ctx context.Context) diag.Diagnost
 	return diags
 }
 
+// checkMCPFields rejects the 28.0-only MCP settings on an older server.
+func (r *WebshareConfigResource) checkMCPFields(ctx context.Context, payload map[string]any) diag.Diagnostics {
+	var diags diag.Diagnostics
+	if _, ok := payload["mcp_enabled"]; !ok {
+		if _, ok := payload["mcp_allowed_groups"]; !ok {
+			if _, ok := payload["mcp_allow_write"]; !ok {
+				return diags
+			}
+		}
+	}
+	version, err := r.client.ServerVersion(ctx)
+	if err != nil {
+		diags.AddError("Version probe failed", err.Error())
+		return diags
+	}
+	return mcpGateDiagnostics(version, payload)
+}
+
 // fetchConfig calls webshare.config and unmarshals the response.
 func (r *WebshareConfigResource) fetchConfig(ctx context.Context) (*webshareConfigAPI, error) {
 	raw, err := r.client.CallRead(ctx, "webshare.config")
@@ -112,6 +130,10 @@ func (r *WebshareConfigResource) Create(ctx context.Context, req resource.Create
 
 	payload, diags := config.updatePayload(ctx)
 	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(r.checkMCPFields(ctx, payload)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -197,6 +219,10 @@ func (r *WebshareConfigResource) Update(ctx context.Context, req resource.Update
 
 	payload, diags := config.updatePayload(ctx)
 	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(r.checkMCPFields(ctx, payload)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}

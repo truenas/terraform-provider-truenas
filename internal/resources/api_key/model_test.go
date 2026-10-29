@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // --- expiresAtToPayload: the three input states the create/update payload
@@ -93,7 +94,7 @@ func TestCreatePayload_IncludesUsername(t *testing.T) {
 	m := &APIKeyModel{
 		Name:      types.StringValue("tf-acc-key"),
 		Username:  types.StringValue("truenas_admin"),
-		ExpiresAt: types.StringNull(),
+		ExpiresAt: normalize.NewRFC3339Null(),
 	}
 	p, diags := m.createPayload()
 	if diags.HasError() {
@@ -117,7 +118,7 @@ func TestCreatePayload_InvalidExpiresAt(t *testing.T) {
 	m := &APIKeyModel{
 		Name:      types.StringValue("tf-acc-key"),
 		Username:  types.StringValue("truenas_admin"),
-		ExpiresAt: types.StringValue("garbage"),
+		ExpiresAt: normalize.NewRFC3339Value("garbage"),
 	}
 	p, diags := m.createPayload()
 	if !diags.HasError() {
@@ -136,7 +137,7 @@ func TestUpdatePayload_OmitsUsername(t *testing.T) {
 	m := &APIKeyModel{
 		Name:      types.StringValue("tf-acc-key-renamed"),
 		Username:  types.StringValue("truenas_admin"),
-		ExpiresAt: types.StringNull(),
+		ExpiresAt: normalize.NewRFC3339Null(),
 	}
 	p, diags := m.updatePayload()
 	if diags.HasError() {
@@ -159,7 +160,7 @@ func TestUpdatePayload_AlwaysSendsExpiresAt(t *testing.T) {
 	m := &APIKeyModel{
 		Name:      types.StringValue("tf-acc-key"),
 		Username:  types.StringValue("truenas_admin"),
-		ExpiresAt: types.StringNull(),
+		ExpiresAt: normalize.NewRFC3339Null(),
 	}
 	p, diags := m.updatePayload()
 	if diags.HasError() {

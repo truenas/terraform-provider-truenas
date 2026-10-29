@@ -10,12 +10,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // TestAttributesMap_InvalidJSON verifies that attributesMap rejects
 // malformed JSON with an error diagnostic.
 func TestAttributesMap_InvalidJSON(t *testing.T) {
-	m := AlertServiceModel{Attributes: types.StringValue("{not valid json")}
+	m := AlertServiceModel{Attributes: normalize.NewJSONSubsetValue("{not valid json")}
 
 	attrs, diags := m.attributesMap()
 	if !diags.HasError() {
@@ -29,7 +30,7 @@ func TestAttributesMap_InvalidJSON(t *testing.T) {
 // TestAttributesMap_MissingType verifies that attributesMap rejects valid
 // JSON that lacks the required "type" key.
 func TestAttributesMap_MissingType(t *testing.T) {
-	m := AlertServiceModel{Attributes: types.StringValue(`{"to": "admin@example.com"}`)}
+	m := AlertServiceModel{Attributes: normalize.NewJSONSubsetValue(`{"to": "admin@example.com"}`)}
 
 	attrs, diags := m.attributesMap()
 	if !diags.HasError() {
@@ -43,7 +44,7 @@ func TestAttributesMap_MissingType(t *testing.T) {
 // TestAttributesMap_Valid verifies that attributesMap parses valid JSON with
 // a type key without error.
 func TestAttributesMap_Valid(t *testing.T) {
-	m := AlertServiceModel{Attributes: types.StringValue(`{"type": "Mail", "to": "admin@example.com"}`)}
+	m := AlertServiceModel{Attributes: normalize.NewJSONSubsetValue(`{"type": "Mail", "to": "admin@example.com"}`)}
 
 	attrs, diags := m.attributesMap()
 	if diags.HasError() {
@@ -61,7 +62,7 @@ func TestCreatePayload_Keys(t *testing.T) {
 		Name:       types.StringValue("my-alert"),
 		Level:      types.StringValue("WARNING"),
 		Enabled:    types.BoolValue(true),
-		Attributes: types.StringValue(`{"type": "Mail", "to": "admin@example.com"}`),
+		Attributes: normalize.NewJSONSubsetValue(`{"type": "Mail", "to": "admin@example.com"}`),
 	}
 
 	payload, diags := m.createPayload()
@@ -101,7 +102,7 @@ func TestCreatePayload_EnabledOmittedWhenUnset(t *testing.T) {
 		Name:       types.StringValue("my-alert"),
 		Level:      types.StringValue("WARNING"),
 		Enabled:    types.BoolNull(),
-		Attributes: types.StringValue(`{"type": "Mail", "to": "admin@example.com"}`),
+		Attributes: normalize.NewJSONSubsetValue(`{"type": "Mail", "to": "admin@example.com"}`),
 	}
 
 	payload, diags := m.createPayload()
@@ -129,7 +130,7 @@ func TestUpdatePayload_Keys(t *testing.T) {
 		ID:         types.Int64Value(7),
 		Name:       types.StringValue("my-alert"),
 		Level:      types.StringValue("CRITICAL"),
-		Attributes: types.StringValue(`{"type": "Slack", "url": "https://hooks.slack.com/x"}`),
+		Attributes: normalize.NewJSONSubsetValue(`{"type": "Slack", "url": "https://hooks.slack.com/x"}`),
 	}
 
 	payload, diags := m.updatePayload()
@@ -150,47 +151,66 @@ func TestUpdatePayload_Keys(t *testing.T) {
 	}
 }
 
-// TestAttributesDrifted_Identical verifies that identical maps are not
-// considered drifted.
-func TestAttributesDrifted_Identical(t *testing.T) {
-	state := map[string]any{"type": "Mail", "to": "admin@example.com"}
-	api := map[string]any{"type": "Mail", "to": "admin@example.com"}
+// readAttributesEqualsPrior reports whether Read's value for api keeps the
+// prior (configured) spelling, i.e. is semantically equal to it.
+func readAttributesEqualsPrior(t *testing.T, prior string, api map[string]any, writeOnly bool) bool {
+	t.Helper()
+	v, d := readAttributes(api, prior, writeOnly)
+	if d.HasError() {
+		t.Fatalf("readAttributes: %v", d)
+	}
+	eq, d := v.StringSemanticEquals(context.Background(), normalize.NewJSONSubsetValue(prior))
+	if d.HasError() {
+		t.Fatalf("semantic equals: %v", d)
+	}
+	return eq
+}
 
-	if attributesDrifted(state, api) {
-		t.Error("attributesDrifted() = true for identical maps, want false")
+// Server-added keys and any JSON spelling (heredoc) are not drift; a changed or
+// missing configured value is (B-061, B-120).
+func TestReadAttributes_Subset(t *testing.T) {
+	heredoc := "{\n  \"type\" : \"Mail\",\n  \"to\": \"admin@example.com\"\n}\n"
+	cases := []struct {
+		name string
+		api  map[string]any
+		wo   bool
+		want bool
+	}{
+		{"identical", map[string]any{"type": "Mail", "to": "admin@example.com"}, false, true},
+		{"server-added key", map[string]any{"type": "Mail", "to": "admin@example.com", "from": nil}, false, true},
+		{"server-added key, write-only", map[string]any{"type": "Mail", "to": "admin@example.com", "secret": "s"}, true, true},
+		{"changed value", map[string]any{"type": "Mail", "to": "other@example.com"}, false, false},
+		{"missing key", map[string]any{"type": "Mail"}, false, false},
+	}
+	for _, c := range cases {
+		if got := readAttributesEqualsPrior(t, heredoc, c.api, c.wo); got != c.want {
+			t.Errorf("%s: equal = %v, want %v", c.name, got, c.want)
+		}
 	}
 }
 
-// TestAttributesDrifted_ChangedValue verifies that a changed value for a
-// user-set key is reported as drift.
-func TestAttributesDrifted_ChangedValue(t *testing.T) {
-	state := map[string]any{"type": "Mail", "to": "admin@example.com"}
-	api := map[string]any{"type": "Mail", "to": "other@example.com"}
-
-	if !attributesDrifted(state, api) {
-		t.Error("attributesDrifted() = false for changed value, want true")
+// A read-only session's "********" is not read as data: the prior value is
+// kept, and a masked key the configuration does not have is dropped (B-034).
+func TestUnmaskRedacted(t *testing.T) {
+	got := unmaskRedacted(map[string]any{"type": "SNMPTrap", "v3_authkey": "********", "v3_privkey": "********"},
+		`{"type": "SNMPTrap", "v3_authkey": "real"}`)
+	if got["v3_authkey"] != "real" {
+		t.Errorf("v3_authkey = %v, want the prior value", got["v3_authkey"])
+	}
+	if _, ok := got["v3_privkey"]; ok {
+		t.Errorf("v3_privkey = %v, want dropped", got["v3_privkey"])
 	}
 }
 
-// TestAttributesDrifted_APIAddedKey verifies that a key present only in the
-// API response (a server-added default) is NOT considered drift.
-func TestAttributesDrifted_APIAddedKey(t *testing.T) {
-	state := map[string]any{"type": "Mail", "to": "admin@example.com"}
-	api := map[string]any{"type": "Mail", "to": "admin@example.com", "from": "noreply@example.com"}
-
-	if attributesDrifted(state, api) {
-		t.Error("attributesDrifted() = true for API-added extra key, want false")
+// The data source reports a redacted secret as null (B-034).
+func TestDataSource_RedactedIsNull(t *testing.T) {
+	var m AlertServiceDataSourceModel
+	api := &alertServiceAPI{ID: 1, Attributes: map[string]any{"type": "SNMPTrap", "v3_authkey": "********"}}
+	if d := responseToDataSourceModel(api, &m); d.HasError() {
+		t.Fatal(d)
 	}
-}
-
-// TestAttributesDrifted_MissingUserKey verifies that a user-set key absent
-// from the API response is considered drift.
-func TestAttributesDrifted_MissingUserKey(t *testing.T) {
-	state := map[string]any{"type": "Mail", "to": "admin@example.com"}
-	api := map[string]any{"type": "Mail"}
-
-	if !attributesDrifted(state, api) {
-		t.Error("attributesDrifted() = false for missing user key in API, want true")
+	if want := `{"type":"SNMPTrap","v3_authkey":null}`; m.Attributes.ValueString() != want {
+		t.Errorf("attributes = %s, want %s", m.Attributes.ValueString(), want)
 	}
 }
 

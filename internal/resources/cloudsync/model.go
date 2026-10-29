@@ -46,6 +46,18 @@ func injectCryptSecrets(payload map[string]any, cfg *CloudSyncModel) {
 	}
 }
 
+// cryptSecretsResendNeeded reports whether an update sends the write-only
+// encryption_password/encryption_salt: only when encryption_wo_version changed,
+// or when encryption is being turned on (cloudsync.update rejects encryption
+// without a password, and the stored one may be empty). Other updates leave
+// the stored values alone. (B-141)
+func cryptSecretsResendNeeded(plan, prior CloudSyncModel) bool {
+	if !plan.EncryptionWOVersion.Equal(prior.EncryptionWOVersion) {
+		return true
+	}
+	return plan.Encryption.ValueBool() && !prior.Encryption.ValueBool()
+}
+
 // scheduleAttrTypes describes the attribute types of the nested "schedule"
 // object. The model holds schedule as a types.Object, not a plain struct: the
 // model is shared with the data source, whose schedule is Computed (null in
@@ -99,6 +111,10 @@ type CloudSyncModel struct {
 	FilenameEncryption types.Bool   `tfsdk:"filename_encryption"`
 	EncryptionPassword types.String `tfsdk:"encryption_password"` // write-only
 	EncryptionSalt     types.String `tfsdk:"encryption_salt"`     // write-only
+	// EncryptionWOVersion triggers re-sending encryption_password/salt: the
+	// write-only values never reach state, so a changed value alone is not a
+	// diff (B-026).
+	EncryptionWOVersion types.Int64 `tfsdk:"encryption_wo_version"`
 
 	// Bandwidth-limit schedule: list of {time "HH:MM", bandwidth bytes/sec}.
 	Bwlimit types.List `tfsdk:"bwlimit"`

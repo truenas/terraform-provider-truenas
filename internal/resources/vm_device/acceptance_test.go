@@ -53,6 +53,8 @@ func TestAccVMDevice_basic(t *testing.T) {
 // update (or churn). The empty-plan re-apply asserts it stays a no-op. The
 // import-verify step ignores `attributes` because the server re-normalizes the
 // JSON (key order, defaults) so the raw string cannot be state-compared.
+// attributes_secrets_wo_version reads back null after import, so the first
+// apply records it in place and sends the password overlay once.
 func TestAccVMDevice_importNoReplace(t *testing.T) {
 	vmName := "tfaccvmdevimp" + strings.ReplaceAll(acctest.RandName(""), "-", "")
 	config := acctest.ProviderConfig() + testAccVMDeviceConfig(vmName, 5)
@@ -63,7 +65,7 @@ func TestAccVMDevice_importNoReplace(t *testing.T) {
 		CheckDestroy:             testAccCheckVMDeviceDestroyed,
 		Steps: append([]resource.TestStep{
 			{Config: config},
-		}, acctest.ImportReapplyNoop("truenas_vm_device.test", config, "attributes")...),
+		}, acctest.ImportReapplyNoop("truenas_vm_device.test", config, "attributes", "attributes_secrets_wo_version")...),
 	})
 }
 
@@ -75,7 +77,7 @@ func testAccVMDeviceConfig(vmName string, order int) string {
 	return fmt.Sprintf(`
 resource "truenas_vm" "test" {
   name      = %q
-  memory    = 536870912
+  memory    = 512
   vcpus     = 1
   autostart = false
   running   = false
@@ -90,11 +92,13 @@ resource "truenas_vm_device" "test" {
     resolution = "1024x768"
     wait       = false
     web        = false
-    # API requires a password for display devices and distinct SPICE/web ports.
-    password = "tfacc-spice-pw"
+    # Distinct SPICE/web ports. TrueNAS requires a password for display
+    # devices; it goes in the write-only overlay, never in attributes.
     port     = 15900
     web_port = 15901
   })
+  attributes_secrets_wo         = jsonencode({ password = "tfacc-spice-pw" })
+  attributes_secrets_wo_version = 1
 %s}
 `, vmName, orderLine)
 }
@@ -136,7 +140,7 @@ func testAccVMDeviceWOConfig(vmName, secret string) string {
 	return fmt.Sprintf(`
 resource "truenas_vm" "test" {
   name      = %q
-  memory    = 536870912
+  memory    = 512
   vcpus     = 1
   autostart = false
   running   = false

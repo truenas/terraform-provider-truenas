@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ datasource.DataSource = &DatasetDataSource{}
@@ -49,7 +50,7 @@ func (d *DatasetDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 			"checksum":                 dschema.StringAttribute{Computed: true},
 			"snapdir":                  dschema.StringAttribute{Computed: true},
 			"dedup":                    dschema.StringAttribute{Computed: true},
-			"recordsize":               dschema.StringAttribute{Computed: true},
+			"recordsize":               dschema.StringAttribute{Computed: true, CustomType: normalize.CaseInsensitiveType{}},
 			"copies":                   dschema.Int64Attribute{Computed: true},
 			"special_small_block_size": dschema.Int64Attribute{Computed: true},
 			"refreservation":           dschema.Int64Attribute{Computed: true},

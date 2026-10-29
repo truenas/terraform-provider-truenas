@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func int64List(t *testing.T, vals ...int64) types.List {
@@ -29,8 +30,8 @@ func int64List(t *testing.T, vals ...int64) types.List {
 func TestUpdatePayload_AllFieldsSet(t *testing.T) {
 	ctx := context.Background()
 	m := &ResilverConfigModel{
-		Begin:   types.StringValue("19:00"),
-		End:     types.StringValue("05:00"),
+		Begin:   normalize.NewTimeOfDayValue("19:00"),
+		End:     normalize.NewTimeOfDayValue("05:00"),
 		Enabled: types.BoolValue(true),
 		Weekday: int64List(t, 1, 2, 3, 4, 5),
 	}
@@ -74,8 +75,8 @@ func TestUpdatePayload_AllFieldsSet(t *testing.T) {
 func TestUpdatePayload_UnsetOptionalsOmitted(t *testing.T) {
 	ctx := context.Background()
 	m := &ResilverConfigModel{
-		Begin:   types.StringNull(),
-		End:     types.StringUnknown(),
+		Begin:   normalize.NewTimeOfDayNull(),
+		End:     normalize.NewTimeOfDayUnknown(),
 		Enabled: types.BoolNull(),
 		Weekday: types.ListUnknown(types.Int64Type),
 	}

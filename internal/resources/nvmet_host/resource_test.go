@@ -234,9 +234,9 @@ func TestNVMetHostCreatePayload_EmptySecretsOmitted(t *testing.T) {
 	}
 }
 
-// TestNVMetHostCreatePayload_EmptyDHGroupOmitted verifies that a known but
-// empty dhchap_dhgroup is NOT included in the payload.
-func TestNVMetHostCreatePayload_EmptyDHGroupOmitted(t *testing.T) {
+// TestNVMetHostCreatePayload_EmptyDHGroupClears verifies that a known but
+// empty dhchap_dhgroup is sent as an explicit null (B-024: "" clears it).
+func TestNVMetHostCreatePayload_EmptyDHGroupClears(t *testing.T) {
 	m := NVMetHostModel{
 		HostNQN:       types.StringValue("nqn.2014-08.org.nvmexpress:uuid:test"),
 		DHChapDHGroup: types.StringValue(""),
@@ -247,8 +247,48 @@ func TestNVMetHostCreatePayload_EmptyDHGroupOmitted(t *testing.T) {
 		t.Fatalf("createPayload returned diagnostic errors: %v", diags)
 	}
 
-	if _, ok := payload["dhchap_dhgroup"]; ok {
-		t.Error("payload should not contain 'dhchap_dhgroup' when it is an empty string")
+	if v, ok := payload["dhchap_dhgroup"]; !ok || v != nil {
+		t.Errorf("payload[dhchap_dhgroup] = %v (present=%v), want explicit nil for \"\"", v, ok)
+	}
+}
+
+// TestNVMetHostUpdatePayload_KeysClearedWhenUnset covers B-024: an update
+// sends null for a key that is not in config, so DH-CHAP is turned off, and
+// the config value otherwise.
+func TestNVMetHostUpdatePayload_KeysClearedWhenUnset(t *testing.T) {
+	m := NVMetHostModel{
+		HostNQN:       types.StringValue("nqn.2014-08.org.nvmexpress:uuid:test"),
+		DHChapKey:     types.StringValue("DHHC-1:00:abc:"),
+		DHChapCtrlKey: types.StringNull(),
+	}
+	payload, diags := m.updatePayload(context.Background())
+	if diags.HasError() {
+		t.Fatalf("updatePayload: %v", diags)
+	}
+	if payload["dhchap_key"] != "DHHC-1:00:abc:" {
+		t.Errorf("payload[dhchap_key] = %v, want the config key", payload["dhchap_key"])
+	}
+	if v, ok := payload["dhchap_ctrl_key"]; !ok || v != nil {
+		t.Errorf("payload[dhchap_ctrl_key] = %v (present=%v), want explicit nil", v, ok)
+	}
+}
+
+// TestNVMetHostResponseToModel_KeySet verifies the *_set flags: null (26.0)
+// and "" (28.0) both mean no key.
+func TestNVMetHostResponseToModel_KeySet(t *testing.T) {
+	empty, key := "", "DHHC-1:00:abc:"
+	for _, c := range []struct {
+		k    *string
+		want bool
+	}{{nil, false}, {&empty, false}, {&key, true}} {
+		var m NVMetHostModel
+		responseToModel(context.Background(), &nvmetHostAPI{DHChapKey: c.k, DHChapCtrlKey: c.k}, &m)
+		if m.DHChapKeySet.ValueBool() != c.want || m.DHChapCtrlKeySet.ValueBool() != c.want {
+			t.Errorf("key %v: set = %v/%v, want %v", c.k, m.DHChapKeySet, m.DHChapCtrlKeySet, c.want)
+		}
+		if !m.DHChapKey.IsNull() {
+			t.Errorf("responseToModel must never copy the key into the model")
+		}
 	}
 }
 

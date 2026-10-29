@@ -68,12 +68,35 @@ func (r *FailoverConfigResource) fetchConfig(ctx context.Context) (*failoverConf
 	return &api, nil
 }
 
-// applyUpdate calls failover.update. Probed job:false on both releases, so
-// a plain synchronous r.client.Call is sufficient (no CallJob polling
-// needed). payload MUST come from FailoverConfigModel.updatePayload — see
-// its doc comment for the safety contract this depends on.
+// applyUpdate calls failover.update with the configured fields whose value
+// differs from the current configuration; when nothing differs it makes no
+// call, so adopting the singleton on a non-HA system works. A real change on
+// a system that is not licensed for HA fails with a clear error instead of
+// failover.update's misleading one (B-128). Probed job:false on both
+// releases, so a plain synchronous r.client.Call is sufficient. payload MUST
+// come from FailoverConfigModel.updatePayload — see its doc comment for the
+// safety contract this depends on.
 func (r *FailoverConfigResource) applyUpdate(ctx context.Context, payload map[string]any) error {
-	_, err := r.client.Call(ctx, "failover.update", payload)
+	current, err := r.fetchConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("read current failover configuration: %w", err)
+	}
+	payload = changedFields(payload, current)
+	if len(payload) == 0 {
+		return nil
+	}
+	raw, err := r.client.CallRead(ctx, "failover.licensed")
+	if err != nil {
+		return fmt.Errorf("check HA license: %w", err)
+	}
+	var licensed bool
+	if err := json.Unmarshal(raw, &licensed); err != nil {
+		return fmt.Errorf("parse failover.licensed: %w", err)
+	}
+	if !licensed {
+		return notHAError(payload)
+	}
+	_, err = r.client.Call(ctx, "failover.update", payload)
 	return err
 }
 

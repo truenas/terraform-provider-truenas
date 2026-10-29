@@ -40,8 +40,10 @@ func TestNVMetSubsysSchema(t *testing.T) {
 	if !nameStr.IsRequired() {
 		t.Error("'name' should be Required")
 	}
-	if len(nameStr.PlanModifiers) == 0 {
-		t.Error("'name' should have plan modifiers (RequiresReplace)")
+	// B-041: nvmet.subsys.update renames in place, so name must not force
+	// replacement.
+	if len(nameStr.PlanModifiers) != 0 {
+		t.Error("'name' should have no plan modifiers (renamed in place, not RequiresReplace)")
 	}
 
 	optionalComputedString := []string{"subnqn", "ieee_oui"}
@@ -137,15 +139,15 @@ func TestCreatePayload_NameAlwaysPresent(t *testing.T) {
 	}
 }
 
-// TestCreatePayload_EmptySubNQNSendsNull verifies the three-way rule for
-// subnqn/ieee_oui: null/unknown is omitted, but an explicitly known empty
-// string is sent as an explicit JSON null (clear), distinct from omission.
-func TestCreatePayload_EmptySubNQNSendsNull(t *testing.T) {
+// TestCreatePayload_EmptyIEEEOUISendsNull verifies the three-way rule for
+// ieee_oui: an explicitly known empty string is sent as an explicit JSON null
+// (clear). subnqn has no such rule ("" is rejected by the schema, B-103).
+func TestCreatePayload_EmptyIEEEOUISendsNull(t *testing.T) {
 	ctx := context.Background()
 
 	m := NVMetSubsysModel{
 		Name:     types.StringValue("test-subsys"),
-		SubNQN:   types.StringValue(""),
+		SubNQN:   types.StringNull(),
 		IEEEOUI:  types.StringValue(""),
 		ANA:      types.BoolNull(),
 		PIEnable: types.BoolNull(),
@@ -155,14 +157,6 @@ func TestCreatePayload_EmptySubNQNSendsNull(t *testing.T) {
 	payload, diags := m.createPayload(ctx)
 	if diags.HasError() {
 		t.Fatalf("createPayload returned diagnostic errors: %v", diags)
-	}
-
-	subnqn, ok := payload["subnqn"]
-	if !ok {
-		t.Fatal("expected 'subnqn' key present (explicit null) for empty string, got omitted")
-	}
-	if subnqn != nil {
-		t.Errorf("payload[subnqn] = %v, want nil", subnqn)
 	}
 
 	ieeeOUI, ok := payload["ieee_oui"]
@@ -241,9 +235,9 @@ func TestCreatePayload_AllFieldsKnown(t *testing.T) {
 	}
 }
 
-// TestUpdatePayload_NoNameKey verifies that "name" is never included in the
-// update payload, even when the model's Name field is known.
-func TestUpdatePayload_NoNameKey(t *testing.T) {
+// TestUpdatePayload_IncludesName verifies that "name" is sent on update
+// (B-041: the API renames in place).
+func TestUpdatePayload_IncludesName(t *testing.T) {
 	ctx := context.Background()
 
 	m := NVMetSubsysModel{
@@ -261,8 +255,8 @@ func TestUpdatePayload_NoNameKey(t *testing.T) {
 		t.Fatalf("updatePayload returned diagnostic errors: %v", diags)
 	}
 
-	if _, ok := payload["name"]; ok {
-		t.Error("update payload must never contain 'name' key")
+	if payload["name"] != "test-subsys" {
+		t.Errorf("payload[name] = %v, want test-subsys", payload["name"])
 	}
 	if payload["subnqn"] != "nqn.2011-06.com.truenas:uuid:custom" {
 		t.Errorf("payload[subnqn] = %v, want nqn.2011-06.com.truenas:uuid:custom", payload["subnqn"])

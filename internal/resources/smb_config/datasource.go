@@ -124,7 +124,7 @@ func (d *SMBConfigDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 			"search_protocols": dschema.ListAttribute{
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "Additional network protocols used for server discovery (e.g. WSD, NSD). Reports " +
+				Description: "Search protocols the SMB server offers to clients (SPOTLIGHT is the only value TrueNAS accepts). Reports " +
 					"an empty list on TrueNAS releases below 26.0 (the field does not exist there); " +
 					"writable (via the truenas_smb_config resource) only on TrueNAS 26.0 and later.",
 			},

@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // containerDeviceVersionFloorMajor/Minor is the minimum TrueNAS
@@ -100,24 +101,15 @@ func (m *ContainerDeviceModel) attributesMap() (map[string]any, diag.Diagnostics
 
 // attributesDrifted reports whether any key present in stateAttrs has a
 // different value in apiAttrs. API-added default keys are ignored (not
-// drift) since the API may normalize/expand attributes with defaults (e.g.
-// NIC's auto-generated "mac", or FILESYSTEM's "target" default when the
-// user never set one — see schema.go's Description for the latter's known
-// quirk). Mirrors truenas_vm_device's own attributesDrifted exactly.
+// drift), at every nesting level, since the API may normalize/expand
+// attributes with defaults. A NIC "mac" compares as a MAC address: the server
+// stores it in lower case (BUGS B-082, B-083).
 func attributesDrifted(stateAttrs, apiAttrs map[string]any) bool {
-	for k, v := range stateAttrs {
-		av, ok := apiAttrs[k]
-		if !ok {
-			return true
-		}
-		sb, _ := json.Marshal(v)
-		ab, _ := json.Marshal(av)
-		if string(sb) != string(ab) {
-			return true
-		}
-	}
-	return false
+	return !normalize.EqualTreeFunc(stateAttrs, apiAttrs, true, attributeLeafEqual)
 }
+
+// attributeLeafEqual compares the attribute values the server normalizes.
+var attributeLeafEqual = normalize.KeyEqual(map[string]func(a, b string) bool{"mac": normalize.EqualMAC})
 
 // responseToModel maps containerDeviceAPI onto ContainerDeviceModel. ID and
 // Container are always taken from the API; Attributes is left untouched by

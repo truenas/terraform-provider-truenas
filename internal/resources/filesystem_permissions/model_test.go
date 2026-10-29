@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // TestPermModeString verifies the full st_mode -> permission-bits-only
@@ -33,7 +34,7 @@ func TestPermModeString(t *testing.T) {
 func TestSetpermPayload_FullySet(t *testing.T) {
 	m := &FilesystemPermissionsModel{
 		Path:      types.StringValue("/mnt/tank/tf-acc-fsperm"),
-		Mode:      types.StringValue("0750"),
+		Mode:      normalize.NewOctalModeValue("0750"),
 		UID:       types.Int64Value(1000),
 		GID:       types.Int64Value(1000),
 		Recursive: types.BoolValue(true),
@@ -73,7 +74,7 @@ func TestSetpermPayload_FullySet(t *testing.T) {
 func TestSetpermPayload_OmitsUnsetModeUidGid(t *testing.T) {
 	m := &FilesystemPermissionsModel{
 		Path:      types.StringValue("/mnt/tank/tf-acc-fsperm"),
-		Mode:      types.StringNull(),
+		Mode:      normalize.NewOctalModeNull(),
 		UID:       types.Int64Null(),
 		GID:       types.Int64Null(),
 		Recursive: types.BoolNull(),
@@ -108,10 +109,10 @@ func TestHasWrite(t *testing.T) {
 		m    *FilesystemPermissionsModel
 		want bool
 	}{
-		{"all unset", &FilesystemPermissionsModel{Mode: types.StringNull(), UID: types.Int64Null(), GID: types.Int64Null()}, false},
-		{"mode set", &FilesystemPermissionsModel{Mode: types.StringValue("0750"), UID: types.Int64Null(), GID: types.Int64Null()}, true},
-		{"uid set", &FilesystemPermissionsModel{Mode: types.StringNull(), UID: types.Int64Value(1000), GID: types.Int64Null()}, true},
-		{"gid set", &FilesystemPermissionsModel{Mode: types.StringNull(), UID: types.Int64Null(), GID: types.Int64Value(1000)}, true},
+		{"all unset", &FilesystemPermissionsModel{Mode: normalize.NewOctalModeNull(), UID: types.Int64Null(), GID: types.Int64Null()}, false},
+		{"mode set", &FilesystemPermissionsModel{Mode: normalize.NewOctalModeValue("0750"), UID: types.Int64Null(), GID: types.Int64Null()}, true},
+		{"uid set", &FilesystemPermissionsModel{Mode: normalize.NewOctalModeNull(), UID: types.Int64Value(1000), GID: types.Int64Null()}, true},
+		{"gid set", &FilesystemPermissionsModel{Mode: normalize.NewOctalModeNull(), UID: types.Int64Null(), GID: types.Int64Value(1000)}, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

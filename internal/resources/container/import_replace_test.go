@@ -70,6 +70,9 @@ removed {
 
 // idmap DEFAULT spelled with jsonencode; import then replan.
 func TestAccContainer_idmapDefaultImport(t *testing.T) {
+	if !acctest.ServerVersionAtLeast(t, 26, 0) {
+		t.Skip("truenas_container requires TrueNAS 26.0 or later")
+	}
 	name := "tfhuntct5"
 	var id string
 	cfg := acctest.ProviderConfig() + containerConfig(name, latest, `  idmap = jsonencode({ type = "DEFAULT" })`)

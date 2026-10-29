@@ -66,8 +66,11 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"force": schema.BoolAttribute{
-				Optional:    true,
-				Description: "Bypass validation that checks whether the server is reachable. Write-only: not stored, not read back.",
+				Optional:  true,
+				WriteOnly: true,
+				Description: "Bypass validation that checks whether the server is reachable. A per-apply directive: " +
+					"write-only (never stored in state, so an imported server plans no change for it). Sent on every " +
+					"create and update where it is set. Requires Terraform >= 1.11.",
 			},
 		},
 	}

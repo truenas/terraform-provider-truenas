@@ -11,9 +11,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/list"
 	listschema "github.com/hashicorp/terraform-plugin-framework/list/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ list.ListResource = &AcmeDnsAuthenticatorListResource{}
@@ -74,7 +74,7 @@ func (l *AcmeDnsAuthenticatorListResource) mapRow(ctx context.Context, req list.
 		if res.Diagnostics.HasError() {
 			return res
 		}
-		m.Attributes = types.StringValue(attrsJSON)
+		m.Attributes = normalize.NewJSONSubsetValue(attrsJSON)
 		res.Diagnostics.Append(res.Resource.Set(ctx, &m)...)
 	}
 	return res

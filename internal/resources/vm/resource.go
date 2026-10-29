@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
 )
@@ -85,23 +87,53 @@ func (r *VMResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 
+	// Read before the read-back below overwrites plan.Running with the
+	// current (stopped) state.
 	wantRunning := !plan.Running.IsNull() && !plan.Running.IsUnknown() && plan.Running.ValueBool()
-	if wantRunning {
-		if _, err := r.client.Call(ctx, "vm.start", created.ID); err != nil {
-			resp.Diagnostics.AddError("Start VM failed", err.Error())
-			return
-		}
-	}
 
+	// The VM exists from here on: record it in state before anything else can
+	// fail, so a failed start or read-back leaves a tainted resource that the
+	// next apply replaces, not an orphan whose name blocks the next create.
+	// (BUGS B-045)
 	apiResp, err := r.getInstance(ctx, created.ID)
 	if err != nil {
+		resp.Diagnostics.Append(r.saveCreated(ctx, resp, plan, created.ID)...)
 		resp.Diagnostics.AddError("Read-back after create failed", err.Error())
 		return
 	}
-
 	responseToModel(apiResp, &plan)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if !wantRunning {
+		return
+	}
+	if _, err := r.client.Call(ctx, "vm.start", created.ID); err != nil {
+		resp.Diagnostics.AddError("Start VM failed", err.Error())
+		return
+	}
+	apiResp, err = r.getInstance(ctx, created.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Read-back after start failed", err.Error())
+		return
+	}
+	responseToModel(apiResp, &plan)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// saveCreated records a just-created VM by id alone when its read-back
+// failed, so it is tracked (tainted) rather than orphaned. Unknown computed
+// values become null; the next refresh fills them in.
+func (r *VMResource) saveCreated(ctx context.Context, resp *resource.CreateResponse, plan VMModel, id int64) diag.Diagnostics {
+	var diags diag.Diagnostics
+	plan.ID = types.Int64Value(id)
+	nullUnknowns(&plan)
+	diags.Append(listing.SetIdentity(ctx, resp.Identity, id)...)
+	diags.Append(resp.State.Set(ctx, &plan)...)
+	return diags
 }
 
 func (r *VMResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {

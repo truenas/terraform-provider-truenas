@@ -17,9 +17,10 @@ import (
 // "RECEIVED" when set by a ZFS replication receive — both are explicit values
 // that belong to this zvol. "INHERITED" and "DEFAULT" are not set here.
 type zfsSourced struct {
-	Value  *string         `json:"value"`
-	Parsed json.RawMessage `json:"parsed"`
-	Source string          `json:"source"`
+	Value    *string         `json:"value"`
+	Parsed   json.RawMessage `json:"parsed"`
+	RawValue *string         `json:"rawvalue"`
+	Source   string          `json:"source"`
 }
 
 // isExplicitSource reports whether a ZFS property source represents a value
@@ -35,9 +36,16 @@ func (z zfsSourced) isExplicit() bool { return isExplicitSource(z.Source) }
 
 // parsedInt decodes the parsed field as an int64, tolerating either a JSON
 // number or a numeric string — pool.dataset.get_instance is not consistent
-// about which it uses for byte-valued properties.
+// about which it uses for byte-valued properties. A reservation or
+// refreservation of 0 is reported as parsed = null even when set LOCAL, so a
+// null parsed falls back to rawvalue ("0"). (B-090)
 func (z zfsSourced) parsedInt() (int64, bool) {
 	if len(z.Parsed) == 0 || string(z.Parsed) == "null" {
+		if z.RawValue != nil {
+			if v, err := strconv.ParseInt(strings.TrimSpace(*z.RawValue), 10, 64); err == nil {
+				return v, true
+			}
+		}
 		return 0, false
 	}
 	var n int64

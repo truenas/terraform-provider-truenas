@@ -31,7 +31,7 @@ resource "truenas_nvmet_port" "tcp" {
 ### Optional
 
 - `addr_trsvcid` (Number) Transport service ID (TCP/RDMA port number). Defaults to 4420.
-- `enabled` (Boolean) Cannot change an enabled port while the NVMe target service is running.
+- `enabled` (Boolean) Enable the port. While the NVMe-oF target runs, TrueNAS refuses changes to an enabled port that has subsystems attached, so the provider disables the port for the change and re-enables it (initiators lose the port briefly).
 - `inline_data_size` (Number) Inline data size (bytes) for this port.
 - `max_queue_size` (Number) Maximum queue size for this port.
 - `pi_enable` (Boolean) Enable end-to-end data protection (PI) for this port.

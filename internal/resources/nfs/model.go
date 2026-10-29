@@ -52,17 +52,17 @@ func (m *NFSShareModel) apiPayload() map[string]any {
 	if !m.ReadOnly.IsNull() && !m.ReadOnly.IsUnknown() {
 		p["ro"] = m.ReadOnly.ValueBool()
 	}
-	if !m.MapRoot.IsNull() && !m.MapRoot.IsUnknown() {
-		p["maproot_user"] = m.MapRoot.ValueString()
+	if !m.MapRoot.IsUnknown() {
+		p["maproot_user"] = nullIfEmpty(m.MapRoot)
 	}
-	if !m.MapGroup.IsNull() && !m.MapGroup.IsUnknown() {
-		p["maproot_group"] = m.MapGroup.ValueString()
+	if !m.MapGroup.IsUnknown() {
+		p["maproot_group"] = nullIfEmpty(m.MapGroup)
 	}
-	if !m.MapAll.IsNull() && !m.MapAll.IsUnknown() {
-		p["mapall_user"] = m.MapAll.ValueString()
+	if !m.MapAll.IsUnknown() {
+		p["mapall_user"] = nullIfEmpty(m.MapAll)
 	}
-	if !m.MapAllGr.IsNull() && !m.MapAllGr.IsUnknown() {
-		p["mapall_group"] = m.MapAllGr.ValueString()
+	if !m.MapAllGr.IsUnknown() {
+		p["mapall_group"] = nullIfEmpty(m.MapAllGr)
 	}
 	if !m.ExposeSns.IsNull() && !m.ExposeSns.IsUnknown() {
 		p["expose_snapshots"] = m.ExposeSns.ValueBool()
@@ -79,14 +79,29 @@ func (m *NFSShareModel) apiPayload() map[string]any {
 	if !m.Networks.IsNull() && !m.Networks.IsUnknown() {
 		var nets []string
 		if diags := m.Networks.ElementsAs(context.Background(), &nets, false); !diags.HasError() {
+			if nets == nil {
+				nets = []string{}
+			}
 			p["networks"] = nets
 		}
 	}
 	if !m.Hosts.IsNull() && !m.Hosts.IsUnknown() {
 		var hosts []string
 		if diags := m.Hosts.ElementsAs(context.Background(), &hosts, false); !diags.HasError() {
+			if hosts == nil {
+				hosts = []string{}
+			}
 			p["hosts"] = hosts
 		}
 	}
 	return p
+}
+
+// nullIfEmpty maps a null or "" map user/group to JSON null, the server's
+// "no mapping" value, so removing the attribute clears the mapping.
+func nullIfEmpty(v types.String) any {
+	if v.IsNull() || v.ValueString() == "" {
+		return nil
+	}
+	return v.ValueString()
 }

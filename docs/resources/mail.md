@@ -55,7 +55,7 @@ output "mail_server" {
 - `fromname` (String) "From" display name used on outgoing mail.
 - `outgoingserver` (String) Outgoing SMTP server hostname.
 - `pass` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SMTP authentication password (never read back from TrueNAS). Write-only: never stored in Terraform state. Requires Terraform >= 1.11.
-- `pass_wo_version` (Number) Rotation trigger for the write-only `pass`. A write-only value is absent from state, so Terraform cannot detect that the password changed. Bump this integer whenever `pass` changes to make Terraform re-send it. Optional.
+- `pass_wo_version` (Number) Rotation trigger for the write-only `pass`. A write-only value is absent from state, so Terraform cannot detect that the password changed. Bump this integer whenever `pass` changes to make Terraform re-send it. `pass` is sent on create and, after that, only when this integer changes; other updates leave the stored password alone. Optional.
 - `port` (Number) Outgoing SMTP server port.
 - `security` (String) SMTP transport security: one of PLAIN, SSL, TLS.
 - `smtp` (Boolean) Whether SMTP authentication is enabled.

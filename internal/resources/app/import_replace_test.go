@@ -65,6 +65,7 @@ removed {
 					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 				},
 			},
+			appCleanupStep(t, name, ""),
 		},
 	})
 }

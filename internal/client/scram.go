@@ -12,6 +12,7 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -258,13 +259,38 @@ func MechanismChoices(ctx context.Context, c *Client) ([]string, error) {
 // AuthAPIKeyAuto picks the strongest supported API-key mechanism:
 // SCRAM-SHA-512 when the server offers it (TrueNAS 26.0+) and the key
 // owner's username is known, otherwise the legacy plain login. The
-// mechanism probe failing (as it does on 25.10) selects plain.
+// mechanism probe failing (as it does on 25.10) selects plain, except when
+// it failed because of rate limiting: then SCRAM is attempted directly.
 func AuthAPIKeyAuto(ctx context.Context, c *Client, username, apiKey string) error {
 	if username != "" {
 		choices, err := MechanismChoices(ctx, c)
+		if IsRateLimited(err) {
+			// The probe was rate limited, not refused, so it says nothing
+			// about SCRAM support. Falling back to the plain login here
+			// would send the key secret to a server that may support SCRAM;
+			// try SCRAM instead (auth.login_ex has its own rate-limit
+			// bucket) and use the plain login only if the server rejects
+			// the SCRAM mechanism itself (25.10).
+			err := AuthAPIKeySCRAM(ctx, c, username, apiKey)
+			if isSCRAMUnsupported(err) {
+				return AuthAPIKey(ctx, c, apiKey)
+			}
+			return err
+		}
 		if err == nil && slices.Contains(choices, "SCRAM") {
 			return AuthAPIKeySCRAM(ctx, c, username, apiKey)
 		}
 	}
 	return AuthAPIKey(ctx, c, apiKey)
+}
+
+// isSCRAMUnsupported reports whether err is a server rejecting the SCRAM
+// mechanism itself, as 25.10 does: "[EINVAL] login_data: Input tag 'SCRAM'
+// found using 'mechanism' does not match any of the expected tags".
+func isSCRAMUnsupported(err error) bool {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || IsRateLimited(err) {
+		return false
+	}
+	return strings.Contains(apiErr.Message, "'SCRAM'") && strings.Contains(apiErr.Message, "does not match")
 }

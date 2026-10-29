@@ -3,7 +3,11 @@
 
 package app
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
+)
 
 // projectConfigOntoUserShape returns the live app config reduced to only the
 // keys (recursively) that the user set in their own `values` document. This is
@@ -19,6 +23,9 @@ import "encoding/json"
 // decoded app.config object. The result is canonical JSON (sorted keys, like
 // Terraform's jsonencode), so when nothing drifted it equals the user's input.
 // On any parse error it returns userValuesJSON unchanged (never invent drift).
+// When the projection is semantically equal to the user's document, the user's
+// string is returned as written, so a heredoc or hand-formatted JSON document
+// (whitespace, key order) is not reported as drift (B-095).
 func projectConfigOntoUserShape(userValuesJSON string, liveConfig map[string]any) string {
 	var userShape map[string]any
 	if err := json.Unmarshal([]byte(userValuesJSON), &userShape); err != nil {
@@ -27,6 +34,9 @@ func projectConfigOntoUserShape(userValuesJSON string, liveConfig map[string]any
 	projected := projectMap(liveConfig, userShape)
 	out, err := json.Marshal(projected)
 	if err != nil {
+		return userValuesJSON
+	}
+	if normalize.EqualTree(userShape, projected, false) {
 		return userValuesJSON
 	}
 	return string(out)
@@ -43,13 +53,36 @@ func projectMap(server, userShape map[string]any) map[string]any {
 		if !ok {
 			continue
 		}
-		if um, isMap := uv.(map[string]any); isMap {
-			if sm, isSrvMap := sv.(map[string]any); isSrvMap {
-				out[k] = projectMap(sm, um)
-				continue
-			}
-		}
-		out[k] = sv
+		out[k] = projectValue(sv, uv)
 	}
 	return out
+}
+
+// projectValue projects one server value onto the user's value of the same
+// key. Objects recurse through projectMap. Lists recurse item by item, so the
+// defaults the server fills into each item of a list of objects (e.g.
+// additional_storage[].read_only, host_path_config.acl_enable) are not drift
+// (B-094). A list whose length differs from the user's is real drift and is
+// returned with the server's extra items whole; any other value is the
+// server's.
+func projectValue(server, user any) any {
+	switch u := user.(type) {
+	case map[string]any:
+		if sm, ok := server.(map[string]any); ok {
+			return projectMap(sm, u)
+		}
+	case []any:
+		if sl, ok := server.([]any); ok {
+			out := make([]any, len(sl))
+			for i, sv := range sl {
+				if i < len(u) {
+					out[i] = projectValue(sv, u[i])
+				} else {
+					out[i] = sv
+				}
+			}
+			return out
+		}
+	}
+	return server
 }

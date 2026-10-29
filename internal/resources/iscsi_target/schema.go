@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -31,15 +32,22 @@ func resourceSchema() schema.Schema {
 				Description: "iSCSI target name (IQN suffix).",
 			},
 			"alias": schema.StringAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "Optional human-readable alias for the target.",
+				Optional: true,
+				Computed: true,
+				Description: "Optional human-readable alias for the target. Set to \"\" to clear it; left out of " +
+					"config, the server value is kept.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"mode": schema.StringAttribute{
 				Validators:  []validator.String{stringvalidator.OneOf("BOTH", "FC", "ISCSI")},
 				Optional:    true,
 				Computed:    true,
 				Description: "Protocol mode: ISCSI (default), FC, or BOTH.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"groups": schema.ListNestedAttribute{
 				Optional:    true,

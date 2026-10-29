@@ -113,6 +113,9 @@ func restoreMail(t *testing.T, orig mailOriginal) {
 // Terraform steps fail.
 func TestAccMail_setAndRestore(t *testing.T) {
 	acctest.DisruptiveCheck(t)
+	// Every field the configuration below writes, not only the one varied.
+	restoreConfigKeys(t,
+		"fromname", "outgoingserver", "port", "security", "smtp", "user", "pass")
 
 	orig := readMailOriginal(t)
 	// mail.update requires fromemail on every call. On a box where mail was

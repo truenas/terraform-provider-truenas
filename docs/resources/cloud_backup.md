@@ -88,13 +88,13 @@ variable "backup_s3_secret_access_key" {
 
 - `absolute_paths` (Boolean) Preserve absolute paths in each backup (cannot be true when snapshot is true). Defaults to false. Immutable: excluded from cloud_backup.update's accepted fields (probed against core.get_methods), so changing this forces a new resource.
 - `cache_path` (String) Local path used to cache restic metadata. If not set, performance may degrade. Null when unset.
-- `description` (String) Name of the task to display in the UI. Defaults to an empty string.
+- `description` (String) Name of the task to display in the UI. Defaults to an empty string; removing it clears it.
 - `enabled` (Boolean) Whether the task is enabled. Defaults to true.
 - `exclude` (List of String) Paths to pass to `restic backup --exclude`. Defaults to an empty list.
 - `include` (List of String) Paths to pass to `restic backup --include`. Defaults to an empty list.
 - `password` (String, Sensitive) Password for the restic repository (RESTIC_PASSWORD). Marked Sensitive (kept out of plan/apply output), but — unlike password_wo — it IS stored in state and read back on refresh (TrueNAS returns it unmasked to an admin session). Use password_wo instead to keep it out of state. Exactly one of password or password_wo must be set.
 - `password_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only alternative to password: the restic repository password read from configuration and never stored in state, and not read back on refresh. Requires password_wo_version. Exactly one of password or password_wo must be set.
-- `password_wo_version` (Number) Version trigger for password_wo. Because a write-only value is absent from state, its rotation cannot be detected automatically; bump this integer to re-send a changed password_wo. Required when password_wo is set.
+- `password_wo_version` (Number) Version trigger for password_wo. Because a write-only value is absent from state, its rotation cannot be detected automatically; bump this integer to re-send a changed password_wo. password_wo is sent on create and, after that, only when this integer changes; other updates leave the stored password alone. Required when password_wo is set.
 - `post_script` (String) A Bash script to run immediately after every backup if it succeeds. Defaults to an empty string.
 - `pre_script` (String) A Bash script to run immediately before every backup. Defaults to an empty string.
 - `rate_limit` (Number) Maximum upload/download rate in KiB/s, applied to cloud_backup.sync/restore. Null (the default) means no rate limit. Must be positive when set.

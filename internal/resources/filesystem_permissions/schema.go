@@ -7,9 +7,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func resourceSchema() schema.Schema {
@@ -45,39 +47,54 @@ func resourceSchema() schema.Schema {
 					"from filesystem.stat's \"mode\" field, which is the full stat(2) st_mode (file-type bits " +
 					"included, e.g. a directory reads as decimal 16872 for 0750) — this provider masks it to " +
 					"the low 12 bits and re-encodes as a 4-digit octal string before storing it, so state " +
-					"always reflects just the permission bits. Omit to leave the path's existing mode " +
+					"always reflects just the permission bits; \"750\" and \"0750\" compare equal. Omit to leave the path's existing mode " +
 					"unchanged (filesystem.setperm treats a null mode as \"leave unchanged\").",
 				Validators: []validator.String{stringvalidator.RegexMatches(
 					modeRegexp(), "must be 3 or 4 octal digits, e.g. \"0750\" or \"750\"",
 				)},
+				// "755" and "0755" are the same mode: the 3-digit form read back as
+				// "0755" and failed the apply. (B-091)
+				CustomType: normalize.OctalModeType{},
+				PlanModifiers: []planmodifier.String{
+					normalize.KeepStateIfEquivalent(normalize.OctalModeType{}),
+					// Changed only when configured; keep it known on other updates.
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"uid": schema.Int64Attribute{
 				Optional: true,
 				Computed: true,
 				Description: "Numeric user ID to set as owner. Read back from filesystem.stat's \"uid\" " +
 					"field. Omit to leave the path's existing owner unchanged.",
-				Validators: []validator.Int64{int64validator.Between(-1, 2147483647)},
+				// -1 means "unchanged" to setperm but reads back as the real
+				// owner, so it failed the apply; leave the attribute unset
+				// instead. (B-091)
+				Validators: []validator.Int64{int64validator.Between(0, 2147483647)},
+				// Changed only when configured; keep it known on other updates.
+				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 			},
 			"gid": schema.Int64Attribute{
 				Optional: true,
 				Computed: true,
 				Description: "Numeric group ID to set as group owner. Read back from filesystem.stat's " +
 					"\"gid\" field. Omit to leave the path's existing group owner unchanged.",
-				Validators: []validator.Int64{int64validator.Between(-1, 2147483647)},
+				Validators:    []validator.Int64{int64validator.Between(0, 2147483647)},
+				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 			},
 			"recursive": schema.BoolAttribute{
-				Optional: true,
+				Optional:  true,
+				WriteOnly: true,
 				Description: "Apply mode/uid/gid recursively to everything under \"path\" (filesystem." +
-					"setperm's \"options.recursive\"), limited to the same dataset. This is an apply-time " +
-					"instruction, not a queryable property of the path — TrueNAS has nothing to read it back " +
-					"from, so it is not Computed, is never echoed into state, and must be ignored on import " +
-					"(ImportStateVerifyIgnore). Defaults to false.",
+					"setperm's \"options.recursive\"), limited to the same dataset, whenever they are applied. " +
+					"Write-only: an apply-time instruction with nothing to read back, so it is never stored in " +
+					"state, an import never differs from it, and changing it alone plans nothing (it is used on " +
+					"the next apply that changes mode, uid or gid). Defaults to false.",
 			},
 			"traverse": schema.BoolAttribute{
-				Optional: true,
+				Optional:  true,
+				WriteOnly: true,
 				Description: "When \"recursive\" is set, also cross into child dataset boundaries " +
-					"(filesystem.setperm's \"options.traverse\"). Same apply-time-only caveats as " +
-					"\"recursive\" apply here. Defaults to false.",
+					"(filesystem.setperm's \"options.traverse\"). Write-only, like \"recursive\". Defaults to false.",
 			},
 		},
 	}

@@ -213,7 +213,7 @@ func TestResponseToModel(t *testing.T) {
 // TestResponseToModel_NilPreferredPoolAndBridgeBecomeNull verifies a nil
 // *string from the API (both probed live: lxc.config's preferred_pool and
 // bridge are null on an unconfigured LXC install) maps to a null
-// types.String, not an empty string.
+// preferred_pool, and to the automatic bridge "[AUTO]" (B-081).
 func TestResponseToModel_NilPreferredPoolAndBridgeBecomeNull(t *testing.T) {
 	api := &lxcConfigAPI{
 		ID:        1,
@@ -227,8 +227,8 @@ func TestResponseToModel_NilPreferredPoolAndBridgeBecomeNull(t *testing.T) {
 	if !m.PreferredPool.IsNull() {
 		t.Errorf("PreferredPool = %#v, want null", m.PreferredPool)
 	}
-	if !m.Bridge.IsNull() {
-		t.Errorf("Bridge = %#v, want null", m.Bridge)
+	if m.Bridge.ValueString() != "[AUTO]" {
+		t.Errorf("Bridge = %#v, want [AUTO]", m.Bridge)
 	}
 }
 

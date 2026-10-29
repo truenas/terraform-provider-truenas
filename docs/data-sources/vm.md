@@ -37,8 +37,8 @@ Fetches a TrueNAS VM by name.
 - `hyperv_enlightenments` (Boolean)
 - `id` (Number) Numeric VM ID.
 - `machine_type` (String)
-- `memory` (Number) Memory allocated to the VM, in bytes.
-- `min_memory` (Number) Minimum memory for ballooning, in bytes (0 = unset).
+- `memory` (Number) Memory allocated to the VM, in MiB (mebibytes).
+- `min_memory` (Number) Minimum memory for ballooning, in MiB (mebibytes); 0 when unset.
 - `nodeset` (String)
 - `pin_vcpus` (Boolean)
 - `running` (Boolean)

@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func resourceSchema() schema.Schema {
@@ -19,12 +20,10 @@ func resourceSchema() schema.Schema {
 			"keyed by share_name rather than a TrueNAS-assigned id. This is the SMB \"Share ACL\" surface " +
 			"(who may connect to the share and at what level), distinct from the filesystem ACL on the " +
 			"share's path (truenas_filesystem_acl) and from the share's own settings (truenas_smb_share).\n\n" +
-			"Like truenas_filesystem_acl this follows write-what-you-said: the entries you configure are " +
-			"kept in state verbatim, and a read only rewrites them when the share ACL genuinely changed. " +
-			"The server resolves a principal you give by one selector into the others (e.g. an ae_who_sid " +
-			"of \"S-1-1-0\" reads back with ae_who_str \"everyone@\"); those extra resolved fields are " +
-			"deliberately not stored, so specify exactly one of ae_who_sid / ae_who_id / ae_who_str per " +
-			"entry.\n\n" +
+			"Each entry names its principal by exactly one of ae_who_sid or ae_who_id. The server stores " +
+			"the SID and resolves the other fields (e.g. ae_who_sid \"S-1-1-0\" reads back with ae_who_str " +
+			"\"everyone@\"); all three are kept in state, so an imported share ACL plans no change whichever " +
+			"selector the configuration uses.\n\n" +
 			"Delete semantics: `terraform destroy` resets the share ACL to the TrueNAS default of a single " +
 			"\"everyone@ FULL ALLOWED\" entry (sharing.smb.setacl's documented default), not to \"no ACL\" " +
 			"- an SMB share always has a share ACL. A warning diagnostic is emitted since this mutates the " +
@@ -73,13 +72,21 @@ func resourceSchema() schema.Schema {
 						},
 						"ae_who_sid": schema.StringAttribute{
 							Optional: true,
+							Computed: true,
 							Description: "Principal by SID (e.g. \"S-1-1-0\" for everyone). Specify exactly one " +
-								"of ae_who_sid / ae_who_id / ae_who_str per entry; the server resolves the others.",
+								"of ae_who_sid / ae_who_id per entry. When the entry uses ae_who_id, this is the " +
+								"SID the server resolved. Compared case-insensitively (the server stores SIDs upper-case).",
+							CustomType: normalize.CaseInsensitiveType{},
+							PlanModifiers: []planmodifier.String{
+								normalize.KeepStateIfEquivalent(normalize.CaseInsensitiveType{}),
+							},
 						},
 						"ae_who_id": schema.SingleNestedAttribute{
 							Optional: true,
-							Description: "Principal by Unix ID. Specify exactly one of ae_who_sid / ae_who_id / " +
-								"ae_who_str per entry.",
+							Computed: true,
+							Description: "Principal by Unix ID. Specify exactly one of ae_who_sid / ae_who_id per " +
+								"entry. The user or group must be an SMB account. When the entry uses ae_who_sid, " +
+								"this is the Unix ID the SID maps to (null if it maps to none, e.g. everyone).",
 							Attributes: map[string]schema.Attribute{
 								"id_type": schema.StringAttribute{
 									Required:    true,
@@ -95,9 +102,9 @@ func resourceSchema() schema.Schema {
 							},
 						},
 						"ae_who_str": schema.StringAttribute{
-							Optional: true,
-							Description: "Principal by user or group name (e.g. \"everyone@\"). Specify exactly " +
-								"one of ae_who_sid / ae_who_id / ae_who_str per entry.",
+							Computed: true,
+							Description: "Principal user or group name the server resolved (e.g. \"everyone@\"). " +
+								"Read-only: sharing.smb.setacl cannot resolve a name, so use ae_who_sid or ae_who_id.",
 						},
 					},
 				},

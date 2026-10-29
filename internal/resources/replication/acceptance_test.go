@@ -957,3 +957,55 @@ resource "truenas_replication_task" "test" {
 		),
 	})
 }
+
+// TestAccReplication_encryptionKeyRotation: encryption_key is write-only, so
+// a changed key was never sent (B-026). Bumping encryption_key_wo_version
+// sends it.
+func TestAccReplication_encryptionKeyRotation(t *testing.T) {
+	name := acctest.RandName("tffix3shtasks-repl")
+	keyFile := "/root/" + name + ".key"
+	body := func(key string, version int) string {
+		return fmt.Sprintf(`
+  auto             = false
+  retention_policy = "SOURCE"
+  also_include_naming_schema = ["tffix3-%%Y%%m%%d-%%H%%M"]
+  encryption                = true
+  encryption_inherit        = false
+  encryption_key            = %q
+  encryption_key_wo_version = %d
+  encryption_key_format     = "HEX"
+  encryption_key_location   = %q
+`, key, version, keyFile)
+	}
+	k1 := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	k2 := "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+	check := func(want string) resource.TestCheckFunc {
+		return func(s *terraform.State) error {
+			id, _ := strconv.ParseInt(s.RootModule().Resources["truenas_replication_task.test"].Primary.ID, 10, 64)
+			raw, err := acctest.Client().Call(context.Background(), "replication.get_instance", id)
+			if err != nil {
+				return err
+			}
+			var got struct {
+				EncryptionKey string `json:"encryption_key"`
+			}
+			if err := json.Unmarshal(raw, &got); err != nil {
+				return err
+			}
+			if got.EncryptionKey != want {
+				return fmt.Errorf("server encryption_key = %q, want %q", got.EncryptionKey, want)
+			}
+			return nil
+		}
+	}
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		TerraformVersionChecks:   []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_11_0)},
+		CheckDestroy:             testAccCheckReplicationDestroyed(name),
+		Steps: []resource.TestStep{
+			{Config: acctest.ProviderConfig() + replConfig(name, body(k1, 1)), Check: check(k1)},
+			{Config: acctest.ProviderConfig() + replConfig(name, body(k2, 2)), Check: check(k2)},
+		},
+	})
+}

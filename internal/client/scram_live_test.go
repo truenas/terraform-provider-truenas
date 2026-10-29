@@ -31,13 +31,19 @@ func TestLiveSCRAM(t *testing.T) {
 	c := client.New(endpoint, tlsCfg)
 	ctx := context.Background()
 
+	// WithRetry rides out the auth rate limit (code 16) on a shared box.
 	if err := c.Connect(ctx, func(ctx context.Context) error {
-		choices, err := client.MechanismChoices(ctx, c)
-		if err != nil {
-			t.Skipf("auth.mechanism_choices failed (pre-26.0 server?): %v", err)
-		}
-		t.Logf("server mechanisms: %v", choices)
-		return client.AuthAPIKeySCRAM(ctx, c, username, apiKey)
+		return client.WithRetry(ctx, func(ctx context.Context) error {
+			choices, err := client.MechanismChoices(ctx, c)
+			if client.IsRateLimited(err) {
+				return err
+			}
+			if err != nil {
+				t.Skipf("auth.mechanism_choices failed (pre-26.0 server?): %v", err)
+			}
+			t.Logf("server mechanisms: %v", choices)
+			return client.AuthAPIKeySCRAM(ctx, c, username, apiKey)
+		})
 	}); err != nil {
 		t.Fatalf("SCRAM authentication failed: %v", err)
 	}
@@ -94,7 +100,13 @@ func TestLiveSCRAM_WrongCredentialsRejected(t *testing.T) {
 	if !ok {
 		t.Fatalf("unexpected API key format")
 	}
-	corrupted := fmt.Sprintf("%s-X%s", keyID, secret[1:])
+	// Replace the first secret character with a different one (a fixed "X"
+	// left the key intact whenever the secret already started with X).
+	first := "X"
+	if strings.HasPrefix(secret, "X") {
+		first = "Y"
+	}
+	corrupted := fmt.Sprintf("%s-%s%s", keyID, first, secret[1:])
 	if err := liveScramAttempt(t, endpoint, username, corrupted); err == nil {
 		t.Fatal("server accepted a SCRAM proof built from a corrupted secret")
 	}

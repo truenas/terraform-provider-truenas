@@ -4,11 +4,13 @@
 package ftp_config
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 func resourceSchema() schema.Schema {
@@ -240,9 +242,11 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"tls_policy": schema.StringAttribute{
-				Optional:      true,
-				Computed:      true,
-				Description:   "TLS policy. One of: on, off, data, !data, auth, ctrl+data, ctrl+!data, auth+data, auth+!data. Not validated by this provider.",
+				Optional:    true,
+				Computed:    true,
+				Description: "TLS policy. One of: \"\", on, off, data, !data, auth, ctrl, ctrl+data, ctrl+!data, auth+data, auth+!data.",
+				Validators: []validator.String{stringvalidator.OneOf("", "on", "off", "data", "!data", "auth", "ctrl",
+					"ctrl+data", "ctrl+!data", "auth+data", "auth+!data")},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"ssltls_certificate": schema.Int64Attribute{
@@ -254,7 +258,7 @@ func resourceSchema() schema.Schema {
 			"anonpath": schema.StringAttribute{
 				Optional:      true,
 				Computed:      true,
-				Description:   "Path exposed to anonymous FTP users. \"\" (or omitted) means unset (API null).",
+				Description:   "Path exposed to anonymous FTP users. \"\" (or omitted) means unset (API null). Requires onlyanonymous = true: TrueNAS discards anonpath otherwise.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 		},

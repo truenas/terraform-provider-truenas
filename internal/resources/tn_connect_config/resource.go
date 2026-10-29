@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
 )
@@ -17,6 +19,7 @@ import (
 var _ resource.Resource = &TnConnectConfigResource{}
 var _ resource.ResourceWithImportState = &TnConnectConfigResource{}
 var _ resource.ResourceWithIdentity = &TnConnectConfigResource{}
+var _ resource.ResourceWithModifyPlan = &TnConnectConfigResource{}
 
 // TnConnectConfigResource implements the truenas_tn_connect_config singleton
 // resource. No version gate is needed: tn_connect.config/tn_connect.update
@@ -191,6 +194,44 @@ func (r *TnConnectConfigResource) Update(ctx context.Context, req resource.Updat
 	}
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, tnConnectConfigResourceID)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// enrollmentDerivedAttributes are the computed attributes the server
+// recomputes when "enabled" changes (enrolling or unenrolling changes the
+// status, the issued certificate, the registration and its tier, the
+// heartbeat history and, on 25.10, the advertised addresses). Only id and
+// the four fixed service base URLs are independent of enrollment.
+var enrollmentDerivedAttributes = map[string]attr.Value{
+	"status":                          types.StringUnknown(),
+	"status_reason":                   types.StringUnknown(),
+	"certificate":                     types.Int64Unknown(),
+	"registration_details":            types.StringUnknown(),
+	"tier":                            types.StringUnknown(),
+	"last_heartbeat_failure_datetime": types.StringUnknown(),
+	"ips":                             types.ListUnknown(types.StringType),
+	"interfaces":                      types.ListUnknown(types.StringType),
+	"interfaces_ips":                  types.ListUnknown(types.StringType),
+	"use_all_interfaces":              types.BoolUnknown(),
+}
+
+// ModifyPlan plans the enrollment-derived computed attributes unknown when
+// "enabled" changes. They carry UseStateForUnknown so an unrelated plan stays
+// empty, but enabling or disabling makes the server recompute them, and
+// carrying the prior values into the plan failed the apply with
+// "inconsistent result after apply" (B-064).
+func (r *TnConnectConfigResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() || req.State.Raw.IsNull() {
+		return
+	}
+	var plan, state TnConnectConfigModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() || plan.Enabled.Equal(state.Enabled) {
+		return
+	}
+	for name, unknown := range enrollmentDerivedAttributes {
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root(name), unknown)...)
+	}
 }
 
 // Delete makes NO client calls: tn_connect.config governs whether this

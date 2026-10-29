@@ -113,16 +113,33 @@ type TrueCommandConfigDataSourceModel struct {
 	RemoteIPAddress types.String `tfsdk:"remote_ip_address"`
 }
 
+// redactedAPIKey is the value truecommand.config returns for "api_key" to a
+// session without full-admin rights (a READONLY_ADMIN API key), probed live
+// on TrueNAS 28.0.
+const redactedAPIKey = "********"
+
+// apiKeyRedacted reports whether the server masked api_key for this session.
+func (api *truecommandConfigAPI) apiKeyRedacted() bool {
+	return api.APIKey != nil && *api.APIKey == redactedAPIKey
+}
+
 // responseToModel maps a truecommandConfigAPI response onto a
-// TrueCommandConfigModel.
+// TrueCommandConfigModel. When the server returns the READONLY_ADMIN
+// redaction mask for api_key, the prior value in m is kept, so a read-only
+// refresh neither stores the mask nor plans writing it back (B-029).
 func responseToModel(api *truecommandConfigAPI, m *TrueCommandConfigModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
 	m.ID = types.StringValue(trueCommandConfigResourceID)
 	m.Enabled = types.BoolValue(api.Enabled)
-	if m.usesWriteOnlyAPIKey() {
+	switch {
+	case m.usesWriteOnlyAPIKey():
 		m.APIKey = types.StringNull() // write-only path: do not read the key into state
-	} else {
+	case api.apiKeyRedacted():
+		if m.APIKey.IsUnknown() {
+			m.APIKey = types.StringNull()
+		}
+	default:
 		m.APIKey = types.StringPointerValue(api.APIKey)
 	}
 	m.Status = types.StringValue(api.Status)
@@ -140,7 +157,13 @@ func responseToDataSourceModel(api *truecommandConfigAPI, m *TrueCommandConfigDa
 
 	m.ID = types.StringValue(trueCommandConfigResourceID)
 	m.Enabled = types.BoolValue(api.Enabled)
-	m.APIKey = types.StringPointerValue(api.APIKey)
+	// A READONLY_ADMIN session gets the redaction mask, not the key: report
+	// null rather than the mask as if it were data (B-029).
+	if api.apiKeyRedacted() {
+		m.APIKey = types.StringNull()
+	} else {
+		m.APIKey = types.StringPointerValue(api.APIKey)
+	}
 	m.Status = types.StringValue(api.Status)
 	m.StatusReason = types.StringValue(api.StatusReason)
 	m.RemoteURL = types.StringPointerValue(api.RemoteURL)

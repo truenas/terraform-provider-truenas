@@ -6,6 +6,7 @@ package filesystem_acl
 import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -61,6 +62,9 @@ func resourceSchema() schema.Schema {
 					"only exposed here so \"entries\" can be validated against the right shape. Changing the " +
 					"underlying dataset's acltype out-of-band while entries are still shaped for the old " +
 					"acltype will surface as a filesystem.setacl error on the next apply, not silently.",
+				// Determined by the path (RequiresReplace), so an in-place update
+				// never changes it: keep it known instead of (known after apply). (B-146)
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"entries": schema.StringAttribute{
 				Required: true,
@@ -80,7 +84,10 @@ func resourceSchema() schema.Schema {
 					"decisive: a POSIX1E ACL containing any named USER or GROUP entry MUST also include exactly " +
 					"one MASK entry, or filesystem.setacl rejects the whole ACL with EINVAL. On read, an \"id\" " +
 					"of -1 or null (both observed live for entries where tag isn't USER/GROUP - a real uid/gid " +
-					"is never -1) is normalized away rather than causing perpetual drift; the exact JSON text " +
+					"is never -1) is normalized away rather than causing perpetual drift. A bag of booleans may " +
+					"list only the true members (the server stores the rest as false, and absent and false " +
+					"compare equal), and a USER/GROUP entry given by \"who\" compares equal to the id the " +
+					"server stores for that name. The exact JSON text " +
 					"is otherwise preserved as configured (write-what-you-said) unless the server-side content " +
 					"genuinely changes. TrueNAS may reorder ACL entries server-side on write (observed live with " +
 					"POSIX1E ACLs, e.g. USER_OBJ, USER, GROUP_OBJ, MASK, OTHER ordering); if the configured entry " +
@@ -93,7 +100,12 @@ func resourceSchema() schema.Schema {
 				Description: "Numeric user ID to set as the path's owner via filesystem.setacl's \"uid\" " +
 					"parameter (probed live). Read back from filesystem.getacl's \"uid\" field. Omit to leave " +
 					"the path's existing owner unchanged.",
-				Validators: []validator.Int64{int64validator.Between(-1, 2147483647)},
+				// -1 means "unchanged" to setacl but reads back as the real
+				// owner, so it failed the apply; leave the attribute unset
+				// instead. (B-091 class)
+				Validators: []validator.Int64{int64validator.Between(0, 2147483647)},
+				// Changed only when configured; keep it known on other updates. (B-146)
+				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 			},
 			"gid": schema.Int64Attribute{
 				Optional: true,
@@ -101,21 +113,24 @@ func resourceSchema() schema.Schema {
 				Description: "Numeric group ID to set as the path's group owner via filesystem.setacl's " +
 					"\"gid\" parameter (probed live). Read back from filesystem.getacl's \"gid\" field. Omit " +
 					"to leave the path's existing group owner unchanged.",
-				Validators: []validator.Int64{int64validator.Between(-1, 2147483647)},
+				Validators:    []validator.Int64{int64validator.Between(0, 2147483647)},
+				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 			},
 			"recursive": schema.BoolAttribute{
-				Optional: true,
+				Optional:  true,
+				WriteOnly: true,
 				Description: "Apply the ACL recursively to everything under \"path\" (filesystem.setacl's " +
-					"\"options.recursive\"). This is an apply-time instruction, not a queryable property of " +
-					"the path - TrueNAS has nothing to read it back from, so it is not Computed, is never " +
-					"echoed into state, and must be ignored on import (ImportStateVerifyIgnore). Defaults to " +
-					"false. Never used by Delete, which only ever strips the exact managed path.",
+					"\"options.recursive\") whenever the ACL or owner is applied. Write-only: an apply-time " +
+					"instruction with nothing to read back, so it is never stored in state, an import never " +
+					"differs from it, and changing it alone plans nothing (it is used on the next apply that " +
+					"changes entries, uid or gid). Defaults to false. Never used by Delete, which only ever " +
+					"strips the exact managed path.",
 			},
 			"traverse": schema.BoolAttribute{
-				Optional: true,
+				Optional:  true,
+				WriteOnly: true,
 				Description: "When \"recursive\" is set, also cross into child dataset boundaries " +
-					"(filesystem.setacl's \"options.traverse\"). Same apply-time-only caveats as \"recursive\" " +
-					"apply here. Defaults to false.",
+					"(filesystem.setacl's \"options.traverse\"). Write-only, like \"recursive\". Defaults to false.",
 			},
 		},
 	}

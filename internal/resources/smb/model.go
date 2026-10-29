@@ -741,3 +741,39 @@ func (m *SMBModel) overlayFlatOnOptions(ctx context.Context) (types.Object, bool
 	}
 	return obj, !obj.Equal(m.Options), diags
 }
+
+// resetUnsetFlatLegacy sets every flat legacy attribute that cfg leaves unset
+// to its LEGACY_SHARE server default (the same on 25.10, 26.0 and 28.0) and
+// returns the attribute names it set. Removing a flat attribute from the
+// configuration then resets it on the share instead of keeping the old value
+// with an empty plan (B-113). Only used on a LEGACY_SHARE update without a
+// configured options object.
+func (m *SMBModel) resetUnsetFlatLegacy(cfg *SMBModel) []string {
+	empty := types.ListValueMust(types.StringType, []attr.Value{})
+	var set []string
+	reset := func(key string, cfgV attr.Value, dst any, def attr.Value) {
+		if !cfgV.IsNull() {
+			return
+		}
+		switch d := dst.(type) {
+		case *types.Bool:
+			*d = def.(types.Bool)
+		case *types.List:
+			*d = def.(types.List)
+		case *types.Int64:
+			*d = def.(types.Int64)
+		}
+		set = append(set, key)
+	}
+	reset("recyclebin", cfg.Recyclebin, &m.Recyclebin, types.BoolValue(false))
+	reset("guestok", cfg.GuestOK, &m.GuestOK, types.BoolValue(false))
+	reset("hostsallow", cfg.HostsAllow, &m.HostsAllow, empty)
+	reset("hostsdeny", cfg.HostsDeny, &m.HostsDeny, empty)
+	reset("acl", cfg.ACL, &m.ACL, types.BoolValue(true))
+	reset("durablehandle", cfg.DurableHandle, &m.DurableHandle, types.BoolValue(true))
+	reset("streams", cfg.Streams, &m.Streams, types.BoolValue(true))
+	reset("timemachine", cfg.TimeMachine, &m.TimeMachine, types.BoolValue(false))
+	reset("timemachine_quota", cfg.TimeMachineQuota, &m.TimeMachineQuota, types.Int64Value(0))
+	reset("home", cfg.Home, &m.Home, types.BoolValue(false))
+	return set
+}

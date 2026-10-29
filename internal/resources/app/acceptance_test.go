@@ -53,7 +53,8 @@ func TestAccApp_basic(t *testing.T) {
 				),
 			},
 			// Import then plan the same config: catalog_app is read from metadata.name, so the plan is empty (BUGS B-006).
-		}, acctest.ImportReapplyNoop("truenas_app.test", acctest.ProviderConfig()+testAccAppConfig(name, "syncthing", false))...),
+		}, append(acctest.ImportReapplyNoop("truenas_app.test", acctest.ProviderConfig()+testAccAppConfig(name, "syncthing", false)),
+			appCleanupStep(t, name, ""))...),
 	})
 }
 
@@ -77,8 +78,10 @@ data "truenas_app" "lookup" {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.truenas_app.lookup", "name", name),
 					resource.TestCheckResourceAttrSet("data.truenas_app.lookup", "state"),
+					resource.TestCheckResourceAttr("data.truenas_app.lookup", "catalog_app", "syncthing"),
 				),
 			},
+			appCleanupStep(t, name, ""),
 		},
 	})
 }
@@ -165,6 +168,7 @@ func TestAccApp_valuesDriftDetection(t *testing.T) {
 					},
 				},
 			},
+			appCleanupStep(t, name, ""),
 		},
 	})
 }
@@ -230,6 +234,7 @@ func TestAccApp_composeConfigDriftDetection(t *testing.T) {
 					},
 				},
 			},
+			appCleanupStep(t, name, ""),
 		},
 	})
 }
@@ -289,6 +294,7 @@ func TestAccApp_composeSecretsWO(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 				},
 			},
+			appCleanupStep(t, name, ""),
 		},
 	})
 }

@@ -62,6 +62,15 @@ func (r *TunableResource) Create(ctx context.Context, req resource.CreateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	// update_initramfs is write-only: read from config, never from plan or state.
+	var cfg TunableModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !cfg.UpdateInitramfs.IsNull() && !cfg.UpdateInitramfs.IsUnknown() {
+		payload["update_initramfs"] = cfg.UpdateInitramfs.ValueBool()
+	}
 
 	raw, err := r.client.CallJob(ctx, "tunable.create", payload)
 	if err != nil {
@@ -150,6 +159,15 @@ func (r *TunableResource) Update(ctx context.Context, req resource.UpdateRequest
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+	// update_initramfs is write-only: read from config, never from plan or state.
+	var cfg TunableModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !cfg.UpdateInitramfs.IsNull() && !cfg.UpdateInitramfs.IsUnknown() {
+		payload["update_initramfs"] = cfg.UpdateInitramfs.ValueBool()
 	}
 
 	_, err := r.client.CallJob(ctx, "tunable.update", plan.ID.ValueInt64(), payload)

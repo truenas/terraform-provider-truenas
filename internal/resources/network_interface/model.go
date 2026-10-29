@@ -105,10 +105,14 @@ func responseToModel(ctx context.Context, api *interfaceAPI, m *NetworkInterface
 	m.IPv4DHCP = types.BoolValue(api.IPv4DHCP)
 	m.IPv6Auto = types.BoolValue(api.IPv6Auto)
 
+	// stp exists only on a BRIDGE; other types report it absent (nil), which
+	// maps to null like the other type-specific fields. Reading it as false
+	// made generate-config import write stp = false for a PHYSICAL
+	// interface, which ValidateConfig then rejects (B-158).
 	if api.STP != nil {
 		m.STP = types.BoolValue(*api.STP)
 	} else {
-		m.STP = types.BoolValue(false)
+		m.STP = types.BoolNull()
 	}
 
 	if api.LagProtocol != nil {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
 )
@@ -17,6 +18,7 @@ import (
 var _ resource.Resource = &TrueCommandConfigResource{}
 var _ resource.ResourceWithImportState = &TrueCommandConfigResource{}
 var _ resource.ResourceWithIdentity = &TrueCommandConfigResource{}
+var _ resource.ResourceWithModifyPlan = &TrueCommandConfigResource{}
 
 // TrueCommandConfigResource implements the truenas_truecommand_config
 // singleton resource. No version gate is needed: truecommand.config/
@@ -73,6 +75,9 @@ func (r *TrueCommandConfigResource) fetchConfig(ctx context.Context) (*truecomma
 // needed). payload MUST come from TrueCommandConfigModel.updatePayload —
 // see its doc comment for the safety contract this depends on.
 func (r *TrueCommandConfigResource) applyUpdate(ctx context.Context, payload map[string]any) error {
+	if len(payload) == 0 {
+		return nil // nothing configured: adopting the singleton writes nothing
+	}
 	_, err := r.client.Call(ctx, "truecommand.update", payload)
 	return err
 }
@@ -151,6 +156,17 @@ func (r *TrueCommandConfigResource) Update(ctx context.Context, req resource.Upd
 		return
 	}
 
+	var state TrueCommandConfigModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	// The write-only api_key_wo is sent only when api_key_wo_version changed;
+	// truecommand.update keeps the stored key when api_key is absent. (B-141)
+	if config.APIKeyWOVersion.Equal(state.APIKeyWOVersion) {
+		config.APIKeyWO = types.StringNull()
+	}
+
 	if err := r.applyUpdate(ctx, config.updatePayload()); err != nil {
 		resp.Diagnostics.AddError("Update TrueCommand configuration failed", err.Error())
 		return
@@ -168,6 +184,47 @@ func (r *TrueCommandConfigResource) Update(ctx context.Context, req resource.Upd
 	}
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, trueCommandConfigResourceID)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// ModifyPlan keeps the computed attributes in step with the inputs they
+// derive from:
+//
+//   - api_key is null whenever the write-only api_key_wo path is configured
+//     (api_key_wo_version set). Its UseStateForUnknown would otherwise carry
+//     the old api_key into the plan while the apply stores null, so moving
+//     from api_key to api_key_wo failed with "inconsistent result" (B-062).
+//   - status, status_reason, remote_url and remote_ip_address are recomputed
+//     by the server when enabled or the key changes, so they are planned
+//     unknown on such an update instead of carrying the prior values (B-063).
+func (r *TrueCommandConfigResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+	var config, plan TrueCommandConfigModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !config.APIKeyWOVersion.IsNull() && !config.APIKeyWOVersion.IsUnknown() {
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("api_key"), types.StringNull())...)
+		plan.APIKey = types.StringNull()
+	}
+	if req.State.Raw.IsNull() {
+		return
+	}
+	var state TrueCommandConfigModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if plan.Enabled.Equal(state.Enabled) && plan.APIKey.Equal(state.APIKey) &&
+		plan.APIKeyWOVersion.Equal(state.APIKeyWOVersion) {
+		return
+	}
+	for _, attr := range []string{"status", "status_reason", "remote_url", "remote_ip_address"} {
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root(attr), types.StringUnknown())...)
+	}
 }
 
 // Delete makes NO client calls: truecommand.config governs whether this

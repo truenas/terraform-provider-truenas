@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
 )
 
 // ZvolModel is the Terraform state/plan model for a TrueNAS zvol.
@@ -134,9 +135,9 @@ type zvolResourceModel struct {
 	ForceDestroy types.Bool `tfsdk:"force_destroy"`
 }
 
-// updateAPIPayload is apiPayload without the keys pool.dataset.update does not
+// updatableFields is apiPayload without the keys pool.dataset.update does not
 // accept for a zvol.
-func (m *ZvolModel) updateAPIPayload() map[string]any {
+func (m *ZvolModel) updatableFields() map[string]any {
 	p := m.apiPayload()
 	// name, type, volblocksize, and sparse are not updatable via update endpoint
 	delete(p, "name")
@@ -147,6 +148,35 @@ func (m *ZvolModel) updateAPIPayload() map[string]any {
 	delete(p, "encryption")
 	delete(p, "inherit_encryption")
 	delete(p, "encryption_options")
+	return p
+}
+
+// updateAPIPayload is the pool.dataset.update payload: with a prior state only
+// what changed (dataset.StripUnchanged), so an unrelated update no longer
+// resends the empty comments as a LOCAL description (B-039) or a thick
+// volume's stale refreservation after volsize grew (B-038). With nil it
+// returns every updatable field.
+func (m *ZvolModel) updateAPIPayload(prior *ZvolModel) map[string]any {
+	p := m.updatableFields()
+	if prior != nil {
+		dataset.StripUnchanged(p, prior.updatableFields())
+		dataset.KeepThick(p, m.RefReservation, prior.RefReservation, prior.VolSize)
+	}
+	return p
+}
+
+// createAPIPayload is apiPayload plus inherit_encryption = false when
+// encryption is set and inherit_encryption is not: the server defaults
+// inherit_encryption to true, so encryption = false under an encrypted parent
+// silently created an encrypted zvol (inconsistent result) and encryption =
+// true failed. Same rule as truenas_dataset. (B-042)
+func (m *ZvolModel) createAPIPayload() map[string]any {
+	p := m.apiPayload()
+	if _, set := p["encryption"]; set {
+		if _, inh := p["inherit_encryption"]; !inh {
+			p["inherit_encryption"] = false
+		}
+	}
 	return p
 }
 
@@ -233,8 +263,9 @@ func injectEncryptionSecrets(payload map[string]any, cfg *ZvolModel) {
 	}
 }
 
-// responseToModel populates m from the API response. Sparse is write-only
-// (not returned by the API) so the plan/state value is preserved as-is.
+// responseToModel populates m from the API response. sparse is not returned
+// by the API, so the plan/state value is preserved as-is; Create and
+// ImportState fill an unknown/null one from sparseFromAPI.
 func responseToModel(api *zvolAPI, m *ZvolModel) {
 	m.ID = types.StringValue(api.Name)
 	m.Name = types.StringValue(api.Name)
@@ -272,8 +303,9 @@ func responseToModel(api *zvolAPI, m *ZvolModel) {
 	}
 	m.Sync = localStringOrInherit(api.SyncP)
 	m.Dedup = localStringOrInherit(api.DedupP)
-	m.Comments = types.StringValue(api.UserProperties.Comments.Value)
-	// Sparse is write-only (not in API response); preserve plan/state value.
+	m.Comments = types.StringValue(dataset.CommentsValue(api.UserProperties.Comments.Value))
+	// Sparse is not returned by the API: Read keeps the state value; Create and
+	// ImportState fill an unknown/null one from the read-back (sparseFromAPI).
 
 	// Source-aware ZFS tuning properties (coverage audit): recorded only when set LOCAL.
 	m.Checksum = localStringOrInherit(api.ChecksumP)
@@ -282,6 +314,17 @@ func responseToModel(api *zvolAPI, m *ZvolModel) {
 	m.Copies = localInt(api.CopiesP)
 	m.Reservation = localInt(api.ReservP)
 	m.RefReservation = localInt(api.RefReservP)
+}
+
+// sparseFromAPI derives sparse from a zvol's read-back: a thin (sparse) zvol
+// has no refreservation (0, or ZFS "none"), a thick one has the reservation ZFS
+// sized for its volsize. Used where no configured value exists to keep: an
+// import (B-109) and a create that left sparse unset.
+func sparseFromAPI(api *zvolAPI) bool {
+	if n, ok := api.RefReservP.parsedInt(); ok {
+		return n == 0
+	}
+	return true
 }
 
 // preserveCase returns current if it matches apiVal case-insensitively

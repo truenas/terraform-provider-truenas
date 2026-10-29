@@ -88,7 +88,7 @@ func (r *SNMPConfigResource) Create(ctx context.Context, req resource.CreateRequ
 	if !cfg.CommunityWO.IsNull() && !cfg.CommunityWO.IsUnknown() && cfg.CommunityWO.ValueString() != "" {
 		payload["community"] = cfg.CommunityWO.ValueString()
 	}
-	r.gatePost2700(ctx, payload, &resp.Diagnostics)
+	r.gatePost2800(ctx, payload, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -156,12 +156,21 @@ func (r *SNMPConfigResource) Update(ctx context.Context, req resource.UpdateRequ
 	plan.V3Password = cfg.V3Password
 	plan.V3PrivPassphrase = cfg.V3PrivPassphrase
 
+	var state SNMPConfigModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	payload := plan.updatePayload()
-	// Inject the write-only community string from config (absent from the model).
-	if !cfg.CommunityWO.IsNull() && !cfg.CommunityWO.IsUnknown() && cfg.CommunityWO.ValueString() != "" {
+	// Inject the write-only community string from config (absent from the
+	// model), only when community_wo_version changed: snmp.update keeps the
+	// stored community when it is absent. (B-141)
+	if !plan.CommunityWOVersion.Equal(state.CommunityWOVersion) &&
+		!cfg.CommunityWO.IsNull() && !cfg.CommunityWO.IsUnknown() && cfg.CommunityWO.ValueString() != "" {
 		payload["community"] = cfg.CommunityWO.ValueString()
 	}
-	r.gatePost2700(ctx, payload, &resp.Diagnostics)
+	r.gatePost2800(ctx, payload, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -202,19 +211,26 @@ func (r *SNMPConfigResource) ImportState(ctx context.Context, req resource.Impor
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, snmpConfigResourceID)...)
 }
 
-// gatePost2700 removes fields TrueNAS 27.0 dropped from snmp.update and reports
-// a clear error if the configuration set one. loglevel was removed in 27.0;
-// sending it fails with "Extra inputs are not permitted".
-func (r *SNMPConfigResource) gatePost2700(ctx context.Context, payload map[string]any, diags *diag.Diagnostics) {
+// gatePost2800 removes fields TrueNAS 28.0 dropped from snmp.update and reports
+// a clear error if the configuration set one. loglevel was removed in 28.0
+// (the frozen v27_0_0 API model still declares it; v28_0_0 drops it and maps
+// it to a fixed level for older clients); sending it fails with "Extra
+// inputs are not permitted". The gate sat at 27.0 before, which wrongly
+// rejected loglevel on 27.x (B-130).
+func (r *SNMPConfigResource) gatePost2800(ctx context.Context, payload map[string]any, diags *diag.Diagnostics) {
 	if _, ok := payload["loglevel"]; !ok {
 		return
 	}
-	if ok, err := r.client.VersionAtLeast(ctx, 27, 0); err == nil && ok {
+	if ok, err := r.client.VersionAtLeast(ctx, loglevelRemovedMajor, 0); err == nil && ok {
 		delete(payload, "loglevel")
 		diags.AddAttributeError(
 			path.Root("loglevel"),
-			"loglevel is not supported on TrueNAS 27.0 or later",
-			"snmp.update on this TrueNAS release does not accept the \"loglevel\" field (it was removed in TrueNAS 27.0). Remove the attribute or target a pre-27.0 server.",
+			"loglevel is not supported on TrueNAS 28.0 or later",
+			"snmp.update on this TrueNAS release does not accept the \"loglevel\" field (it was removed in TrueNAS 28.0). Remove the attribute or target a pre-28.0 server.",
 		)
 	}
 }
+
+// loglevelRemovedMajor is the first TrueNAS major release whose snmp.update
+// no longer accepts loglevel.
+const loglevelRemovedMajor = 28

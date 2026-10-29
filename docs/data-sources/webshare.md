@@ -17,7 +17,7 @@ Fetches a TrueNAS Webshare share by name. Requires TrueNAS 26.0 or later (see th
 
 ### Required
 
-- `name` (String) Webshare share name to look up.
+- `name` (String) Webshare share name to look up (case-insensitive; the server keeps names unique regardless of case).
 
 ### Read-Only
 

@@ -106,6 +106,7 @@ func (r *CloudSyncResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
+	resp.Diagnostics.Append(setImported(ctx, resp.Private, false)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -185,7 +186,9 @@ func (r *CloudSyncResource) Update(ctx context.Context, req resource.UpdateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	injectCryptSecrets(payload, &cfg)
+	if cryptSecretsResendNeeded(plan, state) {
+		injectCryptSecrets(payload, &cfg)
+	}
 
 	_, err := r.client.Call(ctx, "cloudsync.update", plan.ID.ValueInt64(), payload)
 	if err != nil {
@@ -211,6 +214,7 @@ func (r *CloudSyncResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
+	resp.Diagnostics.Append(setImported(ctx, resp.Private, false)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -260,5 +264,6 @@ func (r *CloudSyncResource) ImportState(ctx context.Context, req resource.Import
 	state.Attributes = types.StringValue(attrJSON)
 
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, id)...)
+	resp.Diagnostics.Append(setImported(ctx, resp.Private, true)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

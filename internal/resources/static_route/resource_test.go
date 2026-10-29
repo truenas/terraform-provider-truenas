@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // TestStaticRouteSchema verifies that the resource schema has the expected
@@ -93,8 +94,8 @@ func TestStaticRouteApiPayload(t *testing.T) {
 	ctx := context.Background()
 
 	m := StaticRouteModel{
-		Destination: types.StringValue("10.20.0.0/16"),
-		Gateway:     types.StringValue("10.20.0.1"),
+		Destination: normalize.NewCIDRValue("10.20.0.0/16"),
+		Gateway:     normalize.NewIPAddressValue("10.20.0.1"),
 		Description: types.StringValue("test route"),
 	}
 

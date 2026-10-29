@@ -49,10 +49,9 @@ func TestAccNTPServer_basic(t *testing.T) {
 				),
 			},
 			{
-				ResourceName:            "truenas_ntp_server.test",
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"force"},
+				ResourceName:      "truenas_ntp_server.test",
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})

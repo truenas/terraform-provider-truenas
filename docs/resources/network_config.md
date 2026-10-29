@@ -33,9 +33,9 @@ resource "truenas_network_config" "config" {
 ### Optional
 
 - `domain` (String) Primary DNS domain name.
-- `domains` (List of String) Additional DNS search domains.
+- `domains` (List of String) Additional DNS search domains, one domain per entry (no spaces: TrueNAS stores the list space-separated).
 - `hostname` (String) System hostname. WARNING: this affects how the system identifies itself on the network (e.g. in directory services, certificates, and other services keyed on hostname).
-- `hosts` (List of String) Additional /etc/hosts entries.
+- `hosts` (List of String) Additional /etc/hosts entries, one line per entry (non-empty, no leading or trailing whitespace, no newline: TrueNAS stores the list newline-separated and trims it).
 - `httpproxy` (String) HTTP proxy URL used by the system for outbound HTTP(S) requests.
 - `ipv4gateway` (String) Default IPv4 gateway. An empty string clears the assigned gateway (null on the wire). WARNING: changing this can disrupt outbound network connectivity to the system.
 - `ipv6gateway` (String) Default IPv6 gateway. An empty string clears the assigned gateway (null on the wire). WARNING: changing this can disrupt outbound network connectivity to the system.

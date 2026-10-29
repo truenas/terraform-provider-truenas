@@ -6,23 +6,21 @@ package smb_share_acl
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // SMBShareACLModel is the Terraform state/plan model for a
 // truenas_smb_share_acl resource: a share_name-keyed declarative wrapper
-// around the imperative sharing.smb.setacl/getacl methods (both probed live
-// as job:false plain calls on TrueNAS 27.0). It mirrors truenas_filesystem_
-// acl's "write-what-you-said" philosophy - the plan's exact entries are kept
-// in state verbatim; a semantic drift comparison on Read only overwrites them
-// when the underlying share ACL genuinely changed - but uses a typed nested
-// list rather than an opaque JSON string, since the SMB share ACL entry is a
-// small, fixed shape (5 fields, one principal selector) unlike filesystem_acl's
-// NFS4/POSIX1E union.
+// around the imperative sharing.smb.setacl/getacl methods (plain calls, not
+// jobs). Entries are a typed nested list; ae_perm/ae_type are read from the
+// server, and the principal fields keep the configured spelling when they
+// name the same principal (see mergeEntries).
 type SMBShareACLModel struct {
 	ID        types.String `tfsdk:"id"`         // == share_name
 	ShareName types.String `tfsdk:"share_name"` // keyed by share name, not a numeric id
@@ -37,19 +35,17 @@ type SMBShareACLDataSourceModel struct {
 	ShareACL  types.List   `tfsdk:"share_acl"`
 }
 
-// smbAclEntryModel is one Terraform-side share ACL entry. The three ae_who_*
-// fields are alternative principal selectors (SID, Unix ID, or name); a given
-// entry sets exactly one on the way in. They are Optional (NOT Computed): the
-// server resolves the others on write (e.g. ae_who_sid "S-1-1-0" reads back
-// with ae_who_str "everyone@"), but storing those server-added values would
-// make Terraform show a diff against a config that never set them, so this
-// resource keeps only what the user wrote (see entriesDrifted).
+// smbAclEntryModel is one Terraform-side share ACL entry. A configured entry
+// names its principal by exactly one of ae_who_sid or ae_who_id; the server
+// resolves the others, and all three are stored (Optional+Computed, name
+// Computed only), so an import - which cannot know which selector the
+// configuration used - plans no change (B-123). See mergeEntries.
 type smbAclEntryModel struct {
-	AePerm   types.String `tfsdk:"ae_perm"`
-	AeType   types.String `tfsdk:"ae_type"`
-	AeWhoSID types.String `tfsdk:"ae_who_sid"`
-	AeWhoID  types.Object `tfsdk:"ae_who_id"`
-	AeWhoStr types.String `tfsdk:"ae_who_str"`
+	AePerm   types.String              `tfsdk:"ae_perm"`
+	AeType   types.String              `tfsdk:"ae_type"`
+	AeWhoSID normalize.CaseInsensitive `tfsdk:"ae_who_sid"`
+	AeWhoID  types.Object              `tfsdk:"ae_who_id"`
+	AeWhoStr types.String              `tfsdk:"ae_who_str"`
 }
 
 // smbAclWhoIDAttrTypes is the attribute-type map for the ae_who_id nested
@@ -63,7 +59,7 @@ var smbAclWhoIDAttrTypes = map[string]attr.Type{
 var smbAclEntryAttrTypes = map[string]attr.Type{
 	"ae_perm":    types.StringType,
 	"ae_type":    types.StringType,
-	"ae_who_sid": types.StringType,
+	"ae_who_sid": normalize.CaseInsensitiveType{},
 	"ae_who_id":  types.ObjectType{AttrTypes: smbAclWhoIDAttrTypes},
 	"ae_who_str": types.StringType,
 }
@@ -110,8 +106,12 @@ func entriesFromList(ctx context.Context, l types.List) ([]smbAclEntryModel, dia
 	return entries, diags
 }
 
-// setaclPayload builds the sharing.smb.setacl argument from the model's
-// entries. Only the principal selector(s) actually set on each entry are sent.
+// setaclPayload builds the sharing.smb.setacl argument from the configured
+// entries. Only the principal selector set in the configuration is sent:
+// ae_who_sid or ae_who_id (the server resolves the other; ae_who_str is
+// read-only because sharing.smb.setacl cannot resolve a name, B-073). Callers
+// pass the configuration, not the plan: the plan also carries the computed
+// selectors from state.
 func setaclPayload(ctx context.Context, m *SMBShareACLModel) (map[string]any, diag.Diagnostics) {
 	entries, diags := entriesFromList(ctx, m.ShareACL)
 	if diags.HasError() {
@@ -126,9 +126,6 @@ func setaclPayload(ctx context.Context, m *SMBShareACLModel) (map[string]any, di
 		}
 		if !e.AeWhoSID.IsNull() && !e.AeWhoSID.IsUnknown() {
 			entry["ae_who_sid"] = e.AeWhoSID.ValueString()
-		}
-		if !e.AeWhoStr.IsNull() && !e.AeWhoStr.IsUnknown() {
-			entry["ae_who_str"] = e.AeWhoStr.ValueString()
 		}
 		if !e.AeWhoID.IsNull() && !e.AeWhoID.IsUnknown() {
 			var who smbAclWhoIDModel
@@ -170,96 +167,120 @@ func defaultShareACLPayload(shareName string) map[string]any {
 	}
 }
 
-// entriesDrifted reports whether the share ACL returned by the API differs, in
-// a way the user would care about, from what is currently stored in state.
-// It compares entry count, and per entry the ae_perm, ae_type, and the single
-// principal selector the state entry actually specified (SID, Unix ID, or
-// name) - deliberately ignoring the other server-resolved selectors so that a
-// SID-specified entry does not drift merely because the server echoed a
-// resolved ae_who_str.
-func entriesDrifted(state []smbAclEntryModel, api []smbAclEntryAPI) bool {
-	if len(state) != len(api) {
-		return true
+// whoIDOf decodes a known, non-null ae_who_id object. ok is false for a null
+// or unknown object.
+func whoIDOf(o types.Object) (idType string, id int64, ok bool) {
+	if o.IsNull() || o.IsUnknown() {
+		return "", 0, false
 	}
-	for i, s := range state {
-		a := api[i]
-		if s.AePerm.ValueString() != a.AePerm || s.AeType.ValueString() != a.AeType {
-			return true
-		}
-		if !principalMatches(s, a) {
-			return true
-		}
+	attrs := o.Attributes()
+	t, _ := attrs["id_type"].(types.String)
+	n, _ := attrs["id"].(types.Int64)
+	if t.IsUnknown() || n.IsUnknown() {
+		return "", 0, false
 	}
-	return false
+	return t.ValueString(), n.ValueInt64(), true
 }
 
-// principalMatches checks the API entry against the one principal selector the
-// state entry specified. An entry with no selector set (shouldn't happen for a
-// valid config) is treated as matching so it doesn't force perpetual drift.
-func principalMatches(s smbAclEntryModel, a smbAclEntryAPI) bool {
-	switch {
-	case !s.AeWhoSID.IsNull() && !s.AeWhoSID.IsUnknown():
-		return a.AeWhoSID != nil && *a.AeWhoSID == s.AeWhoSID.ValueString()
-	case !s.AeWhoStr.IsNull() && !s.AeWhoStr.IsUnknown():
-		return a.AeWhoStr != nil && *a.AeWhoStr == s.AeWhoStr.ValueString()
-	case !s.AeWhoID.IsNull() && !s.AeWhoID.IsUnknown():
-		if a.AeWhoID == nil {
-			return false
-		}
-		attrs := s.AeWhoID.Attributes()
-		idType, _ := attrs["id_type"].(types.String)
-		id, _ := attrs["id"].(types.Int64)
-		return idType.ValueString() == a.AeWhoID.IDType && id.ValueInt64() == a.AeWhoID.ID
-	default:
-		return true
+// knownString reports whether a value is known and non-null.
+func knownString(v attr.Value) bool { return !v.IsNull() && !v.IsUnknown() }
+
+// samePrincipal reports whether a prior (state or plan) entry and an API entry
+// name the same principal. The server stores only the SID (sharing.smb.setacl
+// resolves ae_who_id to a SID) and reports SIDs upper-case, so SIDs compare
+// case-insensitively (B-074; ae_who_sid is a normalize.CaseInsensitive). Without a prior SID, a matching Unix ID counts;
+// trustIndex additionally accepts an unresolved API ID (winbindd down) - used
+// right after setacl, where entry i is the one just written.
+func samePrincipal(p smbAclEntryModel, a smbAclEntryAPI, trustIndex bool) bool {
+	if knownString(p.AeWhoSID) {
+		return a.AeWhoSID != nil && strings.EqualFold(*a.AeWhoSID, p.AeWhoSID.ValueString())
 	}
+	_, pid, ok := whoIDOf(p.AeWhoID)
+	if !ok {
+		return false
+	}
+	if a.AeWhoID == nil {
+		return trustIndex
+	}
+	return a.AeWhoID.ID == pid
 }
 
-// apiEntriesToList converts API entries into a typed share_acl list, choosing a
-// single principal selector per entry (SID, then Unix ID, then name) so the
-// resulting state matches the one-selector shape a user config would use. Used
-// on import, on the datasource, and when Read detects genuine drift.
-func apiEntriesToList(ctx context.Context, api []smbAclEntryAPI) (types.List, diag.Diagnostics) {
-	entries := make([]smbAclEntryModel, 0, len(api))
-	for _, a := range api {
-		e := smbAclEntryModel{
-			AePerm:   types.StringValue(a.AePerm),
-			AeType:   types.StringValue(a.AeType),
-			AeWhoSID: types.StringNull(),
-			AeWhoID:  types.ObjectNull(smbAclWhoIDAttrTypes),
-			AeWhoStr: types.StringNull(),
-		}
-		switch {
-		case a.AeWhoSID != nil:
-			e.AeWhoSID = types.StringValue(*a.AeWhoSID)
-		case a.AeWhoID != nil:
-			obj, d := types.ObjectValue(smbAclWhoIDAttrTypes, map[string]attr.Value{
-				"id_type": types.StringValue(a.AeWhoID.IDType),
-				"id":      types.Int64Value(a.AeWhoID.ID),
-			})
-			if d.HasError() {
-				return types.ListNull(smbAclEntryObjectType()), d
+// entryFromAPI converts one API entry, carrying every principal field the
+// server resolved (SID, Unix ID and name).
+func entryFromAPI(a smbAclEntryAPI) smbAclEntryModel {
+	e := smbAclEntryModel{
+		AePerm:   types.StringValue(a.AePerm),
+		AeType:   types.StringValue(a.AeType),
+		AeWhoSID: normalize.NewCaseInsensitivePointerValue(a.AeWhoSID),
+		AeWhoID:  types.ObjectNull(smbAclWhoIDAttrTypes),
+		AeWhoStr: types.StringNull(),
+	}
+	if a.AeWhoID != nil {
+		e.AeWhoID = types.ObjectValueMust(smbAclWhoIDAttrTypes, map[string]attr.Value{
+			"id_type": types.StringValue(a.AeWhoID.IDType),
+			"id":      types.Int64Value(a.AeWhoID.ID),
+		})
+	}
+	if a.AeWhoStr != nil {
+		e.AeWhoStr = types.StringValue(*a.AeWhoStr)
+	}
+	return e
+}
+
+// mergeEntries builds state entries from the server's share ACL. ae_perm and
+// ae_type always come from the server, so real drift shows in the plan. When
+// entry i of prior names the same principal as server entry i, prior's spelling
+// of the SID and its Unix ID are kept (the server upper-cases SIDs, may report
+// a GROUP id as BOTH, and reports a null ID while winbindd is down), and a
+// server name that did not resolve falls back to prior's. Otherwise the
+// server's values are used as-is.
+func mergeEntries(prior []smbAclEntryModel, api []smbAclEntryAPI, trustIndex bool) []smbAclEntryModel {
+	out := make([]smbAclEntryModel, 0, len(api))
+	for i, a := range api {
+		e := entryFromAPI(a)
+		if i < len(prior) && samePrincipal(prior[i], a, trustIndex) {
+			p := prior[i]
+			if knownString(p.AeWhoSID) {
+				e.AeWhoSID = p.AeWhoSID
 			}
-			e.AeWhoID = obj
-		case a.AeWhoStr != nil:
-			e.AeWhoStr = types.StringValue(*a.AeWhoStr)
+			if _, _, ok := whoIDOf(p.AeWhoID); ok {
+				e.AeWhoID = p.AeWhoID
+			}
+			if a.AeWhoStr == nil && knownString(p.AeWhoStr) {
+				e.AeWhoStr = p.AeWhoStr
+			}
+			// After an apply (trustIndex), a planned null is kept as well:
+			// the plan promised it, and an ID or name that resolves only now
+			// is picked up by the next read.
+			if trustIndex {
+				if p.AeWhoID.IsNull() {
+					e.AeWhoID = p.AeWhoID
+				}
+				if p.AeWhoStr.IsNull() {
+					e.AeWhoStr = p.AeWhoStr
+				}
+			}
 		}
-		entries = append(entries, e)
+		out = append(out, e)
 	}
-	return types.ListValueFrom(ctx, smbAclEntryObjectType(), entries)
+	return out
+}
+
+// apiEntriesToList converts API entries into a typed share_acl list carrying
+// every resolved principal field. Used on import and by the data source.
+func apiEntriesToList(ctx context.Context, api []smbAclEntryAPI) (types.List, diag.Diagnostics) {
+	return types.ListValueFrom(ctx, smbAclEntryObjectType(), mergeEntries(nil, api, false))
 }
 
 // idFor returns the resource id / identity for a share name.
 func idFor(shareName string) string { return shareName }
 
-// countSelectors counts how many principal selectors an entry sets. An unknown
-// (interpolated) value counts as set so cross-resource references validate.
+// countSelectors counts how many principal selectors (ae_who_sid, ae_who_id)
+// a configured entry sets. An unknown (interpolated) value counts as set so
+// cross-resource references validate.
 func countSelectors(e smbAclEntryModel) int {
 	n := 0
 	if !e.AeWhoSID.IsNull() {
-		n++
-	}
-	if !e.AeWhoStr.IsNull() {
 		n++
 	}
 	if !e.AeWhoID.IsNull() {

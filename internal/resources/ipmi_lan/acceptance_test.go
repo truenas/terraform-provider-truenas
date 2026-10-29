@@ -242,7 +242,7 @@ func TestAccIPMILan_setAndRestoreVlan(t *testing.T) {
 				ImportState:             true,
 				ImportStateId:           strconv.FormatInt(channel, 10),
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"password", "apply_remote"},
+				ImportStateVerifyIgnore: []string{"password"},
 			},
 		},
 	})

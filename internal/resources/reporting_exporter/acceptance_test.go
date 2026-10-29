@@ -98,3 +98,51 @@ func testAccCheckReportingExporterDestroyed(name string) resource.TestCheckFunc 
 		return nil
 	}
 }
+
+// TestAccReportingExporter_removedAttributesRevert guards B-140: removing an
+// optional GRAPHITE setting from the configuration must set it back to the
+// server default, not keep the previous value.
+func TestAccReportingExporter_removedAttributesRevert(t *testing.T) {
+	name := acctest.RandName("tf-acc-exporter")
+	const r = "truenas_reporting_exporter.test"
+	custom := acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_reporting_exporter" "test" {
+  name    = %q
+  enabled = false
+  attributes = {
+    destination_ip            = "192.0.2.50"
+    destination_port          = 2003
+    namespace                 = "tfacc"
+    prefix                    = "tfaccprefix"
+    update_every              = 5
+    buffer_on_failures        = 20
+    send_names_instead_of_ids = false
+    matching_charts           = "cpu.*"
+  }
+}
+`, name)
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckReportingExporterDestroyed(name),
+		Steps: []resource.TestStep{
+			{
+				Config: custom,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(r, "attributes.prefix", "tfaccprefix"),
+					resource.TestCheckResourceAttr(r, "attributes.update_every", "5"),
+				),
+			},
+			{
+				Config: acctest.ProviderConfig() + testAccReportingExporterConfig(name, false, 2003),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(r, "attributes.prefix", "scale"),
+					resource.TestCheckResourceAttr(r, "attributes.update_every", "1"),
+					resource.TestCheckResourceAttr(r, "attributes.buffer_on_failures", "10"),
+					resource.TestCheckResourceAttr(r, "attributes.send_names_instead_of_ids", "true"),
+					resource.TestCheckResourceAttr(r, "attributes.matching_charts", "*"),
+				),
+			},
+		},
+	})
+}

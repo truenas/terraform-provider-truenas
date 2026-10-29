@@ -310,3 +310,13 @@ func (m *IPMILanModel) updatePayload() (map[string]any, error) {
 func vlanCannotBeCleared(stateVlan, configVlan types.Int64) bool {
 	return !stateVlan.IsNull() && configVlan.IsNull()
 }
+
+// dropUnversionedPassword clears the write-only password from an update model
+// unless password_wo_version changed from prior state, so an update re-sends
+// the BMC password only when the operator bumped the version; ipmi.lan.update
+// leaves the password alone when it is absent. (B-141)
+func (m *IPMILanModel) dropUnversionedPassword(prior IPMILanModel) {
+	if m.PasswordWOVersion.Equal(prior.PasswordWOVersion) {
+		m.Password = types.StringNull()
+	}
+}

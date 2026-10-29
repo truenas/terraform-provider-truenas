@@ -25,7 +25,7 @@ resource "truenas_ftp_config" "config" {
 
 ### Optional
 
-- `anonpath` (String) Path exposed to anonymous FTP users. "" (or omitted) means unset (API null).
+- `anonpath` (String) Path exposed to anonymous FTP users. "" (or omitted) means unset (API null). Requires onlyanonymous = true: TrueNAS discards anonpath otherwise.
 - `anonuserbw` (Number) Anonymous user upload bandwidth in KiB/s (0 for unlimited).
 - `anonuserdlbw` (Number) Anonymous user download bandwidth in KiB/s (0 for unlimited).
 - `banner` (String) Banner text displayed to clients on connection.
@@ -63,7 +63,7 @@ resource "truenas_ftp_config" "config" {
 - `tls_opt_no_empty_fragments` (Boolean) TLS option: disable empty fragments (workaround for buggy clients).
 - `tls_opt_no_session_reuse_required` (Boolean) TLS option: require a new SSL session on data connections.
 - `tls_opt_stdenvvars` (Boolean) TLS option: export standard environment variables.
-- `tls_policy` (String) TLS policy. One of: on, off, data, !data, auth, ctrl+data, ctrl+!data, auth+data, auth+!data. Not validated by this provider.
+- `tls_policy` (String) TLS policy. One of: "", on, off, data, !data, auth, ctrl, ctrl+data, ctrl+!data, auth+data, auth+!data.
 
 ### Read-Only
 

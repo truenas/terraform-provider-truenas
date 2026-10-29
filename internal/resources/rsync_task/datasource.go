@@ -154,6 +154,15 @@ func (d *RsyncTaskDataSource) Read(ctx context.Context, req datasource.ReadReque
 		return
 	}
 
+	// More than one match used to return the first silently (B-131).
+	if len(results) > 1 {
+		resp.Diagnostics.AddError(
+			"Ambiguous lookup",
+			fmt.Sprintf("%d rsync tasks match desc %q; the lookup must match exactly one. Give the tasks distinct descriptions.", len(results), state.Desc.ValueString()),
+		)
+		return
+	}
+
 	resp.Diagnostics.Append(responseToDataSourceModel(ctx, &results[0], &state)...)
 	if resp.Diagnostics.HasError() {
 		return

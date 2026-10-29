@@ -12,6 +12,7 @@ import (
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ datasource.DataSource = &ReplicationDataSource{}
@@ -49,7 +50,7 @@ func (d *ReplicationDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			"exclude":                             dschema.ListAttribute{Computed: true, ElementType: types.StringType},
 			"properties":                          dschema.BoolAttribute{Computed: true},
 			"replicate":                           dschema.BoolAttribute{Computed: true},
-			"periodic_snapshot_tasks":             dschema.ListAttribute{Computed: true, ElementType: types.Int64Type},
+			"periodic_snapshot_tasks":             dschema.ListAttribute{Computed: true, ElementType: types.Int64Type, CustomType: normalize.UnorderedListOf(types.Int64Type)},
 			"naming_schema":                       dschema.ListAttribute{Computed: true, ElementType: types.StringType},
 			"also_include_naming_schema":          dschema.ListAttribute{Computed: true, ElementType: types.StringType},
 			"name_regex":                          dschema.StringAttribute{Computed: true},
@@ -88,8 +89,9 @@ func (d *ReplicationDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			// Write-only on the resource (never returned by the API); declared
 			// Computed here only so the shared model matches the data source
 			// schema. Always null.
-			"encryption_key":          dschema.StringAttribute{Computed: true, Sensitive: true},
-			"encryption_key_location": dschema.StringAttribute{Computed: true},
+			"encryption_key":            dschema.StringAttribute{Computed: true, Sensitive: true},
+			"encryption_key_wo_version": dschema.Int64Attribute{Computed: true},
+			"encryption_key_location":   dschema.StringAttribute{Computed: true},
 			"restrict_schedule": dschema.SingleNestedAttribute{
 				Computed: true,
 				Attributes: map[string]dschema.Attribute{

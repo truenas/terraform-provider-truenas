@@ -90,6 +90,16 @@ func restoreFTPConfig(t *testing.T, orig ftpConfigOriginal) {
 // never touched: changing those on a live system can disrupt FTP access.
 func TestAccFTPConfig_setAndRestore(t *testing.T) {
 	acctest.DisruptiveCheck(t)
+	// Every field the configuration below writes, not only the one varied.
+	restoreConfigKeys(t,
+		"banner", "port", "clients", "ipconnections", "loginattempt", "timeout", "timeout_notransfer",
+		"passiveportsmin", "passiveportsmax", "onlyanonymous", "onlylocal", "anonpath", "fxp", "resume",
+		"defaultroot", "ident", "reversedns", "masqaddress", "options", "dirmask", "filemask",
+		"localuserbw", "localuserdlbw", "anonuserbw", "anonuserdlbw", "tls", "tls_policy",
+		"tls_opt_allow_client_renegotiations", "tls_opt_allow_dot_login", "tls_opt_allow_per_user",
+		"tls_opt_common_name_required", "tls_opt_dns_name_required", "tls_opt_enable_diags",
+		"tls_opt_export_cert_data", "tls_opt_ip_address_required", "tls_opt_no_empty_fragments",
+		"tls_opt_no_session_reuse_required", "tls_opt_stdenvvars")
 
 	orig := readFTPConfigOriginal(t)
 	t.Cleanup(func() { restoreFTPConfig(t, orig) })

@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // cronAttrTypes describes a plain cron object (the schedule of a "lifetimes"
@@ -107,29 +108,29 @@ type ReplicationModel struct {
 	Compression    types.String `tfsdk:"compression"` // LZ4, PIGZ, PLZIP; null unless transport = SSH
 	SpeedLimit     types.Int64  `tfsdk:"speed_limit"` // bytes/sec; null unless transport = SSH
 	// netcat_* fields apply only to transport = SSH+NETCAT; null otherwise.
-	NetcatActiveSide                types.String `tfsdk:"netcat_active_side"`                  // LOCAL, REMOTE
-	NetcatActiveSideListenAddress   types.String `tfsdk:"netcat_active_side_listen_address"`   // IP the active side listens on
-	NetcatActiveSidePortMin         types.Int64  `tfsdk:"netcat_active_side_port_min"`         // 1-65535
-	NetcatActiveSidePortMax         types.Int64  `tfsdk:"netcat_active_side_port_max"`         // 1-65535
-	NetcatPassiveSideConnectAddress types.String `tfsdk:"netcat_passive_side_connect_address"` // IP the passive side connects to
-	SourceDatasets                  types.List   `tfsdk:"source_datasets"`                     // List[String], Required
-	TargetDataset                   types.String `tfsdk:"target_dataset"`
-	Recursive                       types.Bool   `tfsdk:"recursive"`
-	Exclude                         types.List   `tfsdk:"exclude"`
-	Properties                      types.Bool   `tfsdk:"properties"`
-	Replicate                       types.Bool   `tfsdk:"replicate"`
-	PeriodicSnapshotTasks           types.List   `tfsdk:"periodic_snapshot_tasks"` // List[Int64]
-	NamingSchema                    types.List   `tfsdk:"naming_schema"`           // List[String]
-	AlsoIncludeNamingSchema         types.List   `tfsdk:"also_include_naming_schema"`
-	NameRegex                       types.String `tfsdk:"name_regex"` // "" = unset -> null
-	Auto                            types.Bool   `tfsdk:"auto"`
-	Schedule                        types.Object `tfsdk:"schedule"`         // optional nested; null when unset
-	RetentionPolicy                 types.String `tfsdk:"retention_policy"` // SOURCE, CUSTOM, NONE
-	LifetimeValue                   types.Int64  `tfsdk:"lifetime_value"`   // null unless retention_policy = CUSTOM
-	LifetimeUnit                    types.String `tfsdk:"lifetime_unit"`    // null unless retention_policy = CUSTOM
-	Readonly                        types.String `tfsdk:"readonly"`         // SET, REQUIRE, IGNORE
-	Enabled                         types.Bool   `tfsdk:"enabled"`
-	Retries                         types.Int64  `tfsdk:"retries"`
+	NetcatActiveSide                types.String            `tfsdk:"netcat_active_side"`                  // LOCAL, REMOTE
+	NetcatActiveSideListenAddress   types.String            `tfsdk:"netcat_active_side_listen_address"`   // IP the active side listens on
+	NetcatActiveSidePortMin         types.Int64             `tfsdk:"netcat_active_side_port_min"`         // 1-65535
+	NetcatActiveSidePortMax         types.Int64             `tfsdk:"netcat_active_side_port_max"`         // 1-65535
+	NetcatPassiveSideConnectAddress types.String            `tfsdk:"netcat_passive_side_connect_address"` // IP the passive side connects to
+	SourceDatasets                  types.List              `tfsdk:"source_datasets"`                     // List[String], Required
+	TargetDataset                   types.String            `tfsdk:"target_dataset"`
+	Recursive                       types.Bool              `tfsdk:"recursive"`
+	Exclude                         types.List              `tfsdk:"exclude"`
+	Properties                      types.Bool              `tfsdk:"properties"`
+	Replicate                       types.Bool              `tfsdk:"replicate"`
+	PeriodicSnapshotTasks           normalize.UnorderedList `tfsdk:"periodic_snapshot_tasks"` // List[Int64], any order
+	NamingSchema                    types.List              `tfsdk:"naming_schema"`           // List[String]
+	AlsoIncludeNamingSchema         types.List              `tfsdk:"also_include_naming_schema"`
+	NameRegex                       types.String            `tfsdk:"name_regex"` // "" = unset -> null
+	Auto                            types.Bool              `tfsdk:"auto"`
+	Schedule                        types.Object            `tfsdk:"schedule"`         // optional nested; null when unset
+	RetentionPolicy                 types.String            `tfsdk:"retention_policy"` // SOURCE, CUSTOM, NONE
+	LifetimeValue                   types.Int64             `tfsdk:"lifetime_value"`   // null unless retention_policy = CUSTOM
+	LifetimeUnit                    types.String            `tfsdk:"lifetime_unit"`    // null unless retention_policy = CUSTOM
+	Readonly                        types.String            `tfsdk:"readonly"`         // SET, REQUIRE, IGNORE
+	Enabled                         types.Bool              `tfsdk:"enabled"`
+	Retries                         types.Int64             `tfsdk:"retries"`
 
 	// Send-stream / behaviour options (coverage audit).
 	Compressed           types.Bool   `tfsdk:"compressed"`  // zfs send -c
@@ -143,11 +144,13 @@ type ReplicationModel struct {
 
 	// Encryption of the replicated (target) datasets. encryption_key is a
 	// write-only secret (read from req.Config, never stored/read back).
-	Encryption            types.Bool   `tfsdk:"encryption"`
-	EncryptionInherit     types.Bool   `tfsdk:"encryption_inherit"`
-	EncryptionKey         types.String `tfsdk:"encryption_key"` // write-only
-	EncryptionKeyFormat   types.String `tfsdk:"encryption_key_format"`
-	EncryptionKeyLocation types.String `tfsdk:"encryption_key_location"`
+	Encryption        types.Bool   `tfsdk:"encryption"`
+	EncryptionInherit types.Bool   `tfsdk:"encryption_inherit"`
+	EncryptionKey     types.String `tfsdk:"encryption_key"` // write-only
+	// EncryptionKeyWOVersion triggers re-sending encryption_key (B-026).
+	EncryptionKeyWOVersion types.Int64  `tfsdk:"encryption_key_wo_version"`
+	EncryptionKeyFormat    types.String `tfsdk:"encryption_key_format"`
+	EncryptionKeyLocation  types.String `tfsdk:"encryption_key_location"`
 
 	// Additional scheduling / property controls (coverage audit).
 	RestrictSchedule   types.Object `tfsdk:"restrict_schedule"`   // cron + begin/end; null when unset
@@ -285,6 +288,19 @@ func injectEncryptionKey(payload map[string]any, cfg *ReplicationModel) {
 	}
 }
 
+// encryptionKeyResendNeeded reports whether an update sends the write-only
+// encryption_key: only when encryption_key_wo_version changed, or when
+// non-inherited encryption is being turned on (replication.update then
+// requires a key, and none may be stored). Other updates leave the stored key
+// alone. (B-141)
+func encryptionKeyResendNeeded(plan, prior ReplicationModel) bool {
+	if !plan.EncryptionKeyWOVersion.Equal(prior.EncryptionKeyWOVersion) {
+		return true
+	}
+	ownKey := func(m ReplicationModel) bool { return m.Encryption.ValueBool() && !m.EncryptionInherit.ValueBool() }
+	return ownKey(plan) && !ownKey(prior)
+}
+
 func stringPtrToValue(p *string) types.String {
 	if p == nil {
 		return types.StringNull()
@@ -370,7 +386,7 @@ func responseToModel(ctx context.Context, api *replicationAPI, m *ReplicationMod
 	m.Replicate = types.BoolValue(api.Replicate)
 
 	taskIDs := periodicSnapshotTaskIDs(api.PeriodicSnapshotTasks)
-	pstList, d3 := types.ListValueFrom(ctx, types.Int64Type, taskIDs)
+	pstList, d3 := normalize.NewUnorderedListValueFrom(ctx, types.Int64Type, taskIDs)
 	diags.Append(d3...)
 	m.PeriodicSnapshotTasks = pstList
 

@@ -52,8 +52,9 @@ func TestKerberosRealmSchema_RealmIsRequired(t *testing.T) {
 	}
 }
 
-// TestKerberosRealmSchema_OptionalComputedFields verifies primary_kdc, kdc,
-// admin_server, and kpasswd_server are all Optional+Computed with
+// TestKerberosRealmSchema_OptionalComputedFields verifies primary_kdc is
+// Optional only (removing it from config must plan null so it is cleared,
+// B-112), and kdc, admin_server, and kpasswd_server are Optional+Computed with
 // UseStateForUnknown plan modifiers, matching the TrueNAS-side defaults
 // observed in the kerberos.realm.create probe.
 func TestKerberosRealmSchema_OptionalComputedFields(t *testing.T) {
@@ -63,15 +64,8 @@ func TestKerberosRealmSchema_OptionalComputedFields(t *testing.T) {
 	if !ok {
 		t.Fatal("schema missing 'primary_kdc' attribute")
 	}
-	primaryKDCStr, ok := primaryKDCAttr.(schema.StringAttribute)
-	if !ok {
-		t.Fatalf("'primary_kdc' attribute is %T, want schema.StringAttribute", primaryKDCAttr)
-	}
-	if !primaryKDCStr.IsOptional() || !primaryKDCStr.IsComputed() {
-		t.Error("'primary_kdc' should be Optional+Computed")
-	}
-	if len(primaryKDCStr.PlanModifiers) == 0 {
-		t.Error("'primary_kdc' should have plan modifiers (UseStateForUnknown)")
+	if !primaryKDCAttr.IsOptional() || primaryKDCAttr.IsComputed() {
+		t.Error("'primary_kdc' should be Optional and not Computed")
 	}
 
 	for _, name := range []string{"kdc", "admin_server", "kpasswd_server"} {

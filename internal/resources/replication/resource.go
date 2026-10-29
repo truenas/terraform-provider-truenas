@@ -323,7 +323,9 @@ func (r *ReplicationResource) Update(ctx context.Context, req resource.UpdateReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	injectEncryptionKey(payload, &cfg)
+	if encryptionKeyResendNeeded(plan, state) {
+		injectEncryptionKey(payload, &cfg)
+	}
 
 	_, err := r.client.Call(ctx, "replication.update", plan.ID.ValueInt64(), payload)
 	if err != nil {

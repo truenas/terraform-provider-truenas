@@ -39,7 +39,7 @@ resource "truenas_lxc_config" "config" {
 
 ### Optional
 
-- `bridge` (String) Network bridge interface used for LXC instance networking, or null if not configured (managed/created automatically). See the lxc.bridge_choices API method on the target box for the set of valid values; this schema does not validate them at plan time.
+- `bridge` (String) Network bridge interface used for LXC instance networking, or "[AUTO]" for the automatically managed bridge (TrueNAS stores that as null; it is reported here as "[AUTO]"). See the lxc.bridge_choices API method on the target box for the set of valid values; this schema does not validate them at plan time.
 - `preferred_pool` (String) ZFS storage pool backing LXC-based instances and image datasets, or null if not configured.
 - `v4_network` (String) IPv4 network CIDR for the LXC instance bridge network (e.g. "172.200.0.0/24").
 - `v6_network` (String) IPv6 network CIDR for the LXC instance bridge network (e.g. "fd42:4c58:43ae::/64").

@@ -97,6 +97,10 @@ func restoreNFSConfig(t *testing.T, orig nfsConfigOriginal) {
 // system can disrupt NFS clients.
 func TestAccNFSConfig_setAndRestore(t *testing.T) {
 	acctest.DisruptiveCheck(t)
+	// Every field the configuration below writes, not only the one varied.
+	restoreConfigKeys(t,
+		"servers", "allow_nonroot", "protocols", "v4_krb", "bindip", "mountd_port", "rpcstatd_port",
+		"rpclockd_port", "mountd_log", "statd_lockd_log", "userd_manage_gids", "rdma", "v4_domain")
 
 	orig := readNFSConfigOriginal(t)
 	t.Cleanup(func() { restoreNFSConfig(t, orig) })

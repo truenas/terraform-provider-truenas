@@ -21,6 +21,7 @@ Fetches the current state of a TrueNAS app by name.
 
 ### Read-Only
 
+- `catalog_app` (String) Catalog app the app was installed from (e.g. "plex"); null for custom apps.
 - `custom_app` (Boolean) True for custom (compose-based) apps.
 - `human_version` (String)
 - `id` (String) App name (used as Terraform ID).

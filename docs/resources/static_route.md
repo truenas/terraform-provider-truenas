@@ -25,8 +25,8 @@ resource "truenas_static_route" "vpn" {
 
 ### Required
 
-- `destination` (String) Destination network in CIDR notation, e.g. "10.20.0.0/16".
-- `gateway` (String) Gateway IP address for this route.
+- `destination` (String) Destination network in CIDR notation, e.g. "10.20.0.0/16". A bare address means /32 (/128 for IPv6) and a dotted netmask is accepted; TrueNAS stores a canonical form (IPv6 exploded), which compares equal to the configured spelling.
+- `gateway` (String) Gateway IP address for this route (IPv4 or IPv6, any spelling).
 
 ### Optional
 

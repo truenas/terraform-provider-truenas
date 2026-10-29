@@ -57,7 +57,10 @@ func resourceSchema() schema.Schema {
 					"and DNS records on the domain controller (ACTIVEDIRECTORY/IPA) or binding to the configured " +
 					"LDAP server (LDAP). Setting this to false disables directory services locally without " +
 					"leaving the domain. Destroying this resource always sends enable=false (see the " +
-					"resource-level description); it never leaves the domain.",
+					"resource-level description); it never leaves the domain. While enabled, TrueNAS only lets " +
+					"enable_account_cache, enable_dns_updates and timeout change in place; for any other change " +
+					"(kerberos_realm or a configuration_* block) the provider disables the service, applies the " +
+					"change, and enables it again.",
 			},
 			"enable_account_cache": schema.BoolAttribute{
 				Optional: true,
@@ -102,7 +105,9 @@ func resourceSchema() schema.Schema {
 					"HCL) on every apply. NOTE: credential_type, username, binddn, client_certificate, and " +
 					"principal ARE persisted in Terraform state (none are sensitive on their own); password and " +
 					"bindpw are WriteOnly (Sensitive, requires Terraform >= 1.11) and are NEVER read back from " +
-					"TrueNAS or stored in state.",
+					"TrueNAS or stored in state. On `terraform import`, an LDAP credential's credential_type and " +
+					"binddn/client_certificate are read back; an ACTIVEDIRECTORY/IPA join stores only the machine-account " +
+					"principal, so leave \"credential\" out of the configuration of an imported AD/IPA join.",
 				Attributes: map[string]schema.Attribute{
 					"credential_type": schema.StringAttribute{
 						Required: true,

@@ -8,19 +8,21 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // GroupModel is the Terraform state model for truenas_group.
 type GroupModel struct {
-	ID                   types.Int64  `tfsdk:"id"`
-	GID                  types.Int64  `tfsdk:"gid"`
-	Name                 types.String `tfsdk:"name"`
-	SMB                  types.Bool   `tfsdk:"smb"`
-	Users                types.List   `tfsdk:"users"` // int64 user IDs who are members
-	SudoCommands         types.List   `tfsdk:"sudo_commands"`
-	SudoCommandsNoPasswd types.List   `tfsdk:"sudo_commands_nopasswd"`
+	ID                   types.Int64             `tfsdk:"id"`
+	GID                  types.Int64             `tfsdk:"gid"`
+	Name                 types.String            `tfsdk:"name"`
+	SMB                  types.Bool              `tfsdk:"smb"`
+	Users                normalize.UnorderedList `tfsdk:"users"` // int64 user IDs who are members
+	SudoCommands         types.List              `tfsdk:"sudo_commands"`
+	SudoCommandsNoPasswd types.List              `tfsdk:"sudo_commands_nopasswd"`
 	// Computed only
 	Builtin   types.Bool `tfsdk:"builtin"`
 	Immutable types.Bool `tfsdk:"immutable"`
@@ -42,8 +44,14 @@ type groupAPI struct {
 	Local                bool     `json:"local"`
 }
 
-// responseToModel maps an API response onto a Terraform model.
-func responseToModel(ctx context.Context, api *groupAPI, m *GroupModel) diag.Diagnostics {
+// responseToModel maps an API response onto a Terraform model. primary is the
+// set of user ids whose PRIMARY group is this group: group.query lists them in
+// "users" although they are not auxiliary members, and group.update cannot
+// remove them, so they are dropped from state unless the configuration (the
+// prior plan/state list) names them. (B-058) The server returns "users" in its
+// own set-iteration order; the UnorderedList type compares without order.
+// (B-057)
+func responseToModel(ctx context.Context, api *groupAPI, primary map[int64]bool, m *GroupModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
 	m.ID = types.Int64Value(api.ID)
@@ -51,11 +59,11 @@ func responseToModel(ctx context.Context, api *groupAPI, m *GroupModel) diag.Dia
 	m.Name = types.StringValue(api.Group) // read from "group" field
 	m.SMB = types.BoolValue(api.SMB)
 
-	users := api.Users
-	if users == nil {
-		users = []int64{}
+	var desired []int64
+	if !m.Users.IsNull() && !m.Users.IsUnknown() {
+		diags.Append(m.Users.ElementsAs(ctx, &desired, false)...)
 	}
-	ul, du := types.ListValueFrom(ctx, types.Int64Type, users)
+	ul, du := normalize.NewUnorderedListValueFrom(ctx, types.Int64Type, dropPrimaryMembers(api.Users, desired, primary))
 	diags.Append(du...)
 	m.Users = ul
 
@@ -82,6 +90,22 @@ func responseToModel(ctx context.Context, api *groupAPI, m *GroupModel) diag.Dia
 	return diags
 }
 
+// dropPrimaryMembers returns server without the primary-group members that
+// desired does not name. A nil server list gives an empty (non-nil) list.
+func dropPrimaryMembers(server, desired []int64, primary map[int64]bool) []int64 {
+	want := make(map[int64]bool, len(desired))
+	for _, u := range desired {
+		want[u] = true
+	}
+	out := make([]int64, 0, len(server))
+	for _, u := range server {
+		if want[u] || !primary[u] {
+			out = append(out, u)
+		}
+	}
+	return out
+}
+
 // decodeCreateResult decodes the result of group.create, which (being a
 // sync, job:false method) may be returned by the middleware either as the
 // full created group object or as a bare integer id, depending on
@@ -101,9 +125,16 @@ func decodeCreateResult(raw json.RawMessage) (*groupAPI, int64, error) {
 	return nil, 0, fmt.Errorf("unable to decode group.create result: %s", string(raw))
 }
 
-// createPayload includes gid and name (only for initial creation).
+// createPayload includes gid and name (only for initial creation). Optional
+// fields left unset (unknown) or null are omitted so group.create applies its
+// own default (smb defaults to true) instead of a zero value. (B-108)
 func (m *GroupModel) createPayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
 	p, diags := m.basePayload(ctx)
+	for key, v := range m.optionalGroupFields() {
+		if v.IsNull() || v.IsUnknown() {
+			delete(p, key)
+		}
+	}
 	if !m.GID.IsNull() && !m.GID.IsUnknown() {
 		p["gid"] = m.GID.ValueInt64()
 	}
@@ -111,9 +142,30 @@ func (m *GroupModel) createPayload(ctx context.Context) (map[string]any, diag.Di
 	return p, diags
 }
 
-// updatePayload omits gid and name (immutable after create).
-func (m *GroupModel) updatePayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
-	return m.basePayload(ctx)
+// updatePayload omits gid and name (immutable after create) and sends only the
+// fields whose plan value is known, non-null, and different from prior state,
+// so an attribute left out of config is never overwritten with a zero value by
+// an unrelated update. (B-037)
+func (m *GroupModel) updatePayload(ctx context.Context, prior GroupModel) (map[string]any, diag.Diagnostics) {
+	p, diags := m.basePayload(ctx)
+	priorFields := prior.optionalGroupFields()
+	for key, plan := range m.optionalGroupFields() {
+		if plan.IsNull() || plan.IsUnknown() || plan.Equal(priorFields[key]) {
+			delete(p, key)
+		}
+	}
+	return p, diags
+}
+
+// optionalGroupFields maps each Optional attribute basePayload emits to its
+// model value, for createPayload/updatePayload to filter on.
+func (m *GroupModel) optionalGroupFields() map[string]attr.Value {
+	return map[string]attr.Value{
+		"smb":                    m.SMB,
+		"sudo_commands":          m.SudoCommands,
+		"sudo_commands_nopasswd": m.SudoCommandsNoPasswd,
+		"users":                  m.Users,
+	}
 }
 
 func (m *GroupModel) basePayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
@@ -135,23 +187,19 @@ func (m *GroupModel) basePayload(ctx context.Context) (map[string]any, diag.Diag
 		sudoCmdsNP = []string{}
 	}
 
+	var users []int64
+	if !m.Users.IsNull() && !m.Users.IsUnknown() {
+		diags.Append(m.Users.ElementsAs(ctx, &users, false)...)
+	}
+	if users == nil {
+		users = []int64{}
+	}
+
 	p := map[string]any{
 		"smb":                    m.SMB.ValueBool(),
 		"sudo_commands":          sudoCmds,
 		"sudo_commands_nopasswd": sudoCmdsNP,
+		"users":                  users,
 	}
-
-	// users (group membership): only send when known and set, so an unset
-	// attribute never wipes existing membership. With UseStateForUnknown the
-	// value is carried from state on an unrelated update, keeping it idempotent.
-	if !m.Users.IsNull() && !m.Users.IsUnknown() {
-		var users []int64
-		diags.Append(m.Users.ElementsAs(ctx, &users, false)...)
-		if users == nil {
-			users = []int64{}
-		}
-		p["users"] = users
-	}
-
 	return p, diags
 }

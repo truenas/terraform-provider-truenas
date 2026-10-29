@@ -10,6 +10,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // APIKeyModel is the Terraform state/plan model for truenas_api_key.
@@ -22,14 +23,14 @@ import (
 // Create must set it explicitly from the create response, and Read/Update
 // carry forward whatever value is already in state/plan.
 type APIKeyModel struct {
-	ID        types.Int64  `tfsdk:"id"`
-	Name      types.String `tfsdk:"name"`
-	Username  types.String `tfsdk:"username"` // immutable: api_key.update rejects it (RequiresReplace)
-	ExpiresAt types.String `tfsdk:"expires_at"`
-	Key       types.String `tfsdk:"key"` // Sensitive+Computed; set once at Create, never overwritten after
-	CreatedAt types.String `tfsdk:"created_at"`
-	Local     types.Bool   `tfsdk:"local"`
-	Revoked   types.Bool   `tfsdk:"revoked"`
+	ID        types.Int64       `tfsdk:"id"`
+	Name      types.String      `tfsdk:"name"`
+	Username  types.String      `tfsdk:"username"` // immutable: api_key.update rejects it (RequiresReplace)
+	ExpiresAt normalize.RFC3339 `tfsdk:"expires_at"`
+	Key       types.String      `tfsdk:"key"` // Sensitive+Computed; set once at Create, never overwritten after
+	CreatedAt types.String      `tfsdk:"created_at"`
+	Local     types.Bool        `tfsdk:"local"`
+	Revoked   types.Bool        `tfsdk:"revoked"`
 }
 
 // APIKeyDataSourceModel is the read-only model for the truenas_api_key data
@@ -154,7 +155,10 @@ func responseToModel(api *apiKeyAPI, m *APIKeyModel) diag.Diagnostics {
 		diags.AddError("Invalid expires_at in API response", err.Error())
 		return diags
 	}
-	m.ExpiresAt = nullableRFC3339Value(expiresAt)
+	// The read-back is always UTC "Z"; RFC3339's semantic equality keeps a
+	// configured offset or fractional-second spelling of the same instant.
+	// (B-059)
+	m.ExpiresAt = normalize.NewRFC3339PointerValue(nullableRFC3339Value(expiresAt).ValueStringPointer())
 
 	m.Local = types.BoolValue(api.Local)
 	m.Revoked = types.BoolValue(api.Revoked)
@@ -203,7 +207,7 @@ func responseToDataSourceModel(api *apiKeyAPI, m *APIKeyDataSourceModel) diag.Di
 // expires_at identically to an explicit null (both probed to produce "no
 // expiration"), so there is no need to distinguish omission from null here.
 func (m *APIKeyModel) createPayload() (map[string]any, diag.Diagnostics) {
-	expiresAt, diags := expiresAtToPayload(m.ExpiresAt)
+	expiresAt, diags := expiresAtToPayload(m.ExpiresAt.StringValue)
 	if diags.HasError() {
 		return nil, diags
 	}
@@ -225,19 +229,11 @@ func (m *APIKeyModel) createPayload() (map[string]any, diag.Diagnostics) {
 // rotate. expires_at is always included, as either {"$date": ms} or JSON
 // null: unlike api_key.create, api_key.update treats an *omitted*
 // expires_at as "leave unchanged" (probed: renaming a key without
-// resending expires_at left its prior expiration intact). Note that
-// removing expires_at from config does NOT reach this "clear" path in
-// practice: expires_at is Optional+Computed, so Terraform carries the
-// prior state value forward into the plan when the attribute is absent
-// from config, and m.ExpiresAt here is never actually null/unknown on an
-// in-place update triggered that way — clearing a previously-set
-// expiration requires tainting the resource (Destroy+Create, which goes
-// through createPayload instead). Sending expires_at unconditionally on
-// every update is still correct: it's harmless (a no-op when unchanged)
-// and keeps the update payload shape deterministic and identical in
-// structure to createPayload's.
+// resending expires_at left its prior expiration intact). expires_at is
+// Optional (not Computed), so removing it from config plans null and this
+// sends the explicit null that clears the expiration. (B-111)
 func (m *APIKeyModel) updatePayload() (map[string]any, diag.Diagnostics) {
-	expiresAt, diags := expiresAtToPayload(m.ExpiresAt)
+	expiresAt, diags := expiresAtToPayload(m.ExpiresAt.StringValue)
 	if diags.HasError() {
 		return nil, diags
 	}

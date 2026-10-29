@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func strPtr(s string) *string { return &s }
@@ -32,12 +33,12 @@ func TestCreatePayload_Imported(t *testing.T) {
 		City:               types.StringNull(),
 		Common:             types.StringNull(),
 		Country:            types.StringNull(),
-		Email:              types.StringNull(),
+		Email:              normalize.NewEmailNull(),
 		Organization:       types.StringNull(),
 		OrganizationalUnit: types.StringNull(),
 		State:              types.StringNull(),
 		DigestAlgorithm:    types.StringNull(),
-		San:                types.ListNull(types.StringType),
+		San:                types.ListNull(normalize.SANType{}),
 		AddToTrustedStore:  types.BoolNull(),
 		RenewDays:          types.Int64Null(),
 		AcmeDirectoryURI:   types.StringNull(),

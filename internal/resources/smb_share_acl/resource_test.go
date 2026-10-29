@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func strptr(s string) *string { return &s }
@@ -16,10 +17,7 @@ func strptr(s string) *string { return &s }
 // mkEntry builds one share_acl list-element object. Pass a nil selector to
 // leave it unset; whoID as a nil pointer leaves ae_who_id null.
 func mkEntry(perm, atype string, sid *string, whoID *smbAclWhoIDAPI, str *string) types.Object {
-	sidVal := types.StringNull()
-	if sid != nil {
-		sidVal = types.StringValue(*sid)
-	}
+	sidVal := normalize.NewCaseInsensitivePointerValue(sid)
 	strVal := types.StringNull()
 	if str != nil {
 		strVal = types.StringValue(*str)
@@ -95,83 +93,115 @@ func TestSetaclPayload_WhoID(t *testing.T) {
 	}
 }
 
-// The headline write-what-you-said case: state specified a SID; the server
-// resolved and echoed ae_who_str "everyone@". That must NOT count as drift.
-func TestEntriesDrifted_ResolvedStrIsNotDrift(t *testing.T) {
-	state := []smbAclEntryModel{{
-		AePerm:   types.StringValue("FULL"),
-		AeType:   types.StringValue("ALLOWED"),
-		AeWhoSID: types.StringValue("S-1-1-0"),
-		AeWhoID:  types.ObjectNull(smbAclWhoIDAttrTypes),
-		AeWhoStr: types.StringNull(),
+// The server reports SIDs upper-case: a configured lower-case spelling of the
+// same SID keeps its spelling (B-074), and the server-resolved name is stored.
+func TestMergeEntries_SIDCaseKept(t *testing.T) {
+	prior := []smbAclEntryModel{{
+		AePerm: types.StringValue("FULL"), AeType: types.StringValue("ALLOWED"),
+		AeWhoSID: normalize.NewCaseInsensitiveValue("s-1-1-0"), AeWhoID: types.ObjectUnknown(smbAclWhoIDAttrTypes), AeWhoStr: types.StringUnknown(),
 	}}
-	api := []smbAclEntryAPI{{
-		AePerm:   "FULL",
-		AeType:   "ALLOWED",
-		AeWhoSID: strptr("S-1-1-0"),
-		AeWhoStr: strptr("everyone@"), // server-resolved extra
-	}}
-	if entriesDrifted(state, api) {
-		t.Error("server-resolved ae_who_str should not be drift")
+	api := []smbAclEntryAPI{{AePerm: "FULL", AeType: "ALLOWED", AeWhoSID: strptr("S-1-1-0"), AeWhoStr: strptr("everyone@")}}
+	got := mergeEntries(prior, api, true)
+	if got[0].AeWhoSID.ValueString() != "s-1-1-0" {
+		t.Errorf("ae_who_sid = %q, want the configured s-1-1-0", got[0].AeWhoSID.ValueString())
+	}
+	if got[0].AeWhoStr.ValueString() != "everyone@" {
+		t.Errorf("ae_who_str = %q, want everyone@", got[0].AeWhoStr.ValueString())
+	}
+	if !got[0].AeWhoID.IsNull() {
+		t.Errorf("ae_who_id = %v, want null", got[0].AeWhoID)
 	}
 }
 
-func TestEntriesDrifted_PermChange(t *testing.T) {
-	state := []smbAclEntryModel{{
+// ae_perm/ae_type and a different principal always come from the server, so
+// drift shows in the plan.
+func TestMergeEntries_DriftFromServer(t *testing.T) {
+	prior := []smbAclEntryModel{{
 		AePerm: types.StringValue("FULL"), AeType: types.StringValue("ALLOWED"),
-		AeWhoSID: types.StringValue("S-1-1-0"), AeWhoID: types.ObjectNull(smbAclWhoIDAttrTypes), AeWhoStr: types.StringNull(),
-	}}
-	api := []smbAclEntryAPI{{AePerm: "CHANGE", AeType: "ALLOWED", AeWhoSID: strptr("S-1-1-0")}}
-	if !entriesDrifted(state, api) {
-		t.Error("perm change should be drift")
-	}
-}
-
-func TestEntriesDrifted_PrincipalChange(t *testing.T) {
-	state := []smbAclEntryModel{{
-		AePerm: types.StringValue("FULL"), AeType: types.StringValue("ALLOWED"),
-		AeWhoSID: types.StringValue("S-1-1-0"), AeWhoID: types.ObjectNull(smbAclWhoIDAttrTypes), AeWhoStr: types.StringNull(),
-	}}
-	api := []smbAclEntryAPI{{AePerm: "FULL", AeType: "ALLOWED", AeWhoSID: strptr("S-1-5-32-544")}}
-	if !entriesDrifted(state, api) {
-		t.Error("SID change should be drift")
-	}
-}
-
-func TestEntriesDrifted_CountChange(t *testing.T) {
-	state := []smbAclEntryModel{{
-		AePerm: types.StringValue("FULL"), AeType: types.StringValue("ALLOWED"),
-		AeWhoSID: types.StringValue("S-1-1-0"), AeWhoID: types.ObjectNull(smbAclWhoIDAttrTypes), AeWhoStr: types.StringNull(),
+		AeWhoSID: normalize.NewCaseInsensitiveValue("S-1-1-0"), AeWhoID: types.ObjectNull(smbAclWhoIDAttrTypes), AeWhoStr: types.StringValue("everyone@"),
 	}}
 	api := []smbAclEntryAPI{
-		{AePerm: "FULL", AeType: "ALLOWED", AeWhoSID: strptr("S-1-1-0")},
+		{AePerm: "CHANGE", AeType: "DENIED", AeWhoSID: strptr("S-1-5-32-544")},
 		{AePerm: "READ", AeType: "ALLOWED", AeWhoSID: strptr("S-1-5-32-546")},
 	}
-	if !entriesDrifted(state, api) {
-		t.Error("entry count change should be drift")
+	got := mergeEntries(prior, api, false)
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2", len(got))
+	}
+	if got[0].AePerm.ValueString() != "CHANGE" || got[0].AeType.ValueString() != "DENIED" {
+		t.Errorf("perm/type = %s/%s, want CHANGE/DENIED", got[0].AePerm.ValueString(), got[0].AeType.ValueString())
+	}
+	if got[0].AeWhoSID.ValueString() != "S-1-5-32-544" || !got[0].AeWhoStr.IsNull() {
+		t.Errorf("principal = %q/%v, want the server's S-1-5-32-544 and a null name", got[0].AeWhoSID.ValueString(), got[0].AeWhoStr)
 	}
 }
 
-func TestEntriesDrifted_WhoIDMatch(t *testing.T) {
+// An entry configured by Unix ID keeps it; the resolved SID and name are
+// stored too, so an import (all three fields) matches (B-123). The server may
+// report the id_type as BOTH, and a null ID while winbindd is down.
+func TestMergeEntries_WhoIDKept(t *testing.T) {
+	cfgID := types.ObjectValueMust(smbAclWhoIDAttrTypes, map[string]attr.Value{
+		"id_type": types.StringValue("GROUP"), "id": types.Int64Value(545),
+	})
+	prior := []smbAclEntryModel{{
+		AePerm: types.StringValue("FULL"), AeType: types.StringValue("ALLOWED"),
+		AeWhoSID: normalize.NewCaseInsensitiveUnknown(), AeWhoID: cfgID, AeWhoStr: types.StringUnknown(),
+	}}
+	for _, who := range []*smbAclWhoIDAPI{{IDType: "BOTH", ID: 545}, nil} {
+		api := []smbAclEntryAPI{{AePerm: "FULL", AeType: "ALLOWED", AeWhoSID: strptr("S-1-5-32-545"), AeWhoID: who, AeWhoStr: strptr("builtin_users")}}
+		got := mergeEntries(prior, api, true)
+		if !got[0].AeWhoID.Equal(cfgID) {
+			t.Errorf("api id %v: ae_who_id = %v, want the configured GROUP 545", who, got[0].AeWhoID)
+		}
+		if got[0].AeWhoSID.ValueString() != "S-1-5-32-545" || got[0].AeWhoStr.ValueString() != "builtin_users" {
+			t.Errorf("api id %v: resolved sid/name = %q/%q", who, got[0].AeWhoSID.ValueString(), got[0].AeWhoStr.ValueString())
+		}
+	}
+	// On Read (trustIndex false) an unresolved API ID is matched through the
+	// stored SID.
 	state := []smbAclEntryModel{{
-		AePerm: types.StringValue("CHANGE"), AeType: types.StringValue("ALLOWED"),
-		AeWhoSID: types.StringNull(),
-		AeWhoID: types.ObjectValueMust(smbAclWhoIDAttrTypes, map[string]attr.Value{
-			"id_type": types.StringValue("GROUP"), "id": types.Int64Value(1000),
-		}),
-		AeWhoStr: types.StringNull(),
+		AePerm: types.StringValue("FULL"), AeType: types.StringValue("ALLOWED"),
+		AeWhoSID: normalize.NewCaseInsensitiveValue("S-1-5-32-545"), AeWhoID: cfgID, AeWhoStr: types.StringValue("builtin_users"),
 	}}
-	api := []smbAclEntryAPI{{
-		AePerm: "CHANGE", AeType: "ALLOWED",
-		AeWhoID:  &smbAclWhoIDAPI{IDType: "GROUP", ID: 1000},
-		AeWhoStr: strptr("builtin_users"), // resolved extra, ignored
-	}}
-	if entriesDrifted(state, api) {
-		t.Error("matching who_id with resolved str should not be drift")
+	api := []smbAclEntryAPI{{AePerm: "FULL", AeType: "ALLOWED", AeWhoSID: strptr("S-1-5-32-545")}}
+	got := mergeEntries(state, api, false)
+	if !got[0].AeWhoID.Equal(cfgID) || got[0].AeWhoStr.ValueString() != "builtin_users" {
+		t.Errorf("read with winbindd down: id=%v str=%v, want state values kept", got[0].AeWhoID, got[0].AeWhoStr)
+	}
+	// A different ID at the same index is not the same principal.
+	other := []smbAclEntryAPI{{AePerm: "FULL", AeType: "ALLOWED", AeWhoSID: strptr("S-1-5-21-1-2-3-1000"), AeWhoID: &smbAclWhoIDAPI{IDType: "USER", ID: 3000}}}
+	got = mergeEntries(prior, other, true)
+	if _, id, _ := whoIDOf(got[0].AeWhoID); id != 3000 {
+		t.Errorf("different principal: id = %d, want the server's 3000", id)
 	}
 }
 
-func TestApiEntriesToList_PrefersSID(t *testing.T) {
+func TestConfiguredPrincipalEqual(t *testing.T) {
+	gid := func(n int64) types.Object {
+		return types.ObjectValueMust(smbAclWhoIDAttrTypes, map[string]attr.Value{
+			"id_type": types.StringValue("GROUP"), "id": types.Int64Value(n),
+		})
+	}
+	state := smbAclEntryModel{AeWhoSID: normalize.NewCaseInsensitiveValue("S-1-5-32-545"), AeWhoID: gid(545), AeWhoStr: types.StringValue("builtin_users")}
+	cases := []struct {
+		name string
+		cfg  smbAclEntryModel
+		want bool
+	}{
+		{"same sid", smbAclEntryModel{AeWhoSID: normalize.NewCaseInsensitiveValue("S-1-5-32-545"), AeWhoID: types.ObjectNull(smbAclWhoIDAttrTypes)}, true},
+		{"same id", smbAclEntryModel{AeWhoSID: normalize.NewCaseInsensitiveNull(), AeWhoID: gid(545)}, true},
+		{"other id", smbAclEntryModel{AeWhoSID: normalize.NewCaseInsensitiveNull(), AeWhoID: gid(546)}, false},
+		{"other sid", smbAclEntryModel{AeWhoSID: normalize.NewCaseInsensitiveValue("S-1-1-0"), AeWhoID: types.ObjectNull(smbAclWhoIDAttrTypes)}, false},
+		{"unknown sid", smbAclEntryModel{AeWhoSID: normalize.NewCaseInsensitiveUnknown(), AeWhoID: types.ObjectNull(smbAclWhoIDAttrTypes)}, false},
+	}
+	for _, c := range cases {
+		if got := configuredPrincipalEqual(c.cfg, state); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestApiEntriesToList_AllResolvedFields(t *testing.T) {
 	api := []smbAclEntryAPI{{
 		AePerm: "FULL", AeType: "ALLOWED",
 		AeWhoSID: strptr("S-1-1-0"), AeWhoStr: strptr("everyone@"),
@@ -187,11 +217,8 @@ func TestApiEntriesToList_PrefersSID(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("len = %d, want 1", len(got))
 	}
-	if got[0].AeWhoSID.ValueString() != "S-1-1-0" {
-		t.Errorf("ae_who_sid = %q, want S-1-1-0", got[0].AeWhoSID.ValueString())
-	}
-	if !got[0].AeWhoStr.IsNull() {
-		t.Errorf("ae_who_str should be null when SID present, got %q", got[0].AeWhoStr.ValueString())
+	if got[0].AeWhoSID.ValueString() != "S-1-1-0" || got[0].AeWhoStr.ValueString() != "everyone@" {
+		t.Errorf("sid/str = %q/%q, want S-1-1-0/everyone@", got[0].AeWhoSID.ValueString(), got[0].AeWhoStr.ValueString())
 	}
 }
 
@@ -218,12 +245,12 @@ func TestApiEntriesToList_WhoIDOnly(t *testing.T) {
 }
 
 func TestCountSelectors(t *testing.T) {
-	none := smbAclEntryModel{AeWhoSID: types.StringNull(), AeWhoStr: types.StringNull(), AeWhoID: types.ObjectNull(smbAclWhoIDAttrTypes)}
+	none := smbAclEntryModel{AeWhoSID: normalize.NewCaseInsensitiveNull(), AeWhoStr: types.StringNull(), AeWhoID: types.ObjectNull(smbAclWhoIDAttrTypes)}
 	if got := countSelectors(none); got != 0 {
 		t.Errorf("no selector: got %d, want 0", got)
 	}
 	sid := none
-	sid.AeWhoSID = types.StringValue("S-1-1-0")
+	sid.AeWhoSID = normalize.NewCaseInsensitiveValue("S-1-1-0")
 	if got := countSelectors(sid); got != 1 {
 		t.Errorf("sid only: got %d, want 1", got)
 	}
@@ -236,9 +263,15 @@ func TestCountSelectors(t *testing.T) {
 	}
 	// unknown counts as set (cross-resource reference)
 	unk := none
-	unk.AeWhoStr = types.StringUnknown()
+	unk.AeWhoID = types.ObjectUnknown(smbAclWhoIDAttrTypes)
 	if got := countSelectors(unk); got != 1 {
 		t.Errorf("unknown selector: got %d, want 1", got)
+	}
+	// ae_who_str is read-only and never counts.
+	str := none
+	str.AeWhoStr = types.StringValue("everyone@")
+	if got := countSelectors(str); got != 0 {
+		t.Errorf("name only: got %d, want 0", got)
 	}
 }
 
@@ -250,5 +283,25 @@ func TestDefaultShareACLPayload(t *testing.T) {
 	acl := p["share_acl"].([]map[string]any)
 	if len(acl) != 1 || acl[0]["ae_perm"] != "FULL" || acl[0]["ae_type"] != "ALLOWED" || acl[0]["ae_who_sid"] != "S-1-1-0" {
 		t.Errorf("default acl = %+v", acl)
+	}
+}
+
+// A planned null ID/name (everyone@ has none) is kept after the apply even if
+// the server resolves one now; the plan promised null (import with a
+// lower-case SID planned no change only once the null ID was planned).
+func TestMergeEntries_PlannedNullKept(t *testing.T) {
+	prior := []smbAclEntryModel{{
+		AePerm: types.StringValue("READ"), AeType: types.StringValue("ALLOWED"),
+		AeWhoSID: normalize.NewCaseInsensitiveValue("S-1-1-0"), AeWhoID: types.ObjectNull(smbAclWhoIDAttrTypes), AeWhoStr: types.StringNull(),
+	}}
+	api := []smbAclEntryAPI{{AePerm: "READ", AeType: "ALLOWED", AeWhoSID: strptr("S-1-1-0"),
+		AeWhoID: &smbAclWhoIDAPI{IDType: "GROUP", ID: 5}, AeWhoStr: strptr("everyone@")}}
+	got := mergeEntries(prior, api, true)
+	if !got[0].AeWhoID.IsNull() || !got[0].AeWhoStr.IsNull() {
+		t.Errorf("apply: id=%v str=%v, want the planned nulls", got[0].AeWhoID, got[0].AeWhoStr)
+	}
+	got = mergeEntries(prior, api, false)
+	if got[0].AeWhoID.IsNull() || got[0].AeWhoStr.ValueString() != "everyone@" {
+		t.Errorf("read: id=%v str=%v, want the server values", got[0].AeWhoID, got[0].AeWhoStr)
 	}
 }

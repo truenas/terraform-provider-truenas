@@ -431,3 +431,32 @@ func TestISCSIAuthResponseToModel_WOVersionsUntouched(t *testing.T) {
 		t.Errorf("PeerSecretWOVersion = %v, want 7", m.PeerSecretWOVersion)
 	}
 }
+
+// TestISCSIAuthApiPayload_NoPeerUserClearsPeerSecret covers B-104: with
+// peeruser "" (its default when unset) the payload clears the peer secret,
+// so dropping mutual CHAP from config turns it off on the server.
+func TestISCSIAuthApiPayload_NoPeerUserClearsPeerSecret(t *testing.T) {
+	m := ISCSIAuthModel{
+		Tag:           types.Int64Value(5),
+		User:          types.StringValue("chapuser"),
+		Secret:        types.StringValue("chapsecret123"),
+		PeerUser:      types.StringValue(""),
+		PeerSecret:    types.StringNull(),
+		DiscoveryAuth: types.StringValue("CHAP"),
+	}
+	payload := m.apiPayload()
+	if v, ok := payload["peeruser"]; !ok || v != "" {
+		t.Errorf("payload[peeruser] = %v (present=%v), want \"\"", v, ok)
+	}
+	if v, ok := payload["peersecret"]; !ok || v != "" {
+		t.Errorf("payload[peersecret] = %v (present=%v), want \"\"", v, ok)
+	}
+
+	// With a peer user and no peersecret in config, the stored secret is
+	// left alone.
+	m.PeerUser = types.StringValue("peer")
+	payload = m.apiPayload()
+	if v, ok := payload["peersecret"]; ok {
+		t.Errorf("payload[peersecret] = %v, want omitted while peeruser is set", v)
+	}
+}

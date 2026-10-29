@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 )
 
@@ -64,10 +65,8 @@ func resourceSchema() schema.Schema {
 			"add_to_trusted_store": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Whether to add this certificate to the trusted certificate store. Defaults to false. Updatable in place.",
-				PlanModifiers: []planmodifier.Bool{
-					boolplanmodifier.UseStateForUnknown(),
-				},
+				Default:     booldefault.StaticBool(false),
+				Description: "Whether to add this certificate to the trusted certificate store. Defaults to false; removing it from the configuration resets it to false. Updatable in place.",
 			},
 			"renew_days": schema.Int64Attribute{
 				Optional: true,
@@ -78,10 +77,12 @@ func resourceSchema() schema.Schema {
 					"certificates (\"Certificate renewal days is only supported for ACME certificates\"), and " +
 					"certificate.create silently ignores it and forces the default (10) instead of honoring a " +
 					"caller-supplied value, either of which would otherwise surface as a confusing " +
-					"provider-inconsistency error rather than a clear one. Defaults to 10. Updatable in place.",
+					"provider-inconsistency error rather than a clear one. Defaults to 10; on an ACME certificate, removing " +
+					"it from the configuration resets it to 10. Updatable in place.",
 				Validators: []validator.Int64{int64validator.Between(1, 30)},
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.UseStateForUnknown(),
+					renewDaysDefaultForACME{},
 				},
 			},
 			"certificate": schema.StringAttribute{
@@ -228,8 +229,10 @@ func resourceSchema() schema.Schema {
 			"email": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Email address for the certificate subject (CSR generation) or parsed from an imported certificate/CSR. Immutable.",
+				CustomType:  normalize.EmailType{},
+				Description: "Email address for the certificate subject (CSR generation) or parsed from an imported certificate/CSR. The domain part compares case-insensitively (the server lower-cases it). Immutable.",
 				PlanModifiers: []planmodifier.String{
+					normalize.KeepStateIfEquivalent(normalize.EmailType{}),
 					stringplanmodifier.UseStateForUnknown(),
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -272,14 +275,17 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"san": schema.ListAttribute{
-				ElementType: types.StringType,
+				ElementType: normalize.SANType{},
 				Optional:    true,
 				Computed:    true,
 				Description: "Subject alternative names. Required (at least one entry) when create_type is " +
 					"CERTIFICATE_CREATE_CSR — confirmed live: TrueNAS rejects a CSR request with an empty/unset " +
 					"\"san\" (\"List should have at least 1 item\"), even when \"common\" is also set. Parsed " +
-					"back from an imported certificate/CSR for the other create_types. Immutable.",
+					"back from an imported certificate/CSR for the other create_types. An IP address may be given " +
+					"bare or as \"IP:<addr>\" and a name bare or as \"DNS:<name>\"; the server's " +
+					"\"IP Address:<addr>\" form compares equal. Immutable.",
 				PlanModifiers: []planmodifier.List{
+					normalize.KeepStateIfEquivalentList(types.ListType{ElemType: normalize.SANType{}}),
 					listplanmodifier.UseStateForUnknown(),
 					listplanmodifier.RequiresReplace(),
 				},

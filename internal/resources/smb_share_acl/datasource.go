@@ -12,6 +12,7 @@ import (
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ datasource.DataSource = &SMBShareACLDataSource{}
@@ -34,21 +35,21 @@ func (d *SMBShareACLDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			"share_name": dschema.StringAttribute{Required: true, Description: "Name of the SMB share to look up."},
 			"share_acl": dschema.ListNestedAttribute{
 				Computed:    true,
-				Description: "Ordered list of share ACL entries. Each entry carries whichever principal selector the server resolved (SID preferred, then Unix ID, then name).",
+				Description: "Ordered list of share ACL entries. Each entry carries every principal field the server resolved: SID, Unix ID (null when the SID maps to none) and name.",
 				NestedObject: dschema.NestedAttributeObject{
 					Attributes: map[string]dschema.Attribute{
 						"ae_perm":    dschema.StringAttribute{Computed: true, Description: "Permission level: FULL, CHANGE, READ, or CUSTOM."},
 						"ae_type":    dschema.StringAttribute{Computed: true, Description: "ALLOWED or DENIED."},
-						"ae_who_sid": dschema.StringAttribute{Computed: true, Description: "Principal SID, if identified by SID."},
+						"ae_who_sid": dschema.StringAttribute{Computed: true, CustomType: normalize.CaseInsensitiveType{}, Description: "Principal SID."},
 						"ae_who_id": dschema.SingleNestedAttribute{
 							Computed:    true,
-							Description: "Principal Unix ID, if identified by Unix ID.",
+							Description: "Principal Unix ID, or null when the SID maps to none.",
 							Attributes: map[string]dschema.Attribute{
 								"id_type": dschema.StringAttribute{Computed: true, Description: "USER or GROUP."},
 								"id":      dschema.Int64Attribute{Computed: true, Description: "Numeric UID or GID."},
 							},
 						},
-						"ae_who_str": dschema.StringAttribute{Computed: true, Description: "Principal user/group name, if identified by name."},
+						"ae_who_str": dschema.StringAttribute{Computed: true, Description: "Principal user or group name, or null when it does not resolve."},
 					},
 				},
 			},

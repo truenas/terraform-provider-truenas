@@ -29,14 +29,14 @@ resource "truenas_cloudsync_credentials" "backup_s3" {
 ### Required
 
 - `name` (String) Name of the cloud sync credentials.
-- `provider_config` (String, Sensitive) JSON document of provider settings. Must include "type" (e.g. S3, B2, GOOGLE_CLOUD_STORAGE, STORJ_IX). May contain secrets (access keys); use provider_secrets_wo to keep secret keys out of state.
+- `provider_config` (String, Sensitive) JSON document of provider settings. Must include "type" (e.g. S3, B2, GOOGLE_CLOUD_STORAGE, STORJ_IX). May contain secrets (access keys); use provider_secrets_wo to keep secret keys out of state. Compared as JSON: any spelling works, keys the server adds are not a change, and `url`/`endpoint` compare as URLs (host case, default port and a trailing slash are ignored). Generated configuration (`terraform plan -generate-config-out`) has this as null, because Terraform never writes sensitive or write-only values there; fill it in before applying.
 
 ### Optional
 
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
 - `provider_secrets_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only JSON object of secret provider settings (e.g. an S3 access key/secret) merged over provider_config when sending to TrueNAS. Never stored in state, and not read back on refresh. Requires provider_secrets_wo_version.
-- `provider_secrets_wo_version` (Number) Version trigger for provider_secrets_wo. Bump to re-send a changed write-only secret overlay. Required when provider_secrets_wo is set.
+- `provider_secrets_wo_version` (Number) Version trigger for provider_secrets_wo. Bump to re-send a changed write-only secret overlay. The overlay is sent on create and when this integer changes; other updates send the secret values TrueNAS already has (the API needs the whole object), so a changed secret is applied only with a version bump. Required when provider_secrets_wo is set.
 
 ### Read-Only
 

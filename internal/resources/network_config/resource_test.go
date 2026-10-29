@@ -10,7 +10,9 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
@@ -637,5 +639,36 @@ func TestNetworkConfigDataSourceModel_MatchesSchema(t *testing.T) {
 
 	if !reflect.DeepEqual(schemaAttrs, modelFields) {
 		t.Fatalf("NetworkConfigDataSourceModel tfsdk tags %v do not match datasource schema attributes %v", modelFields, schemaAttrs)
+	}
+}
+
+// TestSchema_HostsDomainsValidators guards B-145: entries TrueNAS would
+// split, trim or drop are rejected at plan time.
+func TestSchema_HostsDomainsValidators(t *testing.T) {
+	ctx := context.Background()
+	s := resourceSchema()
+	check := func(attr string, vals []string) bool {
+		l, _ := types.ListValueFrom(ctx, types.StringType, vals)
+		var resp validator.ListResponse
+		for _, v := range s.Attributes[attr].(schema.ListAttribute).Validators {
+			v.ValidateList(ctx, validator.ListRequest{Path: path.Root(attr), ConfigValue: l}, &resp)
+		}
+		return !resp.Diagnostics.HasError()
+	}
+	for _, bad := range [][]string{{"192.0.2.2 tfb "}, {" 192.0.2.1 a"}, {""}, {"a\nb"}} {
+		if check("hosts", bad) {
+			t.Errorf("hosts %q accepted", bad)
+		}
+	}
+	if !check("hosts", []string{"192.0.2.1 a.example a", "::1 localhost6"}) {
+		t.Error("valid hosts rejected")
+	}
+	for _, bad := range [][]string{{"a.example b.example"}, {""}, {" a.example"}} {
+		if check("domains", bad) {
+			t.Errorf("domains %q accepted", bad)
+		}
+	}
+	if !check("domains", []string{"a.example", "b.example"}) {
+		t.Error("valid domains rejected")
 	}
 }

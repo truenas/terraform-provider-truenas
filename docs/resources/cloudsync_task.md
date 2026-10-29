@@ -64,8 +64,9 @@ resource "truenas_cloudsync_task" "nightly_backup" {
 - `create_empty_src_dirs` (Boolean) Create empty directories in the destination that exist in the source.
 - `enabled` (Boolean)
 - `encryption` (Boolean) Encrypt file contents before uploading (rclone crypt). Requires encryption_password.
-- `encryption_password` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Password for client-side encryption. Write-only: never stored in Terraform state or read back. Requires Terraform >= 1.11.
+- `encryption_password` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Password for client-side encryption. Write-only: never stored in Terraform state or read back; to change it, also bump encryption_wo_version. Requires Terraform >= 1.11.
 - `encryption_salt` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Salt for client-side encryption key derivation. Write-only: never stored in Terraform state or read back. Requires Terraform >= 1.11.
+- `encryption_wo_version` (Number) Version trigger for encryption_password and encryption_salt. They are write-only, so changing them alone is not a change Terraform can see; bump this to send the new values. They are sent on create and, after that, only when this integer changes or `encryption` is turned on; other updates leave the stored values alone.
 - `exclude` (List of String)
 - `filename_encryption` (Boolean) Also encrypt file and directory names (only meaningful when encryption is enabled).
 - `follow_symlinks` (Boolean) Follow symbolic links and sync the files they point to.

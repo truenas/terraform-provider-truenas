@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // resilverConfigResourceID is the fixed Terraform ID for this singleton
@@ -22,11 +23,11 @@ const resilverConfigResourceID = "resilver_config"
 // ResilverConfigModel is the Terraform state model for
 // truenas_resilver_config.
 type ResilverConfigModel struct {
-	ID      types.String `tfsdk:"id"` // fixed: "resilver_config"
-	Begin   types.String `tfsdk:"begin"`
-	End     types.String `tfsdk:"end"`
-	Enabled types.Bool   `tfsdk:"enabled"`
-	Weekday types.List   `tfsdk:"weekday"` // List[Int64], 1 (Mon) - 7 (Sun)
+	ID      types.String        `tfsdk:"id"` // fixed: "resilver_config"
+	Begin   normalize.TimeOfDay `tfsdk:"begin"`
+	End     normalize.TimeOfDay `tfsdk:"end"`
+	Enabled types.Bool          `tfsdk:"enabled"`
+	Weekday types.List          `tfsdk:"weekday"` // List[Int64], 1 (Mon) - 7 (Sun)
 }
 
 // ResilverConfigDataSourceModel is the read-only model for the
@@ -55,8 +56,10 @@ func responseToModel(ctx context.Context, api *resilverConfigAPI, m *ResilverCon
 	var diags diag.Diagnostics
 
 	m.ID = types.StringValue(resilverConfigResourceID)
-	m.Begin = types.StringValue(api.Begin)
-	m.End = types.StringValue(api.End)
+	// The server zero-pads "H:MM" to "HH:MM"; TimeOfDay compares the times,
+	// so the configured spelling stays in state (B-088).
+	m.Begin = normalize.NewTimeOfDayValue(api.Begin)
+	m.End = normalize.NewTimeOfDayValue(api.End)
 	m.Enabled = types.BoolValue(api.Enabled)
 
 	weekday := api.Weekday

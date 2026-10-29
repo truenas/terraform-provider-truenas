@@ -34,6 +34,7 @@ Fetches a TrueNAS replication task by name.
 - `encryption_key` (String, Sensitive)
 - `encryption_key_format` (String)
 - `encryption_key_location` (String)
+- `encryption_key_wo_version` (Number)
 - `exclude` (List of String)
 - `hold_pending_snapshots` (Boolean)
 - `id` (Number) The ID of this resource.

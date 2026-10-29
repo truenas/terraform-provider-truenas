@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
 )
@@ -18,6 +19,7 @@ import (
 var _ resource.Resource = &NVMetHostResource{}
 var _ resource.ResourceWithImportState = &NVMetHostResource{}
 var _ resource.ResourceWithIdentity = &NVMetHostResource{}
+var _ resource.ResourceWithModifyPlan = &NVMetHostResource{}
 
 // NVMetHostResource implements the truenas_nvmet_host resource.
 type NVMetHostResource struct{ client *client.Client }
@@ -78,6 +80,30 @@ func (r *NVMetHostResource) applyDescriptionSupport(ctx context.Context, payload
 		return
 	}
 	delete(payload, "description")
+}
+
+// ModifyPlan plans dhchap_key_set/dhchap_ctrl_key_set from whether the
+// write-only keys are set in config. The keys never reach the plan, so
+// without this removing a key from config planned nothing and the old key
+// stayed active on the server; now the flag flips and Update clears it. The
+// flags are read back from the server, so a key added or removed outside
+// Terraform also shows as a change.
+func (r *NVMetHostResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+	var cfg NVMetHostModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	for attr, v := range map[string]types.String{"dhchap_key_set": cfg.DHChapKey, "dhchap_ctrl_key_set": cfg.DHChapCtrlKey} {
+		planned := types.BoolUnknown()
+		if !v.IsUnknown() {
+			planned = types.BoolValue(configKey(v) != "")
+		}
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root(attr), planned)...)
+	}
 }
 
 func (r *NVMetHostResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -201,6 +227,7 @@ func (r *NVMetHostResource) Update(ctx context.Context, req resource.UpdateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	omitUnrotatedKeys(payload, plan, state)
 	r.applyDescriptionSupport(ctx, payload, &plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return

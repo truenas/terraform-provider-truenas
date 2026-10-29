@@ -7,10 +7,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
@@ -57,47 +58,38 @@ func resourceSchema() schema.Schema {
 						Validators:  []validator.String{stringvalidator.LengthAtLeast(1)},
 					},
 					"prefix": schema.StringAttribute{
-						Optional:    true,
-						Computed:    true,
-						Description: "Prefix to prepend to all metric names. Defaults to \"scale\".",
-						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
-						},
+						Optional: true,
+						Computed: true,
+						Description: "Prefix to prepend to all metric names. Defaults to \"scale\"; removing it from " +
+							"the configuration sets it back to \"scale\".",
+						Default: stringdefault.StaticString("scale"),
 					},
 					"update_every": schema.Int64Attribute{
 						Optional:    true,
 						Computed:    true,
-						Description: "Interval in seconds between metric updates. Defaults to 1.",
+						Description: "Interval in seconds between metric updates. Defaults to 1 (also when removed from the configuration).",
 						Validators:  []validator.Int64{int64validator.AtLeast(1)},
-						PlanModifiers: []planmodifier.Int64{
-							int64planmodifier.UseStateForUnknown(),
-						},
+						Default:     int64default.StaticInt64(1),
 					},
 					"buffer_on_failures": schema.Int64Attribute{
 						Optional:    true,
 						Computed:    true,
-						Description: "Number of updates to buffer when the Graphite server is unavailable. Defaults to 10.",
+						Description: "Number of updates to buffer when the Graphite server is unavailable. Defaults to 10 (also when removed from the configuration).",
 						Validators:  []validator.Int64{int64validator.AtLeast(1)},
-						PlanModifiers: []planmodifier.Int64{
-							int64planmodifier.UseStateForUnknown(),
-						},
+						Default:     int64default.StaticInt64(10),
 					},
 					"send_names_instead_of_ids": schema.BoolAttribute{
 						Optional:    true,
 						Computed:    true,
-						Description: "Whether to send human-readable names instead of internal IDs. Defaults to true.",
-						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
-						},
+						Description: "Whether to send human-readable names instead of internal IDs. Defaults to true (also when removed from the configuration).",
+						Default:     booldefault.StaticBool(true),
 					},
 					"matching_charts": schema.StringAttribute{
 						Optional:    true,
 						Computed:    true,
-						Description: "Pattern to match charts for export (supports wildcards). Defaults to \"*\".",
+						Description: "Pattern to match charts for export (supports wildcards). Defaults to \"*\" (also when removed from the configuration).",
 						Validators:  []validator.String{stringvalidator.LengthAtLeast(1)},
-						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
-						},
+						Default:     stringdefault.StaticString("*"),
 					},
 				},
 			},

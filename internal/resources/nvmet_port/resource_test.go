@@ -330,3 +330,27 @@ func TestResponseToModel_AllFields(t *testing.T) {
 		t.Errorf("AddrAdrfam = %v, want IPV4", m.AddrAdrfam.ValueString())
 	}
 }
+
+// TestPortSettingsChanged covers the disable-change-enable decision: only a
+// change to something other than enabled needs the toggle.
+func TestPortSettingsChanged(t *testing.T) {
+	state := &NVMetPortModel{
+		AddrTraddr:     types.StringValue("10.0.0.1"),
+		AddrTrsvcid:    types.Int64Value(4420),
+		Enabled:        types.BoolValue(true),
+		InlineDataSize: types.Int64Null(),
+		MaxQueueSize:   types.Int64Value(64),
+		PIEnable:       types.BoolNull(),
+	}
+	same := map[string]any{"addr_traddr": "10.0.0.1", "addr_trsvcid": int64(4420), "max_queue_size": int64(64), "enabled": false}
+	if portSettingsChanged(same, state) {
+		t.Error("enabled-only change reported as a settings change")
+	}
+	for k, v := range map[string]any{"addr_trsvcid": int64(4421), "addr_traddr": "10.0.0.2", "max_queue_size": int64(128), "inline_data_size": int64(16384), "pi_enable": true} {
+		p := map[string]any{"addr_traddr": "10.0.0.1", "addr_trsvcid": int64(4420), "max_queue_size": int64(64)}
+		p[k] = v
+		if !portSettingsChanged(p, state) {
+			t.Errorf("change to %s not detected", k)
+		}
+	}
+}

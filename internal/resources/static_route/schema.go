@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func resourceSchema() schema.Schema {
@@ -22,12 +23,18 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"destination": schema.StringAttribute{
-				Required:    true,
-				Description: "Destination network in CIDR notation, e.g. \"10.20.0.0/16\".",
+				Required:   true,
+				CustomType: normalize.CIDRType{},
+				Description: "Destination network in CIDR notation, e.g. \"10.20.0.0/16\". A bare address means " +
+					"/32 (/128 for IPv6) and a dotted netmask is accepted; TrueNAS stores a canonical form " +
+					"(IPv6 exploded), which compares equal to the configured spelling.",
+				PlanModifiers: []planmodifier.String{normalize.KeepStateIfEquivalent(normalize.CIDRType{})},
 			},
 			"gateway": schema.StringAttribute{
-				Required:    true,
-				Description: "Gateway IP address for this route.",
+				Required:      true,
+				CustomType:    normalize.IPAddressType{},
+				Description:   "Gateway IP address for this route (IPv4 or IPv6, any spelling).",
+				PlanModifiers: []planmodifier.String{normalize.KeepStateIfEquivalent(normalize.IPAddressType{})},
 			},
 			"description": schema.StringAttribute{
 				Optional:    true,

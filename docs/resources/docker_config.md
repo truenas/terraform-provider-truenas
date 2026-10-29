@@ -54,7 +54,7 @@ resource "truenas_docker_config" "config" {
 ### Optional
 
 - `address_pools` (Attributes List) Network address pools Docker allocates per-container-network subnets from. (see [below for nested schema](#nestedatt--address_pools))
-- `cidr_v6` (String) IPv6 CIDR block for Docker container networking (e.g. "fdd0::/64").
+- `cidr_v6` (String) IPv6 CIDR block for Docker container networking (e.g. "fdd0::/64"). Any IPv6 spelling is accepted; the server stores the compressed lower-case form (B-079).
 - `enable_image_updates` (Boolean) Whether TrueNAS periodically checks for and downloads updates to Docker images used by installed applications.
 - `nvidia` (Boolean) Whether NVIDIA GPU support is enabled for containers. Readable on every probed release; writable only on TrueNAS 25.10 and earlier — TrueNAS 26.0+ dropped it from docker.update's accepted fields, so explicitly setting it there is an apply-time error.
 - `pool` (String) ZFS storage pool backing Docker, or null if Docker has not been configured. Changing this pool migrates the Docker dataset; see "migrate_applications" above for why application migration itself is not controlled by this resource.
@@ -70,7 +70,7 @@ resource "truenas_docker_config" "config" {
 
 Required:
 
-- `base` (String) Base network address with prefix for the pool (e.g. "172.17.0.0/12").
+- `base` (String) Base network address with prefix for the pool (e.g. "172.17.0.0/12"). Host bits are ignored when comparing with the server's value.
 - `size` (Number) Subnet size for networks allocated from this pool (e.g. 24).
 
 

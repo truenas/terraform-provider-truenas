@@ -99,12 +99,8 @@ func resourceSchema() schema.Schema {
 			},
 			"cpuset": schema.StringAttribute{
 				Optional: true,
-				Computed: true,
 				Description: "Physical CPU numbers the container's domain process and virtual CPUs may be " +
-					"pinned to (e.g. \"0-3\"), or null for no pinning.",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
+					"pinned to (e.g. \"0-3\"). Unset means no pinning: removing it from the configuration clears it.",
 			},
 			"time": schema.StringAttribute{
 				Validators:  []validator.String{stringvalidator.OneOf("LOCAL", "UTC")},
@@ -133,12 +129,9 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"initdir": schema.StringAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "\"init\" process working directory, or null for the image default.",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
+				Optional: true,
+				Description: "\"init\" process working directory. Unset means the image default: removing it from the " +
+					"configuration clears it.",
 			},
 			"initenv": schema.MapAttribute{
 				Optional:    true,
@@ -150,20 +143,14 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"inituser": schema.StringAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "\"init\" process username, or null for the image default.",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
+				Optional: true,
+				Description: "\"init\" process username. Unset means the image default: removing it from the " +
+					"configuration clears it.",
 			},
 			"initgroup": schema.StringAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "\"init\" process group, or null for the image default.",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
+				Optional: true,
+				Description: "\"init\" process group. Unset means the image default: removing it from the " +
+					"configuration clears it.",
 			},
 			"idmap": schema.StringAttribute{
 				Optional: true,
@@ -210,15 +197,24 @@ func resourceSchema() schema.Schema {
 			"dataset": schema.StringAttribute{
 				Computed:    true,
 				Description: "ZFS dataset backing the container's root filesystem.",
+				PlanModifiers: []planmodifier.String{
+					keepUnlessChanged{input: "name"},
+				},
 			},
 			"default_network": schema.StringAttribute{
 				Computed: true,
 				Description: "Default network bridge used when no NIC devices are explicitly attached, or " +
 					"null when explicit NIC devices are configured.",
+				PlanModifiers: []planmodifier.String{
+					keepUnlessChanged{},
+				},
 			},
 			"status": schema.StringAttribute{
 				Computed:    true,
 				Description: "Current container status: RUNNING, STOPPED.",
+				PlanModifiers: []planmodifier.String{
+					keepUnlessChanged{input: "running"},
+				},
 			},
 		},
 	}

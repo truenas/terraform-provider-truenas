@@ -32,6 +32,9 @@ resource "truenas_webshare_config" "config" {
 
 - `bindip` (List of String) List of IP addresses the Webshare HTTP server binds to. An empty list means it binds to all addresses. See the webshare.bindip_choices API method on the target box for the set of valid values; this schema does not validate them at plan time.
 - `groups` (List of String) List of AD/LDAP group names whose members are granted access to Webshare.
+- `mcp_allow_write` (Boolean) Allow the AI assistant to create new files and directories (it can never overwrite, delete or rename existing files). TrueNAS 28.0 and later only.
+- `mcp_allowed_groups` (List of String) Groups whose members may connect an AI assistant to Webshare. Each group must also grant Webshare access (truenas_webshare or a group in "groups"). TrueNAS 28.0 and later only.
+- `mcp_enabled` (Boolean) Enable the Webshare Model Context Protocol (MCP) server, which lets users connect an AI assistant to their Webshare files. Requires mcp_allowed_groups. TrueNAS 28.0 and later only (null below; setting it there is an apply-time error).
 - `passkey` (String) Passkey authentication mode: ENABLED, DISABLED, or REQUIRED.
 - `search` (Boolean) Enable search indexing for Webshare-exposed content.
 

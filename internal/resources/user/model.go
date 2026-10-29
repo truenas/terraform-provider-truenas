@@ -11,31 +11,32 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // UserModel is the Terraform state model for truenas_user.
 type UserModel struct {
-	ID                   types.Int64  `tfsdk:"id"`
-	UID                  types.Int64  `tfsdk:"uid"`
-	Username             types.String `tfsdk:"username"`
-	FullName             types.String `tfsdk:"full_name"`
-	Email                types.String `tfsdk:"email"`
-	Home                 types.String `tfsdk:"home"`
-	HomeMode             types.String `tfsdk:"home_mode"`
-	Shell                types.String `tfsdk:"shell"`
-	Locked               types.Bool   `tfsdk:"locked"`
-	PasswordDisabled     types.Bool   `tfsdk:"password_disabled"`
-	SMB                  types.Bool   `tfsdk:"smb"`
-	Webshare             types.Bool   `tfsdk:"webshare"`
-	SSHPasswordEnabled   types.Bool   `tfsdk:"ssh_password_enabled"`
-	SSHPubKey            types.String `tfsdk:"sshpubkey"`
-	SudoCommands         types.List   `tfsdk:"sudo_commands"`
-	SudoCommandsNoPasswd types.List   `tfsdk:"sudo_commands_nopasswd"`
-	Groups               types.List   `tfsdk:"groups"`
-	Group                types.Int64  `tfsdk:"group"`
-	GroupCreate          types.Bool   `tfsdk:"group_create"`
-	Password             types.String `tfsdk:"password"`
-	PasswordWOVersion    types.Int64  `tfsdk:"password_wo_version"`
+	ID                   types.Int64         `tfsdk:"id"`
+	UID                  types.Int64         `tfsdk:"uid"`
+	Username             types.String        `tfsdk:"username"`
+	FullName             types.String        `tfsdk:"full_name"`
+	Email                types.String        `tfsdk:"email"`
+	Home                 types.String        `tfsdk:"home"`
+	HomeMode             normalize.OctalMode `tfsdk:"home_mode"`
+	Shell                types.String        `tfsdk:"shell"`
+	Locked               types.Bool          `tfsdk:"locked"`
+	PasswordDisabled     types.Bool          `tfsdk:"password_disabled"`
+	SMB                  types.Bool          `tfsdk:"smb"`
+	Webshare             types.Bool          `tfsdk:"webshare"`
+	SSHPasswordEnabled   types.Bool          `tfsdk:"ssh_password_enabled"`
+	SSHPubKey            normalize.Trimmed   `tfsdk:"sshpubkey"`
+	SudoCommands         types.List          `tfsdk:"sudo_commands"`
+	SudoCommandsNoPasswd types.List          `tfsdk:"sudo_commands_nopasswd"`
+	Groups               types.List          `tfsdk:"groups"`
+	Group                types.Int64         `tfsdk:"group"`
+	GroupCreate          types.Bool          `tfsdk:"group_create"`
+	Password             types.String        `tfsdk:"password"`
+	PasswordWOVersion    types.Int64         `tfsdk:"password_wo_version"`
 	// Computed only
 	Builtin   types.Bool `tfsdk:"builtin"`
 	Immutable types.Bool `tfsdk:"immutable"`
@@ -218,6 +219,19 @@ func decodeGroupField(raw json.RawMessage) (id int64, ok bool, err error) {
 	return 0, false, fmt.Errorf("cannot decode group field %q as object with id, bare integer, or null", string(raw))
 }
 
+// primaryGroupName returns the bsdgrp_group name from the "group" object a
+// user.query/get_instance response embeds, or "" when the field is a bare id,
+// null, or has no name.
+func primaryGroupName(raw json.RawMessage) string {
+	var obj struct {
+		Name string `json:"bsdgrp_group"`
+	}
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return ""
+	}
+	return obj.Name
+}
+
 // responseToModel maps an API response onto a Terraform model.
 // Password is NOT set here (write-only, never stored in state).
 func responseToModel(ctx context.Context, api *userAPI, m *UserModel) diag.Diagnostics {
@@ -244,10 +258,12 @@ func responseToModel(ctx context.Context, api *userAPI, m *UserModel) diag.Diagn
 	m.Webshare = types.BoolValue(api.Webshare)
 	m.SSHPasswordEnabled = types.BoolValue(api.SSHPasswordEnabled)
 
+	// The server strips surrounding whitespace (a key read with file() ends in
+	// "\n"); Trimmed's semantic equality keeps the configured spelling. (B-053)
 	if api.SSHPubKey != nil {
-		m.SSHPubKey = types.StringValue(*api.SSHPubKey)
+		m.SSHPubKey = normalize.NewTrimmedValue(*api.SSHPubKey)
 	} else {
-		m.SSHPubKey = types.StringValue("")
+		m.SSHPubKey = normalize.NewTrimmedValue("")
 	}
 
 	sudoCmds := api.SudoCommands
@@ -303,6 +319,21 @@ func responseToModel(ctx context.Context, api *userAPI, m *UserModel) diag.Diagn
 		m.Group = types.Int64Value(groupID)
 	} else {
 		m.Group = types.Int64Null()
+	}
+
+	// group_create is a create-time directive, but its effect is visible:
+	// user.create with group_create=true makes the primary group the local
+	// group named after the username (creating it, or reusing one that already
+	// exists). A known plan/state value is kept; an unset one (left out of
+	// config on create, or null after import) is derived from that, so an
+	// import followed by a plan with group_create = true is a no-op. (B-051)
+	if m.GroupCreate.IsNull() || m.GroupCreate.IsUnknown() {
+		m.GroupCreate = types.BoolValue(primaryGroupName(api.Group) == api.Username)
+	}
+	// home_mode is not returned by user.query. An unset value stays null here;
+	// ImportState reads it from the home directory's mode.
+	if m.HomeMode.IsUnknown() {
+		m.HomeMode = normalize.NewOctalModeNull()
 	}
 
 	// Computed
@@ -399,9 +430,9 @@ func (m *UserModel) createPayload(ctx context.Context) (map[string]any, diag.Dia
 // drops every unchanged field generically, so no hand-maintained field list can
 // fall out of sync and silently reintroduce the bug for a newly-added field.
 //
-// uid and username are already absent (basePayload omits them). Write-only
-// password / home_mode are kept because prior state carries them null, so they
-// never compare equal. Read (responseToModel) refreshes every field, so
+// uid and username are already absent (basePayload omits them). The
+// write-only password is kept (by design, #48, it is re-sent on every update);
+// home_mode is sent only when it changed. Read (responseToModel) refreshes every field, so
 // out-of-band drift still surfaces as a plan diff and is re-sent — the diff is
 // taken against the refreshed prior state, not against config. (#43)
 func (m *UserModel) updatePayload(ctx context.Context, prior UserModel) (map[string]any, diag.Diagnostics) {
@@ -414,8 +445,8 @@ func (m *UserModel) updatePayload(ctx context.Context, prior UserModel) (map[str
 	// on an imported admin — the v1.5.13 regression). An EXPLICITLY configured
 	// empty value is a known, non-null value, so it is NOT dropped here and is
 	// still sent as a real change. uid/username are absent (basePayload omits
-	// them); write-only password/home_mode are not in this map, so they always
-	// ride along when configured. Read refreshes every field, so out-of-band
+	// them); the write-only password is not in this map: Update sets it on the
+	// model only when passwordResendNeeded. Read refreshes every field, so out-of-band
 	// drift still surfaces as a plan diff and is re-sent. (#43)
 	priorFields := prior.optionalUserFields()
 	for key, plan := range m.optionalUserFields() {
@@ -423,7 +454,27 @@ func (m *UserModel) updatePayload(ctx context.Context, prior UserModel) (map[str
 			delete(p, key)
 		}
 	}
+	// home_mode is applied with a chmod of the home directory on every update
+	// that carries it, and an immutable (built-in) account rejects it outright,
+	// so it is sent only when it changed. (B-142)
+	if m.HomeMode.Equal(prior.HomeMode) {
+		delete(p, "home_mode")
+	}
 	return p, diags
+}
+
+// passwordResendNeeded reports whether an update sends the write-only password.
+// Every user.update that carries a password re-hashes it and resets
+// last_password_change, so re-sending it on unrelated updates kept
+// max_password_age from ever firing (B-141). It is sent only when
+// password_wo_version changed, or when the server requires it: turning smb on
+// for an account that was not an SMB user fails with "Password must be reset
+// in order to enable SMB authentication" unless the password comes along.
+func passwordResendNeeded(plan, prior UserModel) bool {
+	if !plan.PasswordWOVersion.Equal(prior.PasswordWOVersion) {
+		return true
+	}
+	return plan.SMB.ValueBool() && !prior.SMB.ValueBool()
 }
 
 func (m *UserModel) basePayload(ctx context.Context) (map[string]any, diag.Diagnostics) {

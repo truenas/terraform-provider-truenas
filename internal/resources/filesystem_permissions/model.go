@@ -9,18 +9,19 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // FilesystemPermissionsModel is the Terraform state/plan model for a
 // truenas_filesystem_permissions resource.
 type FilesystemPermissionsModel struct {
-	ID        types.String `tfsdk:"id"`
-	Path      types.String `tfsdk:"path"`
-	Mode      types.String `tfsdk:"mode"`
-	UID       types.Int64  `tfsdk:"uid"`
-	GID       types.Int64  `tfsdk:"gid"`
-	Recursive types.Bool   `tfsdk:"recursive"`
-	Traverse  types.Bool   `tfsdk:"traverse"`
+	ID        types.String        `tfsdk:"id"`
+	Path      types.String        `tfsdk:"path"`
+	Mode      normalize.OctalMode `tfsdk:"mode"`
+	UID       types.Int64         `tfsdk:"uid"`
+	GID       types.Int64         `tfsdk:"gid"`
+	Recursive types.Bool          `tfsdk:"recursive"`
+	Traverse  types.Bool          `tfsdk:"traverse"`
 }
 
 // FilesystemPermissionsDataSourceModel is the read-only lookup model for
@@ -104,7 +105,9 @@ func responseToModel(api *fsStatAPI, path string, m *FilesystemPermissionsModel)
 	var diags diag.Diagnostics
 	m.ID = types.StringValue(path)
 	m.Path = types.StringValue(path)
-	m.Mode = types.StringValue(permModeString(api.Mode))
+	// mode is an OctalMode: "755" in the configuration equals the "0755" read
+	// back, and state keeps the configured spelling. (B-091)
+	m.Mode = normalize.NewOctalModeValue(permModeString(api.Mode))
 	m.UID = types.Int64Value(api.UID)
 	m.GID = types.Int64Value(api.GID)
 	return diags

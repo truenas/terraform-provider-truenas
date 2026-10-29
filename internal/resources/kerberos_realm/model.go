@@ -115,7 +115,9 @@ func responseToDataSourceModel(ctx context.Context, api *kerberosRealmAPI, m *Ke
 }
 
 // apiPayload builds the map expected by kerberos.realm.create/
-// kerberos.realm.update. "realm" is always included (Required). primary_kdc,
+// kerberos.realm.update. "realm" is always included (Required). primary_kdc
+// is Optional only and always sent: its value, or JSON null when it is unset,
+// because null is the only value that clears it (the API rejects ""). (B-112)
 // kdc, admin_server, and kpasswd_server are Optional+Computed: each is
 // included only when known and non-null, so an unset optional is omitted
 // entirely and the TrueNAS-side current value/default is left unchanged
@@ -130,6 +132,8 @@ func (m *KerberosRealmModel) apiPayload(ctx context.Context) (map[string]any, di
 
 	if !m.PrimaryKDC.IsNull() && !m.PrimaryKDC.IsUnknown() {
 		p["primary_kdc"] = m.PrimaryKDC.ValueString()
+	} else {
+		p["primary_kdc"] = nil
 	}
 	if !m.KDC.IsNull() && !m.KDC.IsUnknown() {
 		var v []string

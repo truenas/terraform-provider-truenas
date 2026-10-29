@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // TestSNMPConfigSchema_IDIsComputed verifies that "id" is a Computed-only
@@ -270,7 +271,7 @@ func TestResponseToDataSourceModel_V3PrivProtoNilBecomesEmptyString(t *testing.T
 func TestUpdatePayload_OnlyKnownFieldsSent(t *testing.T) {
 	m := &SNMPConfigModel{
 		Community:        types.StringNull(),
-		Contact:          types.StringValue("ops@example.com"),
+		Contact:          normalize.NewEmailValue("ops@example.com"),
 		Location:         types.StringUnknown(),
 		LogLevel:         types.Int64Value(3),
 		Options:          types.StringNull(),
@@ -324,7 +325,7 @@ func TestUpdatePayload_OnlyKnownFieldsSent(t *testing.T) {
 func TestUpdatePayload_AllKnownFieldsSent(t *testing.T) {
 	m := &SNMPConfigModel{
 		Community:        types.StringValue("public"),
-		Contact:          types.StringValue("ops@example.com"),
+		Contact:          normalize.NewEmailValue("ops@example.com"),
 		Location:         types.StringValue("DC1"),
 		LogLevel:         types.Int64Value(3),
 		Options:          types.StringValue(""),
@@ -369,7 +370,7 @@ func TestUpdatePayload_V3PrivProtoThreeWay(t *testing.T) {
 	base := func() *SNMPConfigModel {
 		return &SNMPConfigModel{
 			Community:        types.StringValue("public"),
-			Contact:          types.StringValue(""),
+			Contact:          normalize.NewEmailValue(""),
 			Location:         types.StringValue(""),
 			LogLevel:         types.Int64Value(3),
 			Options:          types.StringValue(""),
@@ -422,7 +423,7 @@ func TestUpdatePayload_SecretsOnlyWhenSet(t *testing.T) {
 	base := func() *SNMPConfigModel {
 		return &SNMPConfigModel{
 			Community:   types.StringValue("public"),
-			Contact:     types.StringValue(""),
+			Contact:     normalize.NewEmailValue(""),
 			Location:    types.StringValue(""),
 			LogLevel:    types.Int64Value(3),
 			Options:     types.StringValue(""),

@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
@@ -67,16 +68,23 @@ type WebshareConfigModel struct {
 	Search  types.Bool   `tfsdk:"search"`
 	Passkey types.String `tfsdk:"passkey"`
 	Groups  types.List   `tfsdk:"groups"` // List[String]
+	// MCP server settings, TrueNAS 28.0+ only (null below; see mcpFieldsSet).
+	MCPEnabled       types.Bool `tfsdk:"mcp_enabled"`
+	MCPAllowedGroups types.List `tfsdk:"mcp_allowed_groups"` // List[String]
+	MCPAllowWrite    types.Bool `tfsdk:"mcp_allow_write"`
 }
 
 // WebshareConfigDataSourceModel is the read-only model for the
 // truenas_webshare_config datasource.
 type WebshareConfigDataSourceModel struct {
-	ID      types.String `tfsdk:"id"`
-	BindIP  types.List   `tfsdk:"bindip"`
-	Search  types.Bool   `tfsdk:"search"`
-	Passkey types.String `tfsdk:"passkey"`
-	Groups  types.List   `tfsdk:"groups"`
+	ID               types.String `tfsdk:"id"`
+	BindIP           types.List   `tfsdk:"bindip"`
+	Search           types.Bool   `tfsdk:"search"`
+	Passkey          types.String `tfsdk:"passkey"`
+	Groups           types.List   `tfsdk:"groups"`
+	MCPEnabled       types.Bool   `tfsdk:"mcp_enabled"`
+	MCPAllowedGroups types.List   `tfsdk:"mcp_allowed_groups"`
+	MCPAllowWrite    types.Bool   `tfsdk:"mcp_allow_write"`
 }
 
 // webshareConfigAPI mirrors the JSON object returned by webshare.config and
@@ -84,12 +92,29 @@ type WebshareConfigDataSourceModel struct {
 // exposes this namespace — see versionGateDiagnostics):
 //
 //	{"id": 1, "bindip": [], "search": false, "passkey": "DISABLED", "groups": []}
+//
+// TrueNAS 28.0 adds the MCP server settings mcp_enabled, mcp_allowed_groups
+// and mcp_allow_write (absent on 26.0, hence pointers).
 type webshareConfigAPI struct {
-	ID      int64    `json:"id"`
-	BindIP  []string `json:"bindip"`
-	Search  bool     `json:"search"`
-	Passkey string   `json:"passkey"`
-	Groups  []string `json:"groups"`
+	ID               int64     `json:"id"`
+	BindIP           []string  `json:"bindip"`
+	Search           bool      `json:"search"`
+	Passkey          string    `json:"passkey"`
+	Groups           []string  `json:"groups"`
+	MCPEnabled       *bool     `json:"mcp_enabled"`
+	MCPAllowedGroups *[]string `json:"mcp_allowed_groups"`
+	MCPAllowWrite    *bool     `json:"mcp_allow_write"`
+}
+
+// mcpValues maps the MCP fields to Terraform values: null when the server
+// does not have them (below TrueNAS 28.0).
+func (api *webshareConfigAPI) mcpValues(ctx context.Context) (types.Bool, types.List, types.Bool, diag.Diagnostics) {
+	groups := types.ListNull(types.StringType)
+	var diags diag.Diagnostics
+	if api.MCPAllowedGroups != nil {
+		groups, diags = types.ListValueFrom(ctx, types.StringType, nonNilStrings(*api.MCPAllowedGroups))
+	}
+	return types.BoolPointerValue(api.MCPEnabled), groups, types.BoolPointerValue(api.MCPAllowWrite), diags
 }
 
 // nonNilStrings returns s unchanged, or an empty (non-nil) slice, so
@@ -121,6 +146,9 @@ func responseToModel(ctx context.Context, api *webshareConfigAPI, m *WebshareCon
 	diags.Append(d...)
 	m.Groups = groups
 
+	m.MCPEnabled, m.MCPAllowedGroups, m.MCPAllowWrite, d = api.mcpValues(ctx)
+	diags.Append(d...)
+
 	return diags
 }
 
@@ -141,6 +169,9 @@ func responseToDataSourceModel(ctx context.Context, api *webshareConfigAPI, m *W
 	groups, d := types.ListValueFrom(ctx, types.StringType, nonNilStrings(api.Groups))
 	diags.Append(d...)
 	m.Groups = groups
+
+	m.MCPEnabled, m.MCPAllowedGroups, m.MCPAllowWrite, d = api.mcpValues(ctx)
+	diags.Append(d...)
 
 	return diags
 }
@@ -192,8 +223,40 @@ func (m *WebshareConfigModel) updatePayload(ctx context.Context) (map[string]any
 		}
 		p["groups"] = groups
 	}
+	if !m.MCPEnabled.IsNull() && !m.MCPEnabled.IsUnknown() {
+		p["mcp_enabled"] = m.MCPEnabled.ValueBool()
+	}
+	if !m.MCPAllowedGroups.IsNull() && !m.MCPAllowedGroups.IsUnknown() {
+		var groups []string
+		diags.Append(m.MCPAllowedGroups.ElementsAs(ctx, &groups, false)...)
+		p["mcp_allowed_groups"] = nonNilStrings(groups)
+	}
+	if !m.MCPAllowWrite.IsNull() && !m.MCPAllowWrite.IsUnknown() {
+		p["mcp_allow_write"] = m.MCPAllowWrite.ValueBool()
+	}
 
 	return p, diags
+}
+
+// mcpFields are the webshare.update fields that exist only on TrueNAS 28.0+.
+var mcpFields = []string{"mcp_enabled", "mcp_allowed_groups", "mcp_allow_write"}
+
+// mcpGateDiagnostics returns one attribute error per MCP field in payload
+// when the server is below TrueNAS 28.0, whose webshare.update does not
+// accept them.
+func mcpGateDiagnostics(version string, payload map[string]any) diag.Diagnostics {
+	var diags diag.Diagnostics
+	if client.VersionAtLeastString(version, 28, 0) {
+		return diags
+	}
+	for _, f := range mcpFields {
+		if _, ok := payload[f]; ok {
+			diags.AddAttributeError(path.Root(f), f+" requires TrueNAS 28.0 or later",
+				"webshare.update on this TrueNAS release does not have the MCP server settings (added in "+
+					"TrueNAS 28.0). Remove "+f+" from the configuration or target a TrueNAS 28.0+ server.")
+		}
+	}
+	return diags
 }
 
 // deleteWarningDiagnostics builds the warning diagnostic emitted by Delete.

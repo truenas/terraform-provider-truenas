@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func sourced(value string, hasValue bool, parsed, source string) zfsSourced {
@@ -56,7 +57,7 @@ func TestApiPayload_ZFSProps(t *testing.T) {
 		ATime:                 types.StringValue("off"), // lowercase -> uppercased
 		Sync:                  types.StringValue("ALWAYS"),
 		Dedup:                 types.StringValue("ON"),
-		RecordSize:            types.StringValue("128K"),
+		RecordSize:            normalize.NewCaseInsensitiveValue("128K"),
 		Copies:                types.Int64Value(2),
 		SpecialSmallBlockSize: types.Int64Value(0), // 0 is meaningful, must be sent
 		RefReservation:        types.Int64Value(1073741824),
@@ -165,5 +166,23 @@ func TestLocalStringOrInherit_AbsentIsNull(t *testing.T) {
 		if _, ok := p[k]; ok {
 			t.Errorf("update payload carries %q for a VOLUME: %v", k, p[k])
 		}
+	}
+}
+
+// A LOCAL 0 quota-class property is reported as parsed = null with rawvalue
+// "0"; it reads back 0, not null. (B-090)
+func TestLocalInt_ZeroFromRawValue(t *testing.T) {
+	var z zfsSourced
+	if err := json.Unmarshal([]byte(`{"parsed":null,"rawvalue":"0","value":"0","source":"LOCAL"}`), &z); err != nil {
+		t.Fatal(err)
+	}
+	if got := localInt(z); got.IsNull() || got.ValueInt64() != 0 {
+		t.Errorf("localInt = %v, want 0", got)
+	}
+	if err := json.Unmarshal([]byte(`{"parsed":null,"rawvalue":"none","source":"DEFAULT"}`), &z); err != nil {
+		t.Fatal(err)
+	}
+	if got := localInt(z); !got.IsNull() {
+		t.Errorf("DEFAULT localInt = %v, want null", got)
 	}
 }

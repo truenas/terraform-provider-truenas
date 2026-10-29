@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 )
@@ -40,9 +39,13 @@ var readRetryDelays = []time.Duration{2 * time.Second, 5 * time.Second, 10 * tim
 //
 // Any other *APIError (EINVAL, ENOENT/code 2, ...) is a real API response,
 // not a transient condition, and must NOT be retried — retrying those would
-// change IsNotFound semantics and mask genuine errors as flakiness.
+// change IsNotFound semantics and mask genuine errors as flakiness. Neither
+// is ErrResponseTooLarge: the same request gets the same oversized response.
 func isTransient(err error) bool {
 	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrResponseTooLarge) {
 		return false
 	}
 	var apiErr *APIError
@@ -70,7 +73,7 @@ func isTransient(err error) bool {
 // errors, so IsNotFound semantics are unchanged for callers.
 //
 // A transport failure leaves the underlying connection dead (readLoop nils
-// c.conn out when its ReadJSON fails), so between attempts CallRead calls
+// c.conn out when its read fails), so between attempts CallRead calls
 // reconnect, which re-dials only when there is no live connection.
 func (c *Client) CallRead(ctx context.Context, method string, params ...any) (json.RawMessage, error) {
 	var lastErr error
@@ -91,8 +94,9 @@ func (c *Client) CallRead(ctx context.Context, method string, params ...any) (js
 		case <-time.After(readRetryDelays[attempt]):
 		}
 
-		if rErr := c.reconnect(ctx); rErr != nil {
-			return nil, fmt.Errorf("%s: reconnect after transient failure (%v): %w", method, lastErr, rErr)
-		}
+		// Best effort: a failed re-dial is not final, since the next
+		// attempt's Call re-dials (and waits out an unreachable server)
+		// itself.
+		_ = c.reconnect(ctx)
 	}
 }

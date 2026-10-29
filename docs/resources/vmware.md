@@ -60,12 +60,12 @@ variable "vcenter_password" {
 
 ### Optional
 
-- `password_wo_version` (Number) Rotation trigger for the write-only `password`. A write-only value is not kept in state, so Terraform cannot detect that `password` changed. Increase this integer whenever `password` changes to make Terraform re-send it on the next apply. Optional.
+- `password_wo_version` (Number) Rotation trigger for the write-only `password`. A write-only value is not kept in state, so Terraform cannot detect that `password` changed. Increase this integer whenever `password` changes to make Terraform re-send it on the next apply. `password` is sent on create and, after that, only when this integer changes; other updates leave the stored password alone (if you change `hostname` or `username` and the new host needs a different password, bump it too). Optional.
 
 ### Read-Only
 
 - `id` (Number) Numeric identifier of the VMware configuration.
-- `state` (Attributes) Current connection and synchronization state with the VMware host. (see [below for nested schema](#nestedatt--state))
+- `state` (Attributes) Current connection and synchronization state with the VMware host. Shown as "known after apply" on every update: vmware.update resets it to PENDING. (see [below for nested schema](#nestedatt--state))
 
 <a id="nestedatt--state"></a>
 ### Nested Schema for `state`

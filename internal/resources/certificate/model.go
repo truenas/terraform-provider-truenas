@@ -5,10 +5,13 @@ package certificate
 
 import (
 	"context"
+	"net"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // CertificateModel is the Terraform state/plan model for truenas_certificate.
@@ -32,39 +35,39 @@ import (
 // subset of computed metadata is (certificate_path, privatekey_path,
 // csr_path, root_path, cert_type, fingerprint, expired).
 type CertificateModel struct {
-	ID                 types.Int64  `tfsdk:"id"`
-	Name               types.String `tfsdk:"name"`
-	CreateType         types.String `tfsdk:"create_type"`
-	AddToTrustedStore  types.Bool   `tfsdk:"add_to_trusted_store"`
-	RenewDays          types.Int64  `tfsdk:"renew_days"`
-	Certificate        types.String `tfsdk:"certificate"`
-	Privatekey         types.String `tfsdk:"privatekey"`
-	StorePrivatekey    types.Bool   `tfsdk:"store_privatekey"`
-	CSR                types.String `tfsdk:"csr"`
-	KeyType            types.String `tfsdk:"key_type"`
-	KeyLength          types.Int64  `tfsdk:"key_length"`
-	ECCurve            types.String `tfsdk:"ec_curve"`
-	Passphrase         types.String `tfsdk:"passphrase"`
-	City               types.String `tfsdk:"city"`
-	Common             types.String `tfsdk:"common"`
-	Country            types.String `tfsdk:"country"`
-	Email              types.String `tfsdk:"email"`
-	Organization       types.String `tfsdk:"organization"`
-	OrganizationalUnit types.String `tfsdk:"organizational_unit"`
-	State              types.String `tfsdk:"state"`
-	DigestAlgorithm    types.String `tfsdk:"digest_algorithm"`
-	San                types.List   `tfsdk:"san"`
-	AcmeDirectoryURI   types.String `tfsdk:"acme_directory_uri"`
-	CsrID              types.Int64  `tfsdk:"csr_id"`
-	Tos                types.Bool   `tfsdk:"tos"`
-	DNSMapping         types.Map    `tfsdk:"dns_mapping"`
-	CertificatePath    types.String `tfsdk:"certificate_path"`
-	PrivatekeyPath     types.String `tfsdk:"privatekey_path"`
-	CsrPath            types.String `tfsdk:"csr_path"`
-	RootPath           types.String `tfsdk:"root_path"`
-	CertType           types.String `tfsdk:"cert_type"`
-	Fingerprint        types.String `tfsdk:"fingerprint"`
-	Expired            types.Bool   `tfsdk:"expired"`
+	ID                 types.Int64     `tfsdk:"id"`
+	Name               types.String    `tfsdk:"name"`
+	CreateType         types.String    `tfsdk:"create_type"`
+	AddToTrustedStore  types.Bool      `tfsdk:"add_to_trusted_store"`
+	RenewDays          types.Int64     `tfsdk:"renew_days"`
+	Certificate        types.String    `tfsdk:"certificate"`
+	Privatekey         types.String    `tfsdk:"privatekey"`
+	StorePrivatekey    types.Bool      `tfsdk:"store_privatekey"`
+	CSR                types.String    `tfsdk:"csr"`
+	KeyType            types.String    `tfsdk:"key_type"`
+	KeyLength          types.Int64     `tfsdk:"key_length"`
+	ECCurve            types.String    `tfsdk:"ec_curve"`
+	Passphrase         types.String    `tfsdk:"passphrase"`
+	City               types.String    `tfsdk:"city"`
+	Common             types.String    `tfsdk:"common"`
+	Country            types.String    `tfsdk:"country"`
+	Email              normalize.Email `tfsdk:"email"`
+	Organization       types.String    `tfsdk:"organization"`
+	OrganizationalUnit types.String    `tfsdk:"organizational_unit"`
+	State              types.String    `tfsdk:"state"`
+	DigestAlgorithm    types.String    `tfsdk:"digest_algorithm"`
+	San                types.List      `tfsdk:"san"`
+	AcmeDirectoryURI   types.String    `tfsdk:"acme_directory_uri"`
+	CsrID              types.Int64     `tfsdk:"csr_id"`
+	Tos                types.Bool      `tfsdk:"tos"`
+	DNSMapping         types.Map       `tfsdk:"dns_mapping"`
+	CertificatePath    types.String    `tfsdk:"certificate_path"`
+	PrivatekeyPath     types.String    `tfsdk:"privatekey_path"`
+	CsrPath            types.String    `tfsdk:"csr_path"`
+	RootPath           types.String    `tfsdk:"root_path"`
+	CertType           types.String    `tfsdk:"cert_type"`
+	Fingerprint        types.String    `tfsdk:"fingerprint"`
+	Expired            types.Bool      `tfsdk:"expired"`
 }
 
 // CertificateDataSourceModel is the read-only lookup model for the
@@ -223,7 +226,7 @@ func (m *CertificateModel) createPayload(ctx context.Context) (map[string]any, d
 	if !m.San.IsNull() && !m.San.IsUnknown() {
 		var san []string
 		diags.Append(m.San.ElementsAs(ctx, &san, false)...)
-		p["san"] = san
+		p["san"] = sanPayload(san)
 	}
 	if !m.AcmeDirectoryURI.IsNull() && !m.AcmeDirectoryURI.IsUnknown() {
 		p["acme_directory_uri"] = m.AcmeDirectoryURI.ValueString()
@@ -332,7 +335,7 @@ func responseToModel(ctx context.Context, api *certificateAPI, m *CertificateMod
 	m.City = types.StringPointerValue(api.City)
 	m.Common = types.StringPointerValue(api.Common)
 	m.Country = types.StringPointerValue(api.Country)
-	m.Email = types.StringPointerValue(api.Email)
+	m.Email = normalize.NewEmailPointerValue(api.Email)
 	m.Organization = types.StringPointerValue(api.Organization)
 	m.OrganizationalUnit = types.StringPointerValue(api.OrganizationalUnit)
 	m.State = types.StringPointerValue(api.State)
@@ -375,12 +378,16 @@ func responseToModel(ctx context.Context, api *certificateAPI, m *CertificateMod
 // A nil/empty slice is treated as an empty (non-null) list to match
 // certificate.query's own "san" default shape for non-CSR types (an empty
 // array, not null, when no SAN extension is present in an imported cert).
-func sanListValue(ctx context.Context, san []string) (types.List, diag.Diagnostics) {
-	out := make([]string, len(san))
+//
+// Elements are normalize.SAN, so an IP SAN the server reports as
+// "IP Address:10.0.0.1" equals a configured "10.0.0.1" or "IP:10.0.0.1",
+// and "DNS:name" equals "name" (B-060).
+func sanListValue(_ context.Context, san []string) (types.List, diag.Diagnostics) {
+	out := make([]attr.Value, len(san))
 	for i, s := range san {
-		out[i] = strings.TrimPrefix(s, "DNS:")
+		out[i] = normalize.NewSANValue(strings.TrimPrefix(s, "DNS:"))
 	}
-	return types.ListValueFrom(ctx, types.StringType, out)
+	return types.ListValue(normalize.SANType{}, out)
 }
 
 // responseToDataSourceModel maps a certificateAPI response onto a
@@ -592,4 +599,19 @@ func validateRenewDays(createType string, configRenewDays types.Int64) diag.Diag
 			"\"renew_days\" is only supported for create_type "+CreateTypeACME+".")
 	}
 	return diags
+}
+
+// sanPayload sends a bare IP address as "IP:<addr>". TrueNAS 25.10 reads the
+// text before the first ":" of an unprefixed entry as a type, so a bare IPv6
+// SAN "2001:db8::7" was stored as the name "db8::7" (probed live on 25.10.3.1;
+// "IP:2001:db8::7" is stored correctly there and on 26.0/28.0).
+func sanPayload(san []string) []string {
+	out := make([]string, len(san))
+	for i, s := range san {
+		if net.ParseIP(s) != nil {
+			s = "IP:" + s
+		}
+		out[i] = s
+	}
+	return out
 }

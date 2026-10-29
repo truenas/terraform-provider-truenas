@@ -121,6 +121,7 @@ func (r *CredentialsResource) Create(ctx context.Context, req resource.CreateReq
 	// provider document.
 	responseToModel(&apiResp, &plan)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
+	resp.Diagnostics.Append(setImported(ctx, resp.Private, false)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -149,41 +150,12 @@ func (r *CredentialsResource) Read(ctx context.Context, req resource.ReadRequest
 
 	responseToModel(&apiResp, &state)
 
-	if state.usesWriteOnlyProvider() && !state.Provider.IsNull() && state.Provider.ValueString() != "" {
-		// Write-only secrets overlay in use: project the live provider onto the
-		// keys already in state so secret keys are not read back.
-		state.Provider = types.StringValue(projectProviderPreservingEndpointSlash(state.Provider.ValueString(), combinedProviderMap(&apiResp)))
-		resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueInt64())...)
-		resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+	providerJSON, diags := readProvider(combinedProviderMap(&apiResp), state.Provider.ValueString(), state.usesWriteOnlyProvider())
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	// Drift-aware provider_config handling: only overwrite the state string
-	// when a user-set key's value differs in the API response. API-added
-	// keys are not considered drift. If the state string is empty/null (as
-	// on import), populate it directly from the API JSON.
-	if state.Provider.IsNull() || state.Provider.ValueString() == "" {
-		providerJSON, diags := apiProviderJSON(&apiResp)
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		state.Provider = types.StringValue(providerJSON)
-	} else {
-		var stateProvider map[string]any
-		if err := json.Unmarshal([]byte(state.Provider.ValueString()), &stateProvider); err != nil {
-			resp.Diagnostics.AddError("Parse state provider_config JSON", err.Error())
-			return
-		}
-		if providerDrifted(stateProvider, combinedProviderMap(&apiResp)) {
-			providerJSON, diags := apiProviderJSON(&apiResp)
-			resp.Diagnostics.Append(diags...)
-			if resp.Diagnostics.HasError() {
-				return
-			}
-			state.Provider = types.StringValue(providerJSON)
-		}
-	}
+	state.Provider = types.StringValue(providerJSON)
 
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueInt64())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -214,6 +186,21 @@ func (r *CredentialsResource) Update(ctx context.Context, req resource.UpdateReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if plan.ProviderSecretsWOVersion.Equal(state.ProviderSecretsWOVersion) &&
+		!cfg.ProviderSecretsWO.IsNull() && !cfg.ProviderSecretsWO.IsUnknown() && cfg.ProviderSecretsWO.ValueString() != "" {
+		// Version unchanged: keep the stored secrets (see storedSecretsOverlay).
+		rawStored, err := r.client.CallRead(ctx, "cloudsync.credentials.get_instance", plan.ID.ValueInt64())
+		if err != nil {
+			resp.Diagnostics.AddError("Read stored secrets before update failed", err.Error())
+			return
+		}
+		var stored credentialsAPI
+		if err := json.Unmarshal(rawStored, &stored); err != nil {
+			resp.Diagnostics.AddError("Parse get_instance response", err.Error())
+			return
+		}
+		cfg.ProviderSecretsWO = types.StringValue(storedSecretsOverlay(cfg.ProviderSecretsWO.ValueString(), stored.Provider))
+	}
 	injectProviderSecrets(payload, &cfg, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -241,6 +228,7 @@ func (r *CredentialsResource) Update(ctx context.Context, req resource.UpdateReq
 	// (write-what-you-said).
 	responseToModel(&apiResp, &plan)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
+	resp.Diagnostics.Append(setImported(ctx, resp.Private, false)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -286,5 +274,6 @@ func (r *CredentialsResource) ImportState(ctx context.Context, req resource.Impo
 	state.Provider = types.StringValue(providerJSON)
 
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, id)...)
+	resp.Diagnostics.Append(setImported(ctx, resp.Private, true)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

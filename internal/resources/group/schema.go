@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func resourceSchema() schema.Schema {
@@ -43,14 +44,19 @@ func resourceSchema() schema.Schema {
 			"smb": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Whether the group has SMB authentication enabled.",
+				Description: "Whether the group has SMB authentication enabled. Defaults to the server default (true) when unset at create.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"users": schema.ListAttribute{
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.Int64Type,
-				Description: "User IDs (truenas_user.id) of the local users who are members of this group. Omit to leave existing membership unchanged.",
+				Description: "User IDs (truenas_user.id) of the local users who are members of this group (auxiliary membership). Omit to leave existing membership unchanged. Users whose primary group is this group are members implicitly and are not listed unless configured; the order of the list is not significant.",
+				CustomType:  normalize.UnorderedListOf(types.Int64Type),
 				PlanModifiers: []planmodifier.List{
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.Int64Type)),
 					listplanmodifier.UseStateForUnknown(),
 				},
 			},
@@ -59,12 +65,18 @@ func resourceSchema() schema.Schema {
 				Computed:    true,
 				ElementType: types.StringType,
 				Description: "List of allowed sudo commands.",
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"sudo_commands_nopasswd": schema.ListAttribute{
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.StringType,
 				Description: "List of sudo commands allowed without password.",
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
+				},
 			},
 			// Computed-only — server generated
 			"builtin": schema.BoolAttribute{

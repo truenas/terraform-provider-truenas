@@ -29,10 +29,10 @@ resource "truenas_group" "ops" {
 ### Optional
 
 - `gid` (Number) UNIX GID for the group (auto-assigned if omitted). Changing this forces a new resource.
-- `smb` (Boolean) Whether the group has SMB authentication enabled.
+- `smb` (Boolean) Whether the group has SMB authentication enabled. Defaults to the server default (true) when unset at create.
 - `sudo_commands` (List of String) List of allowed sudo commands.
 - `sudo_commands_nopasswd` (List of String) List of sudo commands allowed without password.
-- `users` (List of Number) User IDs (truenas_user.id) of the local users who are members of this group. Omit to leave existing membership unchanged.
+- `users` (List of Number) User IDs (truenas_user.id) of the local users who are members of this group (auxiliary membership). Omit to leave existing membership unchanged. Users whose primary group is this group are members implicitly and are not listed unless configured; the order of the list is not significant.
 
 ### Read-Only
 

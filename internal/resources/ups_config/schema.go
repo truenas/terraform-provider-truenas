@@ -113,7 +113,8 @@ func resourceSchema() schema.Schema {
 				Optional: true,
 				Description: "Rotation trigger for the write-only `monpwd`. A write-only value is not kept in state, " +
 					"so Terraform cannot detect that the password changed. Bump this integer whenever `monpwd` " +
-					"changes to make Terraform re-send it on the next apply. Optional.",
+					"changes to make Terraform re-send it on the next apply. `monpwd` is sent on create and, after that, " +
+					"only when this integer changes; other updates leave the stored password alone. Optional.",
 			},
 			"extrausers": schema.StringAttribute{
 				Optional:      true,

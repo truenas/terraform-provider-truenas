@@ -50,7 +50,10 @@ func (l *CertificateListResource) Configure(_ context.Context, req resource.Conf
 }
 
 func (l *CertificateListResource) List(ctx context.Context, req list.ListRequest, stream *list.ListResultsStream) {
-	listing.StreamCollection(ctx, l.client, "certificate.query", req, stream, l.mapRow)
+	// truenas_default is the system's self-signed certificate (the web UI's
+	// fallback); it is not something to bring under Terraform management, and
+	// destroying it would break the UI (B-138).
+	listing.StreamCollectionFiltered(ctx, l.client, "certificate.query", [][]any{{"name", "!=", systemDefaultCertName}}, req, stream, l.mapRow)
 }
 
 func (l *CertificateListResource) mapRow(ctx context.Context, req list.ListRequest, raw json.RawMessage) list.ListResult {
@@ -66,9 +69,23 @@ func (l *CertificateListResource) mapRow(ctx context.Context, req list.ListReque
 		// dns_mapping is never returned by the API and has no zero value for
 		// a typed Map (see ImportState); type it null up front so
 		// responseToModel's untouched field still converts cleanly.
-		m := CertificateModel{DNSMapping: types.MapNull(types.Int64Type), CreateType: importedCreateType(&api), StorePrivatekey: types.BoolValue(true)}
+		m := CertificateModel{DNSMapping: types.MapNull(types.Int64Type), CreateType: listCreateType(&api), StorePrivatekey: types.BoolValue(true)}
 		res.Diagnostics.Append(responseToModel(ctx, &api, &m)...)
 		res.Diagnostics.Append(res.Resource.Set(ctx, &m)...)
 	}
 	return res
+}
+
+// systemDefaultCertName is the certificate TrueNAS creates for the web UI.
+const systemDefaultCertName = "truenas_default"
+
+// listCreateType is importedCreateType for generated configuration, where
+// create_type (Required) must not be null: a CSR, which import cannot tell
+// apart from an imported CSR, is listed as CERTIFICATE_CREATE_CSR, the mode
+// that needs no private key in the configuration (B-138).
+func listCreateType(api *certificateAPI) types.String {
+	if ct := importedCreateType(api); !ct.IsNull() {
+		return ct
+	}
+	return types.StringValue(CreateTypeCSR)
 }

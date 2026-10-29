@@ -6,7 +6,27 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-29
+
 ### Changed
+- **Breaking:** write-only secrets (`*_wo` with a `*_wo_version`) are now sent
+  on create and on an update only when their `*_wo_version` changes, instead
+  of on every update. A secret changed in config without bumping its version
+  is no longer applied. Exceptions where TrueNAS requires the secret anyway:
+  `truenas_user` when `smb` is turned on, `truenas_iscsi_auth` when mutual
+  CHAP is turned on, `truenas_nvmet_host` when a key is added or removed, and
+  `truenas_cloudsync_task`/`truenas_replication_task` when encryption is
+  turned on. For `truenas_user` this means an unrelated update no longer
+  re-hashes the password or resets `last_password_change`, so
+  `max_password_age` now works. Applies to 18 resources, including
+  `truenas_user`, `truenas_iscsi_auth`, `truenas_nvmet_host`,
+  `truenas_cloud_backup`, `truenas_app_registry`, `truenas_truecommand_config`,
+  `truenas_ups_config`, `truenas_kerberos_keytab` and `truenas_vm_device`.
+- **Breaking:** `truenas_vm_device.attributes` is no longer sensitive, so plans
+  and generated configuration show device settings. A `password` inside
+  `attributes` is now a plan-time error: set it with `attributes_secrets_wo`
+  (and `attributes_secrets_wo_version`). The password is never stored in
+  state.
 - **Breaking:** `truenas_dataset` and `truenas_zvol` no longer delete
   recursively. Destroying (or replacing) a dataset or zvol that has child
   datasets, zvols or snapshots now fails with an error naming them, instead of
@@ -48,6 +68,100 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `latest_version` into a managed container replaces it on every new image
   build (the API cannot change a container's image in place); the examples now
   use `lifecycle { ignore_changes = [image] }`.
+- **Breaking:** `truenas_dataset` and `truenas_zvol` on TrueNAS 26.0+: an
+  `encryption_algorithm` other than `AES-256-GCM` is a plan error. 26.0
+  ignored it and 27.0+ dropped it, so the apply failed with an inconsistent
+  result and left a tainted resource.
+- **Breaking:** `truenas_zvol`: changing `sparse` on an existing zvol is a plan
+  error (it was accepted and ignored). Import now reads `sparse` from the zvol.
+- **Breaking:** `truenas_filesystem_permissions` and `truenas_filesystem_acl`:
+  `uid`/`gid = -1` is rejected at plan time (it always failed at apply); leave
+  the attribute unset to keep the owner. `recursive` and `traverse` are now
+  write-only (Terraform 1.11+): they are not stored in state, changing only
+  them plans nothing, and they apply on the next change of mode, owner or
+  entries.
+- **Breaking:** `truenas_enclosure_label`: `label = ""` is rejected at plan
+  time (it failed at apply). Destroy now restores an unset label instead of
+  storing the enclosure name as a label.
+- **Breaking:** `truenas_container`: removing `cpuset`, `inituser`, `initdir`
+  or `initgroup` from the configuration now clears it on the server. Before,
+  the old value stayed. A value set outside Terraform and not in the
+  configuration is planned for removal.
+- **Breaking:** `truenas_user`: `full_name` is required (TrueNAS always
+  rejected a user without it, so those configurations failed at apply and now
+  fail at plan). `webshare = true` on TrueNAS below 26.0 is a plan error (it
+  was dropped and then failed the apply).
+- **Breaking:** `truenas_iscsi_portal`: `listen[].port` is read-only. A config
+  that sets it fails at plan time; set `listen_port` on `truenas_iscsi_global`
+  instead. Before, any value other than the global port failed with
+  "inconsistent result" and the matching value was ignored.
+- **Breaking:** `truenas_nvmet_subsys`: `subnqn = ""` is a plan error. It was
+  documented as "clear", but TrueNAS always derived a new NQN and every apply
+  failed. Leave `subnqn` unset for the derived NQN, or set it explicitly.
+- **Breaking:** `truenas_ftp_config`: `anonpath` without `onlyanonymous = true`
+  is a plan error (TrueNAS discarded it and the apply failed).
+- **Breaking:** `truenas_network_config`: `hosts` entries with surrounding
+  whitespace and `domains` entries containing spaces are rejected at plan time
+  (TrueNAS rewrote them).
+- **Breaking:** `truenas_ntp_server.force`, `truenas_tunable.update_initramfs`
+  and `truenas_ipmi_lan.apply_remote` are write-only (Terraform 1.11+). Import
+  followed by plan no longer shows an update; for tunables that update re-ran
+  the job and rebuilt the initramfs.
+- **Breaking:** `truenas_service`: removing the resource (or changing `name`)
+  no longer disables and stops the service. It is only removed from state.
+- **Breaking:** `truenas_rsync_task`: `extra` entries that are empty or contain
+  whitespace are rejected at plan time (they were split into several arguments
+  and the apply failed). `validate_rpath` and `ssh_keyscan` are write-only
+  (Terraform 1.11+); changing only them no longer updates the task.
+- **Breaking:** `truenas_smb_share_acl`: `share_acl[].ae_who_str` is read-only
+  (it could never be applied). Use `ae_who_sid` or `ae_who_id`.
+- **Breaking:** the `truenas_periodic_snapshot_task`, `truenas_cronjob`,
+  `truenas_init_shutdown_script`, `truenas_rsync_task`, `truenas_cloudsync_task`,
+  `truenas_cloud_backup`, `truenas_static_route` and `truenas_ntp_server` data
+  sources fail when a lookup matches more than one object. They silently
+  returned the first match.
+- `truenas_group`: `smb` left unset now takes the server default (`true`) instead
+  of `false`, so a group created without `smb` is an SMB group, as in the
+  TrueNAS UI and API.
+- `truenas_api_key`: removing `expires_at` makes the key non-expiring again. An
+  imported key with an expiry and no `expires_at` in config now plans clearing it.
+- `truenas_kerberos_realm`: removing `primary_kdc` clears it. A realm whose
+  `primary_kdc` was set outside the configuration now plans clearing it.
+- `truenas_iscsi_extent` and `truenas_nvmet_subsys`: renaming updates in place.
+  The extent keeps its serial, NAA and LUN mappings; the subsystem keeps its
+  serial, subnqn, namespaces and host/port mappings. Before, a rename destroyed
+  and recreated the object, which gave initiators a new disk identity.
+- `truenas_iscsi_auth`: removing `peeruser`/`peersecret` turns mutual CHAP off
+  and clears both on the server. A peer user set outside Terraform is cleared
+  when the config has none.
+- `truenas_nvmet_host`: removing `dhchap_key`/`dhchap_ctrl_key` turns DH-CHAP
+  off on the server (the old key stayed active), and a key set outside
+  Terraform is removed when the config has none. `dhchap_dhgroup = ""` clears
+  the group.
+- `truenas_smb_share` and `truenas_nfs_share`: removing an optional attribute
+  (comment, ro, browsable, abe, enabled, audit, hostsallow, recyclebin,
+  maproot/mapall, networks, ...) resets it to the server default. A share
+  changed outside Terraform and not set in the config is reset on the next
+  apply.
+- `truenas_lxc_config`: an automatic `bridge` is reported as `"[AUTO]"` instead
+  of null.
+- `truenas_app`: `version = "latest"` is an install-time request; it does not
+  upgrade the app later (the installed version is in `human_version`).
+- `truenas_user`: `home_mode` is sent only when it changes. Changing
+  `group_create` on an existing user shows a warning that it has no effect.
+- `truenas_system_general`: UI setting changes (TLS protocols, ports,
+  addresses, certificate, allowlist, HTTPS redirect) are now applied in the
+  same apply by restarting the web server, which drops open UI and API
+  connections. Before, they were only saved.
+- `truenas_dataset` and `truenas_zvol`: setting `encryption` without
+  `inherit_encryption` now means "this dataset decides". `encryption = true`
+  under an encrypted parent works (it failed); `encryption = false` there fails
+  with the TrueNAS error instead of creating an encrypted dataset.
+- An API-key login that TrueNAS rejects is retried twice before it is reported
+  as an invalid key (TrueNAS 25.10 can reject a valid key while busy).
+- `truenas_vm` and `truenas_vm_device`/`truenas_container_device`: unset
+  `machine_type`, `arch_type`, `cpuset` and `nodeset` read as `""` instead of
+  null. Docs: `truenas_vm` `memory`/`min_memory` are in MiB, not bytes.
 
 ### Added
 - `force_destroy` on `truenas_dataset` and `truenas_zvol` (default `false`).
@@ -55,6 +169,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   upgrading plans no changes.
 - `schedule.begin`/`schedule.end` on `truenas_periodic_snapshot_task` and
   `truenas_replication_task`.
+- `dhchap_key_wo_version` and `dhchap_ctrl_key_wo_version` on
+  `truenas_nvmet_host`: bump one to send a rotated DH-CHAP key. Computed
+  `dhchap_key_set`/`dhchap_ctrl_key_set` show whether each key is set, also on
+  the data source.
+- `encryption_key_wo_version` on `truenas_replication_task` and
+  `encryption_wo_version` on `truenas_cloudsync_task`: bump to send a changed
+  write-only key, password or salt (a change alone was never sent). Also on the
+  data sources.
+- `mcp_enabled`, `mcp_allowed_groups` and `mcp_allow_write` on
+  `truenas_webshare_config` and its data source (TrueNAS 28.0+; null below).
+- `catalog_app` on the `truenas_app` data source.
+- `naming_schema` filter on the `truenas_periodic_snapshot_task` data source,
+  to pick one task when a dataset has several.
+- `GZIP-2` to `GZIP-8` compression on `truenas_dataset` and `truenas_zvol`
+  (TrueNAS 28.0+; older releases reject them).
 
 ### Fixed
 - `truenas_periodic_snapshot_task`: leaving `enabled`/`allow_empty` unset now
@@ -112,11 +241,185 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   the child datasets' snapshots it created, instead of leaving them behind.
 - `truenas_dataset`: `encrypted`, `key_format` and `locked` no longer show as
   "(known after apply)" on every update.
-- Test infrastructure: the shared import check (`ImportReapplyNoop`) now really
-  imports into state before checking the plan (it previously planned against
-  the pre-import state, so it could not catch import bugs), and a provider-wide
-  test fails on any replace-on-change attribute that is neither read back on
-  import nor import-safe. CI unit tests and license-header checks pass again.
+- Provider connection:
+  - A connection drop while waiting on a TrueNAS job (certificate, app, pool,
+    VM, ... create, update or delete) no longer fails the operation while the
+    job finishes on the server, which left an object outside Terraform state.
+  - With 16 or more operations in flight, a dropped connection could hang the
+    run while re-authenticating. A run could also hang forever when TrueNAS
+    rate-limited the login after a dropped connection.
+  - The provider no longer waits forever for an answer that never comes: a
+    call times out after 10 minutes (2 minutes for a login) and a dead
+    connection is replaced.
+  - A call made while the provider was re-authenticating could fail with "Not
+    authenticated". A server that closes the connection during login is
+    retried instead of failing configuration.
+  - Operations started while TrueNAS restarts its web service wait up to about
+    a minute for it to come back instead of failing with "not connected".
+  - A response over 10 MiB (for example a pool with about 1000 datasets)
+    dropped the connection and failed every operation in flight; the limit is
+    256 MiB and an oversized response fails only its own call.
+  - A TrueNAS API method missing on the connected release (for example after
+    rolling back to an older boot environment) no longer makes Terraform
+    silently drop the resource from state. A plain integer result is no longer
+    mistaken for a job id.
+  - Security: on TrueNAS 26.0+, the API-key login no longer falls back to
+    sending the plain API key when the SCRAM probe is rate-limited.
+  - When the provider runs in-process (acceptance tests, embedding) it no
+    longer opens a new, never-closed TrueNAS session for every Terraform
+    command, and idle clients no longer send keepalive logins that pushed the
+    box over its login rate limit.
+- `truenas_acl_template`: `who` entries work (TrueNAS crashed on them; the
+  provider now sends the numeric id). A permission or flag bag may list only the
+  true members, and import plans no change when the ACL means the same
+  template.
+- `truenas_acme_dns_authenticator`, `truenas_alert_service`: refresh and the
+  data sources work with a read-only admin API key (the masked `********`
+  values are no longer read as data; data sources report null). Any JSON
+  spelling of `attributes` (heredoc etc.) no longer diffs on every plan when
+  `attributes_secrets_wo` is used, and import plans no change.
+- `truenas_api_key`: `expires_at` with a non-Z offset or fractional seconds no
+  longer fails the apply.
+- `truenas_app`: a refresh while Docker is stopped or restarting keeps apps in
+  state with a warning instead of removing them; destroy fails with a clear
+  error instead of forgetting an app it could not delete. Values the server adds
+  inside `values` list items, heredoc or hand-formatted JSON `values`, and custom
+  Compose YAML 1.1 values (`yes`, `off`, `0755`, `1:30`) no longer show drift on
+  every plan. `version = "latest"` (the documented default) no longer fails the
+  apply. A values or Compose update no longer shows `state`, `human_version` and
+  `upgrade_available` as "(known after apply)".
+- `truenas_app_registry`: a read-only admin key no longer stores `********` as
+  the username (the data source reports null). Import followed by plan no longer
+  shows a trailing-slash update on `uri`.
+- `truenas_certificate`: `san` accepts IP addresses (bare or `IP:`) and
+  `DNS:`-prefixed names, applies and imports cleanly; a bare IPv6 address is
+  sent as `IP:<addr>` because TrueNAS 25.10 stored it as a wrong DNS name.
+  `email` with upper-case domain letters no longer diffs. Removing
+  `add_to_trusted_store` or `renew_days` (ACME) resets it to the default. The
+  list resource no longer lists `truenas_default` and reports a CSR's
+  `create_type`.
+- `truenas_cloud_backup`: `description` no longer shows "(known after apply)"
+  on updates; import plans no change for `attributes`.
+- `truenas_cloudsync_credentials`: read-only admin sessions no longer
+  see or record `********` as credentials. `url`/`endpoint` in
+  `provider_config` compare as URLs (host case, default port, trailing slash),
+  so they no longer diff forever; import plans no change.
+- `truenas_cloudsync_task`: import plans no change for `attributes`.
+- `truenas_container`, `truenas_vm`: a create whose start fails no longer leaves
+  an untracked VM or container behind; it is saved as tainted and replaced on
+  the next apply. `status` (and container `dataset`, `default_network`) no
+  longer show "(known after apply)" on updates that do not start, stop or
+  rename.
+- `truenas_container_device`, `truenas_vm_device`: a NIC `mac` written in upper
+  case no longer shows a change on every plan, and drift on a device no longer
+  pulls every server default key into `attributes`. Removing a key from
+  `attributes` is planned as a change (it was hidden). Import followed by plan
+  is a no-op for a container device whose config sets fewer keys than the server
+  reports. With a read-only API key, a `vm_device` DISPLAY password
+  (`********`) is no longer read as a change (the data source reports null).
+- `truenas_dataset`, `truenas_zvol`: growing a thick volume now grows its
+  `refreservation` too (it stayed at the old size and the volume became partly
+  thin), and updates send only changed properties. An update no longer writes an
+  empty description to the zvol. `refreservation = 0` and `reservation = 0`
+  apply (they failed with an inconsistent result), and a configured
+  `refreservation` is honored at create on TrueNAS 25.10. `recordsize` is
+  case-insensitive (`"1m"`); a byte count is rejected at plan time. `comments`
+  reads as empty instead of `INHERIT` on 26.0. `acltype = "posix"` or `"off"`
+  without `aclmode` works on 26.0. A zvol name with a space no longer waits for
+  the wrong device path.
+- `truenas_directoryservices`: changing a `configuration_*` block or
+  `kerberos_realm` on an enabled service now disables, applies and re-enables
+  it instead of failing. Importing an LDAP bind no longer plans a rebind; for an
+  imported AD or IPA join, leave `credential` out of the configuration.
+- `truenas_docker_config`: `address_pools[].base` with host bits (for example
+  the documented `172.17.0.0/12`) no longer fails the apply on TrueNAS 28.0;
+  `cidr_v6` spellings and `registry_mirrors[].url` trailing slashes no longer
+  diff; mirror order on 25.10 no longer diffs.
+- `truenas_failover_config`: adopting it on a non-HA system works; a real change
+  there fails with a clear "not licensed for HA" error.
+- `truenas_filesystem_acl`, `truenas_acl_template`: entries given by `who`
+  converge and compare equal to the same entry by `id`. `acltype`, `uid` and
+  `gid` no longer show "(known after apply)" on updates.
+- `truenas_filesystem_permissions`: `mode = "755"` works (it failed with an
+  inconsistent result). Import plans no change.
+- `truenas_group`: an update no longer resets `smb`, `sudo_commands` or
+  `sudo_commands_nopasswd` when they are not in the configuration. `users` order
+  no longer matters, and users whose primary group is this group no longer show
+  as drift.
+- `truenas_ipmi_lan`: switching a channel to DHCP no longer fails with
+  "inconsistent result"; a static address together with `dhcp = true` is a plan
+  error.
+- `truenas_iscsi_extent`: destroying an extent with `ro = true` resets the
+  backing zvol's `readonly` to inherit (TrueNAS left it read-only). Create and
+  update wait up to 60 seconds for a zvol device that does not exist yet, so a
+  config naming the zvol as a literal string works on the first apply. Moving
+  `disk` to another zvol and switching `type` between DISK and FILE apply in
+  place (both failed with "inconsistent result" after the server had already
+  changed). An `avail_threshold` set outside Terraform is no longer cleared by an
+  unrelated update. New plan-time errors cover disk/path combinations TrueNAS
+  would refuse or rewrite.
+- `truenas_iscsi_portal`: reordering `listen` IPs no longer fails with
+  "inconsistent result", and a new `listen` entry no longer plans its port as
+  null.
+- `truenas_iscsi_target`: `alias = ""` clears the alias (the apply failed), and
+  unrelated updates no longer show `alias`/`mode` as "(known after apply)".
+- `truenas_keychain_ssh_keypair`: a `private_key` without a final newline no
+  longer fails the apply.
+- `truenas_network_interface`: changing `lag_protocol` (for example LACP to
+  FAILOVER) no longer fails with "inconsistent result" on `lacpdu_rate` and
+  `xmit_hash_policy`. A PHYSICAL interface's `stp` reads as null instead of
+  false.
+- `truenas_nfs_config`: `servers = 0` (automatic) applies and reads back as 0;
+  the data source also reports 0.
+- `truenas_nfs_share`: `networks` accepts a bare IPv4 or IPv6 address (stored as
+  /32 or /128), and import of a non-canonical CIDR plans no change.
+- `truenas_nvmet_port`: changing an enabled port that has subsystems attached
+  works while the NVMe-oF target runs. The port is disabled for the change and
+  re-enabled; before, it failed with "Disable first to allow change".
+- `truenas_replication_task`: `periodic_snapshot_tasks` may be listed in any
+  order.
+- `truenas_reporting_exporter`: removing an optional GRAPHITE setting resets it
+  to the TrueNAS default.
+- `truenas_resilver_config`: `begin`/`end` written as `"8:00"` (no leading zero)
+  apply cleanly.
+- `truenas_service`: starting or stopping a service failed on TrueNAS 26.0
+  (`service.start` and `service.stop` require an options argument there). The
+  provider now uses `service.control` on every release and reports failures as
+  errors. A configuration without `enabled` no longer turns off the service's
+  autostart.
+- `truenas_smb_config`: a failed SMB service restart after TrueNAS saved the
+  settings is a warning, not an error. `unixcharset` and `search_protocols` are
+  validated at plan time; the same applies to FTP `tls_policy` and SSH
+  `sftp_log_level`/`sftp_log_facility`.
+- `truenas_smb_share`: the data source name lookup is case-insensitive (also
+  `truenas_webshare`).
+- `truenas_smb_share_acl`: a lower-case SID no longer diffs forever. Entries
+  store the resolved `ae_who_sid`, `ae_who_id` and `ae_who_str`, and import plans
+  no change whichever selector the config uses.
+- `truenas_snmp_config`: an e-mail contact with upper-case domain letters no
+  longer fails the apply on TrueNAS 28.0; `loglevel` is accepted on TrueNAS 27.x
+  again (only 28.0+ rejects it).
+- `truenas_static_route`: IPv6 routes, bare IPv4 destinations and dotted
+  netmasks apply cleanly and import without a diff. The data source finds a route
+  by any spelling of its destination.
+- `truenas_system_general`: refresh and the data source work with a read-only
+  admin API key (`ui_certificate` was redacted and failed to decode). Only
+  configured attributes are sent, so an unrelated update no longer records a
+  usage-collection opt-in. `ui_certificate = 0` is a plan error.
+- `truenas_tn_connect_config`, `truenas_truecommand_config`: changing `enabled`
+  no longer fails with "inconsistent result" on the status and enrollment
+  fields. `truenas_truecommand_config` no longer stores or reports `********` as
+  `api_key` with a read-only key, and moving from `api_key` to `api_key_wo` works.
+- `truenas_user`: unchanged attributes no longer show "(known after apply)" on
+  every update. Importing a user (smb users, `group_create`, `home_mode`) plans
+  no change. `sshpubkey = file("~/.ssh/id_ed25519.pub")` (trailing newline) no
+  longer fails the apply.
+- `truenas_vm`: setting `cpu_model`, `machine_type`, `arch_type`, `cpuset`,
+  `nodeset` or `command_line_args` to `""` (or `min_memory` to 0) clears the
+  value; before, the apply failed with an inconsistent result.
+- `truenas_vmware`: updates no longer fail with "inconsistent result" after a
+  snapshot sync changed the state.
+- Test coverage and CI checks were tightened.
 
 ## [1.5.24] - 2026-10-27
 

@@ -123,7 +123,7 @@ func coerceInt64(v any) int64 {
 
 // apiPayload builds the map[string]any payload for iscsi.extent.create /
 // update. name/type/disk/path are required (or type-dependent) and are
-// always sent. Every other field is Optional+Computed in the schema, so it
+// always sent; name is updatable in place. Every other field is Optional+Computed in the schema, so it
 // is only included when set (neither null nor unknown) in the model — the
 // zero Go value for these types (0, "", false) is not a valid TrueNAS
 // value for several of them (e.g. blocksize must be 512/1024/2048/4096,
@@ -132,17 +132,20 @@ func coerceInt64(v any) int64 {
 func (m *ISCSIExtentModel) apiPayload(_ context.Context) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
-	// avail_threshold already three-way (nil pointer omits it semantically
-	// via `0 = unset`): 0 sends nil, non-zero sends the value.
-	var avail *int64
-	if v := m.AvailThreshold.ValueInt64(); v != 0 {
-		avail = &v
+	payload := map[string]any{
+		"name": m.Name.ValueString(),
+		"type": m.Type.ValueString(),
 	}
 
-	payload := map[string]any{
-		"name":            m.Name.ValueString(),
-		"type":            m.Type.ValueString(),
-		"avail_threshold": avail,
+	// avail_threshold: 0 means unset and is sent as null. Unknown (left out
+	// of config on create) is omitted so the server default applies; it used
+	// to be sent as null, which cleared a value set outside Terraform.
+	if !m.AvailThreshold.IsNull() && !m.AvailThreshold.IsUnknown() {
+		if v := m.AvailThreshold.ValueInt64(); v != 0 {
+			payload["avail_threshold"] = v
+		} else {
+			payload["avail_threshold"] = nil
+		}
 	}
 
 	if !m.Comment.IsNull() && !m.Comment.IsUnknown() {

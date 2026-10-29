@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -61,17 +62,22 @@ func existingScrubTaskID(t *testing.T, poolID int64) int64 {
 //
 // TrueNAS allows at most one scrub schedule per pool (verified by probe:
 // pool.scrub.create on a pool that already has one returns "[EINVAL]
-// pool_scrub_create.pool: A scrub with this pool already exists"). The test
-// pool typically ships with a default scrub schedule already present, in
-// which case this test cannot create its own without deleting that default
-// — so it SKIPs rather than mutating a schedule it doesn't own.
+// pool_scrub_create.pool: A scrub with this pool already exists"), and every
+// pool ships with one. With TRUENAS_DISRUPTIVE=1 the test therefore deletes
+// the pool's existing schedule first and recreates it with the same values
+// when it ends (the recreated schedule gets a new id); without it the test
+// skips rather than touching a schedule it does not own. (It used to skip
+// on every box.)
 func TestAccScrubTask_basic(t *testing.T) {
 	acctest.PreCheck(t)
 
 	poolID := testPoolID(t)
 	if existing := existingScrubTaskID(t, poolID); existing != 0 {
-		t.Skipf("pool %s (id %d) already has a scrub schedule (id %d); TrueNAS allows only one scrub "+
-			"schedule per pool, so this test cannot create its own without deleting the existing one", acctest.TestPool(), poolID, existing)
+		if os.Getenv("TRUENAS_DISRUPTIVE") != "1" {
+			t.Skipf("pool %s (id %d) already has a scrub schedule (id %d); set TRUENAS_DISRUPTIVE=1 to let the "+
+				"test delete it and recreate it afterwards", acctest.TestPool(), poolID, existing)
+		}
+		setAsideScrubTask(t, poolID, existing)
 	}
 
 	resource.Test(t, resource.TestCase{
@@ -104,6 +110,42 @@ func TestAccScrubTask_basic(t *testing.T) {
 				ImportStateVerify: true,
 			},
 		},
+	})
+}
+
+// setAsideScrubTask deletes the pool's existing scrub schedule so the test
+// can create its own, and recreates it with the same settings when the test
+// ends (after the test's own schedule is destroyed).
+func setAsideScrubTask(t *testing.T, poolID, id int64) {
+	t.Helper()
+	ctx := context.Background()
+	raw, err := acctest.RestoreCall(ctx, "pool.scrub.get_instance", id)
+	if err != nil {
+		t.Fatalf("read scrub task %d: %v", id, err)
+	}
+	var orig struct {
+		Threshold   int64          `json:"threshold"`
+		Description string         `json:"description"`
+		Enabled     bool           `json:"enabled"`
+		Schedule    map[string]any `json:"schedule"`
+	}
+	if err := json.Unmarshal(raw, &orig); err != nil {
+		t.Fatalf("parse scrub task %d: %v", id, err)
+	}
+	if _, err := acctest.Client().Call(ctx, "pool.scrub.delete", id); err != nil {
+		t.Fatalf("delete scrub task %d: %v", id, err)
+	}
+	t.Cleanup(func() {
+		if existingScrubTaskID(t, poolID) != 0 {
+			t.Errorf("pool %d still has a scrub schedule; original (id %d) not recreated: %+v", poolID, id, orig)
+			return
+		}
+		if _, err := acctest.RestoreCall(context.Background(), "pool.scrub.create", map[string]any{
+			"pool": poolID, "threshold": orig.Threshold, "description": orig.Description,
+			"enabled": orig.Enabled, "schedule": orig.Schedule,
+		}); err != nil {
+			t.Errorf("RESTORE scrub task for pool %d: %v (original %+v)", poolID, err, orig)
+		}
 	})
 }
 

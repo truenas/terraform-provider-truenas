@@ -5,6 +5,9 @@ package failover_config
 
 import (
 	"context"
+	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -176,6 +179,36 @@ func (m *FailoverConfigModel) updatePayload() map[string]any {
 		p["timeout"] = m.Timeout.ValueInt64()
 	}
 	return p
+}
+
+// changedFields returns the payload entries whose value differs from the
+// current failover.config, so adopting the singleton with values that already
+// hold sends nothing.
+func changedFields(payload map[string]any, current *failoverConfigAPI) map[string]any {
+	now := map[string]any{"disabled": current.Disabled, "master": current.Master, "timeout": current.Timeout}
+	out := map[string]any{}
+	for k, v := range payload {
+		if now[k] != v {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// notHAError is returned when the configuration asks for a failover setting
+// change on a system that is not licensed for Enterprise HA. failover.update
+// fails there with an error about the never-sent "disabled" field
+// ("You need at least one critical interface to enable failover"), which
+// does not say what is wrong (B-128).
+func notHAError(payload map[string]any) error {
+	keys := make([]string, 0, len(payload))
+	for k := range payload {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return fmt.Errorf("this system is not licensed for TrueNAS Enterprise HA (failover.licensed is false), so its "+
+		"failover settings cannot be changed; remove %s from the configuration or set them to the current values",
+		strings.Join(keys, ", "))
 }
 
 // deleteWarningDiagnostics builds the warning diagnostic emitted by

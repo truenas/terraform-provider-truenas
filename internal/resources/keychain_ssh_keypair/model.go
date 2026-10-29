@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // keychainCredentialType is the fixed "type" discriminator this package's
@@ -27,11 +28,11 @@ const keychainCredentialType = "SSH_KEY_PAIR"
 // corresponding field in the wire attributes object, so responseToModel
 // never touches it.
 type KeychainSSHKeyPairModel struct {
-	ID         types.Int64  `tfsdk:"id"`
-	Name       types.String `tfsdk:"name"`
-	Generate   types.Bool   `tfsdk:"generate"`
-	PrivateKey types.String `tfsdk:"private_key"`
-	PublicKey  types.String `tfsdk:"public_key"`
+	ID         types.Int64       `tfsdk:"id"`
+	Name       types.String      `tfsdk:"name"`
+	Generate   types.Bool        `tfsdk:"generate"`
+	PrivateKey normalize.Trimmed `tfsdk:"private_key"`
+	PublicKey  types.String      `tfsdk:"public_key"`
 }
 
 // KeychainSSHKeyPairDataSourceModel is the read-only lookup model for the
@@ -161,7 +162,10 @@ func responseToModel(api *keychainSSHKeyPairAPI, m *KeychainSSHKeyPairModel) dia
 
 	m.ID = types.Int64Value(api.ID)
 	m.Name = types.StringValue(api.Name)
-	m.PrivateKey = types.StringPointerValue(api.Attributes.PrivateKey)
+	// The server appends a final "\n" to a key supplied without one
+	// (trimspace(file(...))); Trimmed's semantic equality keeps the configured
+	// spelling. (B-054)
+	m.PrivateKey = normalize.NewTrimmedPointerValue(api.Attributes.PrivateKey)
 	m.PublicKey = types.StringPointerValue(api.Attributes.PublicKey)
 
 	return diags

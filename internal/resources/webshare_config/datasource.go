@@ -56,6 +56,19 @@ func (d *WebshareConfigDataSource) Schema(_ context.Context, _ datasource.Schema
 				ElementType: types.StringType,
 				Description: "List of AD/LDAP group names whose members are granted access to Webshare.",
 			},
+			"mcp_enabled": dschema.BoolAttribute{
+				Computed:    true,
+				Description: "Whether the Webshare MCP server is enabled. Null below TrueNAS 28.0.",
+			},
+			"mcp_allowed_groups": dschema.ListAttribute{
+				Computed:    true,
+				ElementType: types.StringType,
+				Description: "Groups whose members may connect an AI assistant to Webshare. Null below TrueNAS 28.0.",
+			},
+			"mcp_allow_write": dschema.BoolAttribute{
+				Computed:    true,
+				Description: "Whether the AI assistant may create files and directories. Null below TrueNAS 28.0.",
+			},
 		},
 	}
 }

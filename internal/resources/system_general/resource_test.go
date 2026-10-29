@@ -409,11 +409,11 @@ func TestUpdatePayload_AllKnownFieldsSent(t *testing.T) {
 	}
 }
 
-// TestUpdatePayload_UICertificateThreeWay verifies the three-way behavior
-// for ui_certificate: null/unknown omits the key entirely, an explicit 0
-// sends JSON nil (clearing the certificate), and any other value sends that
-// value.
-func TestUpdatePayload_UICertificateThreeWay(t *testing.T) {
+// TestUpdatePayload_UICertificate verifies ui_certificate is omitted when
+// null/unknown and sent as its value otherwise. There is no "0 clears it"
+// mapping: TrueNAS rejects a null UI certificate (B-144), and the schema
+// validator rejects values below 1.
+func TestUpdatePayload_UICertificate(t *testing.T) {
 	base := func(cert types.Int64) *SystemGeneralModel {
 		return &SystemGeneralModel{
 			DSAuth:           types.BoolNull(),
@@ -449,19 +449,6 @@ func TestUpdatePayload_UICertificateThreeWay(t *testing.T) {
 	}
 	if _, ok := p["ui_certificate"]; ok {
 		t.Error("expected 'ui_certificate' to be omitted when unknown")
-	}
-
-	// explicit 0 -> nil
-	p, diags = base(types.Int64Value(0)).updatePayload(context.Background())
-	if diags.HasError() {
-		t.Fatalf("unexpected error: %v", diags)
-	}
-	v, ok := p["ui_certificate"]
-	if !ok {
-		t.Fatal("expected 'ui_certificate' to be present when explicitly 0")
-	}
-	if v != nil {
-		t.Errorf("ui_certificate = %v, want nil", v)
 	}
 
 	// N -> N

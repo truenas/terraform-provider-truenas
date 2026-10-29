@@ -4,57 +4,59 @@
 package app_registry
 
 import (
+	"context"
 	"testing"
+
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// TestPreserveURI guards the #47 fix: TrueNAS canonicalizes a registry URI by
-// appending a trailing slash, so the configured value must round-trip when it
-// differs only by that slash; a genuinely different URI takes the API value.
-func TestPreserveURI(t *testing.T) {
-	cases := []struct {
-		name    string
-		current types.String
-		apiVal  string
-		want    string
-	}{
-		{"trailing-slash equivalence kept", types.StringValue("https://ghcr.io"), "https://ghcr.io/", "https://ghcr.io"},
-		{"already-slashed kept", types.StringValue("https://ghcr.io/"), "https://ghcr.io/", "https://ghcr.io/"},
-		{"real change takes api value", types.StringValue("https://ghcr.io"), "https://registry.example.com/", "https://registry.example.com/"},
-		{"null current takes api value", types.StringNull(), "https://index.docker.io/v1/", "https://index.docker.io/v1/"},
-		{"unknown current takes api value", types.StringUnknown(), "https://ghcr.io/", "https://ghcr.io/"},
+// TestSchema_URISemanticEquality guards #47 and B-122: TrueNAS appends "/" to
+// an http(s) registry URI. The URL type keeps the configured spelling after
+// apply, and KeepStateIfEquivalent plans no change after import (state holds
+// the server's spelling).
+func TestSchema_URISemanticEquality(t *testing.T) {
+	a := resourceSchema().Attributes["uri"].(schema.StringAttribute)
+	if _, ok := a.CustomType.(normalize.URLType); !ok {
+		t.Errorf("uri CustomType = %T, want normalize.URLType", a.CustomType)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := preserveURI(tc.current, tc.apiVal).ValueString(); got != tc.want {
-				t.Errorf("preserveURI(%v, %q) = %q, want %q", tc.current, tc.apiVal, got, tc.want)
-			}
-		})
+	if len(a.PlanModifiers) != 2 {
+		t.Errorf("uri plan modifiers = %d, want UseStateForUnknown + KeepStateIfEquivalent", len(a.PlanModifiers))
+	}
+	eq, d := normalize.NewURLValue("http://127.0.0.1:5000").StringSemanticEquals(context.Background(), normalize.NewURLValue("http://127.0.0.1:5000/"))
+	if d.HasError() || !eq {
+		t.Error("trailing-slash URI spellings are not equal")
 	}
 }
 
-// TestResponseToModel_URISlashPreserved proves preserveURI is actually WIRED
-// INTO the resource read path (not just defined): with the configured value
-// carried in m.URI and the API returning the slash-normalized form, the read
-// must keep the configured value — the exact round-trip that failed in #47. The
-// datasource read keeps the API value verbatim (computed-only).
-func TestResponseToModel_URISlashPreserved(t *testing.T) {
-	api := &appRegistryAPI{Name: "ghcr", URI: "https://ghcr.io/"}
+// TestResponseToModel_RedactedUsername guards B-032: a READONLY_ADMIN session
+// gets username as "********". The resource keeps the prior value (null after
+// import) and the data source reports null, instead of storing the mask.
+func TestResponseToModel_RedactedUsername(t *testing.T) {
+	api := &appRegistryAPI{Name: "r", URI: "https://ghcr.io/", Username: "********"}
 
-	m := &AppRegistryModel{URI: types.StringValue("https://ghcr.io")}
-	if d := responseToModel(api, m); d.HasError() {
-		t.Fatalf("responseToModel: %v", d)
+	m := &AppRegistryModel{Username: types.StringValue("alice")}
+	responseToModel(api, m)
+	if got := m.Username.ValueString(); got != "alice" {
+		t.Errorf("resource username = %q, want the prior alice", got)
 	}
-	if got := m.URI.ValueString(); got != "https://ghcr.io" {
-		t.Errorf("resource read URI = %q, want the configured %q (preserveURI not wired in)", got, "https://ghcr.io")
+	m = &AppRegistryModel{}
+	responseToModel(api, m)
+	if !m.Username.IsNull() {
+		t.Errorf("imported username = %v, want null", m.Username)
 	}
-
 	dm := &AppRegistryDataSourceModel{}
-	if d := responseToDataSourceModel(api, dm); d.HasError() {
-		t.Fatalf("responseToDataSourceModel: %v", d)
+	responseToDataSourceModel(api, dm)
+	if !dm.Username.IsNull() {
+		t.Errorf("data source username = %v, want null", dm.Username)
 	}
-	if got := dm.URI.ValueString(); got != "https://ghcr.io/" {
-		t.Errorf("datasource read URI = %q, want the API value %q verbatim", got, "https://ghcr.io/")
+
+	api.Username = "bob"
+	responseToModel(api, m)
+	responseToDataSourceModel(api, dm)
+	if m.Username.ValueString() != "bob" || dm.Username.ValueString() != "bob" {
+		t.Errorf("unredacted username not read: %v %v", m.Username, dm.Username)
 	}
 }

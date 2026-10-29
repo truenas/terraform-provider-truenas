@@ -31,11 +31,15 @@ resource "truenas_nvmet_host" "initiator" {
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
 - `description` (String) Free-form description of the host.
-- `dhchap_ctrl_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) DH-CHAP controller key used for bidirectional authentication. Write-only: never stored in Terraform state. Requires Terraform >= 1.11.
-- `dhchap_dhgroup` (String) DH-CHAP Diffie-Hellman group used for bidirectional authentication.
+- `dhchap_ctrl_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) DH-CHAP controller key used for bidirectional authentication. Needs dhchap_key. Removing it from config turns bidirectional authentication off. To rotate it, change the key and bump dhchap_ctrl_key_wo_version. Write-only: never stored in Terraform state. Requires Terraform >= 1.11.
+- `dhchap_ctrl_key_wo_version` (Number) Rotation trigger for the write-only dhchap_ctrl_key. A write-only value is absent from state, so Terraform cannot detect that dhchap_ctrl_key changed. Bump this integer whenever dhchap_ctrl_key changes to make Terraform re-send it. dhchap_ctrl_key is sent on create, when it is added or removed, and otherwise only when this integer changes; other updates leave the stored key alone. Optional.
+- `dhchap_dhgroup` (String) DH-CHAP Diffie-Hellman group used for bidirectional authentication. Set to "" to clear it.
 - `dhchap_hash` (String) DH-CHAP hash algorithm. One of: SHA-256, SHA-384, SHA-512.
-- `dhchap_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) DH-CHAP key used by this host to authenticate to a subsystem. Write-only: never stored in Terraform state. Requires Terraform >= 1.11.
+- `dhchap_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) DH-CHAP key used by this host to authenticate to a subsystem. Removing it from config turns DH-CHAP off for the host. To rotate it, change the key and bump dhchap_key_wo_version. Write-only: never stored in Terraform state. Requires Terraform >= 1.11.
+- `dhchap_key_wo_version` (Number) Rotation trigger for the write-only dhchap_key. A write-only value is absent from state, so Terraform cannot detect that dhchap_key changed. Bump this integer whenever dhchap_key changes to make Terraform re-send it. dhchap_key is sent on create, when it is added or removed, and otherwise only when this integer changes; other updates leave the stored key alone. Optional.
 
 ### Read-Only
 
+- `dhchap_ctrl_key_set` (Boolean) Whether TrueNAS has a DH-CHAP controller key for this host. Planned from whether dhchap_ctrl_key is set in config.
+- `dhchap_key_set` (Boolean) Whether TrueNAS has a DH-CHAP key for this host. Planned from whether dhchap_key is set in config, so adding or removing the key (in config or outside Terraform) shows as a change.
 - `id` (Number) Numeric NVMe-oF host ID assigned by TrueNAS.

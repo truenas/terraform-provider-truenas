@@ -53,13 +53,12 @@ func TestAccUser_basic(t *testing.T) {
 			},
 			// Import by the user's numeric id. Password is write-only and
 			// never returned by the API, so it can't be verified.
-			// group_create is also write-only (only sent on create) and is
-			// never read back into state.
+			// group_create is read back from the primary group's name.
 			{
 				ResourceName:            "truenas_user.test",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"password", "group_create"},
+				ImportStateVerifyIgnore: []string{"password"},
 			},
 		},
 	})
@@ -81,21 +80,9 @@ func TestAccUser_basic(t *testing.T) {
 // resource identity values for equality — that is this kind of step's
 // built-in round-trip check.
 //
-// This step sets ExpectNonEmptyPlan: true because that post-import plan is
-// genuinely non-empty here, for the same reason TestAccUser_basic's
-// ImportStateVerifyIgnore lists "group_create": group_create is sent only on
-// create and is never read back from the API, so after import the plan sees
-// it go from unset to the configured value. Several other optional+computed
-// attributes (email, locked, ssh_password_enabled, sshpubkey, sudo_commands,
-// sudo_commands_nopasswd, groups) aren't set in testAccUserConfig either, and
-// the framework's default behavior for an optional+computed attribute with
-// no config value and no UseStateForUnknown plan modifier is to mark it
-// unknown on any plan that isn't a true no-op — which is exactly the
-// documented case for ExpectNonEmptyPlan: "importing a resource that cannot
-// read its entire value back from the remote API." ImportPlanChecks.PreApply
-// below still asserts, explicitly, that the import lands correctly: the plan
-// action is the expected in-place update (not a create/replace/destroy) and
-// the imported username is exactly the one that was created.
+// The post-import plan must be a no-op: group_create is read back from the
+// primary group's name, and the other Optional+Computed attributes keep their
+// imported values (UseStateForUnknown). (B-051, B-136)
 func TestAccUser_identityImport(t *testing.T) {
 	username := acctest.RandName("tf-acc-user-ident")
 
@@ -115,13 +102,12 @@ func TestAccUser_identityImport(t *testing.T) {
 				),
 			},
 			{
-				ResourceName:       "truenas_user.test",
-				ImportState:        true,
-				ImportStateKind:    resource.ImportBlockWithResourceIdentity,
-				ExpectNonEmptyPlan: true, // group_create (and other unread-back computed attrs) diff post-import; see doc comment above
+				ResourceName:    "truenas_user.test",
+				ImportState:     true,
+				ImportStateKind: resource.ImportBlockWithResourceIdentity,
 				ImportPlanChecks: resource.ImportPlanChecks{
 					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectResourceAction("truenas_user.test", plancheck.ResourceActionUpdate),
+						plancheck.ExpectResourceAction("truenas_user.test", plancheck.ResourceActionNoop),
 						plancheck.ExpectKnownValue("truenas_user.test", tfjsonpath.New("username"), knownvalue.StringExact(username)),
 					},
 				},
@@ -247,7 +233,7 @@ func TestAccUser_fullSurface(t *testing.T) {
 				ResourceName:            "truenas_user.test",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"password", "password_wo_version", "group_create", "home_mode", "groups"},
+				ImportStateVerifyIgnore: []string{"password", "password_wo_version", "home_mode"},
 			},
 		},
 	})

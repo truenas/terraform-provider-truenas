@@ -51,7 +51,8 @@ func TestWebshareConfigSchema_OptionalComputedFields(t *testing.T) {
 
 func TestWebshareConfigSchema_NoUnexpectedAttributes(t *testing.T) {
 	s := resourceSchema()
-	want := map[string]bool{"id": true, "bindip": true, "search": true, "passkey": true, "groups": true}
+	want := map[string]bool{"id": true, "bindip": true, "search": true, "passkey": true, "groups": true,
+		"mcp_enabled": true, "mcp_allowed_groups": true, "mcp_allow_write": true}
 	if len(s.Attributes) != len(want) {
 		t.Errorf("schema has %d attributes, want %d", len(s.Attributes), len(want))
 	}

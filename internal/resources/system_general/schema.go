@@ -4,12 +4,14 @@
 package system_general
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -22,7 +24,14 @@ func resourceSchema() schema.Schema {
 			"state (the configuration is left in place, since it controls management UI access). WARNING: " +
 			"several attributes on this resource control how the management UI is reached over the network " +
 			"(ui_address, ui_allowlist, ui_port, ui_httpsport, ui_v6address); changing them can cut off " +
-			"management access to the system.",
+			"management access to the system." +
+			"\n\n" +
+			"Changes to the web server settings (ui_address, ui_v6address, ui_allowlist, ui_certificate, " +
+			"ui_httpsport, ui_httpsprotocols, ui_httpsredirect, ui_port, ui_x_frame_options) take effect in the " +
+			"same apply: the provider asks TrueNAS to restart the web server, which drops every open web UI and " +
+			"API connection, and waits for the API to answer again before reading the result back. Only the " +
+			"attributes set in the configuration are sent; an attribute left out keeps its current value on " +
+			"TrueNAS.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:      true,
@@ -66,8 +75,9 @@ func resourceSchema() schema.Schema {
 			"ui_certificate": schema.Int64Attribute{
 				Optional: true,
 				Computed: true,
-				Description: "Numeric ID of the certificate used by the web UI for HTTPS. A value of 0 clears " +
-					"the assigned certificate (null on the wire).",
+				Description: "Numeric ID of the certificate used by the web UI for HTTPS. TrueNAS always " +
+					"requires a UI certificate, so it can be changed but not cleared.",
+				Validators:    []validator.Int64{int64validator.AtLeast(1)},
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 			},
 			"ui_consolemsg": schema.BoolAttribute{

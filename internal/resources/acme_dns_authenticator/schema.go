@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func resourceSchema() schema.Schema {
@@ -35,8 +36,12 @@ func resourceSchema() schema.Schema {
 				Description: "Human-readable name for the DNS authenticator. Updatable in place.",
 			},
 			"attributes": schema.StringAttribute{
-				Required:  true,
-				Sensitive: true,
+				Required:   true,
+				Sensitive:  true,
+				CustomType: normalize.JSONSubsetType{},
+				PlanModifiers: []planmodifier.String{
+					keepImportedIfEquivalent{},
+				},
 				Description: "JSON document of DNS provider credentials/config. Must include \"authenticator\" " +
 					"(one of: cloudflare, digitalocean, OVH, route53, shell) plus that variant's own fields — " +
 					"e.g. {\"authenticator\":\"route53\",\"access_key_id\":\"...\",\"secret_access_key\":\"...\"}. " +
@@ -47,7 +52,7 @@ func resourceSchema() schema.Schema {
 					"but fake cloudflare api_token was accepted without any outbound call failing); the \"shell\" " +
 					"variant is the one exception, performing a local check that \"script\" is an existing file " +
 					"under a pool mount point. Updatable in place (a full replace, not a partial patch — " +
-					"acme.dns.authenticator.update takes the same {name, attributes} shape as create).",
+					"acme.dns.authenticator.update takes the same {name, attributes} shape as create). Generated configuration (`terraform plan -generate-config-out`) has this as null, because Terraform never writes sensitive or write-only values there; fill it in before applying.",
 			},
 			"attributes_secrets_wo": schema.StringAttribute{
 				Optional:  true,
@@ -63,7 +68,9 @@ func resourceSchema() schema.Schema {
 			"attributes_secrets_wo_version": schema.Int64Attribute{
 				Optional: true,
 				Description: "Version trigger for attributes_secrets_wo. Bump to re-send a changed " +
-					"write-only secret overlay. Required when attributes_secrets_wo is set.",
+					"write-only secret overlay. The overlay is sent on create and when this integer changes; " +
+					"other updates send the secret values TrueNAS already has (the API needs the whole object), so a " +
+					"changed secret is applied only with a version bump. Required when attributes_secrets_wo is set.",
 				Validators: []validator.Int64{
 					int64validator.AlsoRequires(path.MatchRoot("attributes_secrets_wo")),
 				},

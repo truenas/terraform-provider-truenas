@@ -13,6 +13,14 @@ import (
 	"time"
 )
 
+// ErrAPIKeyRejected is returned (wrapped) when auth.login_with_api_key
+// answers false. A wrong key always does, but TrueNAS 25.10 also answers a
+// valid key with an occasional bare false while the source IP is being rate
+// limited (seen live: two falses in a row in the middle of an EBUSY burst,
+// with no audit entry), so WithRetry retries it a few times before giving
+// up.
+var ErrAPIKeyRejected = errors.New("authentication rejected: invalid API key")
+
 // AuthAPIKey authenticates using a TrueNAS API key.
 // The API key format is "<id>-<secret>", e.g. "1-abcdef1234".
 func AuthAPIKey(ctx context.Context, c *Client, apiKey string) error {
@@ -25,7 +33,7 @@ func AuthAPIKey(ctx context.Context, c *Client, apiKey string) error {
 		return fmt.Errorf("parse auth response: %w", err)
 	}
 	if !ok {
-		return fmt.Errorf("authentication rejected: invalid API key")
+		return ErrAPIKeyRejected
 	}
 	return nil
 }
@@ -86,16 +94,36 @@ func IsRateLimited(err error) bool {
 	return strings.Contains(strings.ToLower(err.Error()), "rate limit")
 }
 
+// maxAPIKeyRejectedRetries is how many times WithRetry retries an API-key
+// login that answered false (ErrAPIKeyRejected) before reporting the key as
+// invalid. Kept small: a wrong key fails on every attempt, so each retry only
+// delays that report (by the first authRetryBackoff steps, ~15-22s in all).
+const maxAPIKeyRejectedRetries = 2
+
 // WithRetry calls authFn and, if it fails with a rate-limit error (see
 // IsRateLimited), retries up to len(authRetryBackoff) more times with
-// increasing backoff between attempts. Any non-rate-limit error, or
-// context cancellation/deadline while waiting between attempts, returns
-// immediately.
+// increasing backoff between attempts. An API-key login answered with false
+// (ErrAPIKeyRejected) is retried up to maxAPIKeyRejectedRetries times within
+// the same schedule, because TrueNAS can answer a valid key that way while
+// rate limiting. Any other error, or context cancellation/deadline while
+// waiting between attempts, returns immediately.
 func WithRetry(ctx context.Context, authFn func(ctx context.Context) error) error {
 	var err error
+	rejections := 0
 	for attempt := 0; ; attempt++ {
 		err = authFn(ctx)
-		if err == nil || !IsRateLimited(err) || attempt >= len(authRetryBackoff) {
+		if err == nil {
+			return nil
+		}
+		retry := IsRateLimited(err)
+		if !retry && errors.Is(err, ErrAPIKeyRejected) && rejections < maxAPIKeyRejectedRetries {
+			rejections++
+			retry = true
+		}
+		if !retry || attempt >= len(authRetryBackoff) {
+			if rejections > 0 && errors.Is(err, ErrAPIKeyRejected) {
+				return fmt.Errorf("%w (rejected on %d attempts)", err, rejections+1)
+			}
 			return err
 		}
 		select {

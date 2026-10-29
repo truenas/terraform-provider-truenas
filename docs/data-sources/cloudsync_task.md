@@ -30,6 +30,7 @@ Fetches a TrueNAS cloud sync task by description. Cloud sync tasks have no name 
 - `encryption` (Boolean)
 - `encryption_password` (String, Sensitive)
 - `encryption_salt` (String, Sensitive)
+- `encryption_wo_version` (Number)
 - `exclude` (List of String)
 - `filename_encryption` (Boolean)
 - `follow_symlinks` (Boolean)

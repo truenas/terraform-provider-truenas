@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func strPtr(s string) *string { return &s }
@@ -23,17 +24,17 @@ func boolPtr(b bool) *bool    { return &b }
 func TestUpdatePayload_AllFieldsSet_Unified(t *testing.T) {
 	ctx := context.Background()
 	pools, _ := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: addressPoolAttrTypes}, []AddressPoolModel{
-		{Base: types.StringValue("172.17.0.0/12"), Size: types.Int64Value(24)},
+		{Base: normalize.NewNetworkValue("172.17.0.0/12"), Size: types.Int64Value(24)},
 	})
 	mirrors, _ := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: registryMirrorAttrTypes}, []RegistryMirrorModel{
-		{URL: types.StringValue("https://mirror.example.com"), Insecure: types.BoolValue(false)},
-		{URL: types.StringValue("http://insecure.example.com"), Insecure: types.BoolValue(true)},
+		{URL: normalize.NewURLValue("https://mirror.example.com"), Insecure: types.BoolValue(false)},
+		{URL: normalize.NewURLValue("http://insecure.example.com"), Insecure: types.BoolValue(true)},
 	})
 
 	m := &DockerConfigModel{
 		EnableImageUpdates: types.BoolValue(false),
 		Pool:               types.StringValue("tank"),
-		CIDRv6:             types.StringValue("fdd0::/64"),
+		CIDRv6:             normalize.NewCIDRValue("fdd0::/64"),
 		AddressPools:       pools,
 		RegistryMirrors:    mirrors,
 	}
@@ -80,15 +81,15 @@ func TestUpdatePayload_AllFieldsSet_Unified(t *testing.T) {
 func TestUpdatePayload_AllFieldsSet_Split(t *testing.T) {
 	ctx := context.Background()
 	mirrors, _ := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: registryMirrorAttrTypes}, []RegistryMirrorModel{
-		{URL: types.StringValue("https://mirror.example.com"), Insecure: types.BoolValue(false)},
-		{URL: types.StringValue("http://insecure.example.com"), Insecure: types.BoolValue(true)},
-		{URL: types.StringValue("https://mirror2.example.com"), Insecure: types.BoolValue(false)},
+		{URL: normalize.NewURLValue("https://mirror.example.com"), Insecure: types.BoolValue(false)},
+		{URL: normalize.NewURLValue("http://insecure.example.com"), Insecure: types.BoolValue(true)},
+		{URL: normalize.NewURLValue("https://mirror2.example.com"), Insecure: types.BoolValue(false)},
 	})
 
 	m := &DockerConfigModel{
 		EnableImageUpdates: types.BoolValue(true),
 		Pool:               types.StringNull(),
-		CIDRv6:             types.StringValue("fdd0::/64"),
+		CIDRv6:             normalize.NewCIDRValue("fdd0::/64"),
 		AddressPools:       types.ListNull(types.ObjectType{AttrTypes: addressPoolAttrTypes}),
 		RegistryMirrors:    mirrors,
 	}
@@ -124,7 +125,7 @@ func TestUpdatePayload_UnsetOptionalsOmitted(t *testing.T) {
 	m := &DockerConfigModel{
 		EnableImageUpdates: types.BoolUnknown(),
 		Pool:               types.StringUnknown(),
-		CIDRv6:             types.StringUnknown(),
+		CIDRv6:             normalize.NewCIDRUnknown(),
 		AddressPools:       types.ListUnknown(types.ObjectType{AttrTypes: addressPoolAttrTypes}),
 		RegistryMirrors:    types.ListUnknown(types.ObjectType{AttrTypes: registryMirrorAttrTypes}),
 	}
@@ -361,5 +362,35 @@ func TestDeleteWarningDiagnostics(t *testing.T) {
 	}
 	if diags[0].Detail() != "Docker configuration left in place; removed from Terraform state only" {
 		t.Errorf("detail = %q, want the documented warning text", diags[0].Detail())
+	}
+}
+
+// TestKeepPriorMirrorOrder guards B-152: TrueNAS 25.10 returns secure mirrors
+// before insecure ones, so a config that mixes them keeps its own order when
+// the set is unchanged; a real change takes the read value.
+func TestKeepPriorMirrorOrder(t *testing.T) {
+	ctx := context.Background()
+	list := func(ms ...RegistryMirrorModel) types.List {
+		l, _ := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: registryMirrorAttrTypes}, ms)
+		return l
+	}
+	ins := RegistryMirrorModel{URL: normalize.NewURLValue("http://a/"), Insecure: types.BoolValue(true)}
+	sec := RegistryMirrorModel{URL: normalize.NewURLValue("https://b/"), Insecure: types.BoolValue(false)}
+	other := RegistryMirrorModel{URL: normalize.NewURLValue("https://c/"), Insecure: types.BoolValue(false)}
+
+	prior := list(ins, sec)
+	read := list(sec, ins)
+	if got := keepPriorMirrorOrder(prior, read); !got.Equal(prior) {
+		t.Errorf("reordered read replaced the prior order: %v", got)
+	}
+	if got := keepPriorMirrorOrder(prior, list(sec, other)); !got.Equal(list(sec, other)) {
+		t.Errorf("changed set kept the prior value: %v", got)
+	}
+	if got := keepPriorMirrorOrder(prior, list(sec)); !got.Equal(list(sec)) {
+		t.Errorf("removed item kept the prior value: %v", got)
+	}
+	unknown := types.ListUnknown(types.ObjectType{AttrTypes: registryMirrorAttrTypes})
+	if got := keepPriorMirrorOrder(unknown, read); !got.Equal(read) {
+		t.Errorf("unknown prior: %v", got)
 	}
 }

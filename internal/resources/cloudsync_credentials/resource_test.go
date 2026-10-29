@@ -6,6 +6,7 @@ package cloudsync_credentials
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -182,7 +183,7 @@ func TestProjectProviderPreservingEndpointSlash_SlashOnly(t *testing.T) {
 		"access_key_id":     "AKIA-LIVE",
 		"secret_access_key": "shh",
 	}
-	out := projectProviderPreservingEndpointSlash(stateJSON, live)
+	out, _ := readProvider(live, stateJSON, true)
 
 	var got map[string]any
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
@@ -208,7 +209,7 @@ func TestProjectProviderPreservingEndpointSlash_SlashOnly(t *testing.T) {
 func TestProjectProviderPreservingEndpointSlash_RealChange(t *testing.T) {
 	stateJSON := `{"type":"S3","endpoint":"https://old.example.com"}`
 	live := map[string]any{"type": "S3", "endpoint": "https://new.example.com/"}
-	out := projectProviderPreservingEndpointSlash(stateJSON, live)
+	out, _ := readProvider(live, stateJSON, true)
 
 	var got map[string]any
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
@@ -216,6 +217,37 @@ func TestProjectProviderPreservingEndpointSlash_RealChange(t *testing.T) {
 	}
 	if got["endpoint"] != "https://new.example.com/" {
 		t.Errorf("endpoint = %v, want the live https://new.example.com/ (real change)", got["endpoint"])
+	}
+}
+
+// TestReadProvider_URLForms: the server rewrites URL keys (default port,
+// host case, trailing slash), which is not drift; the configured string is
+// kept verbatim (B-085). A read-only session's "********" is not data (B-035).
+func TestReadProvider_URLForms(t *testing.T) {
+	cases := []struct{ key, cfg, live string }{
+		{"endpoint", "https://S3.Example.com:443", "https://s3.example.com/"},
+		{"url", "http://h.example.com/dav", "http://h.example.com:80/dav/"},
+	}
+	for _, c := range cases {
+		prior := `{"type":"S3","` + c.key + `":"` + c.cfg + `"}`
+		live := map[string]any{"type": "S3", c.key: c.live, "region": ""}
+		for _, wo := range []bool{false, true} {
+			if out, _ := readProvider(live, prior, wo); out != prior {
+				t.Errorf("%s wo=%v: got %s, want the prior string", c.key, wo, out)
+			}
+		}
+	}
+	prior := `{"type":"S3","access_key_id":"AKIA","secret_access_key":"real"}`
+	live := map[string]any{"type": "S3", "access_key_id": "AKIA", "secret_access_key": "********"}
+	if out, _ := readProvider(live, prior, false); out != prior {
+		t.Errorf("redacted secret: got %s, want the prior string", out)
+	}
+	var ds CredentialsDataSourceModel
+	if d := responseToDataSourceModel(&credentialsAPI{ID: 1, Provider: live}, &ds); d.HasError() {
+		t.Fatal(d)
+	}
+	if strings.Contains(ds.Provider.ValueString(), "********") {
+		t.Errorf("data source provider_config = %s, holds the redaction mask", ds.Provider.ValueString())
 	}
 }
 

@@ -5,8 +5,8 @@ terraform-provider-truenas. None are provider bugs — each is a behavior in
 the TrueNAS middleware itself, recorded here so they can be filed
 upstream with iX. Where the provider carries a workaround, it is noted.
 
-Releases referenced: TrueNAS 25.10.3.1, 25.10.4 (Enterprise HA), and
-26.0.0-BETA.2. Each finding lists the release(s) where it was observed.
+Releases referenced: TrueNAS 25.10.3.1, 25.10.4 (Enterprise HA),
+26.0.0-BETA.2, 26.0.0-BETA.3 and 28.0. Each finding lists the release(s) where it was observed.
 
 ---
 
@@ -299,11 +299,215 @@ decodes a numeric value from the API. In `internal/resources/nvmet_subsys/`.
 
 ---
 
+## 9. `interface.create` of a bridge with a member fails on 28.0
+
+**Severity:** functional — a bridge with a member cannot be created.
+**Observed on:** TrueNAS 28.0 (MASTER).
+**Namespace/method:** `interface.create` (`type: BRIDGE`, `bridge_members`).
+
+### Summary
+Creating a BRIDGE interface that lists at least one member fails with
+`[EINVAL] 'VMQueryResultItem' object is not subscriptable`. The error comes
+from the `nic_attach_users` helper in the network plugin, which indexes a VM
+query result as if it were a dict. A bridge without members is created
+normally.
+
+### Reproduction
+1. `midclt call interface.create '{"type":"BRIDGE","name":"br9","bridge_members":["<spare NIC>"]}'`
+   with a NIC that is not in use.
+2. The call fails with `'VMQueryResultItem' object is not subscriptable`.
+3. Repeat without `bridge_members`; it succeeds (delete the bridge afterwards).
+
+### Expected
+The bridge is created with its member.
+
+### Provider handling
+None; the provider sends a valid request. The bridge-member acceptance test
+fails on 28.0 for this reason and passes on the older releases.
+
+---
+
+## 10. A bare IPv6 certificate SAN is stored as `DNS:db8::7` on 25.10
+
+**Severity:** correctness — a requested SAN silently becomes a different one.
+**Observed on:** TrueNAS 25.10.3.1. 26.0 and 28.0 store it correctly.
+**Namespace/method:** `certificate.create` (CERTIFICATE_CREATE_CSR, `san`).
+
+### Summary
+A SAN entry given as a bare IPv6 address with no `IP:` prefix, for example
+`2001:db8::7`, is split on its first colon: `2001` is read as the entry type
+and the rest is stored as a DNS name, giving `DNS:db8::7`. The resulting CSR
+carries the wrong SAN. The prefixed form `IP:2001:db8::7` is stored correctly.
+
+### Reproduction
+1. `midclt call certificate.create` a CSR with `"san": ["2001:db8::7"]`.
+2. Read the certificate back; `san` is `["DNS:db8::7"]`.
+3. Repeat with `"IP:2001:db8::7"`; the SAN is stored as an IP address.
+
+### Expected
+Either detect a bare IPv6 address and store it as an IP SAN, or reject the
+entry. Do not store a different name.
+
+### Provider handling
+`truenas_certificate.san` sends a bare IP address as `IP:<address>` on every
+release. In `internal/resources/certificate/`.
+
+---
+
+## 11. `service.start` / `service.stop` require an `options` argument on 26.0
+
+**Severity:** functional — the documented short call form raises a TypeError.
+**Observed on:** TrueNAS 26.0.0-BETA.3. 25.10 and 28.0 accept the service name alone.
+**Namespace/method:** `service.start`, `service.stop`.
+
+### Summary
+On 26.0, calling `service.start` or `service.stop` with only the service name
+fails with `TypeError: ServiceService.start() missing 1 required positional
+argument: 'options'`. 25.10 and 28.0 accept the name alone. On 26.0
+`core.get_methods` does not list `service.start` or `service.stop` at all; it
+lists `service.control`, `service.get_instance`, `service.query`,
+`service.started`, `service.started_or_enabled` and `service.update`. A client
+cannot discover from the API metadata that the call shape differs on this
+release.
+
+### Reproduction
+1. `midclt call service.start ftp` on 26.0; it raises the TypeError above.
+2. `midclt call service.start <name> '{}'` (with an empty options object) gets past the
+   signature check (for a nonexistent name it fails with `MatchNotFound` instead).
+3. `midclt call core.get_methods` and look for `service.start`; it is absent.
+4. Repeat steps 1 and 3 on 25.10 and 28.0; the short call works.
+
+### Expected
+The same call shape on every release, and every callable method listed by
+`core.get_methods`.
+
+### Provider handling
+`truenas_service` uses `service.control` on every release and reports a failed
+start or stop as an error. In `internal/resources/service/`.
+
+---
+
+## 12. 25.10 keeps API-key sessions that `auth.terminate_session` cannot remove
+
+**Severity:** reliability — sessions pile up and the box rate-limits logins.
+**Observed on:** TrueNAS 25.10.
+**Namespace/method:** `auth.sessions`, `auth.terminate_session`,
+`auth.login_with_api_key`.
+
+### Summary
+A box that had served a few hundred short-lived API-key connections held 642
+authentication sessions, 635 of them from one test API key, while only about
+25 TCP connections were open on the web port. `auth.terminate_session` returns
+`True` for those sessions, but they stay in `auth.sessions`. Only a middleware
+restart clears them. In the same period `auth.login_with_api_key` answered
+`false` for a valid key several times, which looks tied to the session load.
+
+### Reproduction
+1. Open and close many websocket connections that log in with one API key
+   (for example a test run that does not close its connections).
+2. Compare `midclt call auth.sessions` (hundreds of entries) with the number
+   of established connections on the web port (a few dozen).
+3. `midclt call auth.terminate_session <id>` returns `True`; the entry is still
+   listed.
+
+### Expected
+Sessions disappear when their connection closes, and `auth.terminate_session`
+removes the session it reports terminating.
+
+### Provider handling
+The provider stops creating sessions at that rate (one client per process, no
+keepalive logins on abandoned clients) and retries an API-key login that is
+rejected with `false` twice before reporting an invalid key. In
+`internal/client/`.
+
+---
+
+## 13. `filesystem.acltemplate.create` fails with `KeyError: 'who'` for `who` entries
+
+**Severity:** functional — an unhandled server-side exception.
+**Observed on:** TrueNAS 26.0 and 28.0 (same code path in the source).
+**Namespace/method:** `filesystem.acltemplate.create`.
+
+### Summary
+An ACL template entry that names its principal with `who` (for example
+`"who": "root"` on a USER entry) fails with `KeyError: 'who'`. The plugin pops
+`who` while resolving the entry and then reads `ace['who']` again further down.
+The same entry given as `id` works.
+
+### Reproduction
+1. `midclt call filesystem.acltemplate.create` with an ACL whose USER entry is
+   `{"tag":"USER","who":"root",...}`.
+2. The call fails with `KeyError: 'who'`.
+
+### Expected
+The entry is accepted, or rejected with a validation error.
+
+### Provider handling
+`truenas_acl_template` resolves `who` to the numeric id before sending. In
+`internal/resources/acl_template/`.
+
+---
+
+## 14. `auth.mechanism_choices` raises an exception when called before login on 25.10
+
+**Severity:** minor — an unhandled exception from a method that is callable
+before authentication on 26.0.
+**Observed on:** TrueNAS 25.10.3.1.
+**Namespace/method:** `auth.mechanism_choices`.
+
+### Summary
+Called on an unauthenticated connection, the method raises
+`'NoneType' object has no attribute 'may_create_auth_token'` instead of
+returning the available login mechanisms. On 26.0 and later it answers.
+
+### Reproduction
+1. Open a websocket connection and, before logging in, call
+   `auth.mechanism_choices`.
+2. The call fails with the AttributeError text above.
+
+### Expected
+The list of mechanisms, as on 26.0.
+
+### Provider handling
+The provider treats the failure as "this server has no SCRAM login" and uses
+the API-key login. In `internal/client/scram.go`.
+
+---
+
+## 15. 25.10 ignores the `refreservation` property when creating a zvol
+
+**Severity:** correctness — a configured value is replaced by another one.
+**Observed on:** TrueNAS 25.10.
+**Namespace/method:** `pool.dataset.create` (`type: VOLUME`, `refreservation`).
+
+### Summary
+Creating a non-sparse zvol with an explicit `refreservation` (including `0`)
+stores the value ZFS computes for the volume instead: a requested `0` reads
+back as 70254592, and a requested 536870912 reads back as 1092616192. The
+property sent in the create call is overridden when the volume is created.
+
+### Reproduction
+1. `midclt call pool.dataset.create '{"name":"<pool>/rtest","type":"VOLUME","volsize":1073741824,"refreservation":0}'`
+2. `midclt call pool.dataset.query '[["id","=","<pool>/rtest"]]'` shows a
+   non-zero `refreservation`.
+3. A following `pool.dataset.update` with `refreservation: 0` sets it.
+4. Delete the test zvol.
+
+### Expected
+The requested `refreservation` is applied at create.
+
+### Provider handling
+`truenas_zvol` (and `truenas_dataset` with `type = "VOLUME"`) issues an update
+after create when the stored `refreservation` differs from the configured one.
+In `internal/resources/zvol/` and `internal/resources/dataset/`.
+
+---
+
 ## Filing notes
 
 Findings 1, 2 and 7 have functional impact (a server crash, a broken
 re-join, and silently dropped permission changes) and are the strongest
-upstream candidates. 3–6 are correctness/reliability gaps. Reproduction transcripts captured during
+upstream candidates. 3–6 and 8–15 are correctness/reliability gaps (9, 11 and 13 are also hard failures). Reproduction transcripts captured during
 development live under `.superpowers/sdd/` (git-ignored) — attach the
 relevant task report when filing. This document is summarized in
 `TEST-PLAN.md` §10.

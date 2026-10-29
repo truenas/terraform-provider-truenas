@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
@@ -16,6 +17,7 @@ import (
 var _ resource.Resource = &ISCSIExtentResource{}
 var _ resource.ResourceWithImportState = &ISCSIExtentResource{}
 var _ resource.ResourceWithIdentity = &ISCSIExtentResource{}
+var _ resource.ResourceWithValidateConfig = &ISCSIExtentResource{}
 
 // ISCSIExtentResource implements the truenas_iscsi_extent resource.
 type ISCSIExtentResource struct{ client *client.Client }
@@ -63,7 +65,7 @@ func (r *ISCSIExtentResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "iscsi.extent.create", payload)
+	raw, err := callWaitingForDevice(ctx, r.client, "iscsi.extent.create", payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Create iSCSI extent failed", err.Error())
 		return
@@ -147,9 +149,8 @@ func (r *ISCSIExtentResource) Update(ctx context.Context, req resource.UpdateReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	delete(payload, "name") // name is not allowed in update
 
-	_, err := r.client.Call(ctx, "iscsi.extent.update", plan.ID.ValueInt64(), payload)
+	_, err := callWaitingForDevice(ctx, r.client, "iscsi.extent.update", plan.ID.ValueInt64(), payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Update iSCSI extent failed", err.Error())
 		return
@@ -187,6 +188,52 @@ func (r *ISCSIExtentResource) Delete(ctx context.Context, req resource.DeleteReq
 	_, err := r.client.Call(ctx, "iscsi.extent.delete", state.ID.ValueInt64(), false, false)
 	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Delete iSCSI extent failed", err.Error())
+		return
+	}
+
+	// ro = true made TrueNAS set readonly=on on the backing zvol, and the
+	// server's delete does not undo it, so the zvol would stay read-only
+	// after the extent is gone. Reset it to inherit. A failure here is a
+	// warning: the extent itself is deleted.
+	if state.ReadOnly.ValueBool() && state.Type.ValueString() == "DISK" {
+		if name, ok := zvolName(state.Disk.ValueString()); ok {
+			if _, err := r.client.Call(ctx, "pool.dataset.update", name, map[string]any{"readonly": "INHERIT"}); err != nil && !client.IsNotFound(err) {
+				resp.Diagnostics.AddWarning("Could not reset zvol readonly property",
+					fmt.Sprintf("The extent was deleted, but resetting readonly to inherit on zvol %q failed: %s. "+
+						"TrueNAS set readonly=on on it because the extent had ro = true.", name, err))
+			}
+		}
+	}
+}
+
+// ValidateConfig rejects disk/path combinations TrueNAS would refuse or
+// silently rewrite: a DISK extent needs disk and stores it as path, and a
+// FILE extent needs path and has no disk.
+func (r *ISCSIExtentResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var cfg ISCSIExtentModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() || cfg.Type.IsUnknown() || cfg.Type.IsNull() {
+		return
+	}
+	switch cfg.Type.ValueString() {
+	case "DISK":
+		if cfg.Disk.IsNull() || (!cfg.Disk.IsUnknown() && cfg.Disk.ValueString() == "") {
+			resp.Diagnostics.AddAttributeError(path.Root("disk"), "disk is required for a DISK extent",
+				"Set disk to the zvol path, for example \"zvol/${truenas_zvol.x.name}\".")
+		}
+		if !cfg.Path.IsNull() && !cfg.Path.IsUnknown() && !cfg.Disk.IsUnknown() && cfg.Path.ValueString() != cfg.Disk.ValueString() {
+			resp.Diagnostics.AddAttributeError(path.Root("path"), "path must be unset for a DISK extent",
+				"TrueNAS stores a DISK extent's zvol in path, so path always reads back as the disk value. Remove path.")
+		}
+	case "FILE":
+		if cfg.Path.IsNull() || (!cfg.Path.IsUnknown() && cfg.Path.ValueString() == "") {
+			resp.Diagnostics.AddAttributeError(path.Root("path"), "path is required for a FILE extent",
+				"Set path to the backing file, for example \"${truenas_dataset.x.mountpoint}/extent.img\".")
+		}
+		if !cfg.Disk.IsNull() && !cfg.Disk.IsUnknown() && cfg.Disk.ValueString() != "" {
+			resp.Diagnostics.AddAttributeError(path.Root("disk"), "disk must be unset for a FILE extent",
+				"TrueNAS ignores disk for FILE extents and reports it as empty. Remove disk.")
+		}
 	}
 }
 

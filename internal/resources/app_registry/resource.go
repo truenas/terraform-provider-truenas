@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
 )
@@ -141,13 +142,17 @@ func (r *AppRegistryResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 	plan.ID = state.ID
 
-	// write-only: value lives in config, not plan. Re-sent on every update;
-	// bumping password_wo_version is what lets a rotated token produce an
-	// update in the first place (the token itself is invisible to the plan).
+	// write-only: value lives in config, not plan. Sent only when
+	// password_wo_version changed (B-141): bumping it is what lets a rotated
+	// token produce an update in the first place (the token itself is
+	// invisible to the plan), and other updates leave the stored one alone.
 	var cfg AppRegistryModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+	if plan.PasswordWOVersion.Equal(state.PasswordWOVersion) {
+		cfg.PasswordWO = types.StringNull()
 	}
 
 	payload := plan.apiPayload(cfg.PasswordWO)

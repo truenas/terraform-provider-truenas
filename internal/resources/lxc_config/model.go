@@ -95,10 +95,23 @@ type lxcConfigAPI struct {
 func responseToModel(api *lxcConfigAPI, m *LXCConfigModel) {
 	m.ID = types.StringValue(lxcConfigResourceID)
 	m.PreferredPool = types.StringPointerValue(api.PreferredPool)
-	m.Bridge = types.StringPointerValue(api.Bridge)
+	// lxc.update stores "[AUTO]" (the automatic bridge, the only value
+	// lxc.bridge_choices offers by default) and "" as null. Report null as
+	// "[AUTO]", so bridge = "[AUTO]" applies cleanly and plans no change after
+	// import, and keep a configured "" as written (B-081).
+	switch {
+	case api.Bridge != nil:
+		m.Bridge = types.StringValue(*api.Bridge)
+	case !m.Bridge.IsNull() && !m.Bridge.IsUnknown() && m.Bridge.ValueString() == "":
+	default:
+		m.Bridge = types.StringValue(bridgeAuto)
+	}
 	m.V4Network = types.StringValue(api.V4Network)
 	m.V6Network = types.StringValue(api.V6Network)
 }
+
+// bridgeAuto is lxc.bridge_choices' key for the automatically managed bridge.
+const bridgeAuto = "[AUTO]"
 
 // responseToDataSourceModel maps an lxcConfigAPI response onto an
 // LXCConfigDataSourceModel.

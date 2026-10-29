@@ -79,12 +79,11 @@ func TestApiPayload_AllFieldsSet(t *testing.T) {
 	}
 }
 
-// TestApiPayload_UnsetOptionalsOmitted verifies that primary_kdc, kdc,
-// admin_server, and kpasswd_server are omitted from the payload when null
-// or unknown, leaving only the Required "realm" field — so the
-// TrueNAS-side defaults (primary_kdc=null, kdc=[], admin_server=[],
-// kpasswd_server=[]) take effect instead of an explicit zero value being
-// sent.
+// TestApiPayload_UnsetOptionalsOmitted verifies that kdc, admin_server, and
+// kpasswd_server are omitted from the payload when null or unknown — so the
+// TrueNAS-side defaults (kdc=[], admin_server=[], kpasswd_server=[]) take
+// effect instead of an explicit zero value being sent — while an unset
+// primary_kdc is sent as JSON null, the only value that clears it. (B-112)
 func TestApiPayload_UnsetOptionalsOmitted(t *testing.T) {
 	ctx := context.Background()
 	m := &KerberosRealmModel{
@@ -100,13 +99,16 @@ func TestApiPayload_UnsetOptionalsOmitted(t *testing.T) {
 		t.Fatalf("apiPayload returned diagnostics errors: %v", diags)
 	}
 
-	if len(p) != 1 {
-		t.Fatalf("payload has %d keys (%v), want 1 (only realm)", len(p), p)
+	if len(p) != 2 {
+		t.Fatalf("payload has %d keys (%v), want 2 (realm, primary_kdc)", len(p), p)
 	}
 	if p["realm"] != "EXAMPLE.COM" {
 		t.Errorf("payload[realm] = %v, want \"EXAMPLE.COM\"", p["realm"])
 	}
-	for _, key := range []string{"primary_kdc", "kdc", "admin_server", "kpasswd_server"} {
+	if v, ok := p["primary_kdc"]; !ok || v != nil {
+		t.Errorf("payload[primary_kdc] = %v (present=%v), want explicit nil", v, ok)
+	}
+	for _, key := range []string{"kdc", "admin_server", "kpasswd_server"} {
 		if _, ok := p[key]; ok {
 			t.Errorf("expected %q to be omitted (null/unknown), got %v", key, p[key])
 		}

@@ -88,8 +88,13 @@ func TestVMSchema(t *testing.T) {
 	if statusStr.IsOptional() || statusStr.IsRequired() {
 		t.Error("'status' should be Computed-only")
 	}
-	if len(statusStr.PlanModifiers) != 0 {
-		t.Error("'status' should NOT have plan modifiers (value can change server-side)")
+	// status may only be pinned by statusFollowsRunning, which still plans it
+	// unknown when running changes (B-137).
+	if len(statusStr.PlanModifiers) != 1 {
+		t.Fatalf("'status' should have exactly the statusFollowsRunning plan modifier, got %d", len(statusStr.PlanModifiers))
+	}
+	if _, ok := statusStr.PlanModifiers[0].(statusFollowsRunning); !ok {
+		t.Errorf("'status' plan modifier is %T, want statusFollowsRunning", statusStr.PlanModifiers[0])
 	}
 }
 
@@ -261,40 +266,59 @@ func TestVMSchema_CreateOnlyFieldsRequireReplace(t *testing.T) {
 	}
 }
 
-// TestVMApiPayload_MinMemoryZeroOmitted verifies that min_memory is omitted
-// from the payload when it is explicitly set to 0.
-func TestVMApiPayload_MinMemoryZeroOmitted(t *testing.T) {
+// TestVMApiPayload_ZeroValueClears verifies that the clearable options send
+// null for a configured ""/0 (the API rejects "" and 0 for them), and that
+// command_line_args, a plain string on the server, sends "". (B-098)
+func TestVMApiPayload_ZeroValueClears(t *testing.T) {
 	m := VMModel{
-		Name:        types.StringValue("myvm"),
-		Memory:      types.Int64Value(1073741824),
-		Description: types.StringValue(""),
-		MinMemory:   types.Int64Value(0),
+		Name:            types.StringValue("myvm"),
+		Memory:          types.Int64Value(1024),
+		Description:     types.StringValue(""),
+		MinMemory:       types.Int64Value(0),
+		CPUModel:        types.StringValue(""),
+		MachineType:     types.StringValue(""),
+		ArchType:        types.StringValue(""),
+		CPUSet:          types.StringValue(""),
+		NodeSet:         types.StringValue(""),
+		CommandLineArgs: types.StringValue(""),
 	}
 
 	payload := m.apiPayload()
-	if _, ok := payload["min_memory"]; ok {
-		t.Error("payload should not contain min_memory when set to 0")
+	for _, k := range []string{"min_memory", "cpu_model", "machine_type", "arch_type", "cpuset", "nodeset"} {
+		v, ok := payload[k]
+		if !ok || v != nil {
+			t.Errorf("payload[%s] = %v (present %v), want explicit null", k, v, ok)
+		}
+	}
+	if v, ok := payload["command_line_args"]; !ok || v != "" {
+		t.Errorf("payload[command_line_args] = %v (present %v), want \"\"", v, ok)
 	}
 }
 
-// TestVMApiPayload_CPUModelEmptyOmitted verifies that cpu_model is omitted
-// from the payload when it is explicitly set to "".
-func TestVMApiPayload_CPUModelEmptyOmitted(t *testing.T) {
+// TestVMApiPayload_UnsetClearableOmitted verifies that a null or unknown
+// clearable option is left out, so the server value is kept.
+func TestVMApiPayload_UnsetClearableOmitted(t *testing.T) {
 	m := VMModel{
-		Name:        types.StringValue("myvm"),
-		Memory:      types.Int64Value(1073741824),
-		Description: types.StringValue(""),
-		CPUModel:    types.StringValue(""),
+		Name:            types.StringValue("myvm"),
+		Memory:          types.Int64Value(1024),
+		MinMemory:       types.Int64Unknown(),
+		CPUModel:        types.StringNull(),
+		MachineType:     types.StringUnknown(),
+		ArchType:        types.StringNull(),
+		CPUSet:          types.StringUnknown(),
+		NodeSet:         types.StringNull(),
+		CommandLineArgs: types.StringUnknown(),
 	}
-
 	payload := m.apiPayload()
-	if _, ok := payload["cpu_model"]; ok {
-		t.Error("payload should not contain cpu_model when set to \"\"")
+	for _, k := range []string{"min_memory", "cpu_model", "machine_type", "arch_type", "cpuset", "nodeset", "command_line_args"} {
+		if _, ok := payload[k]; ok {
+			t.Errorf("payload should not contain %s when unset", k)
+		}
 	}
 }
 
 // TestResponseToModel_NilHandling verifies that a nil MinMemory maps to 0 and
-// a nil CPUModel maps to "".
+// a nil clearable string maps to "".
 func TestResponseToModel_NilHandling(t *testing.T) {
 	api := &vmAPI{
 		ID:              1,
@@ -320,8 +344,13 @@ func TestResponseToModel_NilHandling(t *testing.T) {
 	if m.MinMemory.ValueInt64() != 0 {
 		t.Errorf("MinMemory = %v, want 0", m.MinMemory.ValueInt64())
 	}
-	if m.CPUModel.ValueString() != "" {
-		t.Errorf("CPUModel = %q, want \"\"", m.CPUModel.ValueString())
+	for name, v := range map[string]types.String{
+		"cpu_model": m.CPUModel, "machine_type": m.MachineType, "arch_type": m.ArchType,
+		"cpuset": m.CPUSet, "nodeset": m.NodeSet,
+	} {
+		if v.IsNull() || v.ValueString() != "" {
+			t.Errorf("%s = %v, want \"\" (the configured spelling of unset)", name, v)
+		}
 	}
 }
 

@@ -4,11 +4,14 @@ page_title: "truenas_system_general Resource - truenas"
 subcategory: "System"
 description: |-
   Manages the TrueNAS system general configuration (management UI, timezone, keyboard map, usage collection). This is a singleton resource — there is exactly one system general configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls system.general.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it controls management UI access). WARNING: several attributes on this resource control how the management UI is reached over the network (ui_address, ui_allowlist, ui_port, ui_httpsport, ui_v6address); changing them can cut off management access to the system.
+  Changes to the web server settings (ui_address, ui_v6address, ui_allowlist, ui_certificate, ui_httpsport, ui_httpsprotocols, ui_httpsredirect, ui_port, ui_x_frame_options) take effect in the same apply: the provider asks TrueNAS to restart the web server, which drops every open web UI and API connection, and waits for the API to answer again before reading the result back. Only the attributes set in the configuration are sent; an attribute left out keeps its current value on TrueNAS.
 ---
 
 # truenas_system_general (Resource)
 
 Manages the TrueNAS system general configuration (management UI, timezone, keyboard map, usage collection). This is a singleton resource — there is exactly one system general configuration per TrueNAS system, so it is never created or deleted on TrueNAS; Terraform create/update calls system.general.update, and Terraform delete only removes the resource from state (the configuration is left in place, since it controls management UI access). WARNING: several attributes on this resource control how the management UI is reached over the network (ui_address, ui_allowlist, ui_port, ui_httpsport, ui_v6address); changing them can cut off management access to the system.
+
+Changes to the web server settings (ui_address, ui_v6address, ui_allowlist, ui_certificate, ui_httpsport, ui_httpsprotocols, ui_httpsredirect, ui_port, ui_x_frame_options) take effect in the same apply: the provider asks TrueNAS to restart the web server, which drops every open web UI and API connection, and waits for the API to answer again before reading the result back. Only the attributes set in the configuration are sent; an attribute left out keeps its current value on TrueNAS.
 
 ## Example Usage
 
@@ -29,7 +32,7 @@ resource "truenas_system_general" "config" {
 - `timezone` (String) System timezone (e.g. "America/Los_Angeles").
 - `ui_address` (List of String) IPv4 addresses the web UI binds to. WARNING: changing UI network settings can cut off management access to the system.
 - `ui_allowlist` (List of String) IP addresses/networks allowed to access the web UI. Empty list allows all. WARNING: changing UI network settings can cut off management access to the system.
-- `ui_certificate` (Number) Numeric ID of the certificate used by the web UI for HTTPS. A value of 0 clears the assigned certificate (null on the wire).
+- `ui_certificate` (Number) Numeric ID of the certificate used by the web UI for HTTPS. TrueNAS always requires a UI certificate, so it can be changed but not cleared.
 - `ui_consolemsg` (Boolean) Whether console messages are shown on the login screen.
 - `ui_httpsport` (Number) TCP port the web UI listens on for HTTPS. WARNING: changing this can cut off management access to the system.
 - `ui_httpsprotocols` (List of String) TLS protocol versions accepted by the web UI (e.g. TLSv1.2, TLSv1.3).

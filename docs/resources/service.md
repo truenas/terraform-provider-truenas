@@ -3,12 +3,12 @@
 page_title: "truenas_service Resource - truenas"
 subcategory: "System"
 description: |-
-  Manages a TrueNAS service (enable/disable, start/stop). Services are not created or deleted.
+  Manages a TrueNAS service (enable/disable, start/stop). Services are not created or deleted: creating this resource adopts the existing service and changes only what the configuration sets, and destroying it (or removing it from the configuration) only removes it from Terraform state, leaving the service enabled and running exactly as it is.
 ---
 
 # truenas_service (Resource)
 
-Manages a TrueNAS service (enable/disable, start/stop). Services are not created or deleted.
+Manages a TrueNAS service (enable/disable, start/stop). Services are not created or deleted: creating this resource adopts the existing service and changes only what the configuration sets, and destroying it (or removing it from the configuration) only removes it from Terraform state, leaving the service enabled and running exactly as it is.
 
 ## Example Usage
 

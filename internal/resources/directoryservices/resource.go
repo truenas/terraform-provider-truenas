@@ -295,6 +295,12 @@ func (r *DirectoryServicesResource) Update(ctx context.Context, req resource.Upd
 		return
 	}
 
+	var prior DirectoryServicesModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &prior)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// write-only: value lives in config, not plan.
 	var cfg DirectoryServicesModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
@@ -331,6 +337,23 @@ func (r *DirectoryServicesResource) Update(ctx context.Context, req resource.Upd
 		}
 	}
 
+	toggled := false
+	if needsDisableForChange(&plan, &prior, existing) {
+		// A configuration change on an enabled service: disable, then apply
+		// the change with the enabling update below. See
+		// needsDisableForChange.
+		if _, err := r.client.CallJob(ctx, "directoryservices.update", map[string]any{"enable": false}); err != nil {
+			resp.Diagnostics.AddError("Disable directory services before the configuration change failed", err.Error())
+			return
+		}
+		toggled = true
+		existing, err = r.fetchConfig(ctx)
+		if err != nil {
+			resp.Diagnostics.AddError("Read directory services configuration failed", err.Error())
+			return
+		}
+	}
+
 	payload, diags := plan.updatePayload(ctx, existing)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -338,7 +361,12 @@ func (r *DirectoryServicesResource) Update(ctx context.Context, req resource.Upd
 	}
 
 	if _, err := r.client.CallJob(ctx, "directoryservices.update", payload); err != nil {
-		resp.Diagnostics.AddError("Update directory services configuration failed", err.Error())
+		msg := err.Error()
+		if toggled {
+			msg += "\n\nDirectory services were disabled to apply this change and are still disabled; " +
+				"the next apply retries the enabling update."
+		}
+		resp.Diagnostics.AddError("Update directory services configuration failed", msg)
 		return
 	}
 
@@ -380,9 +408,28 @@ func (r *DirectoryServicesResource) Delete(ctx context.Context, _ resource.Delet
 
 func (r *DirectoryServicesResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Any import ID is accepted and normalized to the fixed singleton ID; all
-	// other fields are left unset so the subsequent Read call populates them
-	// directly from directoryservices.config. "credential" is left unset:
-	// it is write-only and was never held by TrueNAS in a readable form.
+	// other fields except "credential" are left unset so the subsequent Read
+	// call populates them directly from directoryservices.config.
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), directoryServicesResourceID)...)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, directoryServicesResourceID)...)
+
+	// Read never touches "credential" (its value comes from config), so an
+	// import would leave it null and the first plan would show an update — a
+	// rebind job — for any configuration that sets it. An LDAP credential is
+	// stored as configured (no swap), so its non-secret fields are imported;
+	// bindpw is write-only and never read. An AD/IPA join stores the swapped
+	// machine-account KERBEROS_PRINCIPAL, which no join configuration matches,
+	// so it is left null: omit "credential" from the configuration of an
+	// imported AD/IPA join. (B-050)
+	raw, err := r.client.CallRead(ctx, "directoryservices.config")
+	if err != nil {
+		resp.Diagnostics.AddError("Read directory services configuration failed", err.Error())
+		return
+	}
+	cred, diags := importedLDAPCredential(raw)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() || cred.IsNull() {
+		return
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("credential"), cred)...)
 }

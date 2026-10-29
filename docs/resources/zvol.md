@@ -44,10 +44,10 @@ resource "truenas_zvol" "iso" {
 - `force_destroy` (Boolean) When true, destroying (or replacing) this zvol also deletes all of its snapshots. Default false: the delete is non-recursive, and while any of those exist it fails and lists them. Changing it updates state only. It takes effect only once applied, so set it and apply before the destroy or replacement that needs it. Import sets it to false.
 - `inherit_encryption` (Boolean) Whether this zvol inherits its encryption from the parent dataset rather than owning its own key. Create-only. Computed: reconciled from the zvol's encryption root on read, so it reflects reality even when left unset.
 - `readonly` (String) Mount read-only: ON or OFF. Null inherits.
-- `refreservation` (Number) Referenced reservation in bytes (space guaranteed to the volume, excluding snapshots). Null (unset) inherits.
+- `refreservation` (Number) Referenced reservation in bytes (space guaranteed to the volume, excluding snapshots). 0 makes the zvol thin. When unset, ZFS sets it for a thick zvol and grows it with volsize.
 - `reservation` (Number) Reserved space in bytes (guaranteed to this volume including snapshots). Null (unset) inherits.
 - `snapdev` (String) Visibility of the volume's snapshot device nodes: VISIBLE or HIDDEN. Null inherits.
-- `sparse` (Boolean) Sparse provisioning (write-only; not returned by API).
+- `sparse` (Boolean) Sparse (thin) provisioning: the zvol gets no refreservation. Applied only at creation; changing it on an existing zvol is a plan error (set refreservation instead, or replace the zvol). When unset, and on import, it is read from the zvol's refreservation (0 = sparse).
 - `sync` (String) Sync write behaviour: STANDARD, ALWAYS, or DISABLED. INHERIT inherits from the parent.
 - `volblocksize` (Number) Block size in bytes (512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072). Set at create time only.
 

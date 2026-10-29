@@ -4,7 +4,9 @@
 package filesystem_acl
 
 import (
+	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -150,7 +152,7 @@ func TestEntriesDrifted_NullVsMinusOneNotDrift(t *testing.T) {
 	stateEntries := `[{"tag":"owner@","type":"ALLOW","perms":{"BASIC":"FULL_CONTROL"},"flags":{"BASIC":"INHERIT"}}]`
 	apiACL := json.RawMessage(`[{"tag":"owner@","type":"ALLOW","perms":{"BASIC":"FULL_CONTROL"},"flags":{"BASIC":"INHERIT"},"id":-1,"who":null}]`)
 
-	drifted, diags := entriesDrifted(stateEntries, apiACL)
+	drifted, diags := entriesDrifted(context.Background(), nil, stateEntries, apiACL)
 	if diags.HasError() {
 		t.Fatalf("entriesDrifted returned diagnostics errors: %v", diags)
 	}
@@ -165,7 +167,7 @@ func TestEntriesDrifted_RealChangeIsDrift(t *testing.T) {
 	stateEntries := `[{"tag":"owner@","type":"ALLOW","perms":{"BASIC":"FULL_CONTROL"},"flags":{"BASIC":"INHERIT"}}]`
 	apiACL := json.RawMessage(`[{"tag":"owner@","type":"ALLOW","perms":{"BASIC":"MODIFY"},"flags":{"BASIC":"INHERIT"},"id":-1,"who":null}]`)
 
-	drifted, diags := entriesDrifted(stateEntries, apiACL)
+	drifted, diags := entriesDrifted(context.Background(), nil, stateEntries, apiACL)
 	if diags.HasError() {
 		t.Fatalf("entriesDrifted returned diagnostics errors: %v", diags)
 	}
@@ -273,5 +275,63 @@ func TestDeleteWarningDiagnostics(t *testing.T) {
 	}
 	if diags[0].Severity().String() != "Warning" {
 		t.Errorf("severity = %v, want Warning", diags[0].Severity())
+	}
+}
+
+// fakeLookup answers user.query/group.query for ResolveWho.
+type fakeLookup struct{ calls []string }
+
+func (f *fakeLookup) CallRead(_ context.Context, method string, params ...any) (json.RawMessage, error) {
+	f.calls = append(f.calls, method)
+	b, _ := json.Marshal(params)
+	switch {
+	case method == "user.query" && strings.Contains(string(b), `"alice"`):
+		return json.RawMessage(`[{"username":"alice","uid":3001}]`), nil
+	case method == "group.query" && strings.Contains(string(b), `"staff"`):
+		return json.RawMessage(`[{"group":"staff","gid":4001}]`), nil
+	}
+	return json.RawMessage(`[]`), nil
+}
+
+// A partial bag compares equal to the server's full bag with the missing
+// members false; a member the server has true is still a difference. (B-092)
+func TestEntriesDiffer_PartialBag(t *testing.T) {
+	want := `[{"tag":"everyone@","type":"ALLOW","perms":{"READ_DATA":true},"flags":{"FILE_INHERIT":true}}]`
+	full := `[{"tag":"everyone@","type":"ALLOW","perms":{"READ_DATA":true,"WRITE_DATA":false,"EXECUTE":false},` +
+		`"flags":{"FILE_INHERIT":true,"DIRECTORY_INHERIT":false},"id":-1,"who":null}]`
+	if d, err := EntriesDiffer(context.Background(), nil, want, json.RawMessage(full)); err != nil || d {
+		t.Errorf("partial bag vs full bag: differ=%v err=%v, want equal", d, err)
+	}
+	extra := `[{"tag":"everyone@","type":"ALLOW","perms":{"READ_DATA":true,"WRITE_DATA":true},"flags":{"FILE_INHERIT":true}}]`
+	if d, _ := EntriesDiffer(context.Background(), nil, want, json.RawMessage(extra)); !d {
+		t.Error("a permission granted on the server but not configured compared equal")
+	}
+}
+
+// A USER/GROUP entry by name compares equal to the id the server stores, and
+// an unknown name is an error. (B-093)
+func TestEntriesDiffer_WhoResolved(t *testing.T) {
+	f := &fakeLookup{}
+	want := `[{"tag":"USER","who":"alice","type":"ALLOW","perms":{"BASIC":"READ"},"flags":{"BASIC":"INHERIT"}},` +
+		`{"tag":"GROUP","who":"staff","type":"ALLOW","perms":{"BASIC":"READ"},"flags":{"BASIC":"INHERIT"}}]`
+	got := `[{"tag":"USER","id":3001,"who":null,"type":"ALLOW","perms":{"BASIC":"READ"},"flags":{"BASIC":"INHERIT"}},` +
+		`{"tag":"GROUP","id":4001,"who":null,"type":"ALLOW","perms":{"BASIC":"READ"},"flags":{"BASIC":"INHERIT"}}]`
+	if d, err := EntriesDiffer(context.Background(), f, want, json.RawMessage(got)); err != nil || d {
+		t.Errorf("who vs id: differ=%v err=%v, want equal", d, err)
+	}
+	if len(f.calls) != 2 || f.calls[0] != "user.query" || f.calls[1] != "group.query" {
+		t.Errorf("lookups = %v", f.calls)
+	}
+	bad := `[{"tag":"USER","who":"nobody-here","type":"ALLOW","perms":{"BASIC":"READ"},"flags":{"BASIC":"INHERIT"}}]`
+	if _, err := EntriesDiffer(context.Background(), f, bad, json.RawMessage(got)); err == nil {
+		t.Error("unknown user did not fail")
+	}
+	// Special entries and entries with a real id never look anything up.
+	f.calls = nil
+	plain := `[{"tag":"owner@","who":"x","type":"ALLOW","perms":{"BASIC":"READ"},"flags":{"BASIC":"INHERIT"}},` +
+		`{"tag":"USER","id":5,"who":"y","type":"ALLOW","perms":{"BASIC":"READ"},"flags":{"BASIC":"INHERIT"}}]`
+	entries, _ := NormalizeEntries(json.RawMessage(plain))
+	if err := ResolveWho(context.Background(), f, entries); err != nil || len(f.calls) != 0 {
+		t.Errorf("ResolveWho looked up %v (err %v), want no lookups", f.calls, err)
 	}
 }

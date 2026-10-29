@@ -129,14 +129,17 @@ func resourceSchema() schema.Schema {
 				Optional: true,
 				Description: "Rotation trigger for the write-only `password`. A write-only value is absent " +
 					"from state, so Terraform cannot detect that `password` changed. Bump this integer " +
-					"whenever `password` changes to make Terraform re-send it on the next apply. Optional.",
+					"whenever `password` changes to make Terraform re-send it on the next apply. `password` is sent on " +
+					"create and, after that, only when this integer changes; other updates leave the BMC password alone. Optional.",
 			},
 			"apply_remote": schema.BoolAttribute{
-				Optional: true,
+				Optional:  true,
+				WriteOnly: true,
 				Description: "If true on an Enterprise HA system, also sends this same update to the peer " +
 					"controller's BMC LAN channel. A write-time directive only — it has no corresponding " +
-					"read-back state (ipmi.lan.query has no such key) and is never sent unless explicitly " +
-					"configured." +
+					"read-back state (ipmi.lan.query has no such key), is write-only (never stored in state, so " +
+					"an imported channel plans no change for it; requires Terraform >= 1.11) and is never sent " +
+					"unless explicitly configured." +
 					"\n\n" +
 					"SAFETY: this provider's own committed acceptance tests never set this field to true — " +
 					"see the resource description's SAFETY note and updatePayload's doc comment in model.go " +

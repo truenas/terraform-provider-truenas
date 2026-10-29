@@ -212,6 +212,16 @@ func (r *AppResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 	api, err := r.getInstance(ctx, state.Name.ValueString())
 	if err != nil {
 		if client.IsNotFound(err) {
+			// While Docker is stopped or restarting, app.get_instance reports
+			// every app as not found. Only a not-found with Docker running
+			// means the app is gone; otherwise keep the prior state (B-044).
+			if status, serr := r.dockerStatus(ctx); serr != nil || status != dockerRunning {
+				resp.Diagnostics.AddWarning("App state not refreshed",
+					fmt.Sprintf("TrueNAS reports app %q as not found, but Docker is not running (%s), so the app "+
+						"may still exist. The previous state is kept; refresh again once Docker is running.",
+						state.Name.ValueString(), dockerStatusText(status, serr)))
+				return
+			}
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -280,7 +290,18 @@ func (r *AppResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	// otherwise the read-back overwrites plan.Version with the old value and
 	// Terraform aborts with "Provider produced inconsistent result after
 	// apply").
-	if needsUpgrade(&plan, &state) {
+	upgrade := needsUpgrade(&plan, &state)
+	if upgrade && state.Version.ValueString() == versionLatest {
+		// State holds "latest", not the installed version: skip the upgrade
+		// when the app already runs the version now configured.
+		api, err := r.getInstance(ctx, name)
+		if err != nil {
+			resp.Diagnostics.AddError("Read app failed", err.Error())
+			return
+		}
+		upgrade = api.Version != plan.Version.ValueString()
+	}
+	if upgrade {
 		if _, err := r.client.CallJob(ctx, "app.upgrade", name, map[string]any{
 			"app_version": plan.Version.ValueString(),
 		}); err != nil {
@@ -353,10 +374,48 @@ func (r *AppResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 		"remove_images":     true,
 		"remove_ix_volumes": false,
 	})
-	if err != nil && !client.IsNotFound(err) {
+	if err != nil && client.IsNotFound(err) {
+		// Not found while Docker is down does not mean the app is gone
+		// (B-044): fail rather than drop an app that still exists.
+		if status, serr := r.dockerStatus(ctx); serr != nil || status != dockerRunning {
+			resp.Diagnostics.AddError("Failed to delete app",
+				fmt.Sprintf("TrueNAS reports app %q as not found, but Docker is not running (%s), so the app "+
+					"may still exist. Start Docker and run the destroy again.",
+					state.ID.ValueString(), dockerStatusText(status, serr)))
+		}
+		return
+	}
+	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete app", err.Error())
 		return
 	}
+}
+
+// dockerRunning is the docker.status value when the Docker service is up.
+const dockerRunning = "RUNNING"
+
+// dockerStatus returns docker.status's "status" (RUNNING, STOPPED,
+// INITIALIZING, PENDING, FAILED, UNCONFIGURED, ...).
+func (r *AppResource) dockerStatus(ctx context.Context) (string, error) {
+	raw, err := r.client.CallRead(ctx, "docker.status")
+	if err != nil {
+		return "", err
+	}
+	var st struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(raw, &st); err != nil {
+		return "", err
+	}
+	return st.Status, nil
+}
+
+// dockerStatusText describes a dockerStatus result for a diagnostic.
+func dockerStatusText(status string, err error) string {
+	if err != nil {
+		return "docker.status failed: " + err.Error()
+	}
+	return "docker.status is " + status
 }
 
 func (r *AppResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

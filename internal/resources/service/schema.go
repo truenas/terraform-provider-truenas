@@ -12,7 +12,10 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages a TrueNAS service (enable/disable, start/stop). Services are not created or deleted.",
+		Description: "Manages a TrueNAS service (enable/disable, start/stop). Services are not created or deleted: " +
+			"creating this resource adopts the existing service and changes only what the configuration sets, and " +
+			"destroying it (or removing it from the configuration) only removes it from Terraform state, leaving " +
+			"the service enabled and running exactly as it is.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:      true,

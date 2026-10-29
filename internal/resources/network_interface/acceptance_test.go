@@ -558,3 +558,61 @@ resource "truenas_network_interface" "test" {
 		},
 	})
 }
+
+// TestAccNetworkInterface_lagProtocolSwitch guards B-065: changing
+// lag_protocol on an existing LAG without setting lacpdu_rate /
+// xmit_hash_policy. The server reports both for LACP (SLOW, LAYER2+3 by
+// default), only the hash policy for LOADBALANCE, and neither for FAILOVER,
+// so the plan must not carry the LACP values forward. Gated like
+// TestAccNetworkInterface_lagAttrs (needs a free spare NIC).
+func TestAccNetworkInterface_lagProtocolSwitch(t *testing.T) {
+	nic := safeSecondaryNIC(t, "TRUENAS_FREE_NIC")
+
+	const r = "truenas_network_interface.test"
+	cfg := func(protocol string) string {
+		return acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_network_interface" "test" {
+  name         = "bond997"
+  type         = "LINK_AGGREGATION"
+  lag_protocol = %q
+  lag_ports    = [%q]
+  description  = "tf-acc lag protocol switch"
+}
+`, protocol, nic)
+	}
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckInterfaceDestroyed("bond997"),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg("LACP"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(r, "lacpdu_rate", "SLOW"),
+					resource.TestCheckResourceAttr(r, "xmit_hash_policy", "LAYER2+3"),
+				),
+			},
+			{
+				Config: cfg("LOADBALANCE"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr(r, "lacpdu_rate"),
+					resource.TestCheckResourceAttrSet(r, "xmit_hash_policy"),
+				),
+			},
+			{
+				Config: cfg("FAILOVER"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr(r, "lacpdu_rate"),
+					resource.TestCheckNoResourceAttr(r, "xmit_hash_policy"),
+				),
+			},
+			{
+				Config: cfg("LACP"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(r, "lacpdu_rate", "SLOW"),
+					resource.TestCheckResourceAttr(r, "xmit_hash_policy", "LAYER2+3"),
+				),
+			},
+		},
+	})
+}

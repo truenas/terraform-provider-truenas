@@ -15,7 +15,7 @@ Manages a virtual machine on TrueNAS.
 ```terraform
 resource "truenas_vm" "worker" {
   name       = "worker1"
-  memory     = 4294967296 # 4 GiB in bytes
+  memory     = 4096 # MiB (4 GiB)
   vcpus      = 2
   cores      = 2
   bootloader = "UEFI"
@@ -29,28 +29,28 @@ resource "truenas_vm" "worker" {
 
 ### Required
 
-- `memory` (Number) Memory allocated to the VM, in bytes.
+- `memory` (Number) Memory allocated to the VM, in MiB (mebibytes): 4096 is 4 GiB.
 - `name` (String) VM name.
 
 ### Optional
 
-- `arch_type` (String) Guest CPU architecture. Empty/unset uses the host architecture.
+- `arch_type` (String) Guest CPU architecture; cleared means the host architecture. Set to "" to clear it; removing the attribute leaves the current value unchanged.
 - `autostart` (Boolean) Start this VM automatically at boot.
 - `bootloader` (String) Bootloader type: UEFI, UEFI_CSM.
 - `bootloader_ovmf` (String) OVMF firmware image to use (UEFI bootloader). Empty/unset uses the default. Create-only: changing it recreates the VM.
-- `command_line_args` (String) Extra command-line arguments passed to the VM process.
+- `command_line_args` (String) Extra command-line arguments passed to the VM process. Set to "" to clear it; removing the attribute leaves the current value unchanged.
 - `cores` (Number) Number of cores per virtual CPU.
 - `cpu_mode` (String) CPU mode: CUSTOM, HOST-MODEL, HOST-PASSTHROUGH.
-- `cpu_model` (String) Custom CPU model, applicable when cpu_mode is CUSTOM ("" = unset).
-- `cpuset` (String) Physical host CPUs to pin the VM to, e.g. "0-3" or "0,2,4". Requires pin_vcpus for vCPU pinning.
+- `cpu_model` (String) Custom CPU model, applicable when cpu_mode is CUSTOM. Set to "" to clear it; removing the attribute leaves the current value unchanged.
+- `cpuset` (String) Physical host CPUs to pin the VM to, e.g. "0-3" or "0,2,4". Requires pin_vcpus for vCPU pinning. Set to "" to clear it; removing the attribute leaves the current value unchanged.
 - `description` (String) Optional VM description.
 - `enable_cpu_topology_extension` (Boolean) Expose an extended CPU topology to the guest.
 - `enable_secure_boot` (Boolean) Enable UEFI Secure Boot. Create-only: changing it recreates the VM.
 - `hide_from_msr` (Boolean) Hide the hypervisor from the guest (for nested virtualisation / GPU passthrough).
 - `hyperv_enlightenments` (Boolean) Enable Hyper-V enlightenments for Windows guests.
-- `machine_type` (String) QEMU machine type, e.g. "q35" or "i440fx". Empty/unset uses the TrueNAS default.
-- `min_memory` (Number) Minimum memory for ballooning, in bytes (0 = unset).
-- `nodeset` (String) Host NUMA nodes to pin the VM's memory to, e.g. "0-1".
+- `machine_type` (String) QEMU machine type, e.g. "q35" or "i440fx"; cleared means the hypervisor default. Set to "" to clear it; removing the attribute leaves the current value unchanged.
+- `min_memory` (Number) Minimum memory for ballooning, in MiB (mebibytes). Set to 0 to clear it (no ballooning); removing the attribute leaves the current value unchanged.
+- `nodeset` (String) Host NUMA nodes to pin the VM's memory to, e.g. "0-1". Set to "" to clear it; removing the attribute leaves the current value unchanged.
 - `pin_vcpus` (Boolean) Pin the VM's vCPUs to the physical CPUs given in cpuset.
 - `running` (Boolean) Whether the VM is currently running. Set to true to start, false to stop.
 - `shutdown_timeout` (Number) Seconds to wait for a graceful shutdown before forcing it.

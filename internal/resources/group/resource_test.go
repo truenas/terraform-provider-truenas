@@ -5,11 +5,13 @@ package group
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // TestGroupSchema verifies key schema attributes.
@@ -177,52 +179,80 @@ func TestGroupCreatePayload_NullGID(t *testing.T) {
 	}
 }
 
-// TestGroupUpdatePayload verifies that updatePayload omits gid and name.
+// TestGroupUpdatePayload verifies that updatePayload omits gid and name, and
+// sends only fields that are known, non-null, and changed from prior state:
+// an unset (unknown) or unchanged attribute is never overwritten. (B-037)
 func TestGroupUpdatePayload(t *testing.T) {
 	ctx := context.Background()
 
-	m := GroupModel{
+	prior := GroupModel{
 		GID:                  types.Int64Value(3000),
 		Name:                 types.StringValue("testgroup"),
-		SMB:                  types.BoolValue(false),
-		SudoCommands:         types.ListNull(types.StringType),
-		SudoCommandsNoPasswd: types.ListNull(types.StringType),
-		Builtin:              types.BoolValue(false),
-		Immutable:            types.BoolValue(false),
-		Local:                types.BoolValue(true),
+		SMB:                  types.BoolValue(true),
+		Users:                mustUsers(),
+		SudoCommands:         types.ListValueMust(types.StringType, []attr.Value{types.StringValue("/usr/bin/ls")}),
+		SudoCommandsNoPasswd: types.ListValueMust(types.StringType, []attr.Value{}),
 	}
+	m := prior
+	m.SMB = types.BoolUnknown()
+	m.SudoCommandsNoPasswd = types.ListUnknown(types.StringType)
+	m.Users = mustUsers(types.Int64Value(7))
 
-	payload, diags := m.updatePayload(ctx)
+	payload, diags := m.updatePayload(ctx, prior)
 	if diags.HasError() {
 		t.Fatalf("updatePayload returned errors: %v", diags)
 	}
+	for _, k := range []string{"gid", "name", "group", "smb", "sudo_commands", "sudo_commands_nopasswd"} {
+		if _, ok := payload[k]; ok {
+			t.Errorf("updatePayload must not contain %q: %v", k, payload)
+		}
+	}
+	if got, ok := payload["users"].([]int64); !ok || len(got) != 1 || got[0] != 7 {
+		t.Errorf("payload[users] = %#v, want [7]", payload["users"])
+	}
+}
 
-	// gid and name must NOT be in update payload.
-	if _, ok := payload["gid"]; ok {
-		t.Error("updatePayload must not contain 'gid'")
+// TestGroupCreatePayload_OmitsUnset verifies that unset (unknown) optionals are
+// left out of group.create so the server defaults apply (smb=true). (B-108)
+func TestGroupCreatePayload_OmitsUnset(t *testing.T) {
+	m := GroupModel{
+		GID:                  types.Int64Unknown(),
+		Name:                 types.StringValue("g"),
+		SMB:                  types.BoolUnknown(),
+		Users:                normalize.NewUnorderedListUnknown(types.Int64Type),
+		SudoCommands:         types.ListUnknown(types.StringType),
+		SudoCommandsNoPasswd: types.ListNull(types.StringType),
 	}
-	if _, ok := payload["name"]; ok {
-		t.Error("updatePayload must not contain 'name'")
+	payload, diags := m.createPayload(context.Background())
+	if diags.HasError() {
+		t.Fatalf("createPayload returned errors: %v", diags)
 	}
-	if _, ok := payload["group"]; ok {
-		t.Error("updatePayload must not contain 'group'")
+	if len(payload) != 1 || payload["name"] != "g" {
+		t.Errorf("createPayload = %v, want only name", payload)
 	}
+}
 
-	// Null lists should produce empty slices, not nil.
-	sudoCmds, ok := payload["sudo_commands"].([]string)
-	if !ok {
-		t.Fatalf("payload[sudo_commands] is %T, want []string", payload["sudo_commands"])
+// TestDropPrimaryMembers covers the users read-back: primary-group members are
+// dropped unless configured, and other members not in the configuration are
+// kept (drift). (B-058)
+func TestDropPrimaryMembers(t *testing.T) {
+	primary := map[int64]bool{5: true}
+	cases := []struct {
+		name            string
+		server, desired []int64
+		want            []int64
+	}{
+		{"primary dropped", []int64{1, 5}, []int64{1}, []int64{1}},
+		{"primary configured", []int64{5, 1}, []int64{1, 5}, []int64{5, 1}},
+		{"import drops primary", []int64{5, 2}, nil, []int64{2}},
+		{"drift kept", []int64{4, 1}, []int64{1}, []int64{4, 1}},
+		{"nil server", nil, nil, []int64{}},
 	}
-	if sudoCmds == nil {
-		t.Error("payload[sudo_commands] must not be nil")
-	}
-
-	sudoCmdsNP, ok := payload["sudo_commands_nopasswd"].([]string)
-	if !ok {
-		t.Fatalf("payload[sudo_commands_nopasswd] is %T, want []string", payload["sudo_commands_nopasswd"])
-	}
-	if sudoCmdsNP == nil {
-		t.Error("payload[sudo_commands_nopasswd] must not be nil")
+	for _, c := range cases {
+		got := dropPrimaryMembers(c.server, c.desired, primary)
+		if fmt.Sprint(got) != fmt.Sprint(c.want) || got == nil {
+			t.Errorf("%s: dropPrimaryMembers(%v, %v) = %#v, want %v", c.name, c.server, c.desired, got, c.want)
+		}
 	}
 }
 
@@ -244,7 +274,7 @@ func TestGroupResponseToModel(t *testing.T) {
 	}
 
 	var m GroupModel
-	diags := responseToModel(ctx, api, &m)
+	diags := responseToModel(ctx, api, nil, &m)
 	if diags.HasError() {
 		t.Fatalf("responseToModel returned errors: %v", diags)
 	}
@@ -293,7 +323,7 @@ func TestGroupResponseToModel_NilSlices(t *testing.T) {
 	}
 
 	var m GroupModel
-	diags := responseToModel(ctx, api, &m)
+	diags := responseToModel(ctx, api, nil, &m)
 	if diags.HasError() {
 		t.Fatalf("responseToModel returned errors: %v", diags)
 	}
@@ -313,4 +343,15 @@ func TestGroupResponseToModel_NilSlices(t *testing.T) {
 	if sudoCmdsNP == nil {
 		t.Error("SudoCommandsNoPasswd must not be nil when API returns nil")
 	}
+}
+
+func mustUsers(ids ...attr.Value) normalize.UnorderedList {
+	if ids == nil {
+		ids = []attr.Value{}
+	}
+	v, d := normalize.NewUnorderedListValue(types.Int64Type, ids)
+	if d.HasError() {
+		panic(d)
+	}
+	return v
 }

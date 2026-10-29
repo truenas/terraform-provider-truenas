@@ -41,6 +41,7 @@ var importIgnoreJustified = map[string]string{
 	"truenas_iscsi_auth.peersecret_wo_version":                  "secret: _wo_version is a config-only re-send counter, not sent to or returned by the API",
 	"truenas_kerberos_keytab.file_wo_version":                   "secret: _wo_version is a config-only re-send counter, not sent to or returned by the API",
 	"truenas_ups_config.monpwd_wo_version":                      "secret: _wo_version is a config-only re-send counter, not sent to or returned by the API",
+	"truenas_vm_device.attributes_secrets_wo_version":           "secret: _wo_version is a config-only re-send counter, not sent to or returned by the API",
 	"truenas_user.password_wo_version":                          "secret: _wo_version is a config-only re-send counter, not sent to or returned by the API",
 	"truenas_user.password":                                     "secret: write-only account password",
 
@@ -50,18 +51,11 @@ var importIgnoreJustified = map[string]string{
 	"truenas_certificate.ec_curve":             "create: key-generation input, not echoed for an existing cert; recorded in place via planmod.ReplaceFromKnownString",
 	"truenas_dataset.encryption_generate_key":  "create: generate-key flag consumed at creation, not returned",
 	"truenas_filesystem_acl.recursive":         "create: apply-scope flag for setacl, not a stored property",
-	"truenas_filesystem_acl.traverse":          "create: apply-scope flag for setacl, not a stored property",
 	"truenas_filesystem_permissions.recursive": "create: apply-scope flag for setperm, not a stored property",
-	"truenas_filesystem_permissions.traverse":  "create: apply-scope flag for setperm, not a stored property",
 	"truenas_keychain_ssh_keypair.generate":    "create: generate-keypair flag consumed at creation, not returned; recorded in place via planmod.ReplaceFromKnownBool",
-	"truenas_ntp_server.force":                 "create: force-add flag, not a stored property",
 	"truenas_rsync_task.ssh_keyscan":           "create: one-time host-key-scan flag, not a stored property",
 	"truenas_rsync_task.validate_rpath":        "create: one-time remote-path validation flag, not a stored property",
 	"truenas_snapshot.recursive":               "create: recursive-create flag, not a stored snapshot property; recorded in place via planmod.ReplaceFromKnownBool",
-	"truenas_tunable.update_initramfs":         "create: one-time initramfs-rebuild flag, not a stored property",
-	"truenas_ipmi_lan.apply_remote":            "create: targets the remote controller for this call, not stored",
-	"truenas_user.group_create":                "create: 'also create a primary group' flag, sent only on create",
-	"truenas_zvol.sparse":                      "create: thin-provisioning flag set at creation, not returned",
 	"truenas_boot_environment.source":          "create: the clone source, not a property of the resulting BE; recorded in place via planmod.ReplaceFromKnownString",
 
 	// --- server-owned / server-normalized values ---
@@ -74,6 +68,5 @@ var importIgnoreJustified = map[string]string{
 	"truenas_cloud_backup.attributes":           "server: provider attributes blob re-normalized server-side",
 	"truenas_vm_device.attributes":              "server: device attributes JSON re-normalized server-side (key order, defaults)",
 
-	"truenas_user.groups":    "server: group_create auto-adds a primary group, so live membership differs from the configured set (groups themselves are read back, model.go)",
 	"truenas_user.home_mode": "create: user.query returns only 'home', not 'home_mode' (a filesystem mode applied at create, not stored in the user record) — confirmed live",
 }

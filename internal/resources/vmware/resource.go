@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
 )
@@ -147,6 +148,11 @@ func (r *VMwareResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 	plan.Password = cfg.Password
+	// The write-only password is sent only when password_wo_version changed.
+	// (B-141)
+	if plan.PasswordWOVersion.Equal(state.PasswordWOVersion) {
+		cfg.Password = types.StringNull()
+	}
 
 	payload := plan.apiPayload(cfg.Password)
 

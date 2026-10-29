@@ -106,8 +106,8 @@ func TestContainerSchema_MutableFieldsAreOptionalComputedWithoutForceNew(t *test
 	// Optional+Computed with exactly one plan modifier (UseStateForUnknown
 	// only — no RequiresReplace).
 	s := resourceSchema()
-	for _, name := range []string{"description", "autostart", "cpuset", "time", "shutdown_timeout",
-		"init", "initdir", "inituser", "initgroup", "capabilities_policy", "running"} {
+	for _, name := range []string{"description", "autostart", "time", "shutdown_timeout",
+		"init", "capabilities_policy", "running"} {
 		attr, ok := s.Attributes[name]
 		if !ok {
 			t.Fatalf("schema missing %q attribute", name)
@@ -134,6 +134,25 @@ func TestContainerSchema_MutableFieldsAreOptionalComputedWithoutForceNew(t *test
 			}
 		default:
 			t.Errorf("%q has unexpected type %T", name, attr)
+		}
+	}
+}
+
+// TestContainerSchema_ClearableFieldsAreOptionalOnly: the nullable strings must
+// be Optional without Computed, so removing one plans null and clears it
+// (Optional+Computed+UseStateForUnknown kept the server value; B-099).
+func TestContainerSchema_ClearableFieldsAreOptionalOnly(t *testing.T) {
+	s := resourceSchema()
+	for _, name := range []string{"cpuset", "initdir", "inituser", "initgroup"} {
+		a, ok := s.Attributes[name].(schema.StringAttribute)
+		if !ok {
+			t.Fatalf("%q attribute is %T, want schema.StringAttribute", name, s.Attributes[name])
+		}
+		if !a.IsOptional() || a.IsComputed() {
+			t.Errorf("%q should be Optional and not Computed", name)
+		}
+		if len(a.PlanModifiers) != 0 {
+			t.Errorf("%q should have no plan modifiers, got %d", name, len(a.PlanModifiers))
 		}
 	}
 }

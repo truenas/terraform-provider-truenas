@@ -63,7 +63,7 @@ func (r *NVMetNamespaceResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 
-	raw, err := r.client.Call(ctx, "nvmet.namespace.create", payload)
+	raw, err := callWaitingForDevice(ctx, r.client, "nvmet.namespace.create", payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Create NVMe-oF namespace failed", err.Error())
 		return
@@ -164,7 +164,7 @@ func (r *NVMetNamespaceResource) Update(ctx context.Context, req resource.Update
 		disabled = true
 	}
 
-	_, err := r.client.Call(ctx, "nvmet.namespace.update", plan.ID.ValueInt64(), payload)
+	_, err := callWaitingForDevice(ctx, r.client, "nvmet.namespace.update", plan.ID.ValueInt64(), payload)
 	if err != nil {
 		msg := err.Error()
 		if disabled {

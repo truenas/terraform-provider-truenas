@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -16,12 +15,20 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ resource.Resource = &DatasetResource{}
 var _ resource.ResourceWithImportState = &DatasetResource{}
 var _ resource.ResourceWithIdentity = &DatasetResource{}
 var _ resource.ResourceWithValidateConfig = &DatasetResource{}
+var _ resource.ResourceWithModifyPlan = &DatasetResource{}
+
+// ModifyPlan rejects at plan time what the connected release cannot create
+// (see CheckEncryptionAlgorithm).
+func (r *DatasetResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	resp.Diagnostics.Append(CheckEncryptionAlgorithm(ctx, r.client, req)...)
+}
 
 // ValidateConfig rejects configurations that set `encryption` together with
 // `inherit_encryption = true`. With inheritance the parent dataset determines
@@ -86,7 +93,7 @@ func (r *DatasetResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	payload := plan.apiPayload()
+	payload := plan.createAPIPayload()
 	// encryption_passphrase / encryption_key are write-only: read them from the
 	// config (they are null in the plan/state) and inject into encryption_options.
 	var cfg datasetResourceModel
@@ -124,6 +131,30 @@ func (r *DatasetResource) Create(ctx context.Context, req resource.CreateRequest
 	if err := json.Unmarshal(raw, &apiResp); err != nil {
 		resp.Diagnostics.AddError("Parse read response", err.Error())
 		return
+	}
+
+	// TrueNAS 25.10 creates a thick VOLUME with the refreservation ZFS
+	// computes for its volsize whatever refreservation was sent, so a
+	// configured one read back different and failed the apply. Set it with an
+	// update (as truenas_zvol does).
+	if want := plan.RefReservation; !want.IsNull() && !want.IsUnknown() {
+		got, _ := apiResp.RefResP.parsedInt()
+		if got != want.ValueInt64() {
+			if _, err := r.client.Call(ctx, "pool.dataset.update", plan.Name.ValueString(),
+				map[string]any{"refreservation": want.ValueInt64()}); err != nil {
+				resp.Diagnostics.AddError("Set refreservation after create failed", err.Error())
+				return
+			}
+			raw, err = r.client.CallRead(ctx, "pool.dataset.get_instance", plan.Name.ValueString())
+			if err == nil {
+				apiResp = apiResponse{}
+				err = json.Unmarshal(raw, &apiResp)
+			}
+			if err != nil {
+				resp.Diagnostics.AddError("Read after create failed", err.Error())
+				return
+			}
+		}
 	}
 
 	resp.Diagnostics.Append(r.responseToModel(&apiResp, &plan.DatasetModel)...)
@@ -176,15 +207,14 @@ func (r *DatasetResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	// Pass prior state so unchanged quota/refquota/reservation are omitted and
-	// their property source is not flipped to LOCAL by a no-op resend. (#61)
+	// Only what changed against prior state is sent (StripUnchanged), so an
+	// unrelated update never turns an inherited property local. (#61, #62)
 	payload := plan.updateAPIPayload(&state.DatasetModel)
 
-	// Skip the API call when the payload is what prior state would send: only
+	// Skip the API call when nothing the server stores changed: only
 	// state-only attributes changed (force_destroy, share_type recorded after an
-	// import, a letter-case change of type/acltype/compression). Sending it
-	// anyway would rewrite properties for nothing.
-	if !reflect.DeepEqual(payload, state.updateAPIPayload(&state.DatasetModel)) {
+	// import, a letter-case change of type/acltype/compression).
+	if len(payload) > 0 {
 		_, err := r.client.Call(ctx, "pool.dataset.update", plan.Name.ValueString(), payload)
 		if err != nil {
 			resp.Diagnostics.AddError("Update dataset failed", err.Error())
@@ -305,7 +335,7 @@ func (r *DatasetResource) responseToModel(api *apiResponse, m *DatasetModel) dia
 	} else {
 		m.AClType = preserveCase(m.AClType, "INHERIT")
 	}
-	m.Comments = types.StringValue(api.UserProperties.Comments.Value)
+	m.Comments = types.StringValue(CommentsValue(api.UserProperties.Comments.Value))
 	// ShareType is write-only (not returned by API); preserve plan/state value as-is.
 
 	if api.Quota.Parsed != nil {
@@ -335,7 +365,10 @@ func (r *DatasetResource) responseToModel(api *apiResponse, m *DatasetModel) dia
 	m.Checksum = localStringOrInherit(api.ChecksumP)
 	m.Snapdir = localStringOrInherit(api.SnapdirP)
 	m.Dedup = localStringOrInherit(api.DedupP)
-	m.RecordSize = localString(api.RecordSizeP)
+	// recordsize is case-insensitive (normalize.CaseInsensitive): the server
+	// stores "1M" for a configured "1m", and state keeps the configured
+	// spelling. (B-126)
+	m.RecordSize = normalize.CaseInsensitive{StringValue: localString(api.RecordSizeP)}
 	m.Copies = localInt(api.CopiesP)
 	m.SpecialSmallBlockSize = localInt(api.SSBSP)
 	m.RefReservation = localInt(api.RefResP)

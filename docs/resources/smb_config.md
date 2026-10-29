@@ -44,11 +44,11 @@ resource "truenas_smb_config" "config" {
 - `netbiosalias` (List of String) NetBIOS aliases for the server.
 - `netbiosname` (String) NetBIOS name of the server.
 - `ntlmv1_auth` (Boolean) Whether the insecure NTLMv1 authentication protocol is allowed.
-- `search_protocols` (List of String) Additional network protocols used for server discovery (e.g. WSD, NSD). Writable only on TrueNAS 26.0 and later — it does not exist on smb.update below TrueNAS 26.0, so explicitly setting it there is an apply-time error.
+- `search_protocols` (List of String) Search protocols the SMB server offers to clients. The only value TrueNAS accepts is SPOTLIGHT (macOS Spotlight search over SMB). Writable only on TrueNAS 26.0 and later — it does not exist on smb.update below TrueNAS 26.0, so explicitly setting it there is an apply-time error.
 - `smb_options` (String) Additional smb.conf options, appended verbatim.
 - `stateful_failover` (Boolean) Whether stateful SMB failover support is enabled. Writable only on TrueNAS 26.0 and later — it does not exist on smb.update below TrueNAS 26.0, so explicitly setting it there is an apply-time error.
 - `syslog` (Boolean) Whether SMB logging is also written to syslog.
-- `unixcharset` (String) UNIX character set. One of UTF-8, GB2312, HZ-GB-2312, CP1361, and others. Not validated by this provider.
+- `unixcharset` (String) UNIX character set. One of UTF-8, GB2312, HZ-GB-2312, CP1361, and the other character sets smb.update accepts (validated at plan time).
 - `workgroup` (String) Workgroup name.
 
 ### Read-Only

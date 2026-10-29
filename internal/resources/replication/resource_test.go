@@ -5,6 +5,7 @@ package replication
 
 import (
 	"context"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -446,7 +447,7 @@ func TestReplicationPayload_PeriodicSnapshotTasksNilBecomesEmptySlice(t *testing
 	ctx := context.Background()
 
 	m := baseModel(ctx, t)
-	m.PeriodicSnapshotTasks = types.ListNull(types.Int64Type)
+	m.PeriodicSnapshotTasks = normalize.NewUnorderedListNull(types.Int64Type)
 
 	payload, diags := m.apiPayload(ctx)
 	if diags.HasError() {
@@ -644,7 +645,7 @@ func TestReplicationApiPayload_OmitsUnsetOptionals(t *testing.T) {
 		Exclude:                 types.ListNull(types.StringType),
 		Properties:              types.BoolNull(),
 		Replicate:               types.BoolNull(),
-		PeriodicSnapshotTasks:   types.ListNull(types.Int64Type),
+		PeriodicSnapshotTasks:   normalize.NewUnorderedListNull(types.Int64Type),
 		NamingSchema:            types.ListNull(types.StringType),
 		AlsoIncludeNamingSchema: types.ListNull(types.StringType),
 		NameRegex:               types.StringNull(),
@@ -1045,7 +1046,7 @@ func baseModel(ctx context.Context, t *testing.T) ReplicationModel {
 		Exclude:                 types.ListValueMust(types.StringType, []attr.Value{}),
 		Properties:              types.BoolValue(true),
 		Replicate:               types.BoolValue(false),
-		PeriodicSnapshotTasks:   types.ListValueMust(types.Int64Type, []attr.Value{}),
+		PeriodicSnapshotTasks:   mustUnordered(types.Int64Type),
 		NamingSchema:            types.ListValueMust(types.StringType, []attr.Value{types.StringValue("auto-%Y-%m-%d")}),
 		AlsoIncludeNamingSchema: types.ListValueMust(types.StringType, []attr.Value{}),
 		NameRegex:               types.StringValue(""),
@@ -1058,4 +1059,12 @@ func baseModel(ctx context.Context, t *testing.T) ReplicationModel {
 		Enabled:                 types.BoolValue(true),
 		Retries:                 types.Int64Value(5),
 	}
+}
+
+func mustUnordered(elem attr.Type) normalize.UnorderedList {
+	v, d := normalize.NewUnorderedListValue(elem, []attr.Value{})
+	if d.HasError() {
+		panic(d)
+	}
+	return v
 }

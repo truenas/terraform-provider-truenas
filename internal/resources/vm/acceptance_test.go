@@ -32,7 +32,7 @@ func TestAccVM_basic(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_vm.test", "name", name),
 					resource.TestCheckResourceAttr("truenas_vm.test", "description", "initial description"),
-					resource.TestCheckResourceAttr("truenas_vm.test", "memory", "536870912"),
+					resource.TestCheckResourceAttr("truenas_vm.test", "memory", "512"),
 					resource.TestCheckResourceAttr("truenas_vm.test", "vcpus", "1"),
 					resource.TestCheckResourceAttr("truenas_vm.test", "autostart", "false"),
 					resource.TestCheckResourceAttr("truenas_vm.test", "running", "false"),
@@ -62,12 +62,12 @@ func testAccVMConfig(name, description string, vcpus int) string {
 resource "truenas_vm" "test" {
   name        = %q
   description = %q
-  memory      = 536870912
+  memory      = 512
   vcpus       = %d
   autostart   = false
   running     = false
 
-  min_memory                    = 268435456
+  min_memory                    = 256
   cores                         = 2
   threads                       = 1
   bootloader                    = "UEFI"
@@ -126,7 +126,7 @@ func testAccVMHardwareConfig(name string) string {
 	return fmt.Sprintf(`
 resource "truenas_vm" "test" {
   name      = %q
-  memory    = 536870912
+  memory    = 512
   vcpus     = 1
   autostart = false
   running   = false

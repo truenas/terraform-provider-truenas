@@ -10,8 +10,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ datasource.DataSource = &CertificateDataSource{}
@@ -48,7 +48,7 @@ func (d *CertificateDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			"organizational_unit":  dschema.StringAttribute{Computed: true, Description: "Organizational unit from the certificate subject, or null."},
 			"state":                dschema.StringAttribute{Computed: true, Description: "State from the certificate subject, or null."},
 			"san": dschema.ListAttribute{
-				ElementType: types.StringType,
+				ElementType: normalize.SANType{},
 				Computed:    true,
 				Description: "Subject alternative names.",
 			},

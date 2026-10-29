@@ -31,7 +31,7 @@ func (d *WebshareDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 			"truenas_webshare resource's schema description for the version-gate details).",
 		Attributes: map[string]dschema.Attribute{
 			"id":            dschema.Int64Attribute{Computed: true, Description: "Numeric Webshare share ID."},
-			"name":          dschema.StringAttribute{Required: true, Description: "Webshare share name to look up."},
+			"name":          dschema.StringAttribute{Required: true, Description: "Webshare share name to look up (case-insensitive; the server keeps names unique regardless of case)."},
 			"path":          dschema.StringAttribute{Computed: true, Description: "Local server path being shared."},
 			"enabled":       dschema.BoolAttribute{Computed: true, Description: "Whether the share is available."},
 			"is_home_base":  dschema.BoolAttribute{Computed: true, Description: "Whether this share is the user home-directory base."},
@@ -74,8 +74,9 @@ func (d *WebshareDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	// Query by name: sharing.webshare.query([["name", "=", "<sharename>"]])
-	queryFilters := []any{[]any{"name", "=", state.Name.ValueString()}}
+	// Query by name, case-insensitively ("C="): the server keeps webshare
+	// names unique regardless of case (B-154).
+	queryFilters := []any{[]any{"name", "C=", state.Name.ValueString()}}
 	raw, err := d.client.CallRead(ctx, "sharing.webshare.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query Webshare shares failed", err.Error())
@@ -96,6 +97,9 @@ func (d *WebshareDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
+	configured := state.Name
 	responseToDataSourceModel(&results[0], &state)
+	// Keep the name as configured; the server's spelling may differ in case.
+	state.Name = configured
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

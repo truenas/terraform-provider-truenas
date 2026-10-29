@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func resourceSchema() schema.Schema {
@@ -25,18 +26,26 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"begin": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
+				Optional:   true,
+				Computed:   true,
+				CustomType: normalize.TimeOfDayType{},
 				Description: "Time when the resilver operations window begins, 24-hour \"HH:MM\" format " +
-					"(e.g. \"18:00\").",
-				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+					"(e.g. \"18:00\"; \"8:00\" is accepted and equals \"08:00\").",
+				PlanModifiers: []planmodifier.String{
+					normalize.KeepStateIfEquivalent(normalize.TimeOfDayType{}),
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"end": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
+				Optional:   true,
+				Computed:   true,
+				CustomType: normalize.TimeOfDayType{},
 				Description: "Time when the resilver operations window ends, 24-hour \"HH:MM\" format " +
 					"(e.g. \"09:00\"). If earlier than begin, the window rolls over midnight.",
-				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+				PlanModifiers: []planmodifier.String{
+					normalize.KeepStateIfEquivalent(normalize.TimeOfDayType{}),
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"enabled": schema.BoolAttribute{
 				Optional:      true,

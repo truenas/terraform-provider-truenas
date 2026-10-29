@@ -66,9 +66,10 @@ resource "truenas_replication_task" "local_backup" {
 - `enabled` (Boolean) Whether the replication task is enabled.
 - `encryption` (Boolean) Create the target datasets as encrypted. Requires encryption_key (or encryption_inherit).
 - `encryption_inherit` (Boolean) Inherit encryption from the target's parent dataset instead of supplying a key.
-- `encryption_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Encryption key (hex string, or passphrase per encryption_key_format). Write-only: never stored in Terraform state or read back. Requires Terraform >= 1.11.
+- `encryption_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Encryption key (hex string, or passphrase per encryption_key_format). Write-only: never stored in Terraform state or read back; to change it, also bump encryption_key_wo_version. Requires Terraform >= 1.11.
 - `encryption_key_format` (String) Format of encryption_key: HEX or PASSPHRASE.
 - `encryption_key_location` (String) Path on the target system where the encryption key is stored ($TrueNAS-managed location if omitted).
+- `encryption_key_wo_version` (Number) Version trigger for encryption_key. It is write-only, so changing it alone is not a change Terraform can see; bump this to send the new key. The key is sent on create and, after that, only when this integer changes or encryption with its own key (not inherited) is turned on; other updates leave the stored key alone.
 - `exclude` (List of String) Dataset paths to exclude from a recursive replication.
 - `hold_pending_snapshots` (Boolean) Prevent source snapshots from being deleted by retention while a replication is pending.
 - `large_block` (Boolean) Enable large-block ZFS send streams (zfs send -L).
@@ -84,7 +85,7 @@ resource "truenas_replication_task" "local_backup" {
 - `netcat_active_side_port_min` (Number) For transport = "SSH+NETCAT", the low end of the port range the active side may listen on (1-65535). Only valid for SSH+NETCAT.
 - `netcat_passive_side_connect_address` (String) For transport = "SSH+NETCAT", the IP address the passive side connects to. Only valid for SSH+NETCAT.
 - `only_matching_schedule` (Boolean) Only replicate snapshots that match `schedule` or `restrict_schedule`.
-- `periodic_snapshot_tasks` (List of Number) IDs of periodic snapshot tasks that feed this replication task.
+- `periodic_snapshot_tasks` (List of Number) IDs of periodic snapshot tasks that feed this replication task. Order does not matter (the server sorts them).
 - `properties` (Boolean) Include dataset properties in the replication stream.
 - `properties_exclude` (List of String) Dataset property names to exclude from replication.
 - `properties_override` (Map of String) ZFS properties to force to specific values on the target datasets (property name -> value). Omit it (rather than {}) for none.

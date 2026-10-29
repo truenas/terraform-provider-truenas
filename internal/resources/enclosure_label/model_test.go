@@ -9,6 +9,10 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 // apiShape mirrors the live TrueNAS 25.10.4 Enterprise HA probe of the single
@@ -91,6 +95,7 @@ func TestCaptureOriginalLabel_StoresJSONEncodedLabel(t *testing.T) {
 	ctx := context.Background()
 	p := &fakePrivate{}
 	api := apiShape()
+	api.Label = "Rack 4 shelf B"
 
 	if err := captureOriginalLabel(ctx, p, api); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -105,6 +110,40 @@ func TestCaptureOriginalLabel_StoresJSONEncodedLabel(t *testing.T) {
 	}
 	if got != api.Label {
 		t.Errorf("stored original label = %q, want %q", got, api.Label)
+	}
+}
+
+// TestCaptureOriginalLabel_DefaultLabelIsEmpty: an enclosure with no user
+// label reports its name as the label; that is captured as "" so destroy
+// clears the label instead of storing the name as a user label. (B-132)
+func TestCaptureOriginalLabel_DefaultLabelIsEmpty(t *testing.T) {
+	p := &fakePrivate{}
+	if err := captureOriginalLabel(context.Background(), p, apiShape()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var got string
+	if err := json.Unmarshal(p.value, &got); err != nil {
+		t.Fatalf("stored value is not valid JSON: %v", err)
+	}
+	if got != "" {
+		t.Errorf("stored original label = %q, want \"\" (label equal to name means no user label)", got)
+	}
+}
+
+// TestEnclosureLabelSchema_LabelNotEmpty: label = "" would read back as the
+// enclosure name, so it is rejected at plan time. (B-132)
+func TestEnclosureLabelSchema_LabelNotEmpty(t *testing.T) {
+	attr := resourceSchema().Attributes["label"]
+	sa, ok := attr.(schema.StringAttribute)
+	if !ok || len(sa.Validators) == 0 {
+		t.Fatalf("label has no validators: %#v", attr)
+	}
+	resp := &validator.StringResponse{}
+	sa.Validators[0].ValidateString(context.Background(), validator.StringRequest{
+		Path: path.Root("label"), ConfigValue: types.StringValue(""),
+	}, resp)
+	if !resp.Diagnostics.HasError() {
+		t.Error(`label = "" passed validation`)
 	}
 }
 

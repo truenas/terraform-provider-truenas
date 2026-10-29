@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func resourceSchema() schema.Schema {
@@ -37,15 +38,15 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"expires_at": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
-				Description: "RFC3339 timestamp after which the key expires (e.g. \"2030-01-01T00:00:00Z\"); " +
-					"null/unset means the key never expires. The provider always reads this back as a UTC, " +
-					"'Z'-suffixed RFC3339 string, so configure it that way to avoid a permanent diff against a " +
-					"differently-formatted (but equivalent) input.",
+				Optional:   true,
+				CustomType: normalize.RFC3339Type{},
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					normalize.KeepStateIfEquivalent(normalize.RFC3339Type{}),
 				},
+				Description: "RFC3339 timestamp after which the key expires (e.g. \"2030-01-01T00:00:00Z\"); " +
+					"null/unset means the key never expires, and removing the attribute from configuration " +
+					"makes an expiring key non-expiring again. Any offset or fractional-second spelling of the same " +
+					"instant (to the second) matches the server's UTC read-back.",
 			},
 			"key": schema.StringAttribute{
 				Computed:  true,

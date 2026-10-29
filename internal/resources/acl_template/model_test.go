@@ -4,6 +4,7 @@
 package acl_template
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -20,7 +21,7 @@ func TestApiPayload_FullySet(t *testing.T) {
 		Comment: types.StringValue("a comment"),
 	}
 
-	p, diags := m.apiPayload()
+	p, diags := m.apiPayload(context.Background(), nil)
 	if diags.HasError() {
 		t.Fatalf("apiPayload returned diagnostics errors: %v", diags)
 	}
@@ -51,7 +52,7 @@ func TestApiPayload_CommentOmittedWhenUnset(t *testing.T) {
 		Comment: types.StringNull(),
 	}
 
-	p, diags := m.apiPayload()
+	p, diags := m.apiPayload(context.Background(), nil)
 	if diags.HasError() {
 		t.Fatalf("apiPayload returned diagnostics errors: %v", diags)
 	}
@@ -98,7 +99,7 @@ func TestAclDrifted_NullVsMinusOneNotDrift(t *testing.T) {
 	stateACL := `[{"tag":"owner@","type":"ALLOW","perms":{"BASIC":"FULL_CONTROL"},"flags":{"BASIC":"INHERIT"}}]`
 	apiACL := json.RawMessage(`[{"tag":"owner@","type":"ALLOW","perms":{"BASIC":"FULL_CONTROL"},"flags":{"BASIC":"INHERIT"},"id":-1,"who":null}]`)
 
-	drifted, diags := aclDrifted(stateACL, apiACL)
+	drifted, diags := aclDrifted(context.Background(), nil, stateACL, apiACL)
 	if diags.HasError() {
 		t.Fatalf("aclDrifted returned diagnostics errors: %v", diags)
 	}
@@ -113,7 +114,7 @@ func TestAclDrifted_RealChangeIsDrift(t *testing.T) {
 	stateACL := `[{"tag":"owner@","type":"ALLOW","perms":{"BASIC":"FULL_CONTROL"},"flags":{"BASIC":"INHERIT"}}]`
 	apiACL := json.RawMessage(`[{"tag":"owner@","type":"ALLOW","perms":{"BASIC":"MODIFY"},"flags":{"BASIC":"INHERIT"},"id":-1,"who":null}]`)
 
-	drifted, diags := aclDrifted(stateACL, apiACL)
+	drifted, diags := aclDrifted(context.Background(), nil, stateACL, apiACL)
 	if diags.HasError() {
 		t.Fatalf("aclDrifted returned diagnostics errors: %v", diags)
 	}
@@ -177,5 +178,35 @@ func TestResponseToDataSourceModel(t *testing.T) {
 	}
 	if m.Builtin.ValueBool() != true {
 		t.Errorf("Builtin = %v, want true", m.Builtin)
+	}
+}
+
+type fakeUsers struct{}
+
+func (fakeUsers) CallRead(_ context.Context, method string, _ ...any) (json.RawMessage, error) {
+	if method == "user.query" {
+		return json.RawMessage(`[{"username":"root","uid":0}]`), nil
+	}
+	return json.RawMessage(`[]`), nil
+}
+
+// A "who" entry is sent as the id it names: acltemplate.create crashes with
+// KeyError: 'who' otherwise. (B-149)
+func TestApiPayload_ResolvesWho(t *testing.T) {
+	m := &AclTemplateModel{
+		Name:    types.StringValue("t"),
+		ACLType: types.StringValue("NFS4"),
+		ACL:     types.StringValue(`[{"tag":"USER","who":"root","type":"ALLOW","perms":{"BASIC":"READ"},"flags":{"BASIC":"INHERIT"}}]`),
+	}
+	p, diags := m.apiPayload(context.Background(), fakeUsers{})
+	if diags.HasError() {
+		t.Fatalf("apiPayload: %v", diags)
+	}
+	var entries []map[string]any
+	if err := json.Unmarshal(p["acl"].(json.RawMessage), &entries); err != nil {
+		t.Fatal(err)
+	}
+	if _, has := entries[0]["who"]; has || entries[0]["id"] != float64(0) {
+		t.Errorf("entry = %v, want id 0 and no who", entries[0])
 	}
 }

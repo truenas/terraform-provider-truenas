@@ -156,6 +156,7 @@ func (r *ISCSIAuthResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 	plan.Secret = cfg.Secret
 	plan.PeerSecret = cfg.PeerSecret
+	plan.dropUnversionedSecrets(state)
 
 	payload := plan.apiPayload()
 

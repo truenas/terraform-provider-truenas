@@ -226,3 +226,52 @@ func TestDatasetAPIPayloadIncludesVolsizeForVolume(t *testing.T) {
 		t.Errorf("expected volsize=1073741824 for VOLUME dataset, got %v", payload["volsize"])
 	}
 }
+
+// createAPIPayload fills the create-only defaults: inherit_encryption = false
+// when encryption is set (B-042), aclmode = DISCARD for a POSIX/OFF acltype
+// (B-148). A configured value is never overridden.
+func TestDatasetCreateAPIPayloadDefaults(t *testing.T) {
+	m := &DatasetModel{Name: types.StringValue("tank/x"), Encryption: types.BoolValue(false), AClType: types.StringValue("posix")}
+	p := m.createAPIPayload()
+	if p["inherit_encryption"] != false || p["aclmode"] != "DISCARD" {
+		t.Errorf("payload = %v, want inherit_encryption=false aclmode=DISCARD", p)
+	}
+	m = &DatasetModel{Name: types.StringValue("tank/x"), AClType: types.StringValue("OFF"), ACLMode: types.StringValue("RESTRICTED"),
+		Encryption: types.BoolUnknown(), InheritEncryption: types.BoolValue(true)}
+	p = m.createAPIPayload()
+	if p["aclmode"] != "RESTRICTED" || p["inherit_encryption"] != true {
+		t.Errorf("configured values overridden: %v", p)
+	}
+	m = &DatasetModel{Name: types.StringValue("tank/x"), AClType: types.StringValue("nfsv4")}
+	p = m.createAPIPayload()
+	if _, ok := p["aclmode"]; ok {
+		t.Errorf("NFSV4 payload carries aclmode: %v", p)
+	}
+	if _, ok := p["inherit_encryption"]; ok {
+		t.Errorf("payload without encryption carries inherit_encryption: %v", p)
+	}
+}
+
+// StripUnchanged keeps only changed keys, and keeps a configured
+// refreservation when volsize changes. (B-038)
+func TestStripUnchanged(t *testing.T) {
+	p := map[string]any{"volsize": int64(2), "refreservation": int64(5), "sync": "ALWAYS", "comments": ""}
+	StripUnchanged(p, map[string]any{"volsize": int64(1), "refreservation": int64(5), "sync": "STANDARD", "comments": ""})
+	if len(p) != 3 || p["refreservation"] != int64(5) || p["sync"] != "ALWAYS" || p["volsize"] != int64(2) {
+		t.Errorf("payload = %v", p)
+	}
+	p = map[string]any{"volsize": int64(1), "refreservation": int64(5)}
+	StripUnchanged(p, map[string]any{"volsize": int64(1), "refreservation": int64(5)})
+	if len(p) != 0 {
+		t.Errorf("unchanged payload = %v, want empty", p)
+	}
+}
+
+// 26.0 writes the literal "INHERIT" description; it reads back as "". (B-147)
+func TestCommentsValue(t *testing.T) {
+	for in, want := range map[string]string{"INHERIT": "", "": "", "hello": "hello", "inherit": "inherit"} {
+		if got := CommentsValue(in); got != want {
+			t.Errorf("CommentsValue(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

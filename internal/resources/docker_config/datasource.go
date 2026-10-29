@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ datasource.DataSource = &DockerConfigDataSource{}
@@ -57,13 +58,14 @@ func (d *DockerConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 				Description: "Network address pools Docker allocates per-container-network subnets from.",
 				NestedObject: dschema.NestedAttributeObject{
 					Attributes: map[string]dschema.Attribute{
-						"base": dschema.StringAttribute{Computed: true, Description: "Base network address with prefix for the pool."},
+						"base": dschema.StringAttribute{Computed: true, CustomType: normalize.NetworkType{}, Description: "Base network address with prefix for the pool."},
 						"size": dschema.Int64Attribute{Computed: true, Description: "Subnet size for networks allocated from this pool."},
 					},
 				},
 			},
 			"cidr_v6": dschema.StringAttribute{
 				Computed:    true,
+				CustomType:  normalize.CIDRType{},
 				Description: "IPv6 CIDR block for Docker container networking.",
 			},
 			"registry_mirrors": dschema.ListNestedAttribute{
@@ -72,7 +74,7 @@ func (d *DockerConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 					"releases (see the resource schema description for the TrueNAS 25.10 wire-shape translation).",
 				NestedObject: dschema.NestedAttributeObject{
 					Attributes: map[string]dschema.Attribute{
-						"url":      dschema.StringAttribute{Computed: true, Description: "Registry mirror URL."},
+						"url":      dschema.StringAttribute{Computed: true, CustomType: normalize.URLType{}, Description: "Registry mirror URL."},
 						"insecure": dschema.BoolAttribute{Computed: true, Description: "Whether this registry mirror uses an insecure (HTTP) connection."},
 					},
 				},

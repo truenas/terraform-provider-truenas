@@ -7,6 +7,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"reflect"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -71,14 +73,31 @@ type SystemGeneralDataSourceModel struct {
 // field), while 25.10 returns the full certificate object (and has no
 // top-level name field). Both shapes decode to the id/name pair; a JSON
 // null leaves both nil.
+//
+// A session without full-admin rights (a READONLY_ADMIN API key) gets the
+// string "********" in place of the id (probed live on 28.0); that decodes to
+// Redacted with no id, rather than failing the whole read (B-030).
 type uiCertificate struct {
-	ID   *int64
-	Name *string
+	ID       *int64
+	Name     *string
+	Redacted bool
 }
+
+// redactionMask is the value system.general.config returns in place of
+// ui_certificate to a READONLY_ADMIN session.
+const redactionMask = "********"
 
 func (c *uiCertificate) UnmarshalJSON(b []byte) error {
 	if bytes.Equal(bytes.TrimSpace(b), []byte("null")) {
 		return nil
+	}
+	var str string
+	if err := json.Unmarshal(b, &str); err == nil {
+		if str == redactionMask {
+			c.Redacted = true
+			return nil
+		}
+		return fmt.Errorf("unexpected ui_certificate string %q", str)
 	}
 	var id int64
 	if err := json.Unmarshal(b, &id); err == nil {
@@ -115,6 +134,10 @@ func (api *systemGeneralAPI) certificateName() types.String {
 		return types.StringValue(api.UICertificateName)
 	case api.UICertificate.Name != nil:
 		return types.StringValue(*api.UICertificate.Name)
+	case api.UICertificate.Redacted:
+		// 25.10 redacts the whole certificate object (name included) for a
+		// READONLY_ADMIN session and has no top-level name: unknown, not "".
+		return types.StringNull()
 	default:
 		return types.StringValue("")
 	}
@@ -165,11 +188,20 @@ func responseToModel(ctx context.Context, api *systemGeneralAPI, m *SystemGenera
 	m.UIHTTPSRedirect = types.BoolValue(api.UIHTTPSRedirect)
 	m.UIPort = types.Int64Value(api.UIPort)
 	m.UIXFrameOptions = types.StringValue(api.UIXFrameOptions)
-	m.UICertificateName = api.certificateName()
+	if name := api.certificateName(); !name.IsNull() || m.UICertificateName.IsUnknown() {
+		m.UICertificateName = name // a redacted name (25.10) keeps the prior value
+	}
 	m.UsageCollectionIsSet = types.BoolValue(api.UsageCollectionIsSet)
 	m.Wizardshown = types.BoolValue(api.Wizardshown)
 
-	m.UICertificate = api.UICertificate.idValue()
+	// A READONLY_ADMIN session gets the redaction mask, not the id: keep the
+	// prior value so a read-only refresh plans nothing (B-030).
+	switch {
+	case !api.UICertificate.Redacted:
+		m.UICertificate = api.UICertificate.idValue()
+	case m.UICertificate.IsUnknown():
+		m.UICertificate = types.Int64Null()
+	}
 
 	if api.UsageCollection != nil {
 		m.UsageCollection = types.BoolValue(*api.UsageCollection)
@@ -274,24 +306,35 @@ func responseToDataSourceModel(ctx context.Context, api *systemGeneralAPI, m *Sy
 	return diags
 }
 
-// updatePayload builds the system.general.update argument. Every writable
-// field is guarded: each is only included when known (Optional+Computed).
+// updatePayload builds the system.general.update argument.
+//
+// CALLERS MUST invoke this on a model populated from req.Config, never from
+// req.Plan: every writable field is Optional+Computed with
+// UseStateForUnknown, so the plan carries the prior state's value for a field
+// the user never set, and sending it back is not harmless here. Re-sending
+// usage_collection recorded an explicit opt-in (usage_collection_is_set
+// flipped to true) on every unrelated update (B-143). Only what the user
+// configured is sent; everything else is left as it is on the box.
+//
 // ui_certificate_name, usage_collection_is_set, and wizardshown are
-// Computed-only and are NEVER included here: they are server-computed
-// values, not something system.general.update accepts. ui_certificate is
-// nullable on the wire: it is omitted entirely when null/unknown, sent as
-// JSON nil when the model holds an explicit 0 (clearing the UI
-// certificate), and sent as its value otherwise. usage_collection is also
-// nullable but uses a plain guard (omitted when null/unknown, sent as its
-// boolean value otherwise) since there is no sentinel value to represent
-// "clear to null" for a boolean. ui_address, ui_allowlist,
-// ui_httpsprotocols, and ui_v6address are only included when known, with a
-// nil ElementsAs guard so a null/unknown list never panics; each list is
-// normalized to an empty slice when nil so an explicitly-set-but-empty list
-// clears the corresponding value on TrueNAS rather than being omitted.
+// Computed-only and are NEVER included. Lists are normalized to an empty
+// slice when nil so an explicitly-set-but-empty list clears the value on
+// TrueNAS rather than being omitted.
 func (m *SystemGeneralModel) updatePayload(ctx context.Context) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	p := map[string]any{}
+
+	list := func(key string, l types.List) {
+		if l.IsNull() || l.IsUnknown() {
+			return
+		}
+		var v []string
+		diags.Append(l.ElementsAs(ctx, &v, false)...)
+		if v == nil {
+			v = []string{}
+		}
+		p[key] = v
+	}
 
 	if !m.DSAuth.IsNull() && !m.DSAuth.IsUnknown() {
 		p["ds_auth"] = m.DSAuth.ValueBool()
@@ -302,28 +345,10 @@ func (m *SystemGeneralModel) updatePayload(ctx context.Context) (map[string]any,
 	if !m.Timezone.IsNull() && !m.Timezone.IsUnknown() {
 		p["timezone"] = m.Timezone.ValueString()
 	}
-	if !m.UIAddress.IsNull() && !m.UIAddress.IsUnknown() {
-		var v []string
-		diags.Append(m.UIAddress.ElementsAs(ctx, &v, false)...)
-		if v == nil {
-			v = []string{}
-		}
-		p["ui_address"] = v
-	}
-	if !m.UIAllowlist.IsNull() && !m.UIAllowlist.IsUnknown() {
-		var v []string
-		diags.Append(m.UIAllowlist.ElementsAs(ctx, &v, false)...)
-		if v == nil {
-			v = []string{}
-		}
-		p["ui_allowlist"] = v
-	}
+	list("ui_address", m.UIAddress)
+	list("ui_allowlist", m.UIAllowlist)
 	if !m.UICertificate.IsNull() && !m.UICertificate.IsUnknown() {
-		if v := m.UICertificate.ValueInt64(); v != 0 {
-			p["ui_certificate"] = v
-		} else {
-			p["ui_certificate"] = nil
-		}
+		p["ui_certificate"] = m.UICertificate.ValueInt64()
 	}
 	if !m.UIConsolemsg.IsNull() && !m.UIConsolemsg.IsUnknown() {
 		p["ui_consolemsg"] = m.UIConsolemsg.ValueBool()
@@ -331,28 +356,14 @@ func (m *SystemGeneralModel) updatePayload(ctx context.Context) (map[string]any,
 	if !m.UIHTTPSPort.IsNull() && !m.UIHTTPSPort.IsUnknown() {
 		p["ui_httpsport"] = m.UIHTTPSPort.ValueInt64()
 	}
-	if !m.UIHTTPSProtocols.IsNull() && !m.UIHTTPSProtocols.IsUnknown() {
-		var v []string
-		diags.Append(m.UIHTTPSProtocols.ElementsAs(ctx, &v, false)...)
-		if v == nil {
-			v = []string{}
-		}
-		p["ui_httpsprotocols"] = v
-	}
+	list("ui_httpsprotocols", m.UIHTTPSProtocols)
 	if !m.UIHTTPSRedirect.IsNull() && !m.UIHTTPSRedirect.IsUnknown() {
 		p["ui_httpsredirect"] = m.UIHTTPSRedirect.ValueBool()
 	}
 	if !m.UIPort.IsNull() && !m.UIPort.IsUnknown() {
 		p["ui_port"] = m.UIPort.ValueInt64()
 	}
-	if !m.UIV6Address.IsNull() && !m.UIV6Address.IsUnknown() {
-		var v []string
-		diags.Append(m.UIV6Address.ElementsAs(ctx, &v, false)...)
-		if v == nil {
-			v = []string{}
-		}
-		p["ui_v6address"] = v
-	}
+	list("ui_v6address", m.UIV6Address)
 	if !m.UIXFrameOptions.IsNull() && !m.UIXFrameOptions.IsUnknown() {
 		p["ui_x_frame_options"] = m.UIXFrameOptions.ValueString()
 	}
@@ -361,6 +372,50 @@ func (m *SystemGeneralModel) updatePayload(ctx context.Context) (map[string]any,
 	}
 
 	return p, diags
+}
+
+// webServerSettingsChanged reports whether payload changes any setting the
+// web server (nginx) only picks up when it restarts: the bind addresses,
+// ports, HTTPS redirect, TLS protocols, certificate, allowlist and
+// X-Frame-Options. system.general.update saves these but does not apply them
+// (B-027); the caller asks for a restart when this returns true.
+// ui_consolemsg is a console setting and is not included.
+func webServerSettingsChanged(current *systemGeneralAPI, payload map[string]any) bool {
+	var currentCert any
+	if current.UICertificate.ID != nil {
+		currentCert = *current.UICertificate.ID
+	}
+	currentValues := map[string]any{
+		"ui_address":         nonNil(current.UIAddress),
+		"ui_v6address":       nonNil(current.UIV6Address),
+		"ui_allowlist":       nonNil(current.UIAllowlist),
+		"ui_httpsprotocols":  nonNil(current.UIHTTPSProtocols),
+		"ui_port":            current.UIPort,
+		"ui_httpsport":       current.UIHTTPSPort,
+		"ui_httpsredirect":   current.UIHTTPSRedirect,
+		"ui_x_frame_options": current.UIXFrameOptions,
+		"ui_certificate":     currentCert,
+	}
+	for key, now := range currentValues {
+		want, ok := payload[key]
+		if !ok {
+			continue
+		}
+		if current.UICertificate.Redacted && key == "ui_certificate" {
+			return true
+		}
+		if !reflect.DeepEqual(want, now) {
+			return true
+		}
+	}
+	return false
+}
+
+func nonNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 // deleteWarningDiagnostics builds the warning diagnostic emitted by Delete.

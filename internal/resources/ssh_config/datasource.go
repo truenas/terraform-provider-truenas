@@ -68,7 +68,7 @@ func (d *SSHConfigDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 			},
 			"sftp_log_level": dschema.StringAttribute{
 				Computed:    true,
-				Description: "SFTP subsystem syslog level. One of \"\" (default), QUIET, FATAL, ERROR, INFO, VERBOSE, DEBUG, DEBUG1, DEBUG2, DEBUG3.",
+				Description: "SFTP subsystem syslog level. One of \"\" (default), QUIET, FATAL, ERROR, INFO, VERBOSE, DEBUG, DEBUG2, DEBUG3.",
 			},
 			"tcpfwd": dschema.BoolAttribute{
 				Computed:    true,

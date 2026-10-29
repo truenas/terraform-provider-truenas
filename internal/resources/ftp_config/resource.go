@@ -10,6 +10,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
 )
@@ -17,6 +18,8 @@ import (
 var _ resource.Resource = &FTPConfigResource{}
 var _ resource.ResourceWithImportState = &FTPConfigResource{}
 var _ resource.ResourceWithIdentity = &FTPConfigResource{}
+var _ resource.ResourceWithValidateConfig = &FTPConfigResource{}
+var _ resource.ResourceWithModifyPlan = &FTPConfigResource{}
 
 // FTPConfigResource implements the truenas_ftp_config singleton resource.
 type FTPConfigResource struct{ client *client.Client }
@@ -62,6 +65,42 @@ func (r *FTPConfigResource) fetchConfig(ctx context.Context) (*ftpConfigAPI, err
 		return nil, err
 	}
 	return &api, nil
+}
+
+// ValidateConfig rejects a non-empty anonpath unless onlyanonymous is set
+// to true in the same configuration. ftp.update stores anonpath only for
+// anonymous-only FTP and silently replaces it with null otherwise, so the
+// apply failed with "inconsistent result after apply" (B-072).
+func (r *FTPConfigResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var cfg FTPConfigModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() || cfg.AnonPath.IsNull() || cfg.AnonPath.IsUnknown() ||
+		cfg.AnonPath.ValueString() == "" || cfg.OnlyAnonymous.IsUnknown() {
+		return
+	}
+	if cfg.OnlyAnonymous.IsNull() || !cfg.OnlyAnonymous.ValueBool() {
+		resp.Diagnostics.AddAttributeError(path.Root("anonpath"),
+			"anonpath requires onlyanonymous = true",
+			"TrueNAS keeps anonpath only when anonymous-only FTP is enabled and discards it otherwise. "+
+				"Set onlyanonymous = true in the same configuration, or remove anonpath.")
+	}
+}
+
+// ModifyPlan plans anonpath as "" when onlyanonymous is planned false and the
+// configuration does not set anonpath: the server clears it then, so the
+// value UseStateForUnknown carried from state would not survive the apply.
+func (r *FTPConfigResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+	var plan, cfg FTPConfigModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() || !cfg.AnonPath.IsNull() || plan.OnlyAnonymous.IsUnknown() ||
+		plan.OnlyAnonymous.ValueBool() || plan.AnonPath.IsUnknown() || plan.AnonPath.ValueString() == "" {
+		return
+	}
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("anonpath"), types.StringValue(""))...)
 }
 
 func (r *FTPConfigResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

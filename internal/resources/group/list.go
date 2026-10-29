@@ -63,7 +63,7 @@ func (l *GroupListResource) mapRow(ctx context.Context, req list.ListRequest, ra
 	res.Diagnostics.Append(listing.SetIdentity(ctx, res.Identity, api.ID)...)
 	if req.IncludeResource {
 		var m GroupModel
-		res.Diagnostics.Append(responseToModel(ctx, &api, &m)...)
+		res.Diagnostics.Append(responseToModel(ctx, &api, nil, &m)...)
 		res.Diagnostics.Append(res.Resource.Set(ctx, &m)...)
 	}
 	return res

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -268,6 +269,103 @@ resource "truenas_webshare_config" "test" {
 			{
 				Config: acctest.ProviderConfig() + cfg,
 				Check:  resource.ComposeTestCheckFunc(checks...),
+			},
+		},
+	})
+}
+
+// TestAccWebshareConfig_mcp guards B-155: the TrueNAS 28.0 MCP server
+// settings are managed and read back. The original values are restored
+// through the API.
+func TestAccWebshareConfig_mcp(t *testing.T) {
+	acctest.DisruptiveCheck(t)
+	if !acctest.ServerVersionAtLeast(t, 28, 0) {
+		t.Skip("the Webshare MCP settings exist only on TrueNAS 28.0 and later")
+	}
+	type mcpShape struct {
+		MCPEnabled       bool     `json:"mcp_enabled"`
+		MCPAllowedGroups []string `json:"mcp_allowed_groups"`
+		MCPAllowWrite    bool     `json:"mcp_allow_write"`
+	}
+	raw, err := acctest.RestoreCall(context.Background(), "webshare.config")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var orig mcpShape
+	if err := json.Unmarshal(raw, &orig); err != nil {
+		t.Fatal(err)
+	}
+	if orig.MCPAllowedGroups == nil {
+		orig.MCPAllowedGroups = []string{}
+	}
+	t.Cleanup(func() {
+		if _, err := acctest.RestoreCall(context.Background(), "webshare.update", map[string]any{
+			"mcp_enabled": orig.MCPEnabled, "mcp_allowed_groups": orig.MCPAllowedGroups, "mcp_allow_write": orig.MCPAllowWrite,
+		}); err != nil {
+			t.Errorf("error restoring webshare MCP settings: %v", err)
+		}
+	})
+	const r = "truenas_webshare_config.test"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + `
+resource "truenas_webshare_config" "test" {
+  mcp_enabled        = true
+  mcp_allowed_groups = ["truenas_webshare"]
+  mcp_allow_write    = true
+}
+`,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(r, "mcp_enabled", "true"),
+					resource.TestCheckResourceAttr(r, "mcp_allowed_groups.#", "1"),
+					resource.TestCheckResourceAttr(r, "mcp_allowed_groups.0", "truenas_webshare"),
+					resource.TestCheckResourceAttr(r, "mcp_allow_write", "true"),
+				),
+			},
+			{
+				Config: acctest.ProviderConfig() + `
+resource "truenas_webshare_config" "test" {
+  mcp_enabled        = false
+  mcp_allowed_groups = []
+  mcp_allow_write    = false
+}
+`,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(r, "mcp_enabled", "false"),
+					resource.TestCheckResourceAttr(r, "mcp_allowed_groups.#", "0"),
+				),
+			},
+			{
+				ResourceName:      r,
+				ImportState:       true,
+				ImportStateId:     "webshare_config",
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+// TestAccWebshareConfig_mcpRejectedBefore28: on TrueNAS 26.0/27.x setting an
+// MCP field is a clear error, raised before anything is written (so this
+// runs without TRUENAS_DISRUPTIVE).
+func TestAccWebshareConfig_mcpRejectedBefore28(t *testing.T) {
+	acctest.PreCheck(t)
+	if !acctest.ServerVersionAtLeast(t, 26, 0) || acctest.ServerVersionAtLeast(t, 28, 0) {
+		t.Skip("needs TrueNAS 26.0 or 27.x")
+	}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + `
+resource "truenas_webshare_config" "test" {
+  mcp_enabled = false
+}
+`,
+				ExpectError: regexp.MustCompile(`mcp_enabled\s+requires\s+TrueNAS\s+28.0\s+or\s+later`),
 			},
 		},
 	})

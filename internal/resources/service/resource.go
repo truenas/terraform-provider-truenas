@@ -75,11 +75,28 @@ func responseToModel(api *serviceAPI, m *ServiceModel) {
 
 // applyRunningState starts or stops the service to reach the desired state.
 func (r *ServiceResource) applyRunningState(ctx context.Context, name string, desired bool) error {
+	// service.control exists on every supported release; service.start/stop
+	// take a required options argument on 26.0 and fail with a TypeError when
+	// called with the name alone. silent=false makes a failed start/stop an
+	// error instead of a quiet `false` result.
+	verb := "STOP"
 	if desired {
-		_, err := r.client.CallJob(ctx, "service.start", name)
-		return err
+		verb = "START"
 	}
-	_, err := r.client.CallJob(ctx, "service.stop", name)
+	_, err := r.client.CallJob(ctx, "service.control", verb, name, map[string]any{"silent": false})
+	return err
+}
+
+// applyEnabled sends service.update {"enable": ...} when the planned value
+// is known and differs from the service's current setting. An unset enabled
+// (unknown in the plan of a create) is left alone: sending ValueBool() of an
+// unknown value disabled the service's autostart on every create that did
+// not set enabled.
+func (r *ServiceResource) applyEnabled(ctx context.Context, svc *serviceAPI, enabled types.Bool) error {
+	if enabled.IsNull() || enabled.IsUnknown() || enabled.ValueBool() == svc.Enable {
+		return nil
+	}
+	_, err := r.client.Call(ctx, "service.update", svc.ID, map[string]any{"enable": enabled.ValueBool()})
 	return err
 }
 
@@ -96,8 +113,7 @@ func (r *ServiceResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	_, err = r.client.Call(ctx, "service.update", svc.ID, map[string]any{"enable": plan.Enabled.ValueBool()})
-	if err != nil {
+	if err := r.applyEnabled(ctx, svc, plan.Enabled); err != nil {
 		resp.Diagnostics.AddError("Failed to update service", err.Error())
 		return
 	}
@@ -158,8 +174,7 @@ func (r *ServiceResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	_, err = r.client.Call(ctx, "service.update", svc.ID, map[string]any{"enable": plan.Enabled.ValueBool()})
-	if err != nil {
+	if err := r.applyEnabled(ctx, svc, plan.Enabled); err != nil {
 		resp.Diagnostics.AddError("Failed to update service", err.Error())
 		return
 	}
@@ -185,27 +200,17 @@ func (r *ServiceResource) Update(ctx context.Context, req resource.UpdateRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (r *ServiceResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var state ServiceModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	svc, err := r.lookupByName(ctx, state.Name.ValueString())
-	if err != nil {
-		if client.IsNotFound(err) {
-			return
-		}
-		resp.Diagnostics.AddError("Failed to look up service", err.Error())
-		return
-	}
-	// Best-effort: disable autostart and stop the service. Errors are ignored
-	// because the Terraform resource is being removed from state regardless.
-	r.client.Call(ctx, "service.update", svc.ID, map[string]any{"enable": false}) //nolint:errcheck
-	if svc.State == "RUNNING" {
-		r.client.CallJob(ctx, "service.stop", state.Name.ValueString()) //nolint:errcheck
-	}
+// Delete makes NO client calls: it only removes the service from Terraform
+// state and leaves it enabled/running exactly as it is. TrueNAS services are
+// never created or deleted, and stopping one as a side effect of removing it
+// from the configuration (or of a name change, which replaces the resource)
+// is destructive: removing truenas_service "ssh" used to disable and stop
+// SSH, and ignored any error doing so (B-106).
+func (r *ServiceResource) Delete(_ context.Context, _ resource.DeleteRequest, resp *resource.DeleteResponse) {
+	resp.Diagnostics.AddWarning(
+		"Service left in place",
+		"The service was removed from Terraform state only; its enabled and running state on TrueNAS are unchanged.",
+	)
 }
 
 func (r *ServiceResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

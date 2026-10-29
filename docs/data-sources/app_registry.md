@@ -24,4 +24,4 @@ Looks up a TrueNAS app container registry entry by name. Never exposes the regis
 - `description` (String) Description of the container registry.
 - `id` (Number) Numeric app registry entry ID assigned by TrueNAS.
 - `uri` (String) Container registry URI endpoint.
-- `username` (String) Username for registry authentication.
+- `username` (String) Username for registry authentication. Null when the session cannot read it (the API redacts it for a read-only admin).

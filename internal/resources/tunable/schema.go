@@ -62,8 +62,11 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"update_initramfs": schema.BoolAttribute{
-				Optional:    true,
-				Description: "Whether to update initramfs after applying this tunable (write-only; not stored in state).",
+				Optional:  true,
+				WriteOnly: true,
+				Description: "Whether to update initramfs after applying this tunable. A per-apply directive: " +
+					"write-only (never stored in state, so an imported tunable plans no change for it, and no " +
+					"initramfs rebuild). Sent on every create and update where it is set. Requires Terraform >= 1.11.",
 			},
 			// Computed-only — server generated
 			"orig_value": schema.StringAttribute{

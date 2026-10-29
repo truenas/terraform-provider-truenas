@@ -39,21 +39,21 @@ resource "truenas_smb_share" "data" {
 
 ### Optional
 
-- `abe` (Boolean) Enable Access-Based Enumeration. Sent to TrueNAS 26.0 as the top-level `access_based_share_enumeration` field (renamed from `abe` on the wire; the Terraform attribute name is unchanged for backward compatibility).
+- `abe` (Boolean) Defaults to `false`. Enable Access-Based Enumeration. Sent to TrueNAS 26.0 as the top-level `access_based_share_enumeration` field (renamed from `abe` on the wire; the Terraform attribute name is unchanged for backward compatibility).
 - `acl` (Boolean) Enable ACL support on this share. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.
-- `audit` (Attributes) Per-share audit logging configuration. (see [below for nested schema](#nestedatt--audit))
-- `browsable` (Boolean) Allow share to appear in Windows network browsing. Sent as the top-level `browsable` field.
+- `audit` (Attributes) Per-share audit logging configuration. Omitted, auditing is off (the server default), so removing the block disables auditing on the share. (see [below for nested schema](#nestedatt--audit))
+- `browsable` (Boolean) Defaults to `true`. Allow share to appear in Windows network browsing. Sent as the top-level `browsable` field.
 - `comment` (String) Optional share description.
 - `durablehandle` (Boolean) Enable SMB2 durable handles. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.
-- `enabled` (Boolean) Enable this share.
+- `enabled` (Boolean) Enable this share. Defaults to `true`.
 - `guestok` (Boolean) Allow unauthenticated (guest) access. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.
 - `home` (Boolean) Use this share as user home-directory share. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.
 - `hostsallow` (List of String) List of hosts/IPs allowed to connect. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.
 - `hostsdeny` (List of String) List of hosts/IPs denied from connecting. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.
 - `options` (Attributes) Purpose-specific SMB options (the discriminated `options` object on TrueNAS 26.0+). Only the fields valid for the share's `purpose` are sent; the rest read back null. This is the recommended surface for all purposes. For LEGACY_SHARE the flat top-level attributes still work; setting a flat attribute and its twin here is a plan-time error. When `options` is configured, any option left unset is reset to the server default on update (TrueNAS replaces the whole options object); when it is not configured, the current values are kept. (see [below for nested schema](#nestedatt--options))
 - `purpose` (String) Purpose preset. One of: DEFAULT_SHARE, LEGACY_SHARE, TIMEMACHINE_SHARE, MULTIPROTOCOL_SHARE, TIME_LOCKED_SHARE, PRIVATE_DATASETS_SHARE, EXTERNAL_SHARE, VEEAM_REPOSITORY_SHARE, FCP_SHARE. On TrueNAS 26.0 this drives a discriminated `options` object on the wire. When left unset (or set to an unrecognized value), the provider defaults to LEGACY_SHARE so this resource's flat legacy attributes (recyclebin, hostsallow, hostsdeny, guestok, streams, durablehandle, home, acl, timemachine, timemachine_quota) continue to work as before. Setting purpose to any other enum value switches the share to that purpose's variant defaults server-side; the flat legacy attributes are then a plan-time error (use `options` instead). Changing purpose on an existing share resets `options` to the new purpose's server defaults unless `options` is configured.
-- `recyclebin` (Boolean) Enable Windows Recycle Bin behaviour. Only valid when the share's `purpose` is (or defaults to) LEGACY_SHARE: it is sent nested under `options`, setting it with any other purpose is a plan-time error, and it reads back false for other purposes. Setting both this and the matching `options` field is a plan-time error.
-- `ro` (Boolean) Export share as read-only. Sent to TrueNAS 26.0 as the top-level `readonly` field (renamed from `ro` on the wire; the Terraform attribute name is unchanged for backward compatibility).
+- `recyclebin` (Boolean) Enable Windows Recycle Bin behaviour. Only valid when the share's `purpose` is (or defaults to) LEGACY_SHARE: it is sent nested under `options`, setting it with any other purpose is a plan-time error, and it reads back false for other purposes. Setting both this and the matching `options` field is a plan-time error. When neither this nor `options` is configured, the LEGACY_SHARE server default applies, so removing it from the configuration resets it on the share.
+- `ro` (Boolean) Defaults to `false`. Export share as read-only. Sent to TrueNAS 26.0 as the top-level `readonly` field (renamed from `ro` on the wire; the Terraform attribute name is unchanged for backward compatibility).
 - `streams` (Boolean) Enable alternate data streams. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.
 - `timemachine` (Boolean) Advertise share as a Time Machine target. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.
 - `timemachine_quota` (Number) Per-machine Time Machine quota in GiB (0 = unlimited). LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.

@@ -26,21 +26,21 @@ resource "truenas_iscsi_extent" "vm_disk" {
 
 ### Required
 
-- `name` (String) Name of the iSCSI extent.
+- `name` (String) Name of the iSCSI extent. Renamed in place: the extent keeps its serial, NAA and target mappings.
 - `type` (String) Extent type: DISK or FILE.
 
 ### Optional
 
-- `avail_threshold` (Number) Availability threshold percentage (0 = unset).
+- `avail_threshold` (Number) Availability threshold percentage (0 = unset). Left out of config, the server value is kept.
 - `blocksize` (Number) Block size in bytes: 512, 1024, 2048, or 4096.
 - `comment` (String) Optional description for the extent.
-- `disk` (String) Zvol path for DISK type extents (e.g. zvol/tank/myvol).
+- `disk` (String) Zvol path for DISK type extents (e.g. zvol/tank/myvol). Required for DISK, must be unset for FILE (TrueNAS reports "" for FILE extents).
 - `enabled` (Boolean) Enable this extent.
 - `filesize` (Number) Size of a FILE type extent, in bytes (0 = unset; ignored for DISK extents).
 - `insecure_tpc` (Boolean) Allow target-to-target XCOPY (insecure third-party copy).
-- `path` (String) File path for FILE type extents.
+- `path` (String) File path for FILE type extents. Required for FILE. For DISK extents TrueNAS reports the zvol path here (the same value as disk), so leave it unset.
 - `pblocksize` (Boolean) Report physical block size to initiators.
-- `ro` (Boolean) Export extent as read-only.
+- `ro` (Boolean) Export extent as read-only. TrueNAS also sets the backing zvol's ZFS readonly property to match (on for true, off for false) on every create and update of a DISK extent, so do not manage truenas_zvol.readonly for that zvol as well. When an extent with ro = true is destroyed, the provider resets the zvol's readonly property to inherit, since TrueNAS would otherwise leave the zvol read-only.
 - `rpm` (String) Reported disk RPM: SSD, 5400, 7200, 10000, or 15000.
 - `xen` (Boolean) Enable Xen initiator compatibility mode.
 

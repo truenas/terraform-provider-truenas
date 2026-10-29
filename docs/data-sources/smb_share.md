@@ -17,7 +17,7 @@ Fetches a TrueNAS SMB share by name.
 
 ### Required
 
-- `name` (String) SMB share name to look up.
+- `name` (String) SMB share name to look up (case-insensitive, like SMB clients).
 
 ### Read-Only
 

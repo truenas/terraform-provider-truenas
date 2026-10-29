@@ -29,7 +29,7 @@ resource "truenas_iscsi_portal" "main" {
 
 ### Required
 
-- `listen` (Attributes List) List of IP/port pairs the portal listens on. (see [below for nested schema](#nestedatt--listen))
+- `listen` (Attributes List) List of IP addresses the portal listens on. Order does not matter: TrueNAS keeps its stored order, and the provider reports the list in config order when the IPs match. (see [below for nested schema](#nestedatt--listen))
 
 ### Optional
 
@@ -47,6 +47,6 @@ Required:
 
 - `ip` (String) IP address to listen on.
 
-Optional:
+Read-Only:
 
-- `port` (Number) Port is reported by TrueNAS but cannot be set per-listen on TrueNAS 26.0+; the global iSCSI listen_port applies.
+- `port` (Number) TCP port reported by TrueNAS. Read-only: no supported TrueNAS release accepts a per-listen port (25.10 and later); set listen_port on truenas_iscsi_global instead.

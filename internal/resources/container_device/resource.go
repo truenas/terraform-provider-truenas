@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
+	"github.com/truenas/terraform-provider-truenas/internal/writeonly"
 )
 
 var _ resource.Resource = &ContainerDeviceResource{}
@@ -129,6 +130,7 @@ func (r *ContainerDeviceResource) Create(ctx context.Context, req resource.Creat
 	// the API may normalize/add default keys.
 	responseToModel(apiResp, &plan)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
+	resp.Diagnostics.Append(setImported(ctx, resp.Private, false)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -158,19 +160,16 @@ func (r *ContainerDeviceResource) Read(ctx context.Context, req resource.ReadReq
 
 	// Drift-aware attributes handling: only overwrite state Attributes when
 	// a user-set key's value differs in the API. API-added default keys are
-	// not considered drift.
+	// not considered drift, and are not absorbed into state on drift either:
+	// state takes the server values of the keys it already holds, so the plan
+	// shows only the keys that really changed. (BUGS B-082)
 	var stateAttrs map[string]any
 	if err := json.Unmarshal([]byte(state.Attributes.ValueString()), &stateAttrs); err != nil {
 		resp.Diagnostics.AddError("Parse state attributes JSON", err.Error())
 		return
 	}
 	if attributesDrifted(stateAttrs, apiResp.Attributes) {
-		attrJSON, diags := apiAttributesJSON(apiResp)
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		state.Attributes = types.StringValue(attrJSON)
+		state.Attributes = types.StringValue(writeonly.ProjectOntoKeys(state.Attributes.ValueString(), apiResp.Attributes))
 	}
 
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueInt64())...)
@@ -219,6 +218,7 @@ func (r *ContainerDeviceResource) Update(ctx context.Context, req resource.Updat
 	// Keep the plan's Attributes JSON string in state (write-what-you-said).
 	responseToModel(apiResp, &plan)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
+	resp.Diagnostics.Append(setImported(ctx, resp.Private, false)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -272,5 +272,6 @@ func (r *ContainerDeviceResource) ImportState(ctx context.Context, req resource.
 	state.Attributes = types.StringValue(attrJSON)
 
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, id)...)
+	resp.Diagnostics.Append(setImported(ctx, resp.Private, true)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

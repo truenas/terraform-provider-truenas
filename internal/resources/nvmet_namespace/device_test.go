@@ -159,3 +159,54 @@ func TestAccNVMetNamespace_devZvolForm(t *testing.T) {
 		},
 	})
 }
+
+// TestAccNVMetNamespace_literalDevicePath: device_path is a literal string,
+// not a reference to the zvol, so Terraform creates the zvol and the
+// namespace at the same time and the namespace create can run before
+// /dev/zvol/<name> exists ("ZVOL device_path must be a block device").
+// Create now waits for the device (B-048, the nvmet_namespace side of issue
+// #40).
+func TestAccNVMetNamespace_literalDevicePath(t *testing.T) {
+	base := acctest.RandName("tfaccnslit")
+	pool := acctest.TestPool()
+	// The subsystem is created in its own first step, so in the second step
+	// nothing delays the namespace creates behind the zvol creates.
+	subsysOnly := acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_nvmet_subsys" "s" {
+  name = %q
+}
+`, base)
+	cfg := subsysOnly + fmt.Sprintf(`
+resource "truenas_zvol" "z" {
+  count   = 2
+  name    = "%[1]s/%[2]s.host-${count.index}"
+  volsize = 67108864
+}
+`, pool, base)
+	// Nothing orders the namespaces after the zvols, so destroy them in their
+	// own step first; the final teardown then only deletes the zvols.
+	zvolsOnly := cfg
+	cfg += fmt.Sprintf(`
+resource "truenas_nvmet_namespace" "n" {
+  count       = 2
+  subsys_id   = truenas_nvmet_subsys.s.id
+  device_path = "zvol/%[1]s/%[2]s.host-${count.index}"
+}
+`, pool, base)
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{Config: subsysOnly},
+			{
+				Config: cfg,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_nvmet_namespace.n.0", "device_type", "ZVOL"),
+					resource.TestCheckResourceAttr("truenas_nvmet_namespace.n.1", "device_type", "ZVOL"),
+				),
+			},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{Config: zvolsOnly},
+		},
+	})
+}

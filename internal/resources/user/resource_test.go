@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // TestUserSchema verifies key schema attributes.
@@ -133,7 +134,7 @@ func TestUserCreatePayload(t *testing.T) {
 		PasswordDisabled:     types.BoolValue(false),
 		SMB:                  types.BoolValue(true),
 		SSHPasswordEnabled:   types.BoolValue(false),
-		SSHPubKey:            types.StringValue(""),
+		SSHPubKey:            normalize.NewTrimmedValue(""),
 		SudoCommands:         types.ListValueMust(types.StringType, []attr.Value{}),
 		SudoCommandsNoPasswd: types.ListValueMust(types.StringType, []attr.Value{}),
 		Groups:               types.ListValueMust(types.Int64Type, []attr.Value{}),
@@ -186,14 +187,14 @@ func TestUserCreatePayload_HomeModeAndWebshare(t *testing.T) {
 		FullName:             types.StringValue("Test User"),
 		Email:                types.StringValue("test@example.com"),
 		Home:                 types.StringValue("/home/testuser"),
-		HomeMode:             types.StringValue("750"),
+		HomeMode:             normalize.NewOctalModeValue("750"),
 		Shell:                types.StringValue("/bin/bash"),
 		Locked:               types.BoolValue(false),
 		PasswordDisabled:     types.BoolValue(false),
 		SMB:                  types.BoolValue(true),
 		Webshare:             types.BoolValue(true),
 		SSHPasswordEnabled:   types.BoolValue(false),
-		SSHPubKey:            types.StringValue(""),
+		SSHPubKey:            normalize.NewTrimmedValue(""),
 		SudoCommands:         types.ListValueMust(types.StringType, []attr.Value{}),
 		SudoCommandsNoPasswd: types.ListValueMust(types.StringType, []attr.Value{}),
 		Groups:               types.ListValueMust(types.Int64Type, []attr.Value{}),
@@ -235,7 +236,7 @@ func TestUserUpdatePayload(t *testing.T) {
 		PasswordDisabled:     types.BoolValue(false),
 		SMB:                  types.BoolValue(false),
 		SSHPasswordEnabled:   types.BoolValue(false),
-		SSHPubKey:            types.StringValue("oldkey"),
+		SSHPubKey:            normalize.NewTrimmedValue("oldkey"),
 		SudoCommands:         types.ListNull(types.StringType),
 		SudoCommandsNoPasswd: types.ListNull(types.StringType),
 		Groups:               types.ListNull(types.Int64Type),
@@ -245,7 +246,7 @@ func TestUserUpdatePayload(t *testing.T) {
 	m := prior
 	m.FullName = types.StringValue("Updated Name")
 	m.Locked = types.BoolValue(true)
-	m.SSHPubKey = types.StringValue("") // clear the key
+	m.SSHPubKey = normalize.NewTrimmedValue("") // clear the key
 
 	payload, diags := m.updatePayload(ctx, prior)
 	if diags.HasError() {
@@ -354,13 +355,13 @@ func TestUserUpdatePayload_UnchangedOmitsEverything(t *testing.T) {
 		Locked: types.BoolValue(true), PasswordDisabled: types.BoolValue(true),
 		SMB: types.BoolValue(false), Webshare: types.BoolValue(false),
 		SSHPasswordEnabled:   types.BoolValue(false),
-		SSHPubKey:            types.StringValue("k"),
+		SSHPubKey:            normalize.NewTrimmedValue("k"),
 		SudoCommands:         types.ListValueMust(types.StringType, []attr.Value{types.StringValue("ALL")}),
 		SudoCommandsNoPasswd: types.ListValueMust(types.StringType, []attr.Value{}),
 		Groups:               types.ListValueMust(types.Int64Type, []attr.Value{types.Int64Value(40)}),
 		Group:                types.Int64Value(950),
 		Password:             types.StringNull(),
-		HomeMode:             types.StringNull(),
+		HomeMode:             normalize.NewOctalModeNull(),
 	}
 	p, diags := m.updatePayload(context.Background(), m)
 	if diags.HasError() {
@@ -390,7 +391,7 @@ func TestUserCreatePayload_GroupCreate(t *testing.T) {
 		PasswordDisabled:     types.BoolValue(false),
 		SMB:                  types.BoolValue(false),
 		SSHPasswordEnabled:   types.BoolValue(false),
-		SSHPubKey:            types.StringValue(""),
+		SSHPubKey:            normalize.NewTrimmedValue(""),
 		SudoCommands:         types.ListValueMust(types.StringType, []attr.Value{}),
 		SudoCommandsNoPasswd: types.ListValueMust(types.StringType, []attr.Value{}),
 		Groups:               types.ListValueMust(types.Int64Type, []attr.Value{}),
@@ -428,7 +429,7 @@ func TestUserCreatePayload_GroupID(t *testing.T) {
 		PasswordDisabled:     types.BoolValue(false),
 		SMB:                  types.BoolValue(false),
 		SSHPasswordEnabled:   types.BoolValue(false),
-		SSHPubKey:            types.StringValue(""),
+		SSHPubKey:            normalize.NewTrimmedValue(""),
 		SudoCommands:         types.ListValueMust(types.StringType, []attr.Value{}),
 		SudoCommandsNoPasswd: types.ListValueMust(types.StringType, []attr.Value{}),
 		Groups:               types.ListValueMust(types.Int64Type, []attr.Value{}),
@@ -467,7 +468,7 @@ func TestUserUpdatePayload_GroupIncluded(t *testing.T) {
 		PasswordDisabled:     types.BoolValue(false),
 		SMB:                  types.BoolValue(false),
 		SSHPasswordEnabled:   types.BoolValue(false),
-		SSHPubKey:            types.StringValue(""),
+		SSHPubKey:            normalize.NewTrimmedValue(""),
 		SudoCommands:         types.ListNull(types.StringType),
 		SudoCommandsNoPasswd: types.ListNull(types.StringType),
 		Groups:               types.ListNull(types.Int64Type),
@@ -760,7 +761,7 @@ func TestUserCreatePayload_OmitsUnsetOptionals(t *testing.T) {
 		SMB:                  types.BoolValue(false), // explicitly set -> kept
 		Webshare:             types.BoolUnknown(),
 		SSHPasswordEnabled:   types.BoolUnknown(),
-		SSHPubKey:            types.StringUnknown(),
+		SSHPubKey:            normalize.NewTrimmedUnknown(),
 		SudoCommands:         types.ListUnknown(types.StringType),
 		SudoCommandsNoPasswd: types.ListUnknown(types.StringType),
 		Groups:               types.ListUnknown(types.Int64Type),
@@ -788,5 +789,95 @@ func TestUserCreatePayload_OmitsUnsetOptionals(t *testing.T) {
 	}
 	if payload["password"] != "secret123" {
 		t.Errorf("payload[password] = %v, want secret123", payload["password"])
+	}
+}
+
+// TestUserSchema_FullNameRequired: user.create rejects a user without
+// full_name, so the schema requires it instead of failing at apply. (B-052)
+func TestUserSchema_FullNameRequired(t *testing.T) {
+	a, ok := resourceSchema().Attributes["full_name"].(schema.StringAttribute)
+	if !ok || !a.IsRequired() {
+		t.Fatalf("full_name must be a Required string attribute, got %#v", resourceSchema().Attributes["full_name"])
+	}
+}
+
+// TestUserSchema_OptionalComputedKeepState: every Optional+Computed attribute
+// carries UseStateForUnknown, so an update does not show them as
+// "(known after apply)" and cascade unknowns into consumers. (B-136)
+func TestUserSchema_OptionalComputedKeepState(t *testing.T) {
+	for name, a := range resourceSchema().Attributes {
+		if !a.IsOptional() || !a.IsComputed() {
+			continue
+		}
+		var n int
+		switch v := a.(type) {
+		case schema.StringAttribute:
+			n = len(v.PlanModifiers)
+		case schema.BoolAttribute:
+			n = len(v.PlanModifiers)
+		case schema.Int64Attribute:
+			n = len(v.PlanModifiers)
+		case schema.ListAttribute:
+			n = len(v.PlanModifiers)
+		default:
+			t.Fatalf("%s: unhandled attribute type %T", name, a)
+		}
+		if n == 0 {
+			t.Errorf("%s is Optional+Computed without a plan modifier", name)
+		}
+	}
+}
+
+// TestUserUpdatePayload_HomeModeOnlyWhenChanged: home_mode is chmod-ed on every
+// update that carries it and rejected on immutable accounts, so it is sent only
+// when it changed. (B-142)
+func TestUserUpdatePayload_HomeModeOnlyWhenChanged(t *testing.T) {
+	ctx := context.Background()
+	prior := UserModel{
+		FullName:             types.StringValue("n"),
+		HomeMode:             normalize.NewOctalModeValue("700"),
+		SudoCommands:         types.ListNull(types.StringType),
+		SudoCommandsNoPasswd: types.ListNull(types.StringType),
+		Groups:               types.ListNull(types.Int64Type),
+	}
+	m := prior
+	m.FullName = types.StringValue("n2")
+	p, _ := m.updatePayload(ctx, prior)
+	if _, ok := p["home_mode"]; ok {
+		t.Errorf("unchanged home_mode must not be sent: %v", p)
+	}
+	m.HomeMode = normalize.NewOctalModeValue("750")
+	p, _ = m.updatePayload(ctx, prior)
+	if p["home_mode"] != "750" {
+		t.Errorf("changed home_mode = %v, want 750", p["home_mode"])
+	}
+}
+
+// TestResponseToModel_GroupCreateDerived: an unset group_create is derived from
+// whether the primary group is named after the user; a known value is kept.
+// (B-051)
+func TestResponseToModel_GroupCreateDerived(t *testing.T) {
+	ctx := context.Background()
+	api := &userAPI{ID: 5, Username: "alice", Group: json.RawMessage(`{"id": 9, "bsdgrp_group": "alice"}`)}
+	m := UserModel{GroupCreate: types.BoolNull(), HomeMode: normalize.NewOctalModeUnknown(), Groups: types.ListNull(types.Int64Type)}
+	if d := responseToModel(ctx, api, &m); d.HasError() {
+		t.Fatal(d)
+	}
+	if !m.GroupCreate.Equal(types.BoolValue(true)) {
+		t.Errorf("group_create = %v, want true", m.GroupCreate)
+	}
+	if !m.HomeMode.IsNull() {
+		t.Errorf("unknown home_mode must resolve to null, got %v", m.HomeMode)
+	}
+	api.Group = json.RawMessage(`{"id": 9, "bsdgrp_group": "staff"}`)
+	m.GroupCreate = types.BoolUnknown()
+	_ = responseToModel(ctx, api, &m)
+	if !m.GroupCreate.Equal(types.BoolValue(false)) {
+		t.Errorf("group_create = %v, want false", m.GroupCreate)
+	}
+	m.GroupCreate = types.BoolValue(true)
+	_ = responseToModel(ctx, api, &m)
+	if !m.GroupCreate.Equal(types.BoolValue(true)) {
+		t.Errorf("known group_create must be kept, got %v", m.GroupCreate)
 	}
 }

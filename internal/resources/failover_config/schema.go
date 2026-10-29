@@ -19,7 +19,8 @@ func resourceSchema() schema.Schema {
 			"one failover configuration per TrueNAS system, so it is never created or deleted on TrueNAS; " +
 			"Terraform create/update calls failover.update, and Terraform delete only removes the resource from " +
 			"state (the configuration is left in place). failover.config reads cleanly even on a box that isn't " +
-			"licensed for Enterprise HA (probed live), so this resource has no version or license gate." +
+			"licensed for Enterprise HA (probed live), and an apply that sets only the current values sends " +
+			"nothing; changing a setting on a system that is not licensed for HA is an apply-time error." +
 			"\n\n" +
 			"SAFETY (read before setting \"disabled\" or \"master\"): unlike \"timeout\", which is a cosmetic " +
 			"wait-time setting, \"disabled\" and \"master\" are direct controls over live HA state. Setting " +

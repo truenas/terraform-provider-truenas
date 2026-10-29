@@ -13,6 +13,7 @@ import (
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ datasource.DataSource = &NFSShareDataSource{}
@@ -34,7 +35,7 @@ func (d *NFSShareDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 			"comment":          dschema.StringAttribute{Computed: true},
 			"enabled":          dschema.BoolAttribute{Computed: true},
 			"ro":               dschema.BoolAttribute{Computed: true},
-			"networks":         dschema.ListAttribute{Computed: true, ElementType: types.StringType},
+			"networks":         dschema.ListAttribute{Computed: true, ElementType: normalize.NetworkType{}},
 			"hosts":            dschema.ListAttribute{Computed: true, ElementType: types.StringType},
 			"maproot_user":     dschema.StringAttribute{Computed: true},
 			"maproot_group":    dschema.StringAttribute{Computed: true},

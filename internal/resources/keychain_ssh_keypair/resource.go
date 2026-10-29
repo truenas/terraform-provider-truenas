@@ -76,7 +76,7 @@ func (r *KeychainSSHKeyPairResource) Create(ctx context.Context, req resource.Cr
 	}
 
 	generate := isConcreteTrue(plan.Generate)
-	privateKeySet := isSet(plan.PrivateKey)
+	privateKeySet := isSet(plan.PrivateKey.StringValue)
 
 	switch {
 	case generate && privateKeySet:

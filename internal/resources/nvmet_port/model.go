@@ -6,6 +6,7 @@ package nvmet_port
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -180,4 +181,49 @@ func (m *NVMetPortModel) updatePayload(_ context.Context) (map[string]any, diag.
 	payload["addr_traddr"] = m.AddrTraddr.ValueString()
 
 	return payload, diags
+}
+
+// portSettingsChanged reports whether an update payload changes anything on
+// the port other than enabled, compared with the prior state. TrueNAS only
+// lets enabled change on an active port with subsystems attached.
+func portSettingsChanged(payload map[string]any, state *NVMetPortModel) bool {
+	for key, v := range payload {
+		var prior attr.Value
+		switch key {
+		case "enabled":
+			continue
+		case "addr_traddr":
+			prior = state.AddrTraddr
+		case "addr_trsvcid":
+			prior = state.AddrTrsvcid
+		case "inline_data_size":
+			prior = state.InlineDataSize
+		case "max_queue_size":
+			prior = state.MaxQueueSize
+		case "pi_enable":
+			prior = state.PIEnable
+		default:
+			return true
+		}
+		if !payloadEqual(v, prior) {
+			return true
+		}
+	}
+	return false
+}
+
+// payloadEqual compares one payload value with a known framework value.
+func payloadEqual(v any, prior attr.Value) bool {
+	if prior == nil || prior.IsNull() || prior.IsUnknown() {
+		return v == nil
+	}
+	switch p := prior.(type) {
+	case types.String:
+		return v == p.ValueString()
+	case types.Int64:
+		return v == p.ValueInt64()
+	case types.Bool:
+		return v == p.ValueBool()
+	}
+	return false
 }

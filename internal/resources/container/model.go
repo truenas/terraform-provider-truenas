@@ -358,10 +358,11 @@ func nonNilBoolMap(m map[string]bool) map[string]bool {
 
 // createPayload builds the map[string]any payload for container.create.
 // "name", "pool", and "image" are always included (Required in schema).
-// Every other field is Optional+Computed: cpuset/initdir/inituser/initgroup
-// use the three-way nullable convention (unknown omits, explicit null sends
-// JSON nil, a value sends the string) since container.create's own schema
-// treats them as anyOf{string,null} with a null default; every other
+// cpuset/initdir/inituser/initgroup are Optional (not Computed) and use the
+// three-way nullable convention (explicit null sends JSON nil, a value sends
+// the string) since container.create's own schema treats them as
+// anyOf{string,null} with a null default: removing one from the
+// configuration plans null and clears it (BUGS B-099). Every other
 // Optional+Computed field uses a plain guard (included only when known and
 // non-null) so an unset optional lets the TrueNAS-side default apply
 // instead of an explicit zero value.
@@ -520,4 +521,31 @@ func isContainerAlreadyStopped(err error) bool {
 		return false
 	}
 	return strings.Contains(msg, "does not exist") || strings.Contains(msg, "is not active")
+}
+
+// nullUnknowns replaces every unknown value in m with null, so a model built
+// from the plan can be saved as state when the read-back failed.
+func nullUnknowns(m *ContainerModel) {
+	v := reflect.ValueOf(m).Elem()
+	for i := 0; i < v.NumField(); i++ {
+		f := v.Field(i)
+		switch val := f.Interface().(type) {
+		case types.String:
+			if val.IsUnknown() {
+				f.Set(reflect.ValueOf(types.StringNull()))
+			}
+		case types.Int64:
+			if val.IsUnknown() {
+				f.Set(reflect.ValueOf(types.Int64Null()))
+			}
+		case types.Bool:
+			if val.IsUnknown() {
+				f.Set(reflect.ValueOf(types.BoolNull()))
+			}
+		case types.Map:
+			if val.IsUnknown() {
+				f.Set(reflect.ValueOf(types.MapNull(val.ElementType(context.Background()))))
+			}
+		}
+	}
 }

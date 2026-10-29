@@ -12,6 +12,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
 )
@@ -20,6 +21,7 @@ var _ resource.Resource = &NetworkInterfaceResource{}
 var _ resource.ResourceWithImportState = &NetworkInterfaceResource{}
 var _ resource.ResourceWithIdentity = &NetworkInterfaceResource{}
 var _ resource.ResourceWithValidateConfig = &NetworkInterfaceResource{}
+var _ resource.ResourceWithModifyPlan = &NetworkInterfaceResource{}
 
 // ValidateConfig rejects a PHYSICAL interface config that sets any
 // BRIDGE/LINK_AGGREGATION/VLAN-specific field. interface.update ignores those
@@ -43,6 +45,31 @@ func (r *NetworkInterfaceResource) ValidateConfig(ctx context.Context, req resou
 				strings.Join(bad, ", ")+". A physical interface supports only ipv4_dhcp, ipv6_auto, "+
 				"aliases, mtu, and description.",
 		)
+	}
+}
+
+// ModifyPlan plans lacpdu_rate and xmit_hash_policy unknown when
+// lag_protocol changes and the configuration does not set them. Their
+// server value depends on the protocol (LACP reports SLOW and LAYER2+3 by
+// default, LOADBALANCE only the hash policy, FAILOVER/ROUNDROBIN/NONE
+// neither), so carrying the old values forward with UseStateForUnknown made
+// e.g. LACP -> FAILOVER fail with "inconsistent result after apply" (B-065).
+func (r *NetworkInterfaceResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() || req.State.Raw.IsNull() {
+		return
+	}
+	var plan, state, config NetworkInterfaceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() || plan.LagProtocol.Equal(state.LagProtocol) {
+		return
+	}
+	if config.LacpduRate.IsNull() {
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("lacpdu_rate"), types.StringUnknown())...)
+	}
+	if config.XmitHashPolicy.IsNull() {
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("xmit_hash_policy"), types.StringUnknown())...)
 	}
 }
 

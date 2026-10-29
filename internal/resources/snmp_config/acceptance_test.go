@@ -89,26 +89,30 @@ func restoreSNMPConfig(t *testing.T, orig snmpConfigOriginal) {
 // Terraform steps fail.
 func TestAccSNMPConfig_setAndRestore(t *testing.T) {
 	acctest.DisruptiveCheck(t)
+	// Every field the configuration below writes, not only the one varied.
+	restoreConfigKeys(t,
+		"community", "contact", "loglevel", "options", "traps", "zilstat", "v3", "v3_username",
+		"v3_authtype", "v3_password", "v3_privproto", "v3_privpassphrase", "location")
 
 	orig := readSNMPConfigOriginal(t)
 	t.Cleanup(func() { restoreSNMPConfig(t, orig) })
 
 	testValue := acctest.RandName("tf-acc-location")
-	// loglevel was removed from snmp.update in TrueNAS 27.0; set it only below 27.0.
-	pre27 := !acctest.ServerVersionAtLeast(t, 27, 0)
+	// loglevel was removed from snmp.update in TrueNAS 28.0; set it only below 28.0.
+	pre28 := !acctest.ServerVersionAtLeast(t, 28, 0)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: acctest.ProviderConfig() + testAccSNMPConfigConfig(testValue, pre27),
+				Config: acctest.ProviderConfig() + testAccSNMPConfigConfig(testValue, pre28),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_snmp_config.test", "id", "snmp_config"),
 					resource.TestCheckResourceAttr("truenas_snmp_config.test", "location", testValue),
 				),
 			},
 			{
-				Config: acctest.ProviderConfig() + testAccSNMPConfigConfig(orig.Location, pre27),
+				Config: acctest.ProviderConfig() + testAccSNMPConfigConfig(orig.Location, pre28),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("truenas_snmp_config.test", "location", orig.Location),
 				),
@@ -124,9 +128,9 @@ func TestAccSNMPConfig_setAndRestore(t *testing.T) {
 	})
 }
 
-func testAccSNMPConfigConfig(location string, pre27 bool) string {
+func testAccSNMPConfigConfig(location string, pre28 bool) string {
 	loglevel := ""
-	if pre27 {
+	if pre28 {
 		loglevel = "\n  loglevel          = 3"
 	}
 	return fmt.Sprintf(`

@@ -172,6 +172,8 @@ resource "truenas_user" "sshuser" {
   username          = %[1]q
   full_name         = "TF Acceptance SSH Connection User"
   password_disabled = true
+  # TrueNAS defaults smb to true, and an SMB user must have a password.
+  smb               = false
   home              = "/mnt/${truenas_dataset.sshuser_home.name}"
   shell             = "/usr/bin/bash"
   group_create      = true

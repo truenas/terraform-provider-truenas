@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/truenas/terraform-provider-truenas/internal/acctest"
 )
 
@@ -85,6 +86,9 @@ func restoreAuditConfig(t *testing.T, orig auditConfigOriginal) {
 // the Terraform steps fail.
 func TestAccAuditConfig_setAndRestore(t *testing.T) {
 	acctest.DisruptiveCheck(t)
+	// Every field the configuration below writes, not only the one varied.
+	restoreConfigKeys(t,
+		"quota", "quota_fill_critical", "reservation", "retention", "quota_fill_warning")
 
 	orig := readAuditConfigOriginal(t)
 	t.Cleanup(func() { restoreAuditConfig(t, orig) })
@@ -111,11 +115,29 @@ func TestAccAuditConfig_setAndRestore(t *testing.T) {
 					resource.TestCheckResourceAttr("truenas_audit_config.test", "quota_fill_warning", fmt.Sprintf("%d", orig.QuotaFillWarning)),
 				),
 			},
+			// The import is checked attribute by attribute rather than with
+			// ImportStateVerify: space.* are live usage counters of the audit
+			// dataset, which grow between the apply and the import whenever
+			// anything on the box is audited.
 			{
-				ResourceName:      "truenas_audit_config.test",
-				ImportState:       true,
-				ImportStateId:     "audit_config",
-				ImportStateVerify: true,
+				ResourceName:  "truenas_audit_config.test",
+				ImportState:   true,
+				ImportStateId: "audit_config",
+				ImportStateCheck: func(is []*terraform.InstanceState) error {
+					if len(is) != 1 {
+						return fmt.Errorf("imported %d instances, want 1", len(is))
+					}
+					want := map[string]string{
+						"id": "audit_config", "quota": "1", "quota_fill_critical": "90", "reservation": "1",
+						"retention": "30", "quota_fill_warning": fmt.Sprintf("%d", orig.QuotaFillWarning),
+					}
+					for k, v := range want {
+						if got := is[0].Attributes[k]; got != v {
+							return fmt.Errorf("imported %s = %q, want %q", k, got, v)
+						}
+					}
+					return nil
+				},
 			},
 		},
 	})

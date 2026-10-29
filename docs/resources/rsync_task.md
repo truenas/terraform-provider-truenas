@@ -51,6 +51,8 @@ resource "truenas_rsync_task" "offsite_backup" {
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `archive` (Boolean) Make rsync run recursively, preserving symlinks, permissions, modification times, group, and special files. Defaults to false.
 - `compress` (Boolean) Reduce the size of the data to be transmitted. Defaults to true.
 - `delayupdates` (Boolean) Delay updating destination files until all transfers are complete. Defaults to true.
@@ -58,7 +60,7 @@ resource "truenas_rsync_task" "offsite_backup" {
 - `desc` (String) Description of the rsync task.
 - `direction` (String) Whether data is PUSHed to or PULLed from the remote system. Defaults to PUSH.
 - `enabled` (Boolean) Whether this rsync task is enabled. Defaults to true.
-- `extra` (List of String) Additional rsync command-line options. Defaults to an empty list.
+- `extra` (List of String) Additional rsync command-line options, one argument per entry. Defaults to an empty list. An entry may not be empty or contain whitespace: TrueNAS joins the entries with spaces and splits them again, so "--exclude=a b" would become two arguments; use rsync's own escaping, e.g. "--exclude=a?b".
 - `mode` (String) Operating mechanism for rsync: MODULE (rsync module/daemon protocol) or SSH. Defaults to MODULE.
 - `preserveattr` (Boolean) Preserve extended attributes of files. Defaults to false.
 - `preserveperm` (Boolean) Preserve original file permissions. Defaults to false.
@@ -70,9 +72,9 @@ resource "truenas_rsync_task" "offsite_backup" {
 - `remoteport` (Number) Port number for the SSH connection. Only applies when mode is SSH. Null when unset.
 - `schedule` (Attributes) Cron schedule for when the rsync task should run. (see [below for nested schema](#nestedatt--schedule))
 - `ssh_credentials` (Number) Keychain credential ID (of type SSH_CREDENTIALS) used to connect to the remote host in SSH mode. Null (the default) means the run-as user's own SSH keys are used.
-- `ssh_keyscan` (Boolean) Automatically add the remote host key to the run-as user's known_hosts file at create/update time. Write-only: rsynctask.query never returns this flag, so it is not read back from the API and is not verified on import.
+- `ssh_keyscan` (Boolean, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Add the remote host key to the run-as user's known_hosts file when the task is created or updated. Write-only (a per-apply directive the API never returns): not stored in state, so changing it alone does not update the task, and an import plans no change for it. Requires Terraform >= 1.11.
 - `times` (Boolean) Preserve modification times of files. Defaults to true.
-- `validate_rpath` (Boolean) Validate the existence of the remote path at create/update time. Write-only: rsynctask.query never returns this flag, so it is not read back from the API and is not verified on import.
+- `validate_rpath` (Boolean, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Validate the existence of the remote path when the task is created or updated. Write-only (a per-apply directive the API never returns): not stored in state, so changing it alone does not update the task, and an import plans no change for it. Requires Terraform >= 1.11.
 
 ### Read-Only
 

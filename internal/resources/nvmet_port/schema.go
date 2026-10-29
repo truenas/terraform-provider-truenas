@@ -45,9 +45,11 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"enabled": schema.BoolAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "Cannot change an enabled port while the NVMe target service is running.",
+				Optional: true,
+				Computed: true,
+				Description: "Enable the port. While the NVMe-oF target runs, TrueNAS refuses changes to an enabled " +
+					"port that has subsystems attached, so the provider disables the port for the change and " +
+					"re-enables it (initiators lose the port briefly).",
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
 				},

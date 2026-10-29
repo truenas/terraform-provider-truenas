@@ -3,15 +3,19 @@
 
 package vm
 
-import "github.com/hashicorp/terraform-plugin-framework/types"
+import (
+	"reflect"
+
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
 
 // VMModel is the Terraform state model for truenas_vm.
 type VMModel struct {
 	ID              types.Int64  `tfsdk:"id"`
 	Name            types.String `tfsdk:"name"`
 	Description     types.String `tfsdk:"description"`
-	Memory          types.Int64  `tfsdk:"memory"`     // bytes
-	MinMemory       types.Int64  `tfsdk:"min_memory"` // 0 = unset
+	Memory          types.Int64  `tfsdk:"memory"`     // MiB
+	MinMemory       types.Int64  `tfsdk:"min_memory"` // MiB; 0 = unset
 	VCPUs           types.Int64  `tfsdk:"vcpus"`
 	Cores           types.Int64  `tfsdk:"cores"`
 	Threads         types.Int64  `tfsdk:"threads"`
@@ -91,8 +95,19 @@ func strOrNull(p *string) types.String {
 	return types.StringValue(*p)
 }
 
+// strOrEmpty maps a nullable API string to a Terraform string, nil -> "".
+// The clearable string options use "" in configuration for "unset" (the
+// payload sends null for it), so the read side uses the same spelling.
+func strOrEmpty(p *string) types.String {
+	if p == nil {
+		return types.StringValue("")
+	}
+	return types.StringValue(*p)
+}
+
 // responseToModel maps a vmAPI struct into a VMModel. MinMemory nil maps to 0;
-// CPUModel nil maps to "". Running is derived from Status.State == "RUNNING".
+// the nullable strings cpu_model, machine_type, arch_type, cpuset and nodeset
+// map nil to "". Running is derived from Status.State == "RUNNING".
 func responseToModel(api *vmAPI, m *VMModel) {
 	m.ID = types.Int64Value(api.ID)
 	m.Name = types.StringValue(api.Name)
@@ -111,21 +126,17 @@ func responseToModel(api *vmAPI, m *VMModel) {
 	m.Time = types.StringValue(api.Time)
 	m.ShutdownTimeout = types.Int64Value(api.ShutdownTimeout)
 	m.CPUMode = types.StringValue(api.CPUMode)
-	if api.CPUModel != nil {
-		m.CPUModel = types.StringValue(*api.CPUModel)
-	} else {
-		m.CPUModel = types.StringValue("")
-	}
+	m.CPUModel = strOrEmpty(api.CPUModel)
 	m.Status = types.StringValue(api.Status.State)
 	m.Running = types.BoolValue(api.Status.State == "RUNNING")
 
 	// Hardware / boot / CPU options (coverage audit).
-	m.MachineType = strOrNull(api.MachineType)
-	m.ArchType = strOrNull(api.ArchType)
+	m.MachineType = strOrEmpty(api.MachineType)
+	m.ArchType = strOrEmpty(api.ArchType)
 	m.BootloaderOVMF = strOrNull(api.BootloaderOVMF)
 	m.CommandLineArgs = types.StringValue(api.CommandLineArgs)
-	m.CPUSet = strOrNull(api.CPUSet)
-	m.NodeSet = strOrNull(api.NodeSet)
+	m.CPUSet = strOrEmpty(api.CPUSet)
+	m.NodeSet = strOrEmpty(api.NodeSet)
 	m.EnableSecureBoot = types.BoolValue(api.EnableSecureBoot)
 	m.TrustedPlatformModule = types.BoolValue(api.TrustedPlatformModule)
 	m.PinVCPUs = types.BoolValue(api.PinVCPUs)
@@ -185,21 +196,31 @@ func (m *VMModel) apiPayload() map[string]any {
 	if !m.CPUMode.IsNull() && !m.CPUMode.IsUnknown() {
 		p["cpu_mode"] = m.CPUMode.ValueString()
 	}
-	if !m.CPUModel.IsNull() && !m.CPUModel.IsUnknown() && m.CPUModel.ValueString() != "" {
-		p["cpu_model"] = m.CPUModel.ValueString()
-	}
-	if !m.MinMemory.IsNull() && !m.MinMemory.IsUnknown() && m.MinMemory.ValueInt64() != 0 {
-		p["min_memory"] = m.MinMemory.ValueInt64()
+	// Clearable options: a configured ""/0 is sent as null (the API's "unset";
+	// it rejects "" and 0 for these), so setting the zero value clears the
+	// server value. Removing the attribute leaves the server value alone, like
+	// every other Optional+Computed VM option. (BUGS B-098)
+	putVMNullableStr(p, "cpu_model", m.CPUModel)
+	if !m.MinMemory.IsNull() && !m.MinMemory.IsUnknown() {
+		if v := m.MinMemory.ValueInt64(); v != 0 {
+			p["min_memory"] = v
+		} else {
+			p["min_memory"] = nil
+		}
 	}
 
-	// Hardware / boot / CPU options (coverage audit). Strings sent when non-empty;
-	// bools sent when set (Computed reads the server default back otherwise).
-	putVMStr(p, "machine_type", m.MachineType)
-	putVMStr(p, "arch_type", m.ArchType)
+	// Hardware / boot / CPU options (coverage audit). Bools are sent when set
+	// (Computed reads the server default back otherwise).
+	putVMNullableStr(p, "machine_type", m.MachineType)
+	putVMNullableStr(p, "arch_type", m.ArchType)
 	putVMStr(p, "bootloader_ovmf", m.BootloaderOVMF)
-	putVMStr(p, "command_line_args", m.CommandLineArgs)
-	putVMStr(p, "cpuset", m.CPUSet)
-	putVMStr(p, "nodeset", m.NodeSet)
+	// command_line_args is a plain string on the server (default ""), so ""
+	// is sent as "" to clear it.
+	if !m.CommandLineArgs.IsNull() && !m.CommandLineArgs.IsUnknown() {
+		p["command_line_args"] = m.CommandLineArgs.ValueString()
+	}
+	putVMNullableStr(p, "cpuset", m.CPUSet)
+	putVMNullableStr(p, "nodeset", m.NodeSet)
 	putVMBool(p, "enable_secure_boot", m.EnableSecureBoot)
 	putVMBool(p, "trusted_platform_module", m.TrustedPlatformModule)
 	putVMBool(p, "pin_vcpus", m.PinVCPUs)
@@ -217,9 +238,45 @@ func putVMStr(p map[string]any, key string, v types.String) {
 	}
 }
 
+// putVMNullableStr adds a nullable string field when set: "" is sent as null
+// (clear), any other value as itself.
+func putVMNullableStr(p map[string]any, key string, v types.String) {
+	if v.IsNull() || v.IsUnknown() {
+		return
+	}
+	if v.ValueString() == "" {
+		p[key] = nil
+		return
+	}
+	p[key] = v.ValueString()
+}
+
 // putVMBool adds a bool field when set.
 func putVMBool(p map[string]any, key string, v types.Bool) {
 	if !v.IsNull() && !v.IsUnknown() {
 		p[key] = v.ValueBool()
+	}
+}
+
+// nullUnknowns replaces every unknown value in m with null, so a model built
+// from the plan can be saved as state when the read-back failed.
+func nullUnknowns(m *VMModel) {
+	v := reflect.ValueOf(m).Elem()
+	for i := 0; i < v.NumField(); i++ {
+		f := v.Field(i)
+		switch val := f.Interface().(type) {
+		case types.String:
+			if val.IsUnknown() {
+				f.Set(reflect.ValueOf(types.StringNull()))
+			}
+		case types.Int64:
+			if val.IsUnknown() {
+				f.Set(reflect.ValueOf(types.Int64Null()))
+			}
+		case types.Bool:
+			if val.IsUnknown() {
+				f.Set(reflect.ValueOf(types.BoolNull()))
+			}
+		}
 	}
 }

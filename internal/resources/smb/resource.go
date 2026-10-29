@@ -138,9 +138,11 @@ func (r *SMBShareResource) ValidateConfig(ctx context.Context, req resource.Vali
 //     stale. When options is not configured, mark it unknown (only the flat
 //     attributes and purpose are sent; the server applies the new purpose's
 //     defaults); vuid is always marked unknown.
-//   - same LEGACY_SHARE purpose, options not configured: copy the configured
-//     flat attributes onto the pinned options so the payload (which must carry
-//     the whole options object) sends the new values, and the plan shows them.
+//   - same LEGACY_SHARE purpose, options not configured: plan every unset flat
+//     attribute at its server default (removing one from the configuration
+//     resets it), then copy the flat attributes onto the pinned options so the
+//     payload (which must carry the whole options object) sends the new
+//     values, and the plan shows them.
 func (r *SMBShareResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.Plan.Raw.IsNull() || req.State.Raw.IsNull() {
 		return
@@ -164,6 +166,13 @@ func (r *SMBShareResource) ModifyPlan(ctx context.Context, req resource.ModifyPl
 
 	if newPurpose != legacySharePurpose || !cfg.Options.IsNull() || plan.Options.IsNull() || plan.Options.IsUnknown() {
 		return
+	}
+	for _, key := range plan.resetUnsetFlatLegacy(&cfg) {
+		for _, f := range plan.flatLegacyAttrs() {
+			if f.key == key {
+				resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root(key), f.value)...)
+			}
+		}
 	}
 	opts, changed, diags := plan.overlayFlatOnOptions(ctx)
 	resp.Diagnostics.Append(diags...)

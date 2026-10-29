@@ -4,11 +4,14 @@
 package acl_template
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/filesystem_acl"
 )
 
 // AclTemplateModel is the Terraform state/plan model for a filesystem ACL
@@ -105,25 +108,19 @@ func canonicalACLJSON(raw json.RawMessage) (string, diag.Diagnostics) {
 	return string(b), diags
 }
 
-// aclDrifted reports whether the API's acl content (after normalization)
-// differs from the currently-stored state's acl content (also normalized).
-// Used to implement write-what-you-said: the plan's exact "acl" JSON text
-// is kept in state as-is unless the underlying entries genuinely changed.
-func aclDrifted(stateACL string, apiACL json.RawMessage) (bool, diag.Diagnostics) {
+// aclDrifted reports whether the API's acl content differs from the stored
+// state's acl content (filesystem_acl.EntriesDiffer: id/who sentinels, false
+// members of a partial perms/flags bag, and who names resolved to ids all
+// compare equal; B-092). Used to implement write-what-you-said: the plan's
+// exact "acl" JSON text is kept in state as-is unless the underlying entries
+// genuinely changed.
+func aclDrifted(ctx context.Context, c filesystem_acl.IDLookup, stateACL string, apiACL json.RawMessage) (bool, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	stateEntries, err := aclEntriesNormalized(json.RawMessage(stateACL))
+	drifted, err := filesystem_acl.EntriesDiffer(ctx, c, stateACL, apiACL)
 	if err != nil {
-		diags.AddError("Invalid acl JSON in state", err.Error())
-		return false, diags
+		diags.AddError("Compare acl template entries failed", err.Error())
 	}
-	apiEntries, err := aclEntriesNormalized(apiACL)
-	if err != nil {
-		diags.AddError("Invalid acl JSON in API response", err.Error())
-		return false, diags
-	}
-	sb, _ := json.Marshal(stateEntries)
-	ab, _ := json.Marshal(apiEntries)
-	return string(sb) != string(ab), diags
+	return drifted, diags
 }
 
 // apiPayload converts the model into the map expected by
@@ -133,18 +130,46 @@ func aclDrifted(stateACL string, apiACL json.RawMessage) (bool, diag.Diagnostics
 // cloud_backup's "description") so an unset comment lets the server-side
 // default ("") apply rather than sending an explicit empty string that
 // would mask a future server-side default change.
-func (m *AclTemplateModel) apiPayload() (map[string]any, diag.Diagnostics) {
+//
+// A USER/GROUP entry given by "who" is sent with the id that name resolves
+// to: filesystem.acltemplate.create/update crash with KeyError: 'who' on
+// such an entry (a middleware bug on 25.10, 26.0 and 28.0). (B-149)
+func (m *AclTemplateModel) apiPayload(ctx context.Context, c filesystem_acl.IDLookup) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
+	acl := json.RawMessage(m.ACL.ValueString())
+	var entries []map[string]any
+	if err := json.Unmarshal(acl, &entries); err == nil && hasWho(entries) {
+		if err := filesystem_acl.ResolveWho(ctx, c, entries); err != nil {
+			diags.AddAttributeError(path.Root("acl"), "Resolve ACL entry name failed", err.Error())
+			return nil, diags
+		}
+		b, err := json.Marshal(entries)
+		if err != nil {
+			diags.AddError("Failed to marshal acl template entries", err.Error())
+			return nil, diags
+		}
+		acl = b
+	}
 	p := map[string]any{
 		"name":    m.Name.ValueString(),
 		"acltype": m.ACLType.ValueString(),
-		"acl":     json.RawMessage(m.ACL.ValueString()),
+		"acl":     acl,
 	}
 	if !m.Comment.IsNull() && !m.Comment.IsUnknown() {
 		p["comment"] = m.Comment.ValueString()
 	}
 	return p, diags
+}
+
+// hasWho reports whether any entry names its user or group by "who".
+func hasWho(entries []map[string]any) bool {
+	for _, e := range entries {
+		if w, ok := e["who"].(string); ok && w != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // responseToModel maps an aclTemplateAPI response into an AclTemplateModel.

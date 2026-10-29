@@ -28,8 +28,8 @@ func (d *UPSConfigDataSource) Metadata(_ context.Context, req datasource.Metadat
 func (d *UPSConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Reads the current TrueNAS UPS service configuration. Takes no arguments: there " +
-			"is exactly one UPS configuration per TrueNAS system. Does not expose monpwd: ups.config never " +
-			"returns a usable value for it.",
+			"is exactly one UPS configuration per TrueNAS system. Does not expose monpwd: ups.config returns " +
+			"it in plain text, and this data source deliberately does not surface it.",
 		Attributes: map[string]dschema.Attribute{
 			"id": dschema.StringAttribute{
 				Computed:    true,

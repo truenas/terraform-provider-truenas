@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func resourceSchema() schema.Schema {
@@ -51,16 +52,23 @@ func resourceSchema() schema.Schema {
 				Optional: true,
 				Description: "Version trigger for community_wo. Bump this integer to re-send a changed " +
 					"write-only community string (a write-only value is absent from state, so its rotation " +
-					"cannot be detected automatically). Required when community_wo is set.",
+					"cannot be detected automatically). community_wo is sent on create and, after that, only " +
+					"when this integer changes; other updates leave the stored community alone. Required when " +
+					"community_wo is set.",
 				Validators: []validator.Int64{
 					int64validator.AlsoRequires(path.MatchRoot("community_wo")),
 				},
 			},
 			"contact": schema.StringAttribute{
-				Optional:      true,
-				Computed:      true,
-				Description:   "Contact information for the SNMP administrator.",
-				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+				Optional:   true,
+				Computed:   true,
+				CustomType: normalize.EmailType{},
+				Description: "Contact information for the SNMP administrator (an e-mail address on TrueNAS 28.0, " +
+					"which stores its domain in lower case; that compares equal to the configured spelling).",
+				PlanModifiers: []planmodifier.String{
+					normalize.KeepStateIfEquivalent(normalize.EmailType{}),
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"location": schema.StringAttribute{
 				Optional:      true,

@@ -67,10 +67,12 @@ output "swappiness_original" {
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `comment` (String) Optional comment describing the tunable.
 - `enabled` (Boolean) Whether the tunable is enabled.
 - `type` (String) Tunable type: SYSCTL, UDEV, or ZFS. Changing this forces a new resource.
-- `update_initramfs` (Boolean) Whether to update initramfs after applying this tunable (write-only; not stored in state).
+- `update_initramfs` (Boolean, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Whether to update initramfs after applying this tunable. A per-apply directive: write-only (never stored in state, so an imported tunable plans no change for it, and no initramfs rebuild). Sent on every create and update where it is set. Requires Terraform >= 1.11.
 
 ### Read-Only
 

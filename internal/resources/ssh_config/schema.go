@@ -4,12 +4,14 @@
 package ssh_config
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -65,15 +67,19 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
 			"sftp_log_facility": schema.StringAttribute{
-				Optional:      true,
-				Computed:      true,
-				Description:   "SFTP subsystem syslog facility. One of \"\" (default), DAEMON, USER, AUTH, LOCAL0-LOCAL7. Not validated by this provider.",
+				Optional:    true,
+				Computed:    true,
+				Description: "SFTP subsystem syslog facility. One of \"\" (default), DAEMON, USER, AUTH, LOCAL0-LOCAL7.",
+				Validators: []validator.String{stringvalidator.OneOf("", "DAEMON", "USER", "AUTH",
+					"LOCAL0", "LOCAL1", "LOCAL2", "LOCAL3", "LOCAL4", "LOCAL5", "LOCAL6", "LOCAL7")},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"sftp_log_level": schema.StringAttribute{
-				Optional:      true,
-				Computed:      true,
-				Description:   "SFTP subsystem syslog level. One of \"\" (default), QUIET, FATAL, ERROR, INFO, VERBOSE, DEBUG, DEBUG1, DEBUG2, DEBUG3. Not validated by this provider.",
+				Optional:    true,
+				Computed:    true,
+				Description: "SFTP subsystem syslog level. One of \"\" (default), QUIET, FATAL, ERROR, INFO, VERBOSE, DEBUG, DEBUG2, DEBUG3.",
+				Validators: []validator.String{stringvalidator.OneOf("", "QUIET", "FATAL", "ERROR", "INFO",
+					"VERBOSE", "DEBUG", "DEBUG2", "DEBUG3")},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"tcpfwd": schema.BoolAttribute{

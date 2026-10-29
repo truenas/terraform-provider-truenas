@@ -4,7 +4,7 @@ page_title: "truenas_smb_share_acl Resource - truenas"
 subcategory: "Sharing"
 description: |-
   Manages the share-level Access Control List of an existing SMB share via sharing.smb.setacl / getacl (both probed live on TrueNAS 27.0 as job:false plain calls), keyed by share_name rather than a TrueNAS-assigned id. This is the SMB "Share ACL" surface (who may connect to the share and at what level), distinct from the filesystem ACL on the share's path (truenas_filesystem_acl) and from the share's own settings (truenas_smb_share).
-  Like truenas_filesystem_acl this follows write-what-you-said: the entries you configure are kept in state verbatim, and a read only rewrites them when the share ACL genuinely changed. The server resolves a principal you give by one selector into the others (e.g. an ae_who_sid of "S-1-1-0" reads back with ae_who_str "everyone@"); those extra resolved fields are deliberately not stored, so specify exactly one of ae_who_sid / ae_who_id / ae_who_str per entry.
+  Each entry names its principal by exactly one of ae_who_sid or ae_who_id. The server stores the SID and resolves the other fields (e.g. ae_who_sid "S-1-1-0" reads back with ae_who_str "everyone@"); all three are kept in state, so an imported share ACL plans no change whichever selector the configuration uses.
   Delete semantics: terraform destroy resets the share ACL to the TrueNAS default of a single "everyone@ FULL ALLOWED" entry (sharing.smb.setacl's documented default), not to "no ACL" - an SMB share always has a share ACL. A warning diagnostic is emitted since this mutates the share outside Terraform's usual forget-state convention.
 ---
 
@@ -12,7 +12,7 @@ description: |-
 
 Manages the share-level Access Control List of an existing SMB share via sharing.smb.setacl / getacl (both probed live on TrueNAS 27.0 as job:false plain calls), keyed by share_name rather than a TrueNAS-assigned id. This is the SMB "Share ACL" surface (who may connect to the share and at what level), distinct from the filesystem ACL on the share's path (truenas_filesystem_acl) and from the share's own settings (truenas_smb_share).
 
-Like truenas_filesystem_acl this follows write-what-you-said: the entries you configure are kept in state verbatim, and a read only rewrites them when the share ACL genuinely changed. The server resolves a principal you give by one selector into the others (e.g. an ae_who_sid of "S-1-1-0" reads back with ae_who_str "everyone@"); those extra resolved fields are deliberately not stored, so specify exactly one of ae_who_sid / ae_who_id / ae_who_str per entry.
+Each entry names its principal by exactly one of ae_who_sid or ae_who_id. The server stores the SID and resolves the other fields (e.g. ae_who_sid "S-1-1-0" reads back with ae_who_str "everyone@"); all three are kept in state, so an imported share ACL plans no change whichever selector the configuration uses.
 
 Delete semantics: `terraform destroy` resets the share ACL to the TrueNAS default of a single "everyone@ FULL ALLOWED" entry (sharing.smb.setacl's documented default), not to "no ACL" - an SMB share always has a share ACL. A warning diagnostic is emitted since this mutates the share outside Terraform's usual forget-state convention.
 
@@ -40,9 +40,12 @@ Required:
 
 Optional:
 
-- `ae_who_id` (Attributes) Principal by Unix ID. Specify exactly one of ae_who_sid / ae_who_id / ae_who_str per entry. (see [below for nested schema](#nestedatt--share_acl--ae_who_id))
-- `ae_who_sid` (String) Principal by SID (e.g. "S-1-1-0" for everyone). Specify exactly one of ae_who_sid / ae_who_id / ae_who_str per entry; the server resolves the others.
-- `ae_who_str` (String) Principal by user or group name (e.g. "everyone@"). Specify exactly one of ae_who_sid / ae_who_id / ae_who_str per entry.
+- `ae_who_id` (Attributes) Principal by Unix ID. Specify exactly one of ae_who_sid / ae_who_id per entry. The user or group must be an SMB account. When the entry uses ae_who_sid, this is the Unix ID the SID maps to (null if it maps to none, e.g. everyone). (see [below for nested schema](#nestedatt--share_acl--ae_who_id))
+- `ae_who_sid` (String) Principal by SID (e.g. "S-1-1-0" for everyone). Specify exactly one of ae_who_sid / ae_who_id per entry. When the entry uses ae_who_id, this is the SID the server resolved. Compared case-insensitively (the server stores SIDs upper-case).
+
+Read-Only:
+
+- `ae_who_str` (String) Principal user or group name the server resolved (e.g. "everyone@"). Read-only: sharing.smb.setacl cannot resolve a name, so use ae_who_sid or ae_who_id.
 
 <a id="nestedatt--share_acl--ae_who_id"></a>
 ### Nested Schema for `share_acl.ae_who_id`

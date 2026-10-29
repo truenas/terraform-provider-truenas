@@ -53,9 +53,12 @@ func responseToModel(ctx context.Context, api *portalAPI, m *ISCSIPortalModel) d
 	m.Comment = types.StringValue(api.Comment)
 	m.Tag = types.Int64Value(api.Tag)
 
-	// Convert listen.
+	// Convert listen, in the order the model already has (plan on
+	// create/update, prior state on read) when it holds the same IPs:
+	// TrueNAS keeps its stored order on update, so a reordered config would
+	// otherwise fail with "inconsistent result after apply".
 	var listenModels []ListenModel
-	for _, l := range api.Listen {
+	for _, l := range orderListen(api.Listen, modelListenIPs(ctx, m.Listen)) {
 		listenModels = append(listenModels, ListenModel{
 			IP:   types.StringValue(l.IP),
 			Port: types.Int64Value(l.Port),
@@ -81,12 +84,10 @@ func (m *ISCSIPortalModel) apiPayload(ctx context.Context) (map[string]any, diag
 		diags.Append(m.Listen.ElementsAs(ctx, &listenItems, false)...)
 	}
 
-	// TrueNAS 26.0 removed per-listen port from iscsi.portal.create/update: the
-	// global iSCSI service listen_port governs all portals now. Only "ip" is
-	// sent per listen entry; "port" is never included in the payload, even
-	// when set in config (see the "port" schema attribute description). The
-	// response still reports port per listen, and responseToModel keeps
-	// mapping it back so it remains visible as a computed value.
+	// iscsi.portal.create/update take only "ip" per listen entry on every
+	// supported release (25.10+): the global iSCSI listen_port governs all
+	// portals. The response still reports port per listen, and
+	// responseToModel maps it back as a Computed-only value.
 	var listenPayload []map[string]any
 	for _, l := range listenItems {
 		listenPayload = append(listenPayload, map[string]any{
@@ -106,4 +107,49 @@ func (m *ISCSIPortalModel) apiPayload(ctx context.Context) (map[string]any, diag
 	}
 
 	return payload, diags
+}
+
+// modelListenIPs returns the IPs of a listen list in order, or nil when the
+// list (or any IP in it) is not known.
+func modelListenIPs(ctx context.Context, l types.List) []string {
+	if l.IsNull() || l.IsUnknown() {
+		return nil
+	}
+	var items []ListenModel
+	if d := l.ElementsAs(ctx, &items, false); d.HasError() {
+		return nil
+	}
+	ips := make([]string, 0, len(items))
+	for _, it := range items {
+		if it.IP.IsNull() || it.IP.IsUnknown() {
+			return nil
+		}
+		ips = append(ips, it.IP.ValueString())
+	}
+	return ips
+}
+
+// orderListen returns api reordered to follow want when both hold the same
+// IPs (as a multiset), and api unchanged otherwise.
+func orderListen(api []listenAPI, want []string) []listenAPI {
+	if len(want) != len(api) || len(api) == 0 {
+		return api
+	}
+	used := make([]bool, len(api))
+	out := make([]listenAPI, 0, len(api))
+	for _, ip := range want {
+		found := false
+		for i, l := range api {
+			if !used[i] && l.IP == ip {
+				used[i] = true
+				out = append(out, l)
+				found = true
+				break
+			}
+		}
+		if !found {
+			return api
+		}
+	}
+	return out
 }

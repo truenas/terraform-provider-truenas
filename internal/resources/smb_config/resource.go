@@ -161,7 +161,7 @@ func (r *SMBConfigResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	if _, err := r.client.Call(ctx, "smb.update", payload); err != nil {
+	if err := r.update(ctx, payload, &resp.Diagnostics); err != nil {
 		resp.Diagnostics.AddError("Create SMB configuration failed", err.Error())
 		return
 	}
@@ -225,7 +225,7 @@ func (r *SMBConfigResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	if _, err := r.client.Call(ctx, "smb.update", payload); err != nil {
+	if err := r.update(ctx, payload, &resp.Diagnostics); err != nil {
 		resp.Diagnostics.AddError("Update SMB configuration failed", err.Error())
 		return
 	}

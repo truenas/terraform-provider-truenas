@@ -6,6 +6,7 @@ package snmp_config
 import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // snmpConfigResourceID is the fixed Terraform ID for this singleton resource:
@@ -15,10 +16,11 @@ const snmpConfigResourceID = "snmp_config"
 
 // SNMPConfigModel is the Terraform state model for truenas_snmp_config.
 //
-// V3Password and V3PrivPassphrase are write-only secrets: the API never
-// returns usable values for them (v3_password always reads back as "",
-// masked), so they are Optional+Sensitive only (never Computed) and are
-// never touched by responseToModel.
+// V3Password and V3PrivPassphrase are write-only secrets: snmp.config does
+// return them in plain text to a full-admin session (masked as "********"
+// for READONLY_ADMIN), but this provider deliberately never reads them, so
+// they are Optional+Sensitive only (never Computed), never touched by
+// responseToModel, and never stored in state.
 type SNMPConfigModel struct {
 	ID        types.String `tfsdk:"id"` // fixed: "snmp_config"
 	Community types.String `tfsdk:"community"`
@@ -26,26 +28,26 @@ type SNMPConfigModel struct {
 	// never stored in state, and not read back on refresh. CommunityWOVersion is
 	// the trigger the user bumps to re-send a rotated write-only community
 	// string. (#36 secrets-out-of-state class) See [[writeonly]].
-	CommunityWO        types.String `tfsdk:"community_wo"`
-	CommunityWOVersion types.Int64  `tfsdk:"community_wo_version"`
-	Contact            types.String `tfsdk:"contact"`
-	Location           types.String `tfsdk:"location"`
-	LogLevel           types.Int64  `tfsdk:"loglevel"`
-	Options            types.String `tfsdk:"options"`
-	Traps              types.Bool   `tfsdk:"traps"`
-	Zilstat            types.Bool   `tfsdk:"zilstat"`
-	V3                 types.Bool   `tfsdk:"v3"`
-	V3Username         types.String `tfsdk:"v3_username"`
-	V3AuthType         types.String `tfsdk:"v3_authtype"`
-	V3Password         types.String `tfsdk:"v3_password"`       // write-only, Sensitive
-	V3PrivProto        types.String `tfsdk:"v3_privproto"`      // nullable in API
-	V3PrivPassphrase   types.String `tfsdk:"v3_privpassphrase"` // write-only, Sensitive; nullable in API
+	CommunityWO        types.String    `tfsdk:"community_wo"`
+	CommunityWOVersion types.Int64     `tfsdk:"community_wo_version"`
+	Contact            normalize.Email `tfsdk:"contact"`
+	Location           types.String    `tfsdk:"location"`
+	LogLevel           types.Int64     `tfsdk:"loglevel"`
+	Options            types.String    `tfsdk:"options"`
+	Traps              types.Bool      `tfsdk:"traps"`
+	Zilstat            types.Bool      `tfsdk:"zilstat"`
+	V3                 types.Bool      `tfsdk:"v3"`
+	V3Username         types.String    `tfsdk:"v3_username"`
+	V3AuthType         types.String    `tfsdk:"v3_authtype"`
+	V3Password         types.String    `tfsdk:"v3_password"`       // write-only, Sensitive
+	V3PrivProto        types.String    `tfsdk:"v3_privproto"`      // nullable in API
+	V3PrivPassphrase   types.String    `tfsdk:"v3_privpassphrase"` // write-only, Sensitive; nullable in API
 }
 
 // SNMPConfigDataSourceModel is the read-only model for the
-// truenas_snmp_config datasource. It has no secret fields (v3_password,
-// v3_privpassphrase): the API never returns usable values for them, so
-// datasource attributes for them would always read as empty/unknown.
+// truenas_snmp_config datasource. It deliberately has no v3_password or
+// v3_privpassphrase fields: snmp.config returns them in plain text, and the
+// data source does not expose SNMPv3 secrets.
 type SNMPConfigDataSourceModel struct {
 	ID          types.String `tfsdk:"id"`
 	Community   types.String `tfsdk:"community"`
@@ -62,8 +64,9 @@ type SNMPConfigDataSourceModel struct {
 }
 
 // snmpConfigAPI mirrors the JSON object returned by snmp.config and accepted
-// (as a subset) by snmp.update. v3_password is present in the response
-// (always "", masked) but is intentionally never read into either model.
+// (as a subset) by snmp.update. v3_password is present in the response (in
+// plain text for a full-admin session) but is intentionally never read into
+// either model.
 type snmpConfigAPI struct {
 	ID               int64   `json:"id"`
 	Community        string  `json:"community"`
@@ -94,7 +97,10 @@ func responseToModel(api *snmpConfigAPI, m *SNMPConfigModel) diag.Diagnostics {
 	} else {
 		m.Community = types.StringValue(api.Community)
 	}
-	m.Contact = types.StringValue(api.Contact)
+	// TrueNAS 28.0 validates contact as an e-mail address and lower-cases its
+	// domain; the Email type compares the domain case-insensitively so the
+	// configured spelling stays in state (B-077).
+	m.Contact = normalize.NewEmailValue(api.Contact)
 	m.Location = types.StringValue(api.Location)
 	if api.LogLevel != nil {
 		m.LogLevel = types.Int64Value(*api.LogLevel)

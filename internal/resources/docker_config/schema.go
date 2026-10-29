@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func resourceSchema() schema.Schema {
@@ -79,8 +80,13 @@ func resourceSchema() schema.Schema {
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"base": schema.StringAttribute{
-							Required:    true,
-							Description: "Base network address with prefix for the pool (e.g. \"172.17.0.0/12\").",
+							Required:   true,
+							CustomType: normalize.NetworkType{},
+							// TrueNAS 28.0 stores the network address (172.17.0.0/12
+							// reads back as 172.16.0.0/12); both name the same pool (B-078).
+							PlanModifiers: []planmodifier.String{normalize.KeepStateIfEquivalent(normalize.NetworkType{})},
+							Description: "Base network address with prefix for the pool (e.g. \"172.17.0.0/12\"). " +
+								"Host bits are ignored when comparing with the server's value.",
 						},
 						"size": schema.Int64Attribute{
 							Required:    true,
@@ -90,11 +96,14 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"cidr_v6": schema.StringAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "IPv6 CIDR block for Docker container networking (e.g. \"fdd0::/64\").",
+				Optional: true,
+				Computed: true,
+				Description: "IPv6 CIDR block for Docker container networking (e.g. \"fdd0::/64\"). Any IPv6 " +
+					"spelling is accepted; the server stores the compressed lower-case form (B-079).",
+				CustomType: normalize.CIDRType{},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+					normalize.KeepStateIfEquivalent(normalize.CIDRType{}),
 				},
 			},
 			"registry_mirrors": schema.ListNestedAttribute{
@@ -110,8 +119,11 @@ func resourceSchema() schema.Schema {
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"url": schema.StringAttribute{
-							Required:    true,
-							Description: "Registry mirror URL.",
+							Required:   true,
+							CustomType: normalize.URLType{},
+							// The server stores the URL with a trailing slash (B-080).
+							PlanModifiers: []planmodifier.String{normalize.KeepStateIfEquivalent(normalize.URLType{})},
+							Description:   "Registry mirror URL.",
 						},
 						"insecure": schema.BoolAttribute{
 							Required:    true,

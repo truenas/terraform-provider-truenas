@@ -33,7 +33,7 @@ resource "truenas_kerberos_realm" "example" {
 - `admin_server` (List of String) List of Kerberos admin servers for this realm. If empty (the default), the Kerberos libraries use DNS to look them up.
 - `kdc` (List of String) List of Kerberos domain controllers for this realm. If empty (the default), the Kerberos libraries use DNS to look up KDCs.
 - `kpasswd_server` (List of String) List of Kerberos kpasswd servers for this realm. If empty (the default), DNS is used to look them up if needed.
-- `primary_kdc` (String) The master Kerberos domain controller for this realm, used as a fallback when TrueNAS cannot get credentials because of an invalid password (helpful in hub-and-spoke topologies). Null (the default) if unset.
+- `primary_kdc` (String) The master Kerberos domain controller for this realm, used as a fallback when TrueNAS cannot get credentials because of an invalid password (helpful in hub-and-spoke topologies). Null (the default) if unset; removing it from configuration clears it.
 
 ### Read-Only
 

@@ -44,13 +44,12 @@ func TestAccZvol_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("truenas_zvol.test", "comments", "updated comment"),
 				),
 			},
-			// Import by zvol name. "sparse" is write-only and never returned
-			// by the API, so it can't be verified after import.
+			// Import by zvol name. sparse is read from the refreservation on
+			// import (B-109), so it verifies like every other attribute.
 			{
-				ResourceName:            "truenas_zvol.test",
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"sparse"},
+				ResourceName:      "truenas_zvol.test",
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})
@@ -59,8 +58,8 @@ func TestAccZvol_basic(t *testing.T) {
 func testAccZvolConfig(name string, volsize int64, compression, comments string) string {
 	// Full-surface: every writable property set to a non-default value so the
 	// post-apply plan and ImportStateVerify prove each round-trips. sparse is
-	// write-only (already in ImportStateVerifyIgnore); with it set, the zvol has
-	// reservation/refreservation are not set: on a sparse zvol they carry no local
+	// read back from the refreservation on import; with it set, the zvol has no
+	// reservation, so reservation/refreservation are not set: on a sparse zvol they carry no local
 	// value and read back null on 26.0+, so they are not portably testable here.
 	return fmt.Sprintf(`
 resource "truenas_zvol" "test" {

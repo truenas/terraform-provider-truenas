@@ -49,13 +49,13 @@ variable "registry_password" {
 
 - `name` (String) Human-readable name for the container registry.
 - `password_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Password or access token for registry authentication. Write-only: never stored in Terraform state and not read back on refresh. Requires Terraform >= 1.11. Validated against the real registry endpoint at apply time (see the resource-level description). Because a write-only value is invisible to the plan, rotate the token by updating password_wo and bumping password_wo_version.
-- `password_wo_version` (Number) Rotation trigger for password_wo. A write-only value is absent from state, so a changed token cannot be detected automatically; bump this integer whenever password_wo changes to re-send it (the provider calls app.registry.update). Set it to 1 on initial configuration.
+- `password_wo_version` (Number) Rotation trigger for password_wo. A write-only value is absent from state, so a changed token cannot be detected automatically; bump this integer whenever password_wo changes to re-send it (the provider calls app.registry.update). password_wo is sent on create and, after that, only when this integer changes; other updates leave the stored token alone. Set it to 1 on initial configuration.
 - `username` (String) Username for registry authentication.
 
 ### Optional
 
 - `description` (String) Optional description of the container registry.
-- `uri` (String) Container registry URI endpoint. Defaults to "https://index.docker.io/v1/" (Docker Hub) when omitted.
+- `uri` (String) Container registry URI endpoint. Defaults to "https://index.docker.io/v1/" (Docker Hub) when omitted. TrueNAS stores an http(s) URI with a trailing slash; either spelling compares equal.
 
 ### Read-Only
 

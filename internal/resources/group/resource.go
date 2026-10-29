@@ -90,7 +90,12 @@ func (r *GroupResource) Create(ctx context.Context, req resource.CreateRequest, 
 		}
 	}
 
-	resp.Diagnostics.Append(responseToModel(ctx, apiResp, &plan)...)
+	primary, err := r.primaryMembers(ctx, apiResp.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Read primary-group members failed", err.Error())
+		return
+	}
+	resp.Diagnostics.Append(responseToModel(ctx, apiResp, primary, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -121,7 +126,12 @@ func (r *GroupResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	resp.Diagnostics.Append(responseToModel(ctx, &apiResp, &state)...)
+	primary, err := r.primaryMembers(ctx, apiResp.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Read primary-group members failed", err.Error())
+		return
+	}
+	resp.Diagnostics.Append(responseToModel(ctx, &apiResp, primary, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -144,7 +154,7 @@ func (r *GroupResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 	plan.ID = state.ID
 
-	payload, diags := plan.updatePayload(ctx)
+	payload, diags := plan.updatePayload(ctx, state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -168,7 +178,12 @@ func (r *GroupResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	resp.Diagnostics.Append(responseToModel(ctx, &apiResp, &plan)...)
+	primary, err := r.primaryMembers(ctx, apiResp.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Read primary-group members failed", err.Error())
+		return
+	}
+	resp.Diagnostics.Append(responseToModel(ctx, &apiResp, primary, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -209,10 +224,37 @@ func (r *GroupResource) ImportState(ctx context.Context, req resource.ImportStat
 	}
 
 	var state GroupModel
-	resp.Diagnostics.Append(responseToModel(ctx, &apiResp, &state)...)
+	primary, err := r.primaryMembers(ctx, apiResp.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Read primary-group members failed", err.Error())
+		return
+	}
+	resp.Diagnostics.Append(responseToModel(ctx, &apiResp, primary, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, id)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
+
+// primaryMembers returns the ids of the users whose primary group is groupID.
+// See responseToModel for why they are filtered out of "users".
+func (r *GroupResource) primaryMembers(ctx context.Context, groupID int64) (map[int64]bool, error) {
+	raw, err := r.client.CallRead(ctx, "user.query",
+		[]any{[]any{"group.id", "=", groupID}},
+		map[string]any{"select": []string{"id"}})
+	if err != nil {
+		return nil, err
+	}
+	var users []struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &users); err != nil {
+		return nil, fmt.Errorf("parse user.query response: %w", err)
+	}
+	out := make(map[int64]bool, len(users))
+	for _, u := range users {
+		out[u.ID] = true
+	}
+	return out, nil
 }

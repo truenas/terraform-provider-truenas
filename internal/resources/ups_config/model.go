@@ -15,9 +15,10 @@ const upsConfigResourceID = "ups_config"
 
 // UPSConfigModel is the Terraform state model for truenas_ups_config.
 //
-// MonPwd is a write-only secret: the API never returns a usable value for
-// it, so it is Optional+Sensitive only (never Computed) and is never touched
-// by responseToModel.
+// MonPwd is a write-only secret: ups.config does return it in plain text,
+// but this provider deliberately never reads it, so it is
+// Optional+Sensitive only (never Computed), never touched by responseToModel
+// and never stored in state.
 //
 // CompleteIdentifier is a server-derived, Computed-only value (it is never
 // sent to ups.update and has no UseStateForUnknown plan modifier, since it
@@ -48,9 +49,9 @@ type UPSConfigModel struct {
 }
 
 // UPSConfigDataSourceModel is the read-only model for the
-// truenas_ups_config datasource. It has no monpwd field: the API never
-// returns a usable value for it, so a datasource attribute for it would
-// always read as empty/unknown.
+// truenas_ups_config datasource. It deliberately has no monpwd field:
+// ups.config returns it in plain text, and the data source does not expose
+// it.
 type UPSConfigDataSourceModel struct {
 	ID                 types.String `tfsdk:"id"`
 	Identifier         types.String `tfsdk:"identifier"`
@@ -75,8 +76,8 @@ type UPSConfigDataSourceModel struct {
 }
 
 // upsConfigAPI mirrors the JSON object returned by ups.config and accepted
-// (as a subset) by ups.update. monpwd is present in the response (masked)
-// but is intentionally never read into either model. shutdowncmd and
+// (as a subset) by ups.update. monpwd is present in the response (in plain
+// text) but is intentionally never read into either model. shutdowncmd and
 // nocommwarntime are nullable on the API side, hence the pointer types.
 // complete_identifier is server-derived and read-only.
 type upsConfigAPI struct {

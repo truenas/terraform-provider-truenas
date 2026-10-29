@@ -25,7 +25,7 @@ Reads the current TrueNAS SSH service configuration. Takes no arguments: there i
 - `password_login_groups` (List of String) Groups whose members are allowed to authenticate with a password.
 - `passwordauth` (Boolean) Whether password authentication is enabled.
 - `sftp_log_facility` (String) SFTP subsystem syslog facility. One of "" (default), DAEMON, USER, AUTH, LOCAL0-LOCAL7.
-- `sftp_log_level` (String) SFTP subsystem syslog level. One of "" (default), QUIET, FATAL, ERROR, INFO, VERBOSE, DEBUG, DEBUG1, DEBUG2, DEBUG3.
+- `sftp_log_level` (String) SFTP subsystem syslog level. One of "" (default), QUIET, FATAL, ERROR, INFO, VERBOSE, DEBUG, DEBUG2, DEBUG3.
 - `tcpfwd` (Boolean) Whether TCP forwarding is enabled.
 - `tcpport` (Number) TCP port the SSH service listens on.
 - `weak_ciphers` (List of String) Weak ciphers to allow. Valid values: AES128-CBC, NONE.

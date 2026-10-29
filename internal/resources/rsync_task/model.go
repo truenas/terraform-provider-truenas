@@ -10,6 +10,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
@@ -411,4 +413,24 @@ func (m *RsyncTaskModel) apiPayload(ctx context.Context) (map[string]any, diag.D
 	}
 
 	return p, diags
+}
+
+// copyDirectives copies the write-only per-apply directives validate_rpath
+// and ssh_keyscan from the configuration into m for the payload: the plan
+// holds write-only attributes as null. They are write-only so an import
+// (which cannot read them back) plans no change (B-117).
+func copyDirectives(ctx context.Context, cfg tfsdk.Config, m *RsyncTaskModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+	var v types.Bool
+	diags.Append(cfg.GetAttribute(ctx, path.Root("validate_rpath"), &v)...)
+	m.ValidateRPath = v
+	diags.Append(cfg.GetAttribute(ctx, path.Root("ssh_keyscan"), &v)...)
+	m.SSHKeyscan = v
+	return diags
+}
+
+// clearDirectives nulls the write-only directives before m is saved to state.
+func (m *RsyncTaskModel) clearDirectives() {
+	m.ValidateRPath = types.BoolNull()
+	m.SSHKeyscan = types.BoolNull()
 }

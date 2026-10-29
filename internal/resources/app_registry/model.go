@@ -4,25 +4,10 @@
 package app_registry
 
 import (
-	"strings"
-
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
-
-// preserveURI keeps the configured registry URI when it differs from the
-// value TrueNAS returns only by a trailing slash. app.registry.create
-// canonicalizes the URI by appending "/" (e.g. "https://ghcr.io" is stored as
-// "https://ghcr.io/"), so taking the API value verbatim would fail with
-// "inconsistent result after apply" when the user configured it without the
-// slash. A genuinely different URI still takes the API value. (#47)
-func preserveURI(current types.String, apiVal string) types.String {
-	if !current.IsNull() && !current.IsUnknown() &&
-		strings.TrimRight(current.ValueString(), "/") == strings.TrimRight(apiVal, "/") {
-		return current
-	}
-	return types.StringValue(apiVal)
-}
 
 // AppRegistryModel is the Terraform state model for truenas_app_registry.
 //
@@ -44,13 +29,13 @@ func preserveURI(current types.String, apiVal string) types.String {
 // app.registry.update, re-sending the current password_wo value. This mirrors
 // the house password_wo/password_wo_version pattern (cloud_backup, #36). (#48)
 type AppRegistryModel struct {
-	ID                types.Int64  `tfsdk:"id"`
-	Name              types.String `tfsdk:"name"`
-	Description       types.String `tfsdk:"description"` // nullable
-	URI               types.String `tfsdk:"uri"`
-	Username          types.String `tfsdk:"username"`
-	PasswordWO        types.String `tfsdk:"password_wo"`         // write-only, Sensitive; never read back
-	PasswordWOVersion types.Int64  `tfsdk:"password_wo_version"` // rotation trigger for password_wo
+	ID                types.Int64   `tfsdk:"id"`
+	Name              types.String  `tfsdk:"name"`
+	Description       types.String  `tfsdk:"description"` // nullable
+	URI               normalize.URL `tfsdk:"uri"`         // server appends "/" to http(s) URIs (#47, B-122)
+	Username          types.String  `tfsdk:"username"`
+	PasswordWO        types.String  `tfsdk:"password_wo"`         // write-only, Sensitive; never read back
+	PasswordWOVersion types.Int64   `tfsdk:"password_wo_version"` // rotation trigger for password_wo
 }
 
 // AppRegistryDataSourceModel is the read-only lookup model for the
@@ -59,11 +44,11 @@ type AppRegistryModel struct {
 // read (mirrors truenas_iscsi_auth's datasource, which omits "secret"/
 // "peersecret" for the same reason).
 type AppRegistryDataSourceModel struct {
-	ID          types.Int64  `tfsdk:"id"`
-	Name        types.String `tfsdk:"name"`
-	Description types.String `tfsdk:"description"`
-	URI         types.String `tfsdk:"uri"`
-	Username    types.String `tfsdk:"username"`
+	ID          types.Int64   `tfsdk:"id"`
+	Name        types.String  `tfsdk:"name"`
+	Description types.String  `tfsdk:"description"`
+	URI         normalize.URL `tfsdk:"uri"`
+	Username    types.String  `tfsdk:"username"`
 }
 
 // appRegistryAPI is the JSON wire format returned by app.registry.create,
@@ -108,8 +93,16 @@ func responseToModel(api *appRegistryAPI, m *AppRegistryModel) diag.Diagnostics 
 	} else {
 		m.Description = types.StringNull()
 	}
-	m.URI = preserveURI(m.URI, api.URI)
-	m.Username = types.StringValue(api.Username)
+	// The server appends "/" to an http(s) URI; the URL type's semantic
+	// equality keeps the configured spelling (#47).
+	m.URI = normalize.NewURLValue(api.URI)
+	// username is a Secret in the API: a READONLY_ADMIN session gets the
+	// redaction mask instead. Keep the prior value then (null after import,
+	// so the next apply records the configured username), rather than storing
+	// the mask (B-032).
+	if api.Username != redactedSecret {
+		m.Username = types.StringValue(api.Username)
+	}
 
 	// NOTE: Password is NOT set here (write-only, never read back from the
 	// API).
@@ -130,11 +123,20 @@ func responseToDataSourceModel(api *appRegistryAPI, m *AppRegistryDataSourceMode
 	} else {
 		m.Description = types.StringNull()
 	}
-	m.URI = types.StringValue(api.URI)
-	m.Username = types.StringValue(api.Username)
+	m.URI = normalize.NewURLValue(api.URI)
+	// A redacted username (READONLY_ADMIN session) is reported as null, not
+	// as "********" (B-032).
+	m.Username = types.StringNull()
+	if api.Username != redactedSecret {
+		m.Username = types.StringValue(api.Username)
+	}
 
 	return diags
 }
+
+// redactedSecret is what app.registry returns for a Secret field (username,
+// password) to a session without full-admin rights (a READONLY_ADMIN key).
+const redactedSecret = "********"
 
 // apiPayload builds the map[string]any payload shared by
 // app.registry.create and app.registry.update. name/username are Required
@@ -155,7 +157,11 @@ func (m *AppRegistryModel) apiPayload(cfgPasswordWO types.String) map[string]any
 	p := map[string]any{
 		"name":     m.Name.ValueString(),
 		"username": m.Username.ValueString(),
-		"password": cfgPasswordWO.ValueString(),
+	}
+	// Update passes a null password unless password_wo_version changed
+	// (B-141); app.registry.update then keeps the stored one.
+	if !cfgPasswordWO.IsNull() && !cfgPasswordWO.IsUnknown() {
+		p["password"] = cfgPasswordWO.ValueString()
 	}
 
 	if m.Description.IsNull() {

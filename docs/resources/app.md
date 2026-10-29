@@ -45,11 +45,11 @@ resource "truenas_app" "syncthing" {
 - `running` (Boolean) Whether the app should be running. Set false to stop.
 - `train` (String) Catalog train: stable, community, enterprise.
 - `values` (String) JSON document of app configuration values. On read it is reconciled from the live app config, projected onto the keys you set, so configuration drift in those keys (e.g. a change made in the UI) is detected. Chart defaults you did not set and server-managed ix_* keys are not reported as drift.
-- `version` (String) App version to install (default "latest").
+- `version` (String) App version to install (default "latest"). Changing it to a specific version upgrades the app. "latest" installs the newest catalog version at create time and is kept as written in state (it does not upgrade the app later; the installed version is in human_version).
 
 ### Read-Only
 
-- `human_version` (String)
+- `human_version` (String) Installed app version as shown in the UI (app version and catalog version).
 - `id` (String) App name (used as Terraform ID).
 - `state` (String) Current app state (RUNNING, STOPPED, DEPLOYING, ...).
-- `upgrade_available` (Boolean)
+- `upgrade_available` (Boolean) Whether a newer catalog version is available.

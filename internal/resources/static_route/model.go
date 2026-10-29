@@ -8,14 +8,15 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // StaticRouteModel is the Terraform state model for truenas_static_route.
 type StaticRouteModel struct {
-	ID          types.Int64  `tfsdk:"id"`
-	Destination types.String `tfsdk:"destination"` // CIDR, e.g. "10.20.0.0/16"
-	Gateway     types.String `tfsdk:"gateway"`
-	Description types.String `tfsdk:"description"`
+	ID          types.Int64         `tfsdk:"id"`
+	Destination normalize.CIDR      `tfsdk:"destination"` // CIDR, e.g. "10.20.0.0/16"
+	Gateway     normalize.IPAddress `tfsdk:"gateway"`
+	Description types.String        `tfsdk:"description"`
 }
 
 // staticRouteAPI is the JSON wire format for a TrueNAS static route object.
@@ -30,8 +31,11 @@ type staticRouteAPI struct {
 func responseToModel(_ context.Context, api *staticRouteAPI, m *StaticRouteModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 	m.ID = types.Int64Value(api.ID)
-	m.Destination = types.StringValue(api.Destination)
-	m.Gateway = types.StringValue(api.Gateway)
+	// The server rewrites both: IPv6 is stored exploded, a bare IPv4 gets /32
+	// and a dotted netmask becomes a prefix length. The normalize types compare
+	// them semantically, so the configured spelling stays in state (B-076).
+	m.Destination = normalize.NewCIDRValue(api.Destination)
+	m.Gateway = normalize.NewIPAddressValue(api.Gateway)
 	m.Description = types.StringValue(api.Description)
 	return diags
 }

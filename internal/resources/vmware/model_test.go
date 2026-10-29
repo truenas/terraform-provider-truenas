@@ -195,3 +195,18 @@ func TestResponseToDataSourceModel_FullShape(t *testing.T) {
 		t.Errorf("Hostname = %q, want esxi.example.com", m.Hostname.ValueString())
 	}
 }
+
+// TestApiPayload_NullPasswordOmitted: an update that does not re-send the
+// write-only password (password_wo_version unchanged) leaves the key out so
+// vmware.update keeps the stored password. (B-141)
+func TestApiPayload_NullPasswordOmitted(t *testing.T) {
+	m := &VMwareModel{
+		Datastore:  types.StringValue("ds1"),
+		Filesystem: types.StringValue("tank/vmware"),
+		Hostname:   types.StringValue("vcenter.example.com"),
+		Username:   types.StringValue("tfuser"),
+	}
+	if _, ok := m.apiPayload(types.StringNull())["password"]; ok {
+		t.Error("null password must be omitted from the payload")
+	}
+}

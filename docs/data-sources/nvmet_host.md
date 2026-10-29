@@ -22,6 +22,8 @@ Looks up a TrueNAS NVMe-oF host (initiator) by hostnqn. Never exposes DH-CHAP se
 ### Read-Only
 
 - `description` (String) Free-form description of the host.
+- `dhchap_ctrl_key_set` (Boolean) Whether the host has a DH-CHAP controller key. The key itself is never exposed.
 - `dhchap_dhgroup` (String) DH-CHAP Diffie-Hellman group used for bidirectional authentication.
 - `dhchap_hash` (String) DH-CHAP hash algorithm (SHA-256, SHA-384, SHA-512).
+- `dhchap_key_set` (Boolean) Whether the host has a DH-CHAP key. The key itself is never exposed.
 - `id` (Number) Numeric NVMe-oF host ID assigned by TrueNAS.

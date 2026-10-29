@@ -12,6 +12,7 @@ import (
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ datasource.DataSource = &GroupDataSource{}
@@ -34,7 +35,7 @@ func (d *GroupDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 			"gid":                    dschema.Int64Attribute{Computed: true, Description: "UNIX GID."},
 			"name":                   dschema.StringAttribute{Required: true, Description: "Group name to look up."},
 			"smb":                    dschema.BoolAttribute{Computed: true},
-			"users":                  dschema.ListAttribute{Computed: true, ElementType: types.Int64Type},
+			"users":                  dschema.ListAttribute{Computed: true, ElementType: types.Int64Type, CustomType: normalize.UnorderedListOf(types.Int64Type)},
 			"sudo_commands":          dschema.ListAttribute{Computed: true, ElementType: types.StringType},
 			"sudo_commands_nopasswd": dschema.ListAttribute{Computed: true, ElementType: types.StringType},
 			"builtin":                dschema.BoolAttribute{Computed: true},
@@ -88,7 +89,7 @@ func (d *GroupDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 
-	resp.Diagnostics.Append(responseToModel(ctx, &results[0], &state)...)
+	resp.Diagnostics.Append(responseToModel(ctx, &results[0], nil, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}

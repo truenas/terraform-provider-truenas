@@ -232,9 +232,9 @@ func TestSchema_IDComputedUseStateForUnknown(t *testing.T) {
 }
 
 // TestSchema_AttributesRequired verifies that "attributes" is a Required
-// StringAttribute, and that it is Sensitive: the blob can carry secrets for
-// some device types (e.g. the DISPLAY device's VNC password), so the whole
-// attribute is masked in plan output and state as a pragmatic fix.
+// StringAttribute and NOT Sensitive: plans show device settings, and secrets
+// (the DISPLAY password) are rejected there and go in attributes_secrets_wo
+// instead. (B-159)
 func TestSchema_AttributesRequired(t *testing.T) {
 	s := resourceSchema()
 
@@ -249,8 +249,8 @@ func TestSchema_AttributesRequired(t *testing.T) {
 	if !strAttr.IsRequired() {
 		t.Error("'attributes' should be Required")
 	}
-	if !strAttr.IsSensitive() {
-		t.Error("'attributes' should be Sensitive")
+	if strAttr.IsSensitive() {
+		t.Error("'attributes' must not be Sensitive (B-159)")
 	}
 }
 

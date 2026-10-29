@@ -168,7 +168,7 @@ func rtResources() []rtResource {
 			typ: "truenas_vm", method: "vm.create",
 			base: func(name, body string) string {
 				alnum := strings.ReplaceAll(name, "-", "")
-				return fmt.Sprintf("resource \"truenas_vm\" \"t\" {\n  name = %q\n  memory = 536870912\n  vcpus = 1\n  autostart = false\n  running = false\n%s}\n", alnum, body)
+				return fmt.Sprintf("resource \"truenas_vm\" \"t\" {\n  name = %q\n  memory = 512\n  vcpus = 1\n  autostart = false\n  running = false\n%s}\n", alnum, body)
 			},
 			fields: []rtField{{api: "bootloader"}, {api: "cpu_mode"}, {api: "time"}},
 		},

@@ -51,10 +51,9 @@ func TestAccTunable_basic(t *testing.T) {
 				),
 			},
 			{
-				ResourceName:            "truenas_tunable.test",
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"update_initramfs"},
+				ResourceName:      "truenas_tunable.test",
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})

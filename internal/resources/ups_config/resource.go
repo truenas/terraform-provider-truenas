@@ -150,7 +150,16 @@ func (r *UPSConfigResource) Update(ctx context.Context, req resource.UpdateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	plan.MonPwd = cfg.MonPwd
+	var state UPSConfigModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	// The write-only monpwd is sent only when monpwd_wo_version changed;
+	// ups.update keeps the stored password when monpwd is absent. (B-141)
+	if !plan.MonPwdWOVersion.Equal(state.MonPwdWOVersion) {
+		plan.MonPwd = cfg.MonPwd
+	}
 
 	// See Create: ups.update requires several fields on every call, so the
 	// live config is fetched first and merged with the plan's known values.

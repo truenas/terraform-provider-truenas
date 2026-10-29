@@ -30,8 +30,9 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"listen": schema.ListNestedAttribute{
-				Required:    true,
-				Description: "List of IP/port pairs the portal listens on.",
+				Required: true,
+				Description: "List of IP addresses the portal listens on. Order does not matter: TrueNAS keeps its " +
+					"stored order, and the provider reports the list in config order when the IPs match.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"ip": schema.StringAttribute{
@@ -39,11 +40,11 @@ func resourceSchema() schema.Schema {
 							Description: "IP address to listen on.",
 						},
 						"port": schema.Int64Attribute{
-							Optional:    true,
-							Computed:    true,
-							Description: "Port is reported by TrueNAS but cannot be set per-listen on TrueNAS 26.0+; the global iSCSI listen_port applies.",
+							Computed: true,
+							Description: "TCP port reported by TrueNAS. Read-only: no supported TrueNAS release accepts a " +
+								"per-listen port (25.10 and later); set listen_port on truenas_iscsi_global instead.",
 							PlanModifiers: []planmodifier.Int64{
-								int64planmodifier.UseStateForUnknown(),
+								portFromState{},
 							},
 						},
 					},

@@ -4,8 +4,10 @@
 package filesystem_acl
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -66,10 +68,8 @@ type fsGetAclAPI struct {
 // uid/gid is never -1) and a "who" of null. Normalization deliberately does
 // NOT sort entries, so server-side reordering (seen with POSIX1E) surfaces as
 // drift; keep-order rationale: entry order is semantically significant for
-// ACL evaluation. Mirrors acl_template's aclEntriesNormalized (that package's
-// types are unexported and not meant to be imported - this is the same
-// normalization re-implemented against this resource's own probe of
-// filesystem.getacl/setacl).
+// ACL evaluation. This is the form stored in state on import or drift and
+// returned by the data source; comparisons use comparableEntries on top of it.
 func entriesNormalized(raw json.RawMessage) ([]map[string]any, error) {
 	if len(raw) == 0 {
 		return nil, fmt.Errorf("empty ACL entries JSON")
@@ -93,6 +93,91 @@ func entriesNormalized(raw json.RawMessage) ([]map[string]any, error) {
 	return entries, nil
 }
 
+// NormalizeEntries is the comparison form of an ACL (a filesystem ACL or an
+// ACL template): entriesNormalized, plus the false members of a "perms" or
+// "flags" bag of booleans removed. The server fills every permission and flag
+// key a bag leaves out with false (setacl and acltemplate.create both expand
+// {READ_DATA = true} to all 14 permissions, and a 1-key flags bag to all 5
+// flags), so a partial bag, as documented, never compared equal and every
+// apply re-ran setacl. Absent and false mean the same thing. (B-092) Shared
+// with truenas_acl_template.
+func NormalizeEntries(raw json.RawMessage) ([]map[string]any, error) {
+	entries, err := entriesNormalized(raw)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range entries {
+		for _, bag := range []string{"perms", "flags"} {
+			m, ok := e[bag].(map[string]any)
+			if !ok {
+				continue
+			}
+			if _, basic := m["BASIC"]; basic {
+				continue
+			}
+			for k, v := range m {
+				if b, isBool := v.(bool); isBool && !b {
+					delete(m, k)
+				}
+			}
+		}
+	}
+	return entries, nil
+}
+
+// IDLookup is the client call ResolveWho needs; *client.Client satisfies it.
+type IDLookup interface {
+	CallRead(ctx context.Context, method string, params ...any) (json.RawMessage, error)
+}
+
+// ResolveWho replaces the "who" name of each USER/GROUP entry that has no id
+// with the uid/gid it names (user.query by username, group.query by group
+// name). The server stores and returns ACL entries by id only (who comes back
+// null), so an entry written with who never compared equal to the read-back
+// and the ACL re-applied forever (B-093). filesystem.acltemplate.create also
+// crashes (KeyError: 'who') on an entry with who, so truenas_acl_template sends
+// the resolved form (B-149).
+func ResolveWho(ctx context.Context, c IDLookup, entries []map[string]any) error {
+	for i, e := range entries {
+		who, ok := e["who"].(string)
+		if !ok || who == "" {
+			continue
+		}
+		if idv, has := e["id"]; has && idv != nil {
+			if f, isNum := idv.(float64); !isNum || f != -1 {
+				continue
+			}
+		}
+		var method, field, key string
+		switch e["tag"] {
+		case "USER":
+			method, field, key = "user.query", "username", "uid"
+		case "GROUP":
+			method, field, key = "group.query", "group", "gid"
+		default:
+			continue
+		}
+		raw, err := c.CallRead(ctx, method, [][]any{{field, "=", who}})
+		if err != nil {
+			return fmt.Errorf("entry %d: look up %s %q: %w", i, strings.ToLower(e["tag"].(string)), who, err)
+		}
+		var rows []map[string]any
+		if err := json.Unmarshal(raw, &rows); err != nil {
+			return fmt.Errorf("entry %d: parse %s result: %w", i, method, err)
+		}
+		if len(rows) == 0 {
+			return fmt.Errorf("entry %d: %s %q does not exist", i, strings.ToLower(e["tag"].(string)), who)
+		}
+		id, ok := rows[0][key].(float64)
+		if !ok {
+			return fmt.Errorf("entry %d: %s %q has no %s", i, strings.ToLower(e["tag"].(string)), who, key)
+		}
+		e["id"] = id
+		delete(e, "who")
+	}
+	return nil
+}
+
 // canonicalEntriesJSON marshals raw's normalized entries back to a JSON
 // string, for use as the state value when the API's content is what should
 // be stored (import, or a genuine drift on read).
@@ -111,26 +196,41 @@ func canonicalEntriesJSON(raw json.RawMessage) (string, diag.Diagnostics) {
 	return string(b), diags
 }
 
-// entriesDrifted reports whether the API's ACL content (after
-// normalization) differs from the currently-stored state's entries content
-// (also normalized). Used to implement write-what-you-said: the plan's
-// exact "entries" JSON text is kept in state as-is unless the underlying
-// entries genuinely changed.
-func entriesDrifted(stateEntries string, apiACL json.RawMessage) (bool, diag.Diagnostics) {
+// EntriesDiffer reports whether two ACLs differ in content: both are reduced
+// with NormalizeEntries and the "who" names in want are resolved to ids
+// (ResolveWho) first. want is the configured or stored text, got the server's
+// (or a second configuration; the server never returns who).
+func EntriesDiffer(ctx context.Context, c IDLookup, want string, got json.RawMessage) (bool, error) {
+	wantNorm, err := NormalizeEntries(json.RawMessage(want))
+	if err != nil {
+		return false, fmt.Errorf("invalid ACL entries JSON in configuration or state: %w", err)
+	}
+	if err := ResolveWho(ctx, c, wantNorm); err != nil {
+		return false, err
+	}
+	gotNorm, err := NormalizeEntries(got)
+	if err != nil {
+		return false, fmt.Errorf("invalid ACL entries JSON in API response: %w", err)
+	}
+	if err := ResolveWho(ctx, c, gotNorm); err != nil {
+		return false, err
+	}
+	wb, _ := json.Marshal(wantNorm)
+	gb, _ := json.Marshal(gotNorm)
+	return string(wb) != string(gb), nil
+}
+
+// entriesDrifted reports whether the API's ACL content differs from the
+// stored state's entries content (EntriesDiffer). Used to implement
+// write-what-you-said: the plan's exact "entries" JSON text is kept in state
+// as-is unless the underlying entries genuinely changed.
+func entriesDrifted(ctx context.Context, c IDLookup, stateEntries string, apiACL json.RawMessage) (bool, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	stateNorm, err := entriesNormalized(json.RawMessage(stateEntries))
+	drifted, err := EntriesDiffer(ctx, c, stateEntries, apiACL)
 	if err != nil {
-		diags.AddError("Invalid ACL entries JSON in state", err.Error())
-		return false, diags
+		diags.AddError("Compare ACL entries failed", err.Error())
 	}
-	apiNorm, err := entriesNormalized(apiACL)
-	if err != nil {
-		diags.AddError("Invalid ACL entries JSON in API response", err.Error())
-		return false, diags
-	}
-	sb, _ := json.Marshal(stateNorm)
-	ab, _ := json.Marshal(apiNorm)
-	return string(sb) != string(ab), diags
+	return drifted, diags
 }
 
 // setaclPayload builds the map expected by filesystem.setacl for Create/

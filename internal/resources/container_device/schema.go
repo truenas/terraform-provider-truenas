@@ -66,6 +66,9 @@ func resourceSchema() schema.Schema {
 			"attributes": schema.StringAttribute{
 				Required:    true,
 				Description: "JSON document of device attributes. Must include \"dtype\": FILESYSTEM, NIC, or USB. See the resource description above for probed field shapes.",
+				PlanModifiers: []planmodifier.String{
+					keepAttributesIfConfigMatchesState{},
+				},
 			},
 		},
 	}

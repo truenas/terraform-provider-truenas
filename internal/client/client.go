@@ -4,10 +4,13 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -39,9 +42,18 @@ func (e *APIError) Error() string {
 // Note the middleware's InstanceNotFound errors report errname EINVAL with
 // an "[ENOENT] ..." reason, so the reason text is checked as well as the
 // errno.
+//
+// JSON-RPC protocol errors (negative codes, e.g. -32601 "Method does not
+// exist" when the connected release lacks a method, or -32602 invalid
+// params) say nothing about the object and never count as not-found:
+// matching their text would let a Read silently drop a resource from state
+// after, for example, a rollback to an older release.
 func IsNotFound(err error) bool {
 	e, ok := err.(*APIError)
 	if !ok {
+		return false
+	}
+	if e.Code < 0 {
 		return false
 	}
 	msg := strings.ToLower(e.Message)
@@ -95,8 +107,38 @@ type callResult struct {
 }
 
 type pendingCall struct {
-	ch chan callResult
+	ch   chan callResult
+	conn *wsConn // the connection the request was written on
 }
+
+// wsConn is one websocket connection. closed is set (under
+// Client.pendingMu) when its readLoop has exited and failed the calls
+// pending on it; send checks it while registering a call, so a call can
+// never wait on a connection that no longer has a reader.
+type wsConn struct {
+	*websocket.Conn
+	closed bool
+}
+
+// ErrResponseTooLarge is returned by a call whose response exceeded
+// maxResponseBytes. Only that call fails: the connection stays up and
+// other in-flight calls are unaffected. It is not transient (CallRead does
+// not retry it), since resending the same request returns the same
+// response.
+var ErrResponseTooLarge = errors.New("response exceeds the client's size limit")
+
+// maxResponseBytes bounds a single response held in memory. Large reads are
+// legitimate (pool.dataset.query on a pool with thousands of datasets runs
+// to tens of MiB), so the bound is generous; it exists to keep a runaway
+// response from exhausting memory. A package variable so tests can shrink it.
+var maxResponseBytes int64 = 256 << 20
+
+// authConnKey marks the context of an authFn run by dial. Calls made with
+// that context go straight to the connection being authenticated: they skip
+// the in-flight semaphore (whose slots may all be held by callers waiting on
+// this very reconnect) and the published c.conn (which is not set until auth
+// succeeds).
+type authConnKey struct{}
 
 // Client is a TrueNAS JSON-RPC 2.0 WebSocket API client (the /api/current
 // endpoint) safe for concurrent use.
@@ -105,7 +147,7 @@ type Client struct {
 	tlsConfig *tls.Config
 
 	connMu sync.Mutex
-	conn   *websocket.Conn
+	conn   *wsConn
 	authFn func(ctx context.Context) error // stored by Connect; replayed by reconnect
 
 	// reconnectMu serializes reconnect attempts. connMu alone isn't enough
@@ -135,6 +177,11 @@ type Client struct {
 	pendingMu sync.Mutex
 	pending   map[uint64]*pendingCall
 
+	// jobMethodsMu guards jobMethods: service -> method -> "runs as a job",
+	// from core.get_methods (see methodIsJob).
+	jobMethodsMu sync.Mutex
+	jobMethods   map[string]map[string]bool
+
 	seq atomic.Uint64
 
 	// versionMu guards version, fetched lazily by ServerVersion.
@@ -154,7 +201,13 @@ type Client struct {
 	// to reconnect. Started once by Connect, stopped by Close.
 	keepaliveStop chan struct{}
 	keepaliveOnce sync.Once
-	stopOnce      sync.Once
+	lastUse       atomic.Int64 // UnixNano of the last Connect or Call
+	// keepaliveEvery/keepaliveIdle are keepaliveInterval/keepaliveIdleLimit,
+	// captured by New.
+	keepaliveEvery time.Duration
+	keepaliveIdle  time.Duration
+
+	stopOnce sync.Once
 }
 
 // userAgentBase and userAgentURL compose the default and
@@ -202,11 +255,13 @@ func WithUserAgent(version string) Option {
 // real provider version.
 func New(endpoint string, tlsCfg *tls.Config, opts ...Option) *Client {
 	c := &Client{
-		endpoint:      endpoint,
-		tlsConfig:     tlsCfg,
-		pending:       make(map[uint64]*pendingCall),
-		userAgent:     fmt.Sprintf("%s/dev (+%s)", userAgentBase, userAgentURL),
-		keepaliveStop: make(chan struct{}),
+		endpoint:       endpoint,
+		tlsConfig:      tlsCfg,
+		pending:        make(map[uint64]*pendingCall),
+		userAgent:      fmt.Sprintf("%s/dev (+%s)", userAgentBase, userAgentURL),
+		keepaliveStop:  make(chan struct{}),
+		keepaliveEvery: keepaliveInterval,
+		keepaliveIdle:  keepaliveIdleLimit,
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -224,8 +279,23 @@ func (c *Client) Connect(ctx context.Context, authenticateFn func(ctx context.Co
 	c.connMu.Lock()
 	c.authFn = authenticateFn
 	c.connMu.Unlock()
-	if err := c.dial(ctx); err != nil {
-		return err
+	c.lastUse.Store(time.Now().UnixNano())
+	// A failed websocket open (handshake timeout, EOF from a busy nginx) is
+	// retried briefly; a server that stays unreachable still fails
+	// configuration within ~20s.
+	for attempt := 0; ; attempt++ {
+		err := c.dial(ctx)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, errDial) || attempt >= len(dialRetryDelays) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(jitteredBackoff(dialRetryDelays[attempt])):
+		}
 	}
 	c.startKeepalive()
 	return nil
@@ -233,30 +303,64 @@ func (c *Client) Connect(ctx context.Context, authenticateFn func(ctx context.Co
 
 // keepaliveInterval is how often the keepalive pings. It is well under the
 // observed ~45-60s server idle-close window so the session never idles out.
-const keepaliveInterval = 30 * time.Second
+// A package variable so tests can shrink it.
+var keepaliveInterval = 30 * time.Second
+
+// keepaliveIdleLimit stops the keepalive for a client nobody has called for
+// this long. A provider process is busy from Configure to exit (job polls
+// run every 2s), so this only matters for clients that were abandoned
+// without Close: in-process acceptance tests configure a new provider, and
+// so a new client, for every Terraform command. Kept warm forever, those
+// abandoned clients held one server session each and, after any connection
+// drop, all logged in again at once and exhausted the login rate limit. A
+// package variable so tests can shrink it.
+var keepaliveIdleLimit = 5 * time.Minute
 
 // startKeepalive launches the single keepalive goroutine (idempotent). Each
-// tick issues a best-effort core.ping: when the connection is live this resets
-// the server's idle timer, and when it has already dropped Call's own
-// reconnect brings it back, keeping the session warm between user operations.
-// Errors are ignored — a real call surfaces any genuine fault; a ping must not.
+// tick issues a best-effort core.ping on the live connection, which resets
+// the server's idle timer. It never reconnects (a dropped connection is
+// re-dialed by the next real call) and stops pinging once the client has
+// been unused for keepaliveIdleLimit, so an abandoned client lets the server
+// close its session. Errors are ignored — a real call surfaces any genuine
+// fault; a ping must not.
 func (c *Client) startKeepalive() {
 	c.keepaliveOnce.Do(func() {
 		go func() {
-			ticker := time.NewTicker(keepaliveInterval)
+			ticker := time.NewTicker(c.keepaliveEvery)
 			defer ticker.Stop()
 			for {
 				select {
 				case <-c.keepaliveStop:
 					return
 				case <-ticker.C:
-					ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-					_, _ = c.Call(ctx, "core.ping")
-					cancel()
+					c.keepalivePing()
 				}
 			}
 		}()
 	})
+}
+
+// keepalivePing pings the current connection if there is one and the client
+// is in use. It does not count as use.
+func (c *Client) keepalivePing() {
+	if time.Since(time.Unix(0, c.lastUse.Load())) > c.keepaliveIdle {
+		return
+	}
+	c.connMu.Lock()
+	conn := c.conn
+	c.connMu.Unlock()
+	if conn == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	select {
+	case c.sem <- struct{}{}:
+		defer func() { <-c.sem }()
+	case <-ctx.Done():
+		return
+	}
+	_, _ = c.send(ctx, conn, "core.ping", nil)
 }
 
 // dial opens the websocket connection and (if an authFn was stored by
@@ -265,6 +369,43 @@ func (c *Client) startKeepalive() {
 // Connect and reconnect so there is exactly one implementation of the
 // connect path.
 func (c *Client) dial(ctx context.Context) error {
+	for attempt := 0; ; attempt++ {
+		err := c.dialOnce(ctx)
+		if err == nil || !errors.Is(err, errClosedDuringAuth) || attempt >= len(dialRetryDelays) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(jitteredBackoff(dialRetryDelays[attempt])):
+		}
+	}
+}
+
+// errClosedDuringAuth marks a dial whose connection the server closed, or
+// stopped answering, before authentication finished. A busy server (seen
+// under login rate limiting) does this; dial retries it on a fresh
+// connection after dialRetryDelays.
+var errClosedDuringAuth = errors.New("connection closed during authentication")
+
+// errDial marks a failure to open the websocket at all (connection refused,
+// failed handshake), as opposed to an authentication failure on an open one.
+var errDial = errors.New("cannot open connection")
+
+// reconnectRetryDelays are the waits between re-dial attempts when Call
+// finds the connection gone and the server unreachable. They span about a
+// minute, enough for a middleware/nginx restart. Connect uses the shorter
+// dialRetryDelays: a box that is down at configuration time fails quickly.
+// A package variable so tests can shrink it.
+var reconnectRetryDelays = []time.Duration{2 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second, 30 * time.Second}
+
+// dialRetryDelays are the waits before re-dialing after errClosedDuringAuth,
+// and before Connect retries a failed websocket open (errDial). A package
+// variable so tests can shrink it.
+var dialRetryDelays = []time.Duration{2 * time.Second, 5 * time.Second, 10 * time.Second}
+
+// dialOnce makes one connect+auth attempt (see dial).
+func (c *Client) dialOnce(ctx context.Context) error {
 	dialer := websocket.Dialer{
 		HandshakeTimeout: 10 * time.Second,
 		TLSClientConfig:  c.tlsConfig,
@@ -275,26 +416,50 @@ func (c *Client) dial(ctx context.Context) error {
 	header := http.Header{}
 	header.Set("User-Agent", c.userAgent)
 
-	conn, _, err := dialer.DialContext(ctx, c.endpoint, header)
+	ws, _, err := dialer.DialContext(ctx, c.endpoint, header)
 	if err != nil {
-		return fmt.Errorf("websocket dial %s: %w", c.endpoint, err)
+		return fmt.Errorf("websocket dial %s: %w: %w", c.endpoint, errDial, err)
 	}
-	conn.SetReadLimit(10 * 1024 * 1024)
+	// No websocket-level read limit: readLoop enforces maxResponseBytes
+	// itself so an oversized response fails only its own call instead of
+	// tearing down the connection.
+	ws.SetReadLimit(0)
+	conn := &wsConn{Conn: ws}
 
 	c.connMu.Lock()
-	c.conn = conn
 	authFn := c.authFn
 	c.connMu.Unlock()
 
-	go c.readLoop(conn)
+	done := make(chan struct{})
+	go c.readLoop(conn, done)
 
+	// Authenticate BEFORE publishing the connection in c.conn: other
+	// goroutines only ever send on an authenticated socket. The auth calls
+	// reach this connection through the context (see authConnKey).
 	if authFn != nil {
-		if err := authFn(ctx); err != nil {
-			_ = c.Close()
+		if err := authFn(context.WithValue(ctx, authConnKey{}, conn)); err != nil {
+			// Checked before closing it ourselves: did the connection drop
+			// under the auth call? failPending marks it closed before it
+			// fails the call, so this is reliable.
+			c.pendingMu.Lock()
+			dropped := conn.closed
+			c.pendingMu.Unlock()
+			_ = conn.Close()
+			if dropped || errors.Is(err, errNoResponse) {
+				return fmt.Errorf("websocket %s: %w: %v", c.endpoint, errClosedDuringAuth, err)
+			}
 			return err
 		}
 	}
 
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
+	select {
+	case <-done:
+		return fmt.Errorf("websocket %s: %w", c.endpoint, errClosedDuringAuth)
+	default:
+	}
+	c.conn = conn
 	return nil
 }
 
@@ -320,53 +485,148 @@ func (c *Client) reconnect(ctx context.Context) error {
 	return c.dial(ctx)
 }
 
-func (c *Client) readLoop(conn *websocket.Conn) {
+// readLoop reads responses from conn until it fails, then fails the calls
+// pending on conn, unpublishes it, and closes done (under connMu, so dial can
+// tell whether the connection died before it was published).
+func (c *Client) readLoop(conn *wsConn, done chan struct{}) {
+	err := c.readMessages(conn)
+	c.failPending(conn, fmt.Errorf("connection closed: %w", err))
+	c.connMu.Lock()
+	if c.conn == conn {
+		c.conn = nil
+	}
+	close(done)
+	c.connMu.Unlock()
+}
+
+// readMessages dispatches responses until a transport or protocol error,
+// which it returns.
+func (c *Client) readMessages(conn *wsConn) error {
 	for {
-		var msg rpcResponse
-		if err := conn.ReadJSON(&msg); err != nil {
-			c.failPending(fmt.Errorf("connection closed: %w", err))
-			c.connMu.Lock()
-			if c.conn == conn {
-				c.conn = nil
+		_, r, err := conn.NextReader()
+		if err != nil {
+			return err
+		}
+		buf, err := io.ReadAll(io.LimitReader(r, maxResponseBytes+1))
+		if err != nil {
+			return err
+		}
+		if int64(len(buf)) > maxResponseBytes {
+			// Fail only the call this response answers. Its id may come
+			// after the oversized result, so scan the rest of the message
+			// for it without keeping the values.
+			id, ok := scanResponseID(io.MultiReader(bytes.NewReader(buf), r))
+			if !ok {
+				return fmt.Errorf("oversized response (> %d bytes) without a readable id", maxResponseBytes)
 			}
-			c.connMu.Unlock()
-			return
+			c.deliver(id, callResult{err: fmt.Errorf("%w (%d bytes)", ErrResponseTooLarge, maxResponseBytes)})
+			continue
+		}
+		var msg rpcResponse
+		if err := json.Unmarshal(buf, &msg); err != nil {
+			return err
 		}
 		// Server-push notifications (collection_update etc.) carry no ID.
 		if msg.ID == nil {
 			continue
 		}
-		c.pendingMu.Lock()
-		p, ok := c.pending[*msg.ID]
-		if ok {
-			delete(c.pending, *msg.ID)
-		}
-		c.pendingMu.Unlock()
-		if ok {
-			if msg.Error != nil {
-				p.ch <- callResult{err: msg.Error.apiError()}
-			} else {
-				p.ch <- callResult{result: msg.Result}
-			}
+		if msg.Error != nil {
+			c.deliver(*msg.ID, callResult{err: msg.Error.apiError()})
+		} else {
+			c.deliver(*msg.ID, callResult{result: msg.Result})
 		}
 	}
 }
 
-// failPending fails every in-flight call after a transport loss. The
-// deliberate wrapping as &APIError{Code: 0} (no real TrueNAS error carries
-// code 0) is what CallRead's isTransient uses to recognize a mid-flight
-// transport failure as retryable.
-func (c *Client) failPending(err error) {
+// deliver hands res to the pending call with this id, if it is still
+// waiting.
+func (c *Client) deliver(id uint64, res callResult) {
+	c.pendingMu.Lock()
+	p, ok := c.pending[id]
+	if ok {
+		delete(c.pending, id)
+	}
+	c.pendingMu.Unlock()
+	if ok {
+		p.ch <- res
+	}
+}
+
+// scanResponseID walks one JSON-RPC response object token by token and
+// returns its top-level "id", without holding the other values in memory.
+func scanResponseID(r io.Reader) (uint64, bool) {
+	dec := json.NewDecoder(r)
+	dec.UseNumber()
+	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+		return 0, false
+	}
+	for dec.More() {
+		t, err := dec.Token()
+		if err != nil {
+			return 0, false
+		}
+		if key, _ := t.(string); key == "id" {
+			var id uint64
+			if err := dec.Decode(&id); err != nil {
+				return 0, false
+			}
+			return id, true
+		}
+		if err := skipJSONValue(dec); err != nil {
+			return 0, false
+		}
+	}
+	return 0, false
+}
+
+// skipJSONValue consumes one complete value from dec.
+func skipJSONValue(dec *json.Decoder) error {
+	depth := 0
+	for {
+		t, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		switch t {
+		case json.Delim('{'), json.Delim('['):
+			depth++
+		case json.Delim('}'), json.Delim(']'):
+			depth--
+		}
+		if depth == 0 {
+			return nil
+		}
+	}
+}
+
+// failPending fails every call in flight on conn after a transport loss.
+// Calls on other connections (a newer connection being authenticated, say)
+// are untouched. The deliberate wrapping as &APIError{Code: 0} (no real
+// TrueNAS error carries code 0) is what CallRead's isTransient uses to
+// recognize a mid-flight transport failure as retryable.
+func (c *Client) failPending(conn *wsConn, err error) {
 	c.pendingMu.Lock()
 	defer c.pendingMu.Unlock()
-	for _, p := range c.pending {
+	conn.closed = true
+	for id, p := range c.pending {
+		if p.conn != conn {
+			continue
+		}
 		p.ch <- callResult{err: &APIError{Message: err.Error()}}
+		delete(c.pending, id)
 	}
-	c.pending = make(map[uint64]*pendingCall)
 }
 
 // Call invokes a TrueNAS method and returns the raw JSON result.
 func (c *Client) Call(ctx context.Context, method string, params ...any) (json.RawMessage, error) {
+	// An authFn run by dial: send on the connection being authenticated,
+	// without a semaphore slot (see authConnKey).
+	if conn, ok := ctx.Value(authConnKey{}).(*wsConn); ok {
+		return c.send(ctx, conn, method, params)
+	}
+
+	c.lastUse.Store(time.Now().UnixNano())
+
 	// Bound in-flight concurrent RPCs (see the sem field): acquire a slot or
 	// wait, so calls beyond the server's per-connection cap queue instead of
 	// failing with -32000. Released on every return path via defer.
@@ -377,13 +637,6 @@ func (c *Client) Call(ctx context.Context, method string, params ...any) (json.R
 		return nil, ctx.Err()
 	}
 
-	id := c.seq.Add(1)
-	p := &pendingCall{ch: make(chan callResult, 1)}
-
-	c.pendingMu.Lock()
-	c.pending[id] = p
-	c.pendingMu.Unlock()
-
 	c.connMu.Lock()
 	conn := c.conn
 	c.connMu.Unlock()
@@ -392,28 +645,60 @@ func (c *Client) Call(ctx context.Context, method string, params ...any) (json.R
 		// nothing has been sent for THIS call yet, so re-dialing and sending
 		// once cannot duplicate a side effect. Reconnect before giving up, so a
 		// call that lands just after an idle drop survives it instead of failing
-		// with "not connected". A mid-flight drop — the WriteJSON below, or a
+		// with "not connected". A mid-flight drop — the write in send, or a
 		// connection lost while awaiting the response (failPending) — is
 		// deliberately NOT reconnected-and-retried here: that request may already
 		// have taken effect, and silently resending it could double-apply a
 		// mutating call. (Idempotent reads layer their own retry in CallRead.)
-		if rErr := c.reconnect(ctx); rErr == nil {
+		//
+		// While the server cannot be reached at all (a middleware or nginx
+		// restart refuses or fails the websocket handshake for a while) the
+		// re-dial is retried after reconnectRetryDelays: still nothing has
+		// been sent, so waiting is safe for any call.
+		for attempt := 0; ; attempt++ {
+			rErr := c.reconnect(ctx)
 			c.connMu.Lock()
 			conn = c.conn
 			c.connMu.Unlock()
+			if conn != nil {
+				break
+			}
+			if rErr == nil {
+				return nil, fmt.Errorf("not connected")
+			}
+			if !errors.Is(rErr, errDial) || attempt >= len(reconnectRetryDelays) {
+				return nil, fmt.Errorf("not connected: %v", rErr)
+			}
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(reconnectRetryDelays[attempt]):
+			}
 		}
 	}
-	if conn == nil {
-		c.pendingMu.Lock()
-		delete(c.pending, id)
+	return c.send(ctx, conn, method, params)
+}
+
+// send writes one request on conn and waits for its response.
+func (c *Client) send(ctx context.Context, conn *wsConn, method string, params []any) (json.RawMessage, error) {
+	id := c.seq.Add(1)
+	p := &pendingCall{ch: make(chan callResult, 1), conn: conn}
+
+	c.pendingMu.Lock()
+	if conn.closed {
+		// The reader is gone: nothing would ever answer this call. Nothing
+		// has been sent, so this is the same as "not connected".
 		c.pendingMu.Unlock()
-		return nil, fmt.Errorf("not connected")
+		return nil, fmt.Errorf("write %s: connection closed", method)
 	}
+	c.pending[id] = p
+	c.pendingMu.Unlock()
 
 	if params == nil {
 		params = []any{}
 	}
 	c.writeMu.Lock()
+	_ = conn.SetWriteDeadline(time.Now().Add(writeTimeout))
 	err := conn.WriteJSON(rpcRequest{
 		JSONRPC: "2.0",
 		ID:      id,
@@ -429,16 +714,70 @@ func (c *Client) Call(ctx context.Context, method string, params ...any) (json.R
 		return nil, fmt.Errorf("write %s: %w", method, err)
 	}
 
+	// A caller without a deadline (Terraform's contexts usually have none)
+	// still gets an answer or an error: a server that never answers, or a
+	// connection that died without the reader noticing, must not hang the
+	// run.
+	var timeout <-chan time.Time
+	limit := callTimeout
+	if _, auth := ctx.Value(authConnKey{}).(*wsConn); auth {
+		limit = authCallTimeout
+	}
+	if _, has := ctx.Deadline(); !has {
+		t := time.NewTimer(limit)
+		defer t.Stop()
+		timeout = t.C
+	}
+
 	select {
 	case <-ctx.Done():
 		c.pendingMu.Lock()
 		delete(c.pending, id)
 		c.pendingMu.Unlock()
 		return nil, ctx.Err()
+	case <-timeout:
+		c.pendingMu.Lock()
+		delete(c.pending, id)
+		c.pendingMu.Unlock()
+		c.dropIfUnresponsive(conn)
+		return nil, fmt.Errorf("%s: %w after %s", method, errNoResponse, limit)
 	case res := <-p.ch:
+		if errors.Is(res.err, ErrResponseTooLarge) {
+			return nil, fmt.Errorf("%s: %w", method, res.err)
+		}
 		return res.result, res.err
 	}
 }
+
+// callTimeout bounds a call whose context has no deadline. Long server work
+// runs as jobs (the call itself returns a job id at once, and each poll is a
+// separate short call), so this only has to cover slow synchronous methods.
+// authCallTimeout bounds each login call (the server's rate limiter delays
+// a rejection by at most 10s). writeTimeout bounds writing one request.
+// Package variables so tests can shrink them.
+var (
+	callTimeout     = 10 * time.Minute
+	authCallTimeout = 2 * time.Minute
+	writeTimeout    = 30 * time.Second
+)
+
+// dropIfUnresponsive closes conn when it does not answer a ping, so the next
+// call re-dials instead of waiting out callTimeout again on a dead
+// connection. A connection that answers is left alone: one slow call must
+// not fail the others in flight.
+func (c *Client) dropIfUnresponsive(conn *wsConn) {
+	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
+	defer cancel()
+	if _, err := c.send(ctx, conn, "core.ping", nil); err != nil {
+		_ = conn.Close()
+	}
+}
+
+// errNoResponse marks a call that timed out waiting for its answer.
+var errNoResponse = errors.New("no response from TrueNAS")
+
+// pingTimeout bounds the liveness ping of dropIfUnresponsive.
+var pingTimeout = 15 * time.Second
 
 // Close shuts down the WebSocket connection and stops the keepalive.
 func (c *Client) Close() error {

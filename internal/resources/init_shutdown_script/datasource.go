@@ -92,6 +92,15 @@ func (d *InitShutdownScriptDataSource) Read(ctx context.Context, req datasource.
 		return
 	}
 
+	// More than one match used to return the first silently (B-131).
+	if len(results) > 1 {
+		resp.Diagnostics.AddError(
+			"Ambiguous lookup",
+			fmt.Sprintf("%d init/shutdown scripts match comment %q; the lookup must match exactly one. Give the scripts distinct comments.", len(results), state.Comment.ValueString()),
+		)
+		return
+	}
+
 	responseToDataSourceModel(&results[0], &state)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

@@ -9,11 +9,13 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ resource.Resource = &NFSShareResource{}
@@ -215,11 +217,22 @@ func (r *NFSShareResource) responseToModel(ctx context.Context, api *apiResponse
 	m.MapAllGr = types.StringValue(api.MapAllGr)
 	m.ExposeSns = types.BoolValue(api.ExposeSn)
 
+	// The server returns [] for an empty list; keep a nil slice (absent key)
+	// as an empty list too so it matches the schema default.
+	for _, l := range []*[]string{&api.Security, &api.Networks, &api.Hosts} {
+		if *l == nil {
+			*l = []string{}
+		}
+	}
 	security, dSec := types.ListValueFrom(ctx, types.StringType, api.Security)
 	diags.Append(dSec...)
 	m.Security = security
 
-	networks, d := types.ListValueFrom(ctx, cidrType{}, api.Networks)
+	nets := make([]attr.Value, 0, len(api.Networks))
+	for _, n := range api.Networks {
+		nets = append(nets, normalize.NewNetworkValue(n))
+	}
+	networks, d := types.ListValue(normalize.NetworkType{}, nets)
 	diags.Append(d...)
 	m.Networks = networks
 	hosts, d := types.ListValueFrom(ctx, types.StringType, api.Hosts)

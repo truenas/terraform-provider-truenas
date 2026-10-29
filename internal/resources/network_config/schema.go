@@ -4,11 +4,16 @@
 package network_config
 
 import (
+	"regexp"
+
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -41,17 +46,21 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"domains": schema.ListAttribute{
-				Optional:      true,
-				Computed:      true,
-				ElementType:   types.StringType,
-				Description:   "Additional DNS search domains.",
+				Optional:    true,
+				Computed:    true,
+				ElementType: types.StringType,
+				Description: "Additional DNS search domains, one domain per entry (no spaces: TrueNAS stores the list space-separated).",
+				Validators: []validator.List{listvalidator.ValueStringsAre(stringvalidator.RegexMatches(
+					regexp.MustCompile(`^\S+$`), "must be a single domain with no whitespace"))},
 				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
 			},
 			"hosts": schema.ListAttribute{
-				Optional:      true,
-				Computed:      true,
-				ElementType:   types.StringType,
-				Description:   "Additional /etc/hosts entries.",
+				Optional:    true,
+				Computed:    true,
+				ElementType: types.StringType,
+				Description: "Additional /etc/hosts entries, one line per entry (non-empty, no leading or trailing whitespace, no newline: TrueNAS stores the list newline-separated and trims it).",
+				Validators: []validator.List{listvalidator.ValueStringsAre(stringvalidator.RegexMatches(
+					regexp.MustCompile(`^[^\s](?:[^\n]*[^\s])?$`), "must be one non-empty line with no leading or trailing whitespace"))},
 				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
 			},
 			"httpproxy": schema.StringAttribute{

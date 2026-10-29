@@ -29,9 +29,10 @@ func resourceSchema() schema.Schema {
 				Description: "Name of the cloud sync credentials.",
 			},
 			"provider_config": schema.StringAttribute{
-				Required:    true,
-				Sensitive:   true,
-				Description: "JSON document of provider settings. Must include \"type\" (e.g. S3, B2, GOOGLE_CLOUD_STORAGE, STORJ_IX). May contain secrets (access keys); use provider_secrets_wo to keep secret keys out of state.",
+				Required:      true,
+				Sensitive:     true,
+				Description:   "JSON document of provider settings. Must include \"type\" (e.g. S3, B2, GOOGLE_CLOUD_STORAGE, STORJ_IX). May contain secrets (access keys); use provider_secrets_wo to keep secret keys out of state. Compared as JSON: any spelling works, keys the server adds are not a change, and `url`/`endpoint` compare as URLs (host case, default port and a trailing slash are ignored). Generated configuration (`terraform plan -generate-config-out`) has this as null, because Terraform never writes sensitive or write-only values there; fill it in before applying.",
+				PlanModifiers: []planmodifier.String{keepImportedIfEquivalent{}},
 			},
 			"provider_secrets_wo": schema.StringAttribute{
 				Optional:  true,
@@ -47,7 +48,9 @@ func resourceSchema() schema.Schema {
 			"provider_secrets_wo_version": schema.Int64Attribute{
 				Optional: true,
 				Description: "Version trigger for provider_secrets_wo. Bump to re-send a changed " +
-					"write-only secret overlay. Required when provider_secrets_wo is set.",
+					"write-only secret overlay. The overlay is sent on create and when this integer changes; " +
+					"other updates send the secret values TrueNAS already has (the API needs the whole object), so a " +
+					"changed secret is applied only with a version bump. Required when provider_secrets_wo is set.",
 				Validators: []validator.Int64{
 					int64validator.AlsoRequires(path.MatchRoot("provider_secrets_wo")),
 				},

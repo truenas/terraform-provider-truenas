@@ -55,34 +55,40 @@ func TestAppSchema_IDIsString(t *testing.T) {
 }
 
 // TestAppSchema_StateHasNoUseStateForUnknown verifies that "state",
-// "human_version" and "upgrade_available" are Computed WITHOUT
-// UseStateForUnknown, since they legitimately change server-side between
-// applies.
+// "human_version" and "upgrade_available" are Computed and are not pinned with
+// UseStateForUnknown, since they change server-side between applies. They
+// carry the conditional keep-from-state modifiers instead (B-137).
 func TestAppSchema_StateHasNoUseStateForUnknown(t *testing.T) {
 	s := resourceSchema()
 
-	for _, name := range []string{"state", "human_version", "upgrade_available"} {
+	want := map[string]any{
+		"state":             keepSettledState{},
+		"human_version":     keepVersionDerivedString{},
+		"upgrade_available": keepVersionDerivedBool{},
+	}
+	for name, mod := range want {
 		attr, ok := s.Attributes[name]
 		if !ok {
 			t.Fatalf("schema missing %q attribute", name)
 		}
+		var mods []any
 		switch a := attr.(type) {
 		case schema.StringAttribute:
-			if len(a.PlanModifiers) != 0 {
-				t.Errorf("%q should have no plan modifiers, got %d", name, len(a.PlanModifiers))
-			}
-			if !a.IsComputed() {
-				t.Errorf("%q should be Computed", name)
+			for _, m := range a.PlanModifiers {
+				mods = append(mods, m)
 			}
 		case schema.BoolAttribute:
-			if len(a.PlanModifiers) != 0 {
-				t.Errorf("%q should have no plan modifiers, got %d", name, len(a.PlanModifiers))
-			}
-			if !a.IsComputed() {
-				t.Errorf("%q should be Computed", name)
+			for _, m := range a.PlanModifiers {
+				mods = append(mods, m)
 			}
 		default:
 			t.Fatalf("%q attribute is unexpected type %T", name, attr)
+		}
+		if !attr.IsComputed() {
+			t.Errorf("%q should be Computed", name)
+		}
+		if len(mods) != 1 || mods[0] != mod {
+			t.Errorf("%q plan modifiers = %#v, want only %T", name, mods, mod)
 		}
 	}
 }

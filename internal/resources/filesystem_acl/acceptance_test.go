@@ -78,11 +78,10 @@ func TestAccFilesystemAcl_basic(t *testing.T) {
 			},
 			// Import by path.
 			{
-				ResourceName:            "truenas_filesystem_acl.test",
-				ImportState:             true,
-				ImportStateId:           path,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"recursive", "traverse"},
+				ResourceName:      "truenas_filesystem_acl.test",
+				ImportState:       true,
+				ImportStateId:     path,
+				ImportStateVerify: true,
 			},
 			// Remove ONLY truenas_filesystem_acl from the config: this
 			// destroys just that resource (Delete = filesystem.setacl with

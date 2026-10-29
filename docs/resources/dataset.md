@@ -80,9 +80,9 @@ resource "truenas_dataset" "keyed" {
 - `inherit_encryption` (Boolean) Whether this dataset inherits its encryption from the parent dataset rather than owning its own key. Create-only. Computed: reconciled from the dataset's encryption root on read, so it reflects reality even when left unset.
 - `quota` (Number) Quota in bytes (0 = unlimited).
 - `readonly` (String) Mount read-only: ON or OFF. Null inherits.
-- `recordsize` (String) Suggested block size for files, e.g. "128K" or "1M". Null (unset) inherits from the parent. Use the ZFS form (uppercase suffix) to avoid drift.
+- `recordsize` (String) Suggested block size for files: 512, 1K, 2K, 4K, 8K, 16K, 32K, 64K, 128K, 256K, 512K, 1M, 2M, 4M, 8M or 16M. Case-insensitive. Null (unset) inherits from the parent.
 - `refquota` (Number) Referenced quota in bytes (0 = unlimited).
-- `refreservation` (Number) Referenced reservation in bytes (space guaranteed to this dataset, excluding descendants/snapshots). Null (unset) inherits.
+- `refreservation` (Number) Referenced reservation in bytes (space guaranteed to this dataset, excluding descendants/snapshots). Null (unset) inherits. For a thick VOLUME left unset, ZFS sets it and grows it with volsize.
 - `reservation` (Number) Reserved space in bytes.
 - `share_type` (String) Optimised share-type preset applied at creation: GENERIC, SMB, MULTIPROTOCOL, NFS, or APPS (write-only, not returned by the API). Create-only: changing it recreates the dataset. After an import it is unknown to the provider, so setting it records the value without recreating the dataset.
 - `snapdir` (String) Visibility of the .zfs/snapshot directory: VISIBLE, HIDDEN, or DISABLED. Null inherits.

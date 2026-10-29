@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
@@ -53,19 +54,26 @@ func resourceSchema() schema.Schema {
 					"\"flags\": {\"BASIC\": \"INHERIT\"|\"NOINHERIT\"} or an object of individual boolean " +
 					"inheritance flags (FILE_INHERIT, DIRECTORY_INHERIT, NO_PROPAGATE_INHERIT, INHERIT_ONLY, " +
 					"INHERITED), plus optional \"id\" (uid/gid, required when tag is USER/GROUP) and \"who\" " +
-					"(username/group name, alternative to id when tag is USER/GROUP). For acltype \"POSIX1E\", " +
+					"(username/group name, alternative to id when tag is USER/GROUP; the provider sends the id " +
+					"it resolves to, since the server cannot store a name). For acltype \"POSIX1E\", " +
 					"each entry is {\"tag\": \"USER_OBJ\"|\"GROUP_OBJ\"|\"OTHER\"|\"MASK\"|\"USER\"|\"GROUP\", " +
 					"\"perms\": {\"READ\": bool, \"WRITE\": bool, \"EXECUTE\": bool}, \"default\": bool (whether " +
 					"this ACE applies to newly created child objects), plus optional \"id\"/\"who\". On read, " +
 					"an \"id\" of -1 or null (the server's two observed sentinels, probed live, for entries " +
-					"where tag isn't USER/GROUP) is normalized away rather than causing perpetual drift; the " +
-					"exact JSON text is otherwise preserved as configured (write-what-you-said) unless the " +
-					"server-side content genuinely changes.",
+					"where tag isn't USER/GROUP) is normalized away rather than causing perpetual drift, a " +
+					"bag of booleans may list only the true members (the server stores the rest as false), and " +
+					"a \"who\" entry compares equal to the id it names; the exact JSON text is otherwise " +
+					"preserved as configured (write-what-you-said) unless the server-side content genuinely " +
+					"changes.",
 			},
 			"comment": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
 				Description: "Optional descriptive comment about the template's purpose. Defaults to an empty string.",
+				// Changed only when configured: keep it known instead of (known
+				// after apply), which also turned an otherwise empty plan after
+				// an import into an update. (B-121, B-146 class)
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"builtin": schema.BoolAttribute{
 				Computed:    true,

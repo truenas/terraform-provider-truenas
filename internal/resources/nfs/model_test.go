@@ -58,7 +58,8 @@ func TestNFSApiPayload_MapallSecurityExpose(t *testing.T) {
 	}
 }
 
-// TestNFSApiPayload_OmitsUnset verifies unset new attributes are not sent.
+// TestNFSApiPayload_OmitsUnset verifies unknown/null list and bool attributes
+// are not sent, and null map users/groups are sent as null.
 func TestNFSApiPayload_OmitsUnset(t *testing.T) {
 	m := &NFSShareModel{
 		Path:      types.StringValue("/mnt/tank/x"),
@@ -75,10 +76,25 @@ func TestNFSApiPayload_OmitsUnset(t *testing.T) {
 		Hosts:     types.ListNull(types.StringType),
 	}
 	p := m.apiPayload()
-	for _, k := range []string{"mapall_user", "mapall_group", "security", "expose_snapshots"} {
+	for _, k := range []string{"security", "expose_snapshots"} {
 		if _, ok := p[k]; ok {
 			t.Errorf("payload should omit unset %q, got %v", k, p[k])
 		}
+	}
+	// A null (or "") map user/group is sent as JSON null so removing it from
+	// the configuration clears the mapping (B-114).
+	for _, k := range []string{"maproot_user", "maproot_group", "mapall_user", "mapall_group"} {
+		if v, ok := p[k]; !ok || v != nil {
+			t.Errorf("payload %q = %v (present %v), want explicit null", k, v, ok)
+		}
+	}
+	m.MapRoot = types.StringValue("")
+	if v, ok := m.apiPayload()["maproot_user"]; !ok || v != nil {
+		t.Errorf(`maproot_user "" = %v, want explicit null`, v)
+	}
+	m.MapRoot = types.StringUnknown()
+	if _, ok := m.apiPayload()["maproot_user"]; ok {
+		t.Error("unknown maproot_user must be omitted")
 	}
 }
 

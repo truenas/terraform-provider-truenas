@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -46,10 +47,8 @@ func reconcileComposeConfig(previous string, liveRaw json.RawMessage) (string, b
 		return "", false, errors.New("could not encode the Compose configuration returned by app.config; the previous Compose state has been preserved")
 	}
 
-	if userVal, perr := decodeYAMLExact(previous); perr == nil {
-		if userCanon, cerr := canonicalJSON(userVal); cerr == nil && userCanon == liveCanon {
-			return previous, true, nil // equivalent: preserve the user's exact YAML
-		}
+	if userVal, perr := decodeYAMLExact(previous); perr == nil && normalize.EqualTree(userVal, live, false) {
+		return previous, true, nil // equivalent: preserve the user's exact YAML
 	}
 
 	// Different (or prior unparseable / empty): emit the live document as YAML.
@@ -86,7 +85,7 @@ func mergeComposeOverlay(baseYAML, overlay string) (string, error) {
 		return baseYAML, nil // non-object base/overlay: nothing sensible to merge
 	}
 	merged := deepMerge(bm, om)
-	out, err := yaml.Marshal(merged)
+	out, err := yaml.Marshal(yamlNumbers(merged))
 	if err != nil {
 		return "", err
 	}
@@ -132,18 +131,10 @@ func reconcileComposeProjected(previous string, liveRaw json.RawMessage) (string
 		return previous, true, nil
 	}
 	projected := projectComposeKeys(liveMap, baseMap)
-	projCanon, err := canonicalJSON(projected)
-	if err != nil {
-		return previous, true, nil
-	}
-	baseCanon, err := canonicalJSON(baseMap)
-	if err != nil {
-		return previous, true, nil
-	}
-	if projCanon == baseCanon {
+	if normalize.EqualTree(baseMap, projected, false) {
 		return previous, true, nil // base keys unchanged: preserve the user's YAML
 	}
-	out, err := yaml.Marshal(projected)
+	out, err := yaml.Marshal(yamlNumbers(projected))
 	if err != nil {
 		return previous, false, nil
 	}
@@ -184,16 +175,19 @@ func decodeJSONExact(raw []byte) (any, error) {
 }
 
 // decodeYAMLExact decodes exactly one YAML document into a generic value,
-// normalized to JSON-compatible types.
+// normalized to JSON-compatible types. TrueNAS parses Compose with PyYAML
+// (YAML 1.1: unquoted yes/off are booleans, 0755 is octal, 1:30 is 90), so the
+// user's document is decoded with the same rules; with YAML 1.2 rules a
+// Compose using them never compared equal to app.config (B-097).
 func decodeYAMLExact(s string) (any, error) {
-	var v any
-	if err := yaml.Unmarshal([]byte(s), &v); err != nil {
+	v, err := normalize.DecodeYAML11(s)
+	if err != nil {
 		return nil, err
 	}
 	if v == nil {
 		return nil, errors.New("empty document")
 	}
-	return normalizeYAML(v), nil
+	return v, nil
 }
 
 // canonicalJSON marshals a value to JSON with map keys sorted (encoding/json
@@ -207,36 +201,26 @@ func canonicalJSON(v any) (string, error) {
 	return string(b), nil
 }
 
-// normalizeYAML converts any map[interface{}]interface{} into
-// map[string]interface{} recursively so the value can be JSON-marshaled.
-// yaml.v3 usually already yields string-keyed maps; this is defensive.
-func normalizeYAML(v any) any {
+// yamlNumbers converts json.Number values (from the YAML 1.1 and JSON
+// decoders) to int64 or float64, recursively, so yaml.Marshal writes them as
+// numbers instead of quoted strings.
+func yamlNumbers(v any) any {
 	switch t := v.(type) {
 	case map[string]any:
 		for k, val := range t {
-			t[k] = normalizeYAML(val)
+			t[k] = yamlNumbers(val)
 		}
-		return t
-	case map[any]any:
-		m := make(map[string]any, len(t))
-		for k, val := range t {
-			m[toString(k)] = normalizeYAML(val)
-		}
-		return m
 	case []any:
 		for i, val := range t {
-			t[i] = normalizeYAML(val)
+			t[i] = yamlNumbers(val)
 		}
-		return t
-	default:
-		return v
+	case json.Number:
+		if i, err := t.Int64(); err == nil {
+			return i
+		}
+		if f, err := t.Float64(); err == nil {
+			return f
+		}
 	}
-}
-
-func toString(k any) string {
-	if s, ok := k.(string); ok {
-		return s
-	}
-	b, _ := json.Marshal(k)
-	return string(b)
+	return v
 }

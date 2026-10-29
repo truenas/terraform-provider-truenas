@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // dockerConfigResourceID is the fixed Terraform ID for this singleton
@@ -23,7 +24,7 @@ const dockerConfigResourceID = "docker_config"
 // "address_pools" list. Identical shape on TrueNAS 25.10 and 26.0 (probed
 // live, see task-1-report.md): no version gating needed here.
 var addressPoolAttrTypes = map[string]attr.Type{
-	"base": types.StringType,
+	"base": normalize.NetworkType{},
 	"size": types.Int64Type,
 }
 
@@ -31,8 +32,8 @@ var addressPoolAttrTypes = map[string]attr.Type{
 // address pool docker.update uses to allocate per-container-network subnets
 // from.
 type AddressPoolModel struct {
-	Base types.String `tfsdk:"base"`
-	Size types.Int64  `tfsdk:"size"`
+	Base normalize.Network `tfsdk:"base"`
+	Size types.Int64       `tfsdk:"size"`
 }
 
 // registryMirrorAttrTypes describes the attribute types of one entry in the
@@ -40,15 +41,15 @@ type AddressPoolModel struct {
 // after TrueNAS 26.0+'s native wire shape (see dockerConfigAPI doc comment
 // for why 25.10's two-flat-array shape is translated into this one).
 var registryMirrorAttrTypes = map[string]attr.Type{
-	"url":      types.StringType,
+	"url":      normalize.URLType{},
 	"insecure": types.BoolType,
 }
 
 // RegistryMirrorModel maps to one entry of the unified "registry_mirrors"
 // list.
 type RegistryMirrorModel struct {
-	URL      types.String `tfsdk:"url"`
-	Insecure types.Bool   `tfsdk:"insecure"`
+	URL      normalize.URL `tfsdk:"url"`
+	Insecure types.Bool    `tfsdk:"insecure"`
 }
 
 // DockerConfigModel is the Terraform state model for truenas_docker_config.
@@ -70,27 +71,27 @@ type RegistryMirrorModel struct {
 // configuration state — there is nothing for docker.config to read back,
 // so it has no place in a Terraform resource model.
 type DockerConfigModel struct {
-	ID                 types.String `tfsdk:"id"`
-	EnableImageUpdates types.Bool   `tfsdk:"enable_image_updates"`
-	Pool               types.String `tfsdk:"pool"` // nullable
-	Dataset            types.String `tfsdk:"dataset"`
-	Nvidia             types.Bool   `tfsdk:"nvidia"` // read-only on TrueNAS 26.0+ (see doc comment above)
-	AddressPools       types.List   `tfsdk:"address_pools"`
-	CIDRv6             types.String `tfsdk:"cidr_v6"`
-	RegistryMirrors    types.List   `tfsdk:"registry_mirrors"`
+	ID                 types.String   `tfsdk:"id"`
+	EnableImageUpdates types.Bool     `tfsdk:"enable_image_updates"`
+	Pool               types.String   `tfsdk:"pool"` // nullable
+	Dataset            types.String   `tfsdk:"dataset"`
+	Nvidia             types.Bool     `tfsdk:"nvidia"` // read-only on TrueNAS 26.0+ (see doc comment above)
+	AddressPools       types.List     `tfsdk:"address_pools"`
+	CIDRv6             normalize.CIDR `tfsdk:"cidr_v6"`
+	RegistryMirrors    types.List     `tfsdk:"registry_mirrors"`
 }
 
 // DockerConfigDataSourceModel is the read-only model for the
 // truenas_docker_config datasource.
 type DockerConfigDataSourceModel struct {
-	ID                 types.String `tfsdk:"id"`
-	EnableImageUpdates types.Bool   `tfsdk:"enable_image_updates"`
-	Pool               types.String `tfsdk:"pool"`
-	Dataset            types.String `tfsdk:"dataset"`
-	Nvidia             types.Bool   `tfsdk:"nvidia"`
-	AddressPools       types.List   `tfsdk:"address_pools"`
-	CIDRv6             types.String `tfsdk:"cidr_v6"`
-	RegistryMirrors    types.List   `tfsdk:"registry_mirrors"`
+	ID                 types.String   `tfsdk:"id"`
+	EnableImageUpdates types.Bool     `tfsdk:"enable_image_updates"`
+	Pool               types.String   `tfsdk:"pool"`
+	Dataset            types.String   `tfsdk:"dataset"`
+	Nvidia             types.Bool     `tfsdk:"nvidia"`
+	AddressPools       types.List     `tfsdk:"address_pools"`
+	CIDRv6             normalize.CIDR `tfsdk:"cidr_v6"`
+	RegistryMirrors    types.List     `tfsdk:"registry_mirrors"`
 }
 
 // addressPoolAPI mirrors one entry of docker.config/docker.update's
@@ -160,7 +161,7 @@ func addressPoolsListValue(ctx context.Context, api []addressPoolAPI) (types.Lis
 	pools := make([]AddressPoolModel, 0, len(api))
 	for _, p := range api {
 		pools = append(pools, AddressPoolModel{
-			Base: types.StringValue(p.Base),
+			Base: normalize.NewNetworkValue(p.Base),
 			Size: types.Int64Value(p.Size),
 		})
 	}
@@ -179,17 +180,17 @@ func registryMirrorsListValue(ctx context.Context, api *dockerConfigAPI) (types.
 		mirrors = make([]RegistryMirrorModel, 0, len(api.RegistryMirrors))
 		for _, m := range api.RegistryMirrors {
 			mirrors = append(mirrors, RegistryMirrorModel{
-				URL:      types.StringValue(m.URL),
+				URL:      normalize.NewURLValue(m.URL),
 				Insecure: types.BoolValue(m.Insecure),
 			})
 		}
 	} else {
 		mirrors = make([]RegistryMirrorModel, 0, len(api.SecureRegistryMirrors)+len(api.InsecureRegistryMirrors))
 		for _, u := range api.SecureRegistryMirrors {
-			mirrors = append(mirrors, RegistryMirrorModel{URL: types.StringValue(u), Insecure: types.BoolValue(false)})
+			mirrors = append(mirrors, RegistryMirrorModel{URL: normalize.NewURLValue(u), Insecure: types.BoolValue(false)})
 		}
 		for _, u := range api.InsecureRegistryMirrors {
-			mirrors = append(mirrors, RegistryMirrorModel{URL: types.StringValue(u), Insecure: types.BoolValue(true)})
+			mirrors = append(mirrors, RegistryMirrorModel{URL: normalize.NewURLValue(u), Insecure: types.BoolValue(true)})
 		}
 	}
 
@@ -209,7 +210,7 @@ func responseToModel(ctx context.Context, api *dockerConfigAPI, m *DockerConfigM
 	} else {
 		m.Nvidia = types.BoolNull()
 	}
-	m.CIDRv6 = types.StringValue(api.CIDRv6)
+	m.CIDRv6 = normalize.NewCIDRValue(api.CIDRv6)
 
 	pools, d := addressPoolsListValue(ctx, api.AddressPools)
 	diags.Append(d...)
@@ -217,9 +218,38 @@ func responseToModel(ctx context.Context, api *dockerConfigAPI, m *DockerConfigM
 
 	mirrors, d := registryMirrorsListValue(ctx, api)
 	diags.Append(d...)
-	m.RegistryMirrors = mirrors
+	m.RegistryMirrors = keepPriorMirrorOrder(m.RegistryMirrors, mirrors)
 
 	return diags
+}
+
+// keepPriorMirrorOrder returns prior when it holds the same mirrors as read in
+// a different order, else read. TrueNAS 25.10 stores secure and insecure
+// mirrors in two arrays, so read always lists the secure ones first and a
+// config that mixed them drifted forever (B-152). The order is not
+// meaningful across the two arrays there.
+func keepPriorMirrorOrder(prior, read types.List) types.List {
+	if prior.IsNull() || prior.IsUnknown() || read.IsNull() || read.IsUnknown() {
+		return read
+	}
+	pe, re := prior.Elements(), read.Elements()
+	if len(pe) != len(re) {
+		return read
+	}
+	used := make([]bool, len(re))
+	for _, p := range pe {
+		found := false
+		for i, r := range re {
+			if !used[i] && p.Equal(r) {
+				used[i], found = true, true
+				break
+			}
+		}
+		if !found {
+			return read
+		}
+	}
+	return prior
 }
 
 // responseToDataSourceModel maps a dockerConfigAPI response onto a
@@ -236,7 +266,7 @@ func responseToDataSourceModel(ctx context.Context, api *dockerConfigAPI, m *Doc
 	} else {
 		m.Nvidia = types.BoolNull()
 	}
-	m.CIDRv6 = types.StringValue(api.CIDRv6)
+	m.CIDRv6 = normalize.NewCIDRValue(api.CIDRv6)
 
 	pools, d := addressPoolsListValue(ctx, api.AddressPools)
 	diags.Append(d...)

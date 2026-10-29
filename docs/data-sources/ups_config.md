@@ -3,12 +3,12 @@
 page_title: "truenas_ups_config Data Source - truenas"
 subcategory: "Service Configuration"
 description: |-
-  Reads the current TrueNAS UPS service configuration. Takes no arguments: there is exactly one UPS configuration per TrueNAS system. Does not expose monpwd: ups.config never returns a usable value for it.
+  Reads the current TrueNAS UPS service configuration. Takes no arguments: there is exactly one UPS configuration per TrueNAS system. Does not expose monpwd: ups.config returns it in plain text, and this data source deliberately does not surface it.
 ---
 
 # truenas_ups_config (Data Source)
 
-Reads the current TrueNAS UPS service configuration. Takes no arguments: there is exactly one UPS configuration per TrueNAS system. Does not expose monpwd: ups.config never returns a usable value for it.
+Reads the current TrueNAS UPS service configuration. Takes no arguments: there is exactly one UPS configuration per TrueNAS system. Does not expose monpwd: ups.config returns it in plain text, and this data source deliberately does not surface it.
 
 
 

@@ -1,6 +1,6 @@
 resource "truenas_vm" "worker" {
   name       = "worker1"
-  memory     = 4294967296 # 4 GiB in bytes
+  memory     = 4096 # MiB (4 GiB)
   vcpus      = 2
   cores      = 2
   bootloader = "UEFI"

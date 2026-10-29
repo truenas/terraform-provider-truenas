@@ -44,7 +44,7 @@ resource "truenas_cronjob" "nightly_cleanup" {
 
 - `description` (String) Human-readable description of what this cron job does. Defaults to an empty string.
 - `enabled` (Boolean) Whether the cron job is active and will be executed. Defaults to true.
-- `schedule` (Attributes) Cron schedule for when the job runs. Defaults to every day at 00:00. (see [below for nested schema](#nestedatt--schedule))
+- `schedule` (Attributes) Cron schedule for when the job runs. Defaults to every hour at minute 00 (minute "00", every other field "*"). (see [below for nested schema](#nestedatt--schedule))
 - `stderr` (Boolean) Whether to IGNORE standard error: if false, standard error is included in the notification email. Defaults to false.
 - `stdout` (Boolean) Whether to IGNORE standard output: if false, standard output is included in the notification email. Defaults to true.
 

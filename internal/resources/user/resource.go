@@ -7,15 +7,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ resource.Resource = &UserResource{}
 var _ resource.ResourceWithImportState = &UserResource{}
 var _ resource.ResourceWithIdentity = &UserResource{}
+var _ resource.ResourceWithModifyPlan = &UserResource{}
 
 // UserResource implements the truenas_user resource.
 type UserResource struct{ client *client.Client }
@@ -160,7 +167,9 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	plan.Password = cfg.Password
+	if passwordResendNeeded(plan, state) {
+		plan.Password = cfg.Password
+	}
 
 	payload, diags := plan.updatePayload(ctx, state)
 	resp.Diagnostics.Append(diags...)
@@ -232,6 +241,10 @@ func (r *UserResource) ImportState(ctx context.Context, req resource.ImportState
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	resp.Diagnostics.Append(r.importAdjust(ctx, &apiResp, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, id)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -239,12 +252,116 @@ func (r *UserResource) ImportState(ctx context.Context, req resource.ImportState
 // gateVersionedFields removes payload fields that older TrueNAS releases do not
 // accept. `webshare` was added in TrueNAS 26.0; sending it to 25.10 fails the
 // whole user.create/update with "Extra inputs are not permitted". Below 26.0 it
-// is dropped from the payload so the rest of the user still applies. Setting
-// webshare explicitly on such a release therefore has no effect (and the schema
-// description notes the 26.0 requirement). If the version cannot be determined,
-// the payload is left unchanged rather than silently dropping fields.
+// is dropped from the payload so the rest of the user still applies; that only
+// drops a false value, because ModifyPlan rejects webshare = true there. If the
+// version cannot be determined, the payload is left unchanged rather than
+// silently dropping fields.
 func (r *UserResource) gateVersionedFields(ctx context.Context, payload map[string]any) {
 	if ok, err := r.client.VersionAtLeast(ctx, 26, 0); err == nil && !ok {
 		delete(payload, "webshare")
 	}
+}
+
+// ModifyPlan adds the plan-time checks that need the connected server or the
+// prior state:
+//   - webshare = true below TrueNAS 26.0 is an error. The API there has no
+//     webshare field, so the value would be dropped and read back as false,
+//     failing the apply with an inconsistent result. (B-055)
+//   - a change to group_create on an existing user is a warning: the flag only
+//     picks the primary group when the user is created, so the update records
+//     the new value without changing the server. (B-142)
+func (r *UserResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+	var cfgWebshare types.Bool
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("webshare"), &cfgWebshare)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if r.client != nil && !cfgWebshare.IsNull() && !cfgWebshare.IsUnknown() && cfgWebshare.ValueBool() {
+		if ok, err := r.client.VersionAtLeast(ctx, 26, 0); err == nil && !ok {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("webshare"),
+				"webshare requires TrueNAS 26.0 or later",
+				"The user webshare field does not exist on this TrueNAS release. Remove the attribute (or set it to false) or upgrade the server.",
+			)
+		}
+	}
+
+	if req.State.Raw.IsNull() {
+		return
+	}
+	var stateGC, planGC types.Bool
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("group_create"), &stateGC)...)
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("group_create"), &planGC)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !stateGC.IsNull() && !planGC.IsNull() && !planGC.IsUnknown() && !stateGC.Equal(planGC) {
+		resp.Diagnostics.AddAttributeWarning(
+			path.Root("group_create"),
+			"group_create only applies when the user is created",
+			"Changing group_create on an existing user does not change its primary group; the new value is only recorded in state. Set 'group' to change the primary group.",
+		)
+	}
+}
+
+// importAdjust fills in what an import cannot get from the user record alone:
+//   - groups: with smb = true, user.create adds the builtin_users group, which
+//     the configuration does not list. Create/Update/Read filter it out against
+//     the configured list, but an import has no configured list, so it is
+//     dropped here. (B-051)
+//   - home_mode: user.query does not return it, so it is read from the mode of
+//     the home directory when that is under /mnt (other homes, such as
+//     /var/empty, are not created or chmod-ed by the server).
+func (r *UserResource) importAdjust(ctx context.Context, api *userAPI, m *UserModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+
+	if api.SMB && len(api.Groups) > 0 {
+		raw, err := r.client.CallRead(ctx, "group.query",
+			[]any{[]any{"group", "=", "builtin_users"}, []any{"local", "=", true}},
+			map[string]any{"select": []string{"id"}})
+		if err != nil {
+			diags.AddError("Look up builtin_users group failed", err.Error())
+			return diags
+		}
+		var found []struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &found); err != nil {
+			diags.AddError("Parse group.query response", err.Error())
+			return diags
+		}
+		if len(found) == 1 {
+			kept := make([]int64, 0, len(api.Groups))
+			for _, g := range api.Groups {
+				if g != found[0].ID {
+					kept = append(kept, g)
+				}
+			}
+			gl, d := types.ListValueFrom(ctx, types.Int64Type, kept)
+			diags.Append(d...)
+			m.Groups = gl
+		}
+	}
+
+	if strings.HasPrefix(api.Home, "/mnt/") {
+		raw, err := r.client.CallRead(ctx, "filesystem.stat", api.Home)
+		if err != nil {
+			diags.AddWarning("Could not read home directory mode",
+				fmt.Sprintf("filesystem.stat %s failed, so home_mode is left unset in state: %s", api.Home, err))
+			return diags
+		}
+		var st struct {
+			Mode int64 `json:"mode"`
+		}
+		if err := json.Unmarshal(raw, &st); err != nil {
+			diags.AddError("Parse filesystem.stat response", err.Error())
+			return diags
+		}
+		m.HomeMode = normalize.NewOctalModeValue(strconv.FormatInt(st.Mode&0o777, 8))
+	}
+
+	return diags
 }

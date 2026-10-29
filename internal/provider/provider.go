@@ -5,9 +5,12 @@ package provider
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -250,23 +253,29 @@ func (p *TrueNASProvider) Configure(ctx context.Context, req provider.ConfigureR
 		return
 	}
 
-	c := client.New(endpoint, tlsCfg, client.WithUserAgent(p.version))
+	cacheKey := clientCacheKey(endpoint, apiKey, username, password, caFile, insecure, p.version)
+	c, err := sharedClient(cacheKey, func() (*client.Client, error) {
+		c := client.New(endpoint, tlsCfg, client.WithUserAgent(p.version))
 
-	var authFn func(ctx context.Context) error
-	if hasAPIKey {
-		// AuthAPIKeyAuto upgrades to SCRAM-SHA-512 when the server offers
-		// it (TrueNAS 26.0+) and username identifies the key owner;
-		// otherwise (or when username is unset) it uses the plain login.
-		key, u := apiKey, username
-		authFn = func(ctx context.Context) error { return client.AuthAPIKeyAuto(ctx, c, u, key) }
-	} else {
-		u, pw := username, password
-		authFn = func(ctx context.Context) error { return client.AuthPassword(ctx, c, u, pw) }
-	}
+		var authFn func(ctx context.Context) error
+		if hasAPIKey {
+			// AuthAPIKeyAuto upgrades to SCRAM-SHA-512 when the server offers
+			// it (TrueNAS 26.0+) and username identifies the key owner;
+			// otherwise (or when username is unset) it uses the plain login.
+			key, u := apiKey, username
+			authFn = func(ctx context.Context) error { return client.AuthAPIKeyAuto(ctx, c, u, key) }
+		} else {
+			u, pw := username, password
+			authFn = func(ctx context.Context) error { return client.AuthPassword(ctx, c, u, pw) }
+		}
 
-	retryingAuthFn := func(ctx context.Context) error { return client.WithRetry(ctx, authFn) }
-
-	if err := c.Connect(ctx, retryingAuthFn); err != nil {
+		retryingAuthFn := func(ctx context.Context) error { return client.WithRetry(ctx, authFn) }
+		if err := c.Connect(ctx, retryingAuthFn); err != nil {
+			return nil, err
+		}
+		return c, nil
+	})
+	if err != nil {
 		resp.Diagnostics.AddError("Connection failed", fmt.Sprintf("Cannot connect to TrueNAS at %s: %s", endpoint, err))
 		return
 	}
@@ -587,4 +596,41 @@ func envOrVal(v types.String, envKey string) string {
 		return v.ValueString()
 	}
 	return os.Getenv(envKey)
+}
+
+// clients holds the connected clients of this process by configuration
+// (clientCacheKey). Terraform runs one provider process per command, so a
+// normal run configures once and this changes nothing. When the provider
+// runs in-process (acceptance tests, embedding) Configure is called for every
+// Terraform command; without reuse each call opened a new connection that
+// nothing ever closed — hundreds of open sessions on the server per test
+// package, and a login per command against the server's per-IP login rate
+// limit.
+var (
+	clientsMu sync.Mutex
+	clients   = map[[sha256.Size]byte]*client.Client{}
+)
+
+// clientCacheKey identifies a provider configuration. The credentials are
+// hashed so the key does not hold them in the clear.
+func clientCacheKey(endpoint, apiKey, username, password, caFile string, insecure bool, version string) [sha256.Size]byte {
+	return sha256.Sum256([]byte(strings.Join([]string{
+		endpoint, apiKey, username, password, caFile, strconv.FormatBool(insecure), version,
+	}, "\x00")))
+}
+
+// sharedClient returns the client already connected for key, or connects
+// one with connect and keeps it. A failed connect is not kept.
+func sharedClient(key [sha256.Size]byte, connect func() (*client.Client, error)) (*client.Client, error) {
+	clientsMu.Lock()
+	defer clientsMu.Unlock()
+	if c, ok := clients[key]; ok {
+		return c, nil
+	}
+	c, err := connect()
+	if err != nil {
+		return nil, err
+	}
+	clients[key] = c
+	return c, nil
 }

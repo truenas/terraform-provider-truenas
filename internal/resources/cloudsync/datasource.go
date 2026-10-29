@@ -58,8 +58,9 @@ func (d *CloudSyncDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 			// Write-only on the resource (never returned by the API); declared
 			// Computed here only so the shared model matches the data source
 			// schema. Always null.
-			"encryption_password": dschema.StringAttribute{Computed: true, Sensitive: true},
-			"encryption_salt":     dschema.StringAttribute{Computed: true, Sensitive: true},
+			"encryption_password":   dschema.StringAttribute{Computed: true, Sensitive: true},
+			"encryption_salt":       dschema.StringAttribute{Computed: true, Sensitive: true},
+			"encryption_wo_version": dschema.Int64Attribute{Computed: true},
 			"bwlimit": dschema.ListNestedAttribute{
 				Computed: true,
 				NestedObject: dschema.NestedAttributeObject{
@@ -116,6 +117,15 @@ func (d *CloudSyncDataSource) Read(ctx context.Context, req datasource.ReadReque
 		resp.Diagnostics.AddError(
 			"Cloud sync task not found",
 			fmt.Sprintf("No cloud sync task with description %q was found.", state.Description.ValueString()),
+		)
+		return
+	}
+
+	// More than one match used to return the first silently (B-131).
+	if len(results) > 1 {
+		resp.Diagnostics.AddError(
+			"Ambiguous lookup",
+			fmt.Sprintf("%d cloud sync tasks match description %q; the lookup must match exactly one. Give the tasks distinct descriptions.", len(results), state.Description.ValueString()),
 		)
 		return
 	}

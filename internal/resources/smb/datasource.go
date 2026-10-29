@@ -32,7 +32,7 @@ func (d *SMBShareDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 		Attributes: map[string]dschema.Attribute{
 			"id":                dschema.Int64Attribute{Computed: true, Description: "Numeric SMB share ID."},
 			"path":              dschema.StringAttribute{Computed: true},
-			"name":              dschema.StringAttribute{Required: true, Description: "SMB share name to look up."},
+			"name":              dschema.StringAttribute{Required: true, Description: "SMB share name to look up (case-insensitive, like SMB clients)."},
 			"comment":           dschema.StringAttribute{Computed: true},
 			"ro":                dschema.BoolAttribute{Computed: true},
 			"browsable":         dschema.BoolAttribute{Computed: true},
@@ -114,8 +114,9 @@ func (d *SMBShareDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	// Query by name: sharing.smb.query([["name", "=", "<sharename>"]])
-	queryFilters := []any{[]any{"name", "=", state.Name.ValueString()}}
+	// Query by name, case-insensitively ("C="): SMB share names are unique
+	// regardless of case and clients treat them case-insensitively (B-154).
+	queryFilters := []any{[]any{"name", "C=", state.Name.ValueString()}}
 	raw, err := d.client.CallRead(ctx, "sharing.smb.query", queryFilters)
 	if err != nil {
 		resp.Diagnostics.AddError("Query SMB shares failed", err.Error())
@@ -136,9 +137,12 @@ func (d *SMBShareDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
+	configured := state.Name
 	resp.Diagnostics.Append(responseToModel(ctx, &results[0], &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	// Keep the name as configured; the server's spelling may differ in case.
+	state.Name = configured
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

@@ -27,16 +27,19 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"name": schema.StringAttribute{
-				Required:    true,
-				Description: "Name of the NVMe-oF subsystem.",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
+				Required: true,
+				Description: "Name of the NVMe-oF subsystem. Renamed in place: the subsystem keeps its serial, " +
+					"subnqn, namespaces and host/port mappings.",
 			},
 			"subnqn": schema.StringAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "NVMe Qualified Name (NQN) for the subsystem. Derived by TrueNAS when unset.",
+				Optional: true,
+				Computed: true,
+				Description: "NVMe Qualified Name (NQN) for the subsystem. Left unset, TrueNAS derives " +
+					"`<basenqn>:<name>` at create time and keeps it afterwards (a rename does not change it). " +
+					"\"\" is rejected: the server never stores an empty NQN, it derives one instead.",
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},

@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
@@ -29,6 +30,23 @@ import (
 // not be silently built on top of.
 func dsPreCheckStatusRequiresDisabled(t *testing.T) {
 	t.Helper()
+	// Destroying the resource only disables directory services; the
+	// service_type, configuration and credential stay behind, and the next
+	// test in this package then starts from a half-configured box (seen as
+	// EFAULT sssd restarts when the LDAP tests ran back to back). Reset to the
+	// empty baseline after every test.
+	t.Cleanup(func() {
+		if _, err := acctest.Client().CallJob(context.Background(), "directoryservices.update", map[string]any{
+			"enable": false, "service_type": nil, "configuration": nil, "credential": nil,
+		}); err != nil {
+			t.Errorf("error resetting directory services to the empty baseline: %v", err)
+		}
+		// Each join/leave restarts sssd; systemd refuses a sixth start within
+		// 50s (StartLimitBurst=5, StartLimitIntervalSec=50s on 25.10-28.0) and
+		// the next test's join then fails with an EFAULT carrying sssd's
+		// shutdown log. Let the window pass before the next test starts.
+		time.Sleep(55 * time.Second)
+	})
 	raw, err := acctest.Client().Call(context.Background(), "directoryservices.status")
 	if err != nil {
 		t.Fatalf("error reading directoryservices.status before test start: %v", err)

@@ -59,11 +59,13 @@ func (r *RsyncTaskResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
+	resp.Diagnostics.Append(copyDirectives(ctx, req.Config, &plan)...)
 	payload, diags := plan.apiPayload(ctx)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	plan.clearDirectives()
 
 	raw, err := r.client.Call(ctx, "rsynctask.create", payload)
 	if err != nil {
@@ -131,11 +133,13 @@ func (r *RsyncTaskResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
+	resp.Diagnostics.Append(copyDirectives(ctx, req.Config, &plan)...)
 	payload, diags := plan.apiPayload(ctx)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	plan.clearDirectives()
 
 	raw, err := r.client.Call(ctx, "rsynctask.update", state.ID.ValueInt64(), payload)
 	if err != nil {
@@ -194,10 +198,7 @@ func (r *RsyncTaskResource) ImportState(ctx context.Context, req resource.Import
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	// validate_rpath and ssh_keyscan cannot be recovered from the API on
-	// import; leave them null (Optional-only, no Computed, so the framework
-	// does not require a value). ImportStateVerify in acceptance tests must
-	// ignore both.
+	// validate_rpath and ssh_keyscan are write-only; they stay null.
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, id)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

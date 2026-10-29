@@ -55,11 +55,10 @@ func TestAccFilesystemPermissions_basic(t *testing.T) {
 			},
 			// Import by path.
 			{
-				ResourceName:            "truenas_filesystem_permissions.test",
-				ImportState:             true,
-				ImportStateId:           path,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"recursive", "traverse"},
+				ResourceName:      "truenas_filesystem_permissions.test",
+				ImportState:       true,
+				ImportStateId:     path,
+				ImportStateVerify: true,
 			},
 			// Remove ONLY truenas_filesystem_permissions from the config:
 			// this destroys just that resource (Delete = state-only +

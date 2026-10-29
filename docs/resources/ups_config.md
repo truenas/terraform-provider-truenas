@@ -43,7 +43,7 @@ variable "ups_password" {
 - `identifier` (String) Identifier of the UPS.
 - `mode` (String) UPS mode: MASTER or SLAVE.
 - `monpwd` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Password used to monitor the UPS (never read back from TrueNAS). Write-only: never stored in Terraform state. Requires Terraform >= 1.11.
-- `monpwd_wo_version` (Number) Rotation trigger for the write-only `monpwd`. A write-only value is not kept in state, so Terraform cannot detect that the password changed. Bump this integer whenever `monpwd` changes to make Terraform re-send it on the next apply. Optional.
+- `monpwd_wo_version` (Number) Rotation trigger for the write-only `monpwd`. A write-only value is not kept in state, so Terraform cannot detect that the password changed. Bump this integer whenever `monpwd` changes to make Terraform re-send it on the next apply. `monpwd` is sent on create and, after that, only when this integer changes; other updates leave the stored password alone. Optional.
 - `monuser` (String) Username used to monitor the UPS.
 - `nocommwarntime` (Number) Seconds without UPS communication before a warning is raised, or null/0 for the default.
 - `options` (String) Extra ups.conf options, appended verbatim.

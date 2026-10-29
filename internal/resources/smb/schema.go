@@ -5,11 +5,15 @@ package smb
 
 import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -34,21 +38,23 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"name":    schema.StringAttribute{Required: true, Description: "NetBIOS share name."},
-			"comment": schema.StringAttribute{Optional: true, Computed: true, Description: "Optional share description."},
+			"comment": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), Description: "Optional share description."},
 			"ro": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Export share as read-only. Sent to TrueNAS 26.0 as the top-level `readonly` field (renamed from `ro` on the wire; the Terraform attribute name is unchanged for backward compatibility).",
+				Default:     booldefault.StaticBool(false),
+				Description: "Defaults to `false`. Export share as read-only. Sent to TrueNAS 26.0 as the top-level `readonly` field (renamed from `ro` on the wire; the Terraform attribute name is unchanged for backward compatibility).",
 			},
 			"browsable": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Allow share to appear in Windows network browsing. Sent as the top-level `browsable` field.",
+				Default:     booldefault.StaticBool(true),
+				Description: "Defaults to `true`. Allow share to appear in Windows network browsing. Sent as the top-level `browsable` field.",
 			},
 			"recyclebin": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Enable Windows Recycle Bin behaviour. Only valid when the share's `purpose` is (or defaults to) LEGACY_SHARE: it is sent nested under `options`, setting it with any other purpose is a plan-time error, and it reads back false for other purposes. Setting both this and the matching `options` field is a plan-time error.",
+				Description: "Enable Windows Recycle Bin behaviour. Only valid when the share's `purpose` is (or defaults to) LEGACY_SHARE: it is sent nested under `options`, setting it with any other purpose is a plan-time error, and it reads back false for other purposes. Setting both this and the matching `options` field is a plan-time error. When neither this nor `options` is configured, the LEGACY_SHARE server default applies, so removing it from the configuration resets it on the share.",
 			},
 			"guestok": schema.BoolAttribute{
 				Optional:    true,
@@ -70,7 +76,8 @@ func resourceSchema() schema.Schema {
 			"abe": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Enable Access-Based Enumeration. Sent to TrueNAS 26.0 as the top-level `access_based_share_enumeration` field (renamed from `abe` on the wire; the Terraform attribute name is unchanged for backward compatibility).",
+				Default:     booldefault.StaticBool(false),
+				Description: "Defaults to `false`. Enable Access-Based Enumeration. Sent to TrueNAS 26.0 as the top-level `access_based_share_enumeration` field (renamed from `abe` on the wire; the Terraform attribute name is unchanged for backward compatibility).",
 			},
 			"acl": schema.BoolAttribute{
 				Optional:    true,
@@ -100,7 +107,8 @@ func resourceSchema() schema.Schema {
 			"enabled": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Enable this share.",
+				Default:     booldefault.StaticBool(true),
+				Description: "Enable this share. Defaults to `true`.",
 			},
 			"home": schema.BoolAttribute{
 				Optional:    true,
@@ -147,9 +155,14 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"audit": schema.SingleNestedAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "Per-share audit logging configuration.",
+				Optional: true,
+				Computed: true,
+				Default: objectdefault.StaticValue(types.ObjectValueMust(smbAuditAttrTypes, map[string]attr.Value{
+					"enable":      types.BoolValue(false),
+					"watch_list":  types.ListValueMust(types.StringType, []attr.Value{}),
+					"ignore_list": types.ListValueMust(types.StringType, []attr.Value{}),
+				})),
+				Description: "Per-share audit logging configuration. Omitted, auditing is off (the server default), so removing the block disables auditing on the share.",
 				PlanModifiers: []planmodifier.Object{
 					objectplanmodifier.UseStateForUnknown(),
 				},

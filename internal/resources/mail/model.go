@@ -28,8 +28,9 @@ type MailModel struct {
 }
 
 // MailDataSourceModel is the read-only model for the truenas_mail
-// datasource. It has no "pass" field: the API never returns the password,
-// so a datasource attribute for it would always read as empty/unknown.
+// datasource. It deliberately has no "pass" field: mail.config returns the
+// password in plain text to a full-admin session, and the data source does
+// not expose it.
 type MailDataSourceModel struct {
 	ID             types.String `tfsdk:"id"`
 	FromEmail      types.String `tfsdk:"fromemail"`
@@ -43,8 +44,8 @@ type MailDataSourceModel struct {
 
 // mailAPI mirrors the JSON object returned by mail.config and accepted
 // (as a subset) by mail.update. Pass is intentionally absent: mail.config
-// never returns the password, and this struct is only used to decode API
-// responses.
+// does return the password (plain text for a full-admin session, "********"
+// for READONLY_ADMIN), but this provider never reads it into a model.
 type mailAPI struct {
 	ID             int64   `json:"id"`
 	FromEmail      string  `json:"fromemail"`

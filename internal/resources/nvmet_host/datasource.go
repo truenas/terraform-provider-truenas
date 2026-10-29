@@ -33,11 +33,13 @@ func (d *NVMetHostDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 		Description: "Looks up a TrueNAS NVMe-oF host (initiator) by hostnqn. " +
 			"Never exposes DH-CHAP secrets: this datasource has no \"dhchap_key\" or \"dhchap_ctrl_key\" attribute.",
 		Attributes: map[string]dschema.Attribute{
-			"id":             dschema.Int64Attribute{Computed: true, Description: "Numeric NVMe-oF host ID assigned by TrueNAS."},
-			"hostnqn":        dschema.StringAttribute{Required: true, Description: "NVMe Qualified Name (NQN) of the host (initiator) to look up."},
-			"description":    dschema.StringAttribute{Computed: true, Description: "Free-form description of the host."},
-			"dhchap_dhgroup": dschema.StringAttribute{Computed: true, Description: "DH-CHAP Diffie-Hellman group used for bidirectional authentication."},
-			"dhchap_hash":    dschema.StringAttribute{Computed: true, Description: "DH-CHAP hash algorithm (SHA-256, SHA-384, SHA-512)."},
+			"id":                  dschema.Int64Attribute{Computed: true, Description: "Numeric NVMe-oF host ID assigned by TrueNAS."},
+			"hostnqn":             dschema.StringAttribute{Required: true, Description: "NVMe Qualified Name (NQN) of the host (initiator) to look up."},
+			"description":         dschema.StringAttribute{Computed: true, Description: "Free-form description of the host."},
+			"dhchap_dhgroup":      dschema.StringAttribute{Computed: true, Description: "DH-CHAP Diffie-Hellman group used for bidirectional authentication."},
+			"dhchap_hash":         dschema.StringAttribute{Computed: true, Description: "DH-CHAP hash algorithm (SHA-256, SHA-384, SHA-512)."},
+			"dhchap_key_set":      dschema.BoolAttribute{Computed: true, Description: "Whether the host has a DH-CHAP key. The key itself is never exposed."},
+			"dhchap_ctrl_key_set": dschema.BoolAttribute{Computed: true, Description: "Whether the host has a DH-CHAP controller key. The key itself is never exposed."},
 		},
 	}
 }

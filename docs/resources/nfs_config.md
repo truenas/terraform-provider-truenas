@@ -33,7 +33,7 @@ resource "truenas_nfs_config" "config" {
 - `rdma` (Boolean) Whether NFS over RDMA is enabled.
 - `rpclockd_port` (Number) TCP/UDP port used by rpc.lockd. A value of 0 restores the default (dynamic) port.
 - `rpcstatd_port` (Number) TCP/UDP port used by rpc.statd. A value of 0 restores the default (dynamic) port.
-- `servers` (Number) Number of NFS server threads. A value of 0 restores automatic thread management.
+- `servers` (Number) Number of NFS server threads. 0 means automatic thread management (TrueNAS picks the count from the CPU count; managed_nfsd is then true), and reads back as 0. The truenas_nfs_config data source reports the effective count instead.
 - `statd_lockd_log` (Boolean) Whether rpc.statd and rpc.lockd logging is enabled.
 - `userd_manage_gids` (Boolean) Whether supplemental groups are resolved server-side (more than 16 groups).
 - `v4_domain` (String) NFSv4 domain override for ID mapping. Empty string uses the system default.

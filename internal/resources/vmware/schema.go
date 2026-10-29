@@ -6,7 +6,6 @@ package vmware
 import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 )
 
@@ -92,14 +91,19 @@ func resourceSchema() schema.Schema {
 				Optional: true,
 				Description: "Rotation trigger for the write-only `password`. A write-only value is not kept in " +
 					"state, so Terraform cannot detect that `password` changed. Increase this integer whenever " +
-					"`password` changes to make Terraform re-send it on the next apply. Optional.",
+					"`password` changes to make Terraform re-send it on the next apply. `password` is sent on create " +
+					"and, after that, only when this integer changes; other updates leave the stored password alone " +
+					"(if you change `hostname` or `username` and the new host needs a different password, bump it too). Optional.",
 			},
 			"state": schema.SingleNestedAttribute{
-				Computed:    true,
-				Description: "Current connection and synchronization state with the VMware host.",
-				PlanModifiers: []planmodifier.Object{
-					objectplanmodifier.UseStateForUnknown(),
-				},
+				Computed: true,
+				Description: "Current connection and synchronization state with the VMware host. Shown as " +
+					"\"known after apply\" on every update: vmware.update resets it to PENDING.",
+				// No UseStateForUnknown: vmware.update always resets the state to
+				// PENDING, and periodic snapshot runs set SUCCESS/ERROR, so the
+				// prior value is never the post-update value. Pinning it made
+				// every update after a snapshot sync fail with "inconsistent
+				// result after apply" (B-069).
 				Attributes: map[string]schema.Attribute{
 					"state": schema.StringAttribute{
 						Computed: true,

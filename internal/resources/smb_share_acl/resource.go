@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -19,6 +20,7 @@ var _ resource.Resource = &SMBShareACLResource{}
 var _ resource.ResourceWithImportState = &SMBShareACLResource{}
 var _ resource.ResourceWithIdentity = &SMBShareACLResource{}
 var _ resource.ResourceWithValidateConfig = &SMBShareACLResource{}
+var _ resource.ResourceWithModifyPlan = &SMBShareACLResource{}
 
 // SMBShareACLResource implements the truenas_smb_share_acl resource: a
 // declarative, share_name-keyed wrapper around sharing.smb.setacl/getacl.
@@ -71,22 +73,36 @@ func (r *SMBShareACLResource) getacl(ctx context.Context, shareName string) (*sm
 	return &api, nil
 }
 
-// applyACL calls sharing.smb.setacl with the model's entries.
-func (r *SMBShareACLResource) applyACL(ctx context.Context, m *SMBShareACLModel) error {
-	payload, diags := setaclPayload(ctx, m)
+// applyACL calls sharing.smb.setacl with the configured entries, then reads
+// the stored share ACL back and merges it with the planned entries (see
+// mergeEntries) into the model.
+func (r *SMBShareACLResource) applyACL(ctx context.Context, cfg, plan *SMBShareACLModel) error {
+	payload, diags := setaclPayload(ctx, cfg)
 	if diags.HasError() {
 		return fmt.Errorf("build sharing.smb.setacl payload: %s", diagText(diags))
 	}
 	if _, err := r.client.Call(ctx, "sharing.smb.setacl", payload); err != nil {
 		return fmt.Errorf("sharing.smb.setacl: %w", err)
 	}
+	api, err := r.getacl(ctx, plan.ShareName.ValueString())
+	if err != nil {
+		return fmt.Errorf("read back share ACL: %w", err)
+	}
+	planned, diags := entriesFromList(ctx, plan.ShareACL)
+	if diags.HasError() {
+		return fmt.Errorf("decode planned entries: %s", diagText(diags))
+	}
+	list, diags := types.ListValueFrom(ctx, smbAclEntryObjectType(), mergeEntries(planned, api.ShareACL, true))
+	if diags.HasError() {
+		return fmt.Errorf("build share_acl: %s", diagText(diags))
+	}
+	plan.ShareACL = list
 	return nil
 }
 
 // ValidateConfig enforces at plan time what the server enforces at apply time
-// (verified live: sharing.smb.setacl returns EINVAL "You must set one of ...
-// ae_who_sid, ae_who_str, or ae_who_id" for an entry with no principal). Each
-// entry must set exactly one of the three principal selectors; an unknown
+// (sharing.smb.setacl rejects an entry with neither ae_who_sid nor ae_who_id).
+// Each entry must set exactly one of the two principal selectors; an unknown
 // (interpolated) value counts as set, so cross-resource references validate.
 func (r *SMBShareACLResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var cfg SMBShareACLModel
@@ -108,11 +124,88 @@ func (r *SMBShareACLResource) ValidateConfig(ctx context.Context, req resource.V
 			resp.Diagnostics.AddAttributeError(
 				path.Root("share_acl").AtListIndex(i),
 				"Exactly one principal selector required",
-				fmt.Sprintf("share_acl entry %d must set exactly one of ae_who_sid, ae_who_id, or "+
-					"ae_who_str (got %d). The server rejects any other combination.", i, set),
+				fmt.Sprintf("share_acl entry %d must set exactly one of ae_who_sid or ae_who_id "+
+					"(got %d).", i, set),
 			)
 		}
 	}
+}
+
+// ModifyPlan keeps the server-resolved principal fields of an entry whose
+// configured principal is unchanged. When anything in share_acl changes, the
+// framework plans every unconfigured computed field as unknown; for entry i
+// whose configured ae_who_sid (case-insensitive) or ae_who_id equals state
+// entry i's, the state's resolved SID, Unix ID and name are planned instead,
+// so only real changes show. An entry with a new principal stays unknown.
+func (r *SMBShareACLResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() || req.State.Raw.IsNull() {
+		return
+	}
+	var plan, state, cfg SMBShareACLModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() || plan.ShareACL.IsUnknown() || cfg.ShareACL.IsUnknown() {
+		return
+	}
+	planned, d := entriesFromList(ctx, plan.ShareACL)
+	resp.Diagnostics.Append(d...)
+	prior, d := entriesFromList(ctx, state.ShareACL)
+	resp.Diagnostics.Append(d...)
+	configured, d := entriesFromList(ctx, cfg.ShareACL)
+	resp.Diagnostics.Append(d...)
+	if resp.Diagnostics.HasError() || len(configured) != len(planned) {
+		return
+	}
+	changed := false
+	for i := range planned {
+		if i >= len(prior) || !configuredPrincipalEqual(configured[i], prior[i]) {
+			continue
+		}
+		// The state entry must be a resolved one (SID known); a null ID or
+		// name in it (everyone@ has no Unix ID) is planned as null too, and
+		// the apply keeps it (mergeEntries).
+		p, c, s := &planned[i], configured[i], prior[i]
+		if !knownString(s.AeWhoSID) {
+			continue
+		}
+		if c.AeWhoSID.IsNull() && p.AeWhoSID.IsUnknown() {
+			p.AeWhoSID = s.AeWhoSID
+			changed = true
+		}
+		if c.AeWhoID.IsNull() && p.AeWhoID.IsUnknown() && !s.AeWhoID.IsUnknown() {
+			p.AeWhoID = s.AeWhoID
+			changed = true
+		}
+		if p.AeWhoStr.IsUnknown() && !s.AeWhoStr.IsUnknown() {
+			p.AeWhoStr = s.AeWhoStr
+			changed = true
+		}
+	}
+	if !changed {
+		return
+	}
+	list, d := types.ListValueFrom(ctx, smbAclEntryObjectType(), planned)
+	resp.Diagnostics.Append(d...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("share_acl"), list)...)
+}
+
+// configuredPrincipalEqual reports whether a configured entry's selector names
+// the same principal as a state entry: equal SIDs (case-insensitive) or equal
+// Unix IDs.
+func configuredPrincipalEqual(c, s smbAclEntryModel) bool {
+	if knownString(c.AeWhoSID) {
+		return knownString(s.AeWhoSID) && strings.EqualFold(c.AeWhoSID.ValueString(), s.AeWhoSID.ValueString())
+	}
+	ct, cid, ok := whoIDOf(c.AeWhoID)
+	if !ok {
+		return false
+	}
+	st, sid, ok := whoIDOf(s.AeWhoID)
+	return ok && ct == st && cid == sid
 }
 
 func (r *SMBShareACLResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -122,14 +215,17 @@ func (r *SMBShareACLResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	if err := r.applyACL(ctx, &plan); err != nil {
+	var cfg SMBShareACLModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if err := r.applyACL(ctx, &cfg, &plan); err != nil {
 		resp.Diagnostics.AddError("Create SMB share ACL failed", err.Error())
 		return
 	}
 
-	// Write-what-you-said: keep the plan's exact entries in state. The server
-	// resolves extra principal selectors, but storing those would drift against
-	// a config that never set them (see model.go entriesDrifted).
 	plan.ID = types.StringValue(idFor(plan.ShareName.ValueString()))
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueString())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -158,14 +254,12 @@ func (r *SMBShareACLResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	if entriesDrifted(stateEntries, api.ShareACL) {
-		list, d := apiEntriesToList(ctx, api.ShareACL)
-		resp.Diagnostics.Append(d...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		state.ShareACL = list
+	list, d := types.ListValueFrom(ctx, smbAclEntryObjectType(), mergeEntries(stateEntries, api.ShareACL, false))
+	resp.Diagnostics.Append(d...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
+	state.ShareACL = list
 
 	state.ID = types.StringValue(idFor(state.ShareName.ValueString()))
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueString())...)
@@ -179,7 +273,13 @@ func (r *SMBShareACLResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	if err := r.applyACL(ctx, &plan); err != nil {
+	var cfg SMBShareACLModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if err := r.applyACL(ctx, &cfg, &plan); err != nil {
 		resp.Diagnostics.AddError("Update SMB share ACL failed", err.Error())
 		return
 	}

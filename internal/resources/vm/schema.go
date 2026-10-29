@@ -38,12 +38,13 @@ func resourceSchema() schema.Schema {
 			},
 			"memory": schema.Int64Attribute{
 				Required:    true,
-				Description: "Memory allocated to the VM, in bytes.",
+				Description: "Memory allocated to the VM, in MiB (mebibytes): 4096 is 4 GiB.",
 			},
 			"min_memory": schema.Int64Attribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "Minimum memory for ballooning, in bytes (0 = unset).",
+				Optional: true,
+				Computed: true,
+				Description: "Minimum memory for ballooning, in MiB (mebibytes). Set to 0 to clear it (no ballooning); " +
+					"removing the attribute leaves the current value unchanged.",
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.UseStateForUnknown(),
 				},
@@ -118,7 +119,7 @@ func resourceSchema() schema.Schema {
 			"cpu_model": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Custom CPU model, applicable when cpu_mode is CUSTOM (\"\" = unset).",
+				Description: "Custom CPU model, applicable when cpu_mode is CUSTOM." + vmClearNote,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -132,12 +133,12 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			// --- Hardware / boot / CPU options (coverage audit) ---
-			"machine_type":                  vmStrAttr("QEMU machine type, e.g. \"q35\" or \"i440fx\". Empty/unset uses the TrueNAS default."),
-			"arch_type":                     vmStrAttr("Guest CPU architecture. Empty/unset uses the host architecture."),
+			"machine_type":                  vmStrAttr("QEMU machine type, e.g. \"q35\" or \"i440fx\"; cleared means the hypervisor default." + vmClearNote),
+			"arch_type":                     vmStrAttr("Guest CPU architecture; cleared means the host architecture." + vmClearNote),
 			"bootloader_ovmf":               vmStrAttrReplace("OVMF firmware image to use (UEFI bootloader). Empty/unset uses the default. Create-only: changing it recreates the VM."),
-			"command_line_args":             vmStrAttr("Extra command-line arguments passed to the VM process."),
-			"cpuset":                        vmStrAttr("Physical host CPUs to pin the VM to, e.g. \"0-3\" or \"0,2,4\". Requires pin_vcpus for vCPU pinning."),
-			"nodeset":                       vmStrAttr("Host NUMA nodes to pin the VM's memory to, e.g. \"0-1\"."),
+			"command_line_args":             vmStrAttr("Extra command-line arguments passed to the VM process." + vmClearNote),
+			"cpuset":                        vmStrAttr("Physical host CPUs to pin the VM to, e.g. \"0-3\" or \"0,2,4\". Requires pin_vcpus for vCPU pinning." + vmClearNote),
+			"nodeset":                       vmStrAttr("Host NUMA nodes to pin the VM's memory to, e.g. \"0-1\"." + vmClearNote),
 			"enable_secure_boot":            vmBoolAttrReplace("Enable UEFI Secure Boot. Create-only: changing it recreates the VM."),
 			"trusted_platform_module":       vmBoolAttr("Attach an emulated TPM (TPM 2.0) device."),
 			"pin_vcpus":                     vmBoolAttr("Pin the VM's vCPUs to the physical CPUs given in cpuset."),
@@ -150,10 +151,17 @@ func resourceSchema() schema.Schema {
 			"status": schema.StringAttribute{
 				Computed:    true,
 				Description: "Current VM status: RUNNING, STOPPED.",
+				PlanModifiers: []planmodifier.String{
+					statusFollowsRunning{},
+				},
 			},
 		},
 	}
 }
+
+// vmClearNote documents the clear semantics of the clearable string options
+// (BUGS B-098): the payload sends "" as null.
+const vmClearNote = " Set to \"\" to clear it; removing the attribute leaves the current value unchanged."
 
 // vmStrAttr is an Optional+Computed string attribute (coverage audit scalar VM option).
 func vmStrAttr(desc string) schema.StringAttribute {

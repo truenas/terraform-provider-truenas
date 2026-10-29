@@ -4,18 +4,21 @@
 package acme_dns_authenticator
 
 import (
+	"bytes"
 	"encoding/json"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
+	"github.com/truenas/terraform-provider-truenas/internal/writeonly"
 )
 
 // AcmeDnsAuthenticatorModel is the Terraform state model for
 // truenas_acme_dns_authenticator.
 type AcmeDnsAuthenticatorModel struct {
-	ID         types.Int64  `tfsdk:"id"`
-	Name       types.String `tfsdk:"name"`
-	Attributes types.String `tfsdk:"attributes"` // JSON doc with "authenticator" key
+	ID         types.Int64          `tfsdk:"id"`
+	Name       types.String         `tfsdk:"name"`
+	Attributes normalize.JSONSubset `tfsdk:"attributes"` // JSON doc with "authenticator" key
 	// AttributesSecretsWO is a write-only JSON object (e.g. the DNS provider API
 	// token) merged over attributes when sending, never stored in state;
 	// AttributesSecretsWOVersion triggers re-send. (#37 secrets-out-of-state)
@@ -72,9 +75,9 @@ type AcmeDnsAuthenticatorDataSourceModel struct {
 // under a pool mount point), which is why this provider's acceptance test
 // uses the cloudflare variant with dummy credentials rather than shell.
 type acmeDnsAuthenticatorAPI struct {
-	ID         int64          `json:"id"`
-	Name       string         `json:"name"`
-	Attributes map[string]any `json:"attributes"`
+	ID         int64         `json:"id"`
+	Name       string        `json:"name"`
+	Attributes apiAttributes `json:"attributes"`
 }
 
 // attributesMap parses the attributes JSON string and validates that it
@@ -95,23 +98,74 @@ func (m *AcmeDnsAuthenticatorModel) attributesMap() (map[string]any, diag.Diagno
 	return attrs, diags
 }
 
-// attributesDrifted reports whether any key present in stateAttrs has a
-// different value in apiAttrs. API-added keys (e.g. optional fields the
-// server fills with an explicit null default) are ignored, not drift. This
-// mirrors alert_service/model.go's attributesDrifted helper.
-func attributesDrifted(stateAttrs, apiAttrs map[string]any) bool {
-	for k, v := range stateAttrs {
-		av, ok := apiAttrs[k]
-		if !ok {
-			return true
-		}
-		sb, _ := json.Marshal(v)
-		ab, _ := json.Marshal(av)
-		if string(sb) != string(ab) {
-			return true
-		}
+// redactedValue is what the middleware returns in place of a secret to a
+// session without the write role (a READONLY_ADMIN API key).
+const redactedValue = "********"
+
+// apiAttributes is the "attributes" object. A read-only session gets the
+// whole object as the string "********" (B-031); UnmarshalJSON flags that as
+// Redacted instead of failing the decode.
+type apiAttributes struct {
+	M        map[string]any
+	Redacted bool
+}
+
+func (a *apiAttributes) UnmarshalJSON(b []byte) error {
+	if t := bytes.TrimSpace(b); len(t) > 0 && t[0] == '"' {
+		*a = apiAttributes{Redacted: true}
+		return nil
 	}
-	return false
+	a.Redacted = false
+	return json.Unmarshal(b, &a.M)
+}
+
+func (a apiAttributes) MarshalJSON() ([]byte, error) {
+	if a.Redacted {
+		return json.Marshal(redactedValue)
+	}
+	return json.Marshal(a.M)
+}
+
+// unmaskRedacted returns a copy of api in which every top-level value that the
+// server redacted to "********" is replaced by the prior (state) value of the
+// same key, or dropped when prior has no such key.
+func unmaskRedacted(api map[string]any, priorJSON string) map[string]any {
+	var prior map[string]any
+	_ = json.Unmarshal([]byte(priorJSON), &prior)
+	out := make(map[string]any, len(api))
+	for k, v := range api {
+		if s, ok := v.(string); ok && s == redactedValue {
+			if pv, ok := prior[k]; ok {
+				out[k] = pv
+			}
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
+// readAttributes is the attributes value Read stores: the server document, or,
+// when the write-only overlay is in use, the server document projected onto
+// the keys in prior so secret keys stay out of state. normalize.JSONSubset
+// keeps prior's spelling when every configured value matches (heredoc
+// spelling, server-added null keys: B-061, B-120). A wholly redacted object
+// (read-only session) keeps prior; there is nothing to compare it with.
+func readAttributes(api apiAttributes, prior string, writeOnly bool) (normalize.JSONSubset, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	if api.Redacted {
+		return normalize.NewJSONSubsetValue(prior), diags
+	}
+	live := unmaskRedacted(api.M, prior)
+	if writeOnly && prior != "" {
+		return normalize.NewJSONSubsetValue(writeonly.ProjectOntoKeys(prior, live)), diags
+	}
+	b, err := json.Marshal(live)
+	if err != nil {
+		diags.AddError("Failed to marshal attributes", err.Error())
+		return normalize.NewJSONSubsetNull(), diags
+	}
+	return normalize.NewJSONSubsetValue(string(b)), diags
 }
 
 // responseToModel maps acmeDnsAuthenticatorAPI onto AcmeDnsAuthenticatorModel.
@@ -160,11 +214,48 @@ func responseToDataSourceModel(api *acmeDnsAuthenticatorAPI, m *AcmeDnsAuthentic
 	var diags diag.Diagnostics
 	m.ID = types.Int64Value(api.ID)
 	m.Name = types.StringValue(api.Name)
-	b, err := json.Marshal(api.Attributes)
+	// A read-only session sees the secrets (or the whole object) as
+	// "********"; report them as null, not as data (B-031).
+	if api.Attributes.Redacted {
+		m.Attributes = types.StringNull()
+		return diags
+	}
+	attrs := make(map[string]any, len(api.Attributes.M))
+	for k, v := range api.Attributes.M {
+		if s, ok := v.(string); ok && s == redactedValue {
+			v = nil
+		}
+		attrs[k] = v
+	}
+	b, err := json.Marshal(attrs)
 	if err != nil {
 		diags.AddError("Failed to marshal attributes", err.Error())
 		return diags
 	}
 	m.Attributes = types.StringValue(string(b))
 	return diags
+}
+
+// storedSecretsOverlay returns the write-only overlay with each key's value
+// replaced by the value TrueNAS has stored for it, when it has one (not null
+// and not the read-only redaction mask). acme.dns.authenticator.update replaces `attributes` as a whole, so
+// every update must carry the secret keys; when attributes_secrets_wo_version did not change, the
+// provider sends the stored secrets rather than the configured ones, so a
+// secret changed in config without a version bump is not applied and the
+// stored one is kept. A key with no stored value is sent from config. (B-141)
+func storedSecretsOverlay(overlayJSON string, stored map[string]any) string {
+	var overlay map[string]any
+	if json.Unmarshal([]byte(overlayJSON), &overlay) != nil {
+		return overlayJSON // injection reports the parse error
+	}
+	for k := range overlay {
+		if v, ok := stored[k]; ok && v != nil && v != "********" {
+			overlay[k] = v
+		}
+	}
+	b, err := json.Marshal(overlay)
+	if err != nil {
+		return overlayJSON
+	}
+	return string(b)
 }

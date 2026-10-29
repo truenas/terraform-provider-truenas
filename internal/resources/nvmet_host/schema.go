@@ -39,24 +39,51 @@ func resourceSchema() schema.Schema {
 				Optional:  true,
 				Sensitive: true,
 				WriteOnly: true,
-				Description: "DH-CHAP key used by this host to authenticate to a subsystem. " +
+				Description: "DH-CHAP key used by this host to authenticate to a subsystem. Removing it from " +
+					"config turns DH-CHAP off for the host. To rotate it, change the key and bump dhchap_key_wo_version. " +
 					"Write-only: never stored in Terraform state. Requires Terraform >= 1.11.",
 			},
 			"dhchap_ctrl_key": schema.StringAttribute{
 				Optional:  true,
 				Sensitive: true,
 				WriteOnly: true,
-				Description: "DH-CHAP controller key used for bidirectional authentication. " +
+				Description: "DH-CHAP controller key used for bidirectional authentication. Needs dhchap_key. " +
+					"Removing it from config turns bidirectional authentication off. To rotate it, change the key and " +
+					"bump dhchap_ctrl_key_wo_version. " +
 					"Write-only: never stored in Terraform state. Requires Terraform >= 1.11.",
 			},
 			"dhchap_dhgroup": schema.StringAttribute{
-				Validators:  []validator.String{stringvalidator.OneOf("2048-BIT", "3072-BIT", "4096-BIT", "6144-BIT", "8192-BIT")},
+				Validators:  []validator.String{stringvalidator.OneOf("", "2048-BIT", "3072-BIT", "4096-BIT", "6144-BIT", "8192-BIT")},
 				Optional:    true,
 				Computed:    true,
-				Description: "DH-CHAP Diffie-Hellman group used for bidirectional authentication.",
+				Description: "DH-CHAP Diffie-Hellman group used for bidirectional authentication. Set to \"\" to clear it.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
+			},
+			"dhchap_key_wo_version": schema.Int64Attribute{
+				Optional: true,
+				Description: "Rotation trigger for the write-only dhchap_key. A write-only value is absent from state, " +
+					"so Terraform cannot detect that dhchap_key changed. Bump this integer whenever dhchap_key changes " +
+					"to make Terraform re-send it. dhchap_key is sent on create, when it is added or removed, and otherwise only " +
+					"when this integer changes; other updates leave the stored key alone. Optional.",
+			},
+			"dhchap_ctrl_key_wo_version": schema.Int64Attribute{
+				Optional: true,
+				Description: "Rotation trigger for the write-only dhchap_ctrl_key. A write-only value is absent from state, " +
+					"so Terraform cannot detect that dhchap_ctrl_key changed. Bump this integer whenever dhchap_ctrl_key " +
+					"changes to make Terraform re-send it. dhchap_ctrl_key is sent on create, when it is added or removed, and otherwise only " +
+					"when this integer changes; other updates leave the stored key alone. Optional.",
+			},
+			"dhchap_key_set": schema.BoolAttribute{
+				Computed: true,
+				Description: "Whether TrueNAS has a DH-CHAP key for this host. Planned from whether dhchap_key is " +
+					"set in config, so adding or removing the key (in config or outside Terraform) shows as a change.",
+			},
+			"dhchap_ctrl_key_set": schema.BoolAttribute{
+				Computed: true,
+				Description: "Whether TrueNAS has a DH-CHAP controller key for this host. Planned from whether " +
+					"dhchap_ctrl_key is set in config.",
 			},
 			"dhchap_hash": schema.StringAttribute{
 				Validators:  []validator.String{stringvalidator.OneOf("SHA-256", "SHA-384", "SHA-512")},

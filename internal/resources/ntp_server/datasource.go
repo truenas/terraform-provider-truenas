@@ -82,6 +82,15 @@ func (d *NTPServerDataSource) Read(ctx context.Context, req datasource.ReadReque
 		)
 		return
 	}
+	// TrueNAS does not enforce unique addresses; refuse to pick one of
+	// several matches silently (B-131).
+	if len(results) > 1 {
+		resp.Diagnostics.AddError(
+			"Several NTP servers match",
+			fmt.Sprintf("%d NTP servers have address %q; this data source needs exactly one.", len(results), state.Address.ValueString()),
+		)
+		return
+	}
 
 	responseToDataSourceModel(&results[0], &state)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)

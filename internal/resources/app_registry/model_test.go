@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // TestApiPayload_FullySet verifies apiPayload includes name, username,
@@ -17,7 +18,7 @@ func TestApiPayload_FullySet(t *testing.T) {
 	m := &AppRegistryModel{
 		Name:        types.StringValue("tf-registry"),
 		Description: types.StringValue("a test registry"),
-		URI:         types.StringValue("https://registry.example.com"),
+		URI:         normalize.NewURLValue("https://registry.example.com"),
 		Username:    types.StringValue("tfuser"),
 		PasswordWO:  types.StringNull(), // write-only: never sourced from here
 	}
@@ -49,7 +50,7 @@ func TestApiPayload_DescriptionExplicitNull(t *testing.T) {
 	m := &AppRegistryModel{
 		Name:        types.StringValue("tf-registry"),
 		Description: types.StringNull(),
-		URI:         types.StringValue("https://registry.example.com"),
+		URI:         normalize.NewURLValue("https://registry.example.com"),
 		Username:    types.StringValue("tfuser"),
 	}
 
@@ -73,7 +74,7 @@ func TestApiPayload_URIOmittedWhenUnknown(t *testing.T) {
 	m := &AppRegistryModel{
 		Name:        types.StringValue("tf-registry"),
 		Description: types.StringNull(),
-		URI:         types.StringUnknown(),
+		URI:         normalize.NewURLUnknown(),
 		Username:    types.StringValue("tfuser"),
 	}
 
@@ -200,5 +201,15 @@ func TestAppRegistryDataSourceModel_NoPasswordField(t *testing.T) {
 		if tag == "password" || tag == "password_wo" {
 			t.Errorf("AppRegistryDataSourceModel must not have a %q field (password must never be exposed via datasource)", tag)
 		}
+	}
+}
+
+// TestApiPayload_NullPasswordOmitted: an update that does not rotate the
+// token (password_wo_version unchanged) leaves password out of the payload so
+// app.registry.update keeps the stored one. (B-141)
+func TestApiPayload_NullPasswordOmitted(t *testing.T) {
+	m := &AppRegistryModel{Name: types.StringValue("r"), Username: types.StringValue("u")}
+	if _, ok := m.apiPayload(types.StringNull())["password"]; ok {
+		t.Error("null password must be omitted from the payload")
 	}
 }

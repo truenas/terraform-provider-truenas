@@ -29,7 +29,7 @@ func (d *MailDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 	resp.Schema = dschema.Schema{
 		Description: "Reads the current TrueNAS system mail (email) configuration. Takes no arguments: " +
 			"there is exactly one mail configuration per TrueNAS system. Does not expose the SMTP password: " +
-			"mail.config never returns it.",
+			"mail.config returns it in plain text, and this data source deliberately does not surface it.",
 		Attributes: map[string]dschema.Attribute{
 			"id": dschema.StringAttribute{
 				Computed:    true,

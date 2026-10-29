@@ -14,7 +14,7 @@ import (
 // NVMetSubsysModel is the Terraform state model for truenas_nvmet_subsys.
 type NVMetSubsysModel struct {
 	ID           types.Int64  `tfsdk:"id"`
-	Name         types.String `tfsdk:"name"`           // Required + RequiresReplace
+	Name         types.String `tfsdk:"name"`           // Required; renamed in place
 	SubNQN       types.String `tfsdk:"subnqn"`         // Optional+Computed+USFU; server derives when unset
 	AllowAnyHost types.Bool   `tfsdk:"allow_any_host"` // Optional+Computed+USFU
 	ANA          types.Bool   `tfsdk:"ana"`            // Optional+Computed+USFU; nullable in API
@@ -158,20 +158,16 @@ func responseToDataSourceModel(_ context.Context, api *nvmetSubsysAPI, m *NVMetS
 // Each is included only when its model value is known (not null, not
 // unknown).
 //
-// subnqn and ieee_oui use a three-way rule instead of the simple guard:
-// null/unknown are omitted (no opinion), an explicit empty string sends an
-// explicit JSON null (clears the server-side value), and any other value is
-// sent as-is. Without this, an explicit "" would be indistinguishable from
-// "unset" and could never clear a previously-set subnqn/ieee_oui.
+// ieee_oui uses a three-way rule instead of the simple guard: null/unknown
+// are omitted (no opinion), an explicit empty string sends an explicit JSON
+// null (clears the server-side value), and any other value is sent as-is.
+// subnqn has no such rule: the server answers null or "" by deriving a new
+// NQN, so "" is rejected by the schema validator instead.
 func (m *NVMetSubsysModel) guardedFields() map[string]any {
 	p := map[string]any{}
 
 	if !m.SubNQN.IsNull() && !m.SubNQN.IsUnknown() {
-		if m.SubNQN.ValueString() == "" {
-			p["subnqn"] = nil
-		} else {
-			p["subnqn"] = m.SubNQN.ValueString()
-		}
+		p["subnqn"] = m.SubNQN.ValueString()
 	}
 	if !m.AllowAnyHost.IsNull() && !m.AllowAnyHost.IsUnknown() {
 		p["allow_any_host"] = m.AllowAnyHost.ValueBool()
@@ -209,9 +205,11 @@ func (m *NVMetSubsysModel) createPayload(_ context.Context) (map[string]any, dia
 }
 
 // updatePayload builds the map[string]any payload for nvmet.subsys.update.
-// It never includes "name": name changes are handled via RequiresReplace,
-// and the API may reject "name" in an update call.
+// name is included: nvmet.subsys.update renames in place (25.10, 26.0 and
+// 28.0), keeping the serial, namespaces and mappings.
 func (m *NVMetSubsysModel) updatePayload(_ context.Context) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	return m.guardedFields(), diags
+	payload := m.guardedFields()
+	payload["name"] = m.Name.ValueString()
+	return payload, diags
 }

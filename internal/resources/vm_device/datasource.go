@@ -39,8 +39,7 @@ func (d *VMDeviceDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 			},
 			"attributes": dschema.StringAttribute{
 				Computed:    true,
-				Sensitive:   true,
-				Description: "JSON document of device attributes.",
+				Description: "JSON document of device attributes. A secret (the DISPLAY device's `password`) is reported as null.",
 			},
 			"order": dschema.Int64Attribute{
 				Computed:    true,

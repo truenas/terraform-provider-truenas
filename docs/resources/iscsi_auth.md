@@ -34,7 +34,7 @@ variable "chap_secret" {
 
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
-- `secret` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) CHAP secret (password) for the initiator. Must be 12-16 characters. Write-only: never stored in Terraform state. Requires Terraform >= 1.11.
+- `secret` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) CHAP secret (password) for the initiator. Must be 12-16 characters. Write-only: never stored in Terraform state. Requires Terraform >= 1.11. Generated configuration (`terraform plan -generate-config-out`) has this as null, because Terraform never writes sensitive or write-only values there; fill it in before applying.
 - `tag` (Number) Group ID for this CHAP credential. Referenced by an iSCSI target group's "auth" setting.
 - `user` (String) CHAP username presented by the initiator.
 
@@ -43,10 +43,10 @@ variable "chap_secret" {
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
 - `discovery_auth` (String) Discovery authentication method. One of: NONE, CHAP, CHAP_MUTUAL.
-- `peersecret` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Peer secret for mutual CHAP. Must be 12-16 characters. Omit or leave empty to disable mutual CHAP. Write-only: never stored in Terraform state. Requires Terraform >= 1.11.
-- `peersecret_wo_version` (Number) Rotation trigger for the write-only peersecret. A write-only value is absent from state, so Terraform cannot detect that peersecret changed. Bump this integer whenever peersecret changes to make Terraform re-send it. Optional.
-- `peeruser` (String) Peer username for mutual CHAP (target authenticates to initiator).
-- `secret_wo_version` (Number) Rotation trigger for the write-only secret. A write-only value is absent from state, so Terraform cannot detect that secret changed. Bump this integer whenever secret changes to make Terraform re-send it. Optional.
+- `peersecret` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Peer secret for mutual CHAP. Must be 12-16 characters. Required while peeruser is set; cleared on the server when peeruser is unset. Write-only: never stored in Terraform state. Requires Terraform >= 1.11.
+- `peersecret_wo_version` (Number) Rotation trigger for the write-only peersecret. A write-only value is absent from state, so Terraform cannot detect that peersecret changed. Bump this integer whenever peersecret changes to make Terraform re-send it. peersecret is sent on create and, after that, only when this integer changes or when mutual CHAP is turned on (peeruser set where it was empty); other updates leave the stored value alone. Optional.
+- `peeruser` (String) Peer username for mutual CHAP (target authenticates to initiator). Leave unset (or "") for one-way CHAP: removing it from config turns mutual CHAP off and clears the peer secret.
+- `secret_wo_version` (Number) Rotation trigger for the write-only secret. A write-only value is absent from state, so Terraform cannot detect that secret changed. Bump this integer whenever secret changes to make Terraform re-send it. secret is sent on create and, after that, only when this integer changes; other updates leave the stored value alone. Optional.
 
 ### Read-Only
 

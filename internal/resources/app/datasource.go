@@ -31,6 +31,7 @@ func (d *AppDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, re
 		Attributes: map[string]dschema.Attribute{
 			"id":                dschema.StringAttribute{Computed: true, Description: "App name (used as Terraform ID)."},
 			"name":              dschema.StringAttribute{Required: true, Description: "Application name."},
+			"catalog_app":       dschema.StringAttribute{Computed: true, Description: "Catalog app the app was installed from (e.g. \"plex\"); null for custom apps."},
 			"train":             dschema.StringAttribute{Computed: true, Description: "Catalog train: stable, community, enterprise."},
 			"version":           dschema.StringAttribute{Computed: true, Description: "Installed app version."},
 			"custom_app":        dschema.BoolAttribute{Computed: true, Description: "True for custom (compose-based) apps."},

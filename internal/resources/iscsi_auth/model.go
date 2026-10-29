@@ -84,16 +84,20 @@ func responseToDataSourceModel(api *iscsiAuthAPI, m *ISCSIAuthDataSourceModel) d
 }
 
 // apiPayload builds the map[string]any payload for iscsi.auth.create /
-// iscsi.auth.update. tag/user/secret are always included (Required).
+// iscsi.auth.update. tag/user are always included (Required); secret when set.
 // peeruser/discovery_auth are Optional+Computed, so they are only included
-// when known. peersecret is Optional (not Computed) and is only included
-// when known and non-empty, so an unset peersecret never overwrites an
-// existing one on the server.
+// when known (peeruser defaults to ""). peersecret is write-only: it is
+// included when known and non-empty, and sent as "" when peeruser is "", so
+// dropping mutual CHAP from config clears both peer credentials.
 func (m *ISCSIAuthModel) apiPayload() map[string]any {
 	p := map[string]any{
-		"tag":    m.Tag.ValueInt64(),
-		"user":   m.User.ValueString(),
-		"secret": m.Secret.ValueString(),
+		"tag":  m.Tag.ValueInt64(),
+		"user": m.User.ValueString(),
+	}
+	// secret is null on an update that does not re-send it (see
+	// dropUnversionedSecrets); iscsi.auth.update keeps the stored one.
+	if !m.Secret.IsNull() && !m.Secret.IsUnknown() {
+		p["secret"] = m.Secret.ValueString()
 	}
 
 	if !m.PeerUser.IsNull() && !m.PeerUser.IsUnknown() {
@@ -107,6 +111,29 @@ func (m *ISCSIAuthModel) apiPayload() map[string]any {
 			p["peersecret"] = v
 		}
 	}
+	// No peer user means one-way CHAP: clear the peer secret too. The server
+	// rejects a stored peer secret without a peer user ("The peer user is
+	// required if you set a peer secret"), and keeping it would leave the
+	// old mutual CHAP credential behind.
+	if !m.PeerUser.IsNull() && !m.PeerUser.IsUnknown() && m.PeerUser.ValueString() == "" {
+		p["peersecret"] = ""
+	}
 
 	return p
+}
+
+// dropUnversionedSecrets clears the write-only CHAP secrets from an update
+// model unless their *_wo_version changed from prior state, so an update does
+// not re-send a secret the operator did not rotate (iscsi.auth.update keeps
+// the stored value for an absent key). (B-141) The peer secret is still sent
+// when mutual CHAP is being turned on (peeruser goes from "" to a name): the
+// server rejects a peer user without a peer secret.
+func (m *ISCSIAuthModel) dropUnversionedSecrets(prior ISCSIAuthModel) {
+	if m.SecretWOVersion.Equal(prior.SecretWOVersion) {
+		m.Secret = types.StringNull()
+	}
+	enablingMutual := m.PeerUser.ValueString() != "" && prior.PeerUser.ValueString() == ""
+	if m.PeerSecretWOVersion.Equal(prior.PeerSecretWOVersion) && !enablingMutual {
+		m.PeerSecret = types.StringNull()
+	}
 }

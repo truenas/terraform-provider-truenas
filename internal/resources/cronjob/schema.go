@@ -43,7 +43,7 @@ func resourceSchema() schema.Schema {
 			"schedule": schema.SingleNestedAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Cron schedule for when the job runs. Defaults to every day at 00:00.",
+				Description: "Cron schedule for when the job runs. Defaults to every hour at minute 00 (minute \"00\", every other field \"*\").",
 				PlanModifiers: []planmodifier.Object{
 					objectplanmodifier.UseStateForUnknown(),
 				},

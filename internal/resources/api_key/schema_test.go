@@ -72,22 +72,18 @@ func TestAPIKeySchema_NameRequired(t *testing.T) {
 	}
 }
 
-// TestAPIKeySchema_ExpiresAtOptionalComputed verifies "expires_at" is
-// Optional+Computed (nullable, user-settable, but also always populated
-// from the API).
-func TestAPIKeySchema_ExpiresAtOptionalComputed(t *testing.T) {
+// TestAPIKeySchema_ExpiresAtOptional verifies "expires_at" is Optional and NOT
+// Computed: removing it from config must plan null so the update clears the
+// expiration, rather than carrying the old value forward. (B-111)
+func TestAPIKeySchema_ExpiresAtOptional(t *testing.T) {
 	s := resourceSchema()
 
 	attr, ok := s.Attributes["expires_at"]
 	if !ok {
 		t.Fatal("schema missing 'expires_at' attribute")
 	}
-	strAttr, ok := attr.(schema.StringAttribute)
-	if !ok {
-		t.Fatalf("'expires_at' attribute is %T, want schema.StringAttribute", attr)
-	}
-	if !strAttr.IsOptional() || !strAttr.IsComputed() {
-		t.Error("'expires_at' should be Optional+Computed")
+	if !attr.IsOptional() || attr.IsComputed() {
+		t.Error("'expires_at' should be Optional and not Computed")
 	}
 }
 

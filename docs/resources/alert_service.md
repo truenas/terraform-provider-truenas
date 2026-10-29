@@ -62,7 +62,7 @@ output "existing_alert_level" {
 
 ### Required
 
-- `attributes` (String, Sensitive) JSON document of service settings. Must include "type" (e.g. Mail, SNMPTrap, Slack, PagerDuty). May contain secrets such as webhook URLs or SNMP v3 keys; use attributes_secrets_wo to keep secret keys out of state.
+- `attributes` (String, Sensitive) JSON document of service settings. Must include "type" (e.g. Mail, SNMPTrap, Slack, PagerDuty). May contain secrets such as webhook URLs or SNMP v3 keys; use attributes_secrets_wo to keep secret keys out of state. Compared as JSON: any spelling (jsonencode, heredoc) works, and keys the server adds with defaults are not a change. Generated configuration (`terraform plan -generate-config-out`) has this as null, because Terraform never writes sensitive or write-only values there; fill it in before applying.
 - `level` (String) Minimum alert level that triggers this service. One of: INFO, NOTICE, WARNING, ERROR, CRITICAL, ALERT, EMERGENCY.
 - `name` (String) Name of the alert service.
 
@@ -71,7 +71,7 @@ output "existing_alert_level" {
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
 - `attributes_secrets_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only JSON object of secret attributes (e.g. Slack/PagerDuty/AWS credentials) merged over attributes when sending to TrueNAS. Never stored in state, and not read back on refresh. Requires attributes_secrets_wo_version.
-- `attributes_secrets_wo_version` (Number) Version trigger for attributes_secrets_wo. Bump to re-send a changed write-only secret overlay. Required when attributes_secrets_wo is set.
+- `attributes_secrets_wo_version` (Number) Version trigger for attributes_secrets_wo. Bump to re-send a changed write-only secret overlay. The overlay is sent on create and when this integer changes; other updates send the secret values TrueNAS already has (the API needs the whole object), so a changed secret is applied only with a version bump. Required when attributes_secrets_wo is set.
 - `enabled` (Boolean) Whether the alert service is enabled.
 
 ### Read-Only

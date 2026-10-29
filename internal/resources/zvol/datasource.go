@@ -10,6 +10,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 )
 
@@ -91,5 +92,6 @@ func (d *ZvolDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	}
 
 	responseToModel(&apiResp, &state)
+	state.Sparse = types.BoolValue(sparseFromAPI(&apiResp))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

@@ -4,16 +4,19 @@
 package acme_dns_authenticator
 
 import (
+	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // TestAttributesMap_RequiresAuthenticatorKey verifies attributesMap rejects
 // JSON missing the "authenticator" discriminator key.
 func TestAttributesMap_RequiresAuthenticatorKey(t *testing.T) {
 	m := &AcmeDnsAuthenticatorModel{
-		Attributes: types.StringValue(`{"api_token":"x"}`),
+		Attributes: normalize.NewJSONSubsetValue(`{"api_token":"x"}`),
 	}
 	_, diags := m.attributesMap()
 	if !diags.HasError() {
@@ -24,7 +27,7 @@ func TestAttributesMap_RequiresAuthenticatorKey(t *testing.T) {
 // TestAttributesMap_InvalidJSON verifies attributesMap rejects malformed JSON.
 func TestAttributesMap_InvalidJSON(t *testing.T) {
 	m := &AcmeDnsAuthenticatorModel{
-		Attributes: types.StringValue(`not json`),
+		Attributes: normalize.NewJSONSubsetValue(`not json`),
 	}
 	_, diags := m.attributesMap()
 	if !diags.HasError() {
@@ -37,7 +40,7 @@ func TestAttributesMap_InvalidJSON(t *testing.T) {
 func TestCreatePayload_Cloudflare(t *testing.T) {
 	m := &AcmeDnsAuthenticatorModel{
 		Name:       types.StringValue("tf-acc-cf"),
-		Attributes: types.StringValue(`{"authenticator":"cloudflare","api_token":"definitely-not-a-real-token"}`),
+		Attributes: normalize.NewJSONSubsetValue(`{"authenticator":"cloudflare","api_token":"definitely-not-a-real-token"}`),
 	}
 
 	p, diags := m.createPayload()
@@ -66,7 +69,7 @@ func TestCreatePayload_Cloudflare(t *testing.T) {
 func TestUpdatePayload_SameShapeAsCreate(t *testing.T) {
 	m := &AcmeDnsAuthenticatorModel{
 		Name:       types.StringValue("tf-acc-cf-renamed"),
-		Attributes: types.StringValue(`{"authenticator":"route53","access_key_id":"AKIA","secret_access_key":"shh"}`),
+		Attributes: normalize.NewJSONSubsetValue(`{"authenticator":"route53","access_key_id":"AKIA","secret_access_key":"shh"}`),
 	}
 
 	p, diags := m.updatePayload()
@@ -92,12 +95,12 @@ func TestResponseToModel_ProbedShape(t *testing.T) {
 	api := &acmeDnsAuthenticatorAPI{
 		ID:   1,
 		Name: "tf-probe-acme-dns-auth-cf",
-		Attributes: map[string]any{
+		Attributes: apiAttributes{M: map[string]any{
 			"authenticator":    "cloudflare",
 			"cloudflare_email": nil,
 			"api_key":          nil,
 			"api_token":        "definitely-not-a-real-token-0000000000000",
-		},
+		}},
 	}
 
 	m := &AcmeDnsAuthenticatorModel{}
@@ -111,22 +114,59 @@ func TestResponseToModel_ProbedShape(t *testing.T) {
 	}
 }
 
-// TestAttributesDrifted_UserKeyChanged verifies attributesDrifted detects a
-// changed user-set key.
-func TestAttributesDrifted_UserKeyChanged(t *testing.T) {
-	state := map[string]any{"authenticator": "cloudflare", "api_token": "old"}
-	apiResp := map[string]any{"authenticator": "cloudflare", "api_token": "new", "api_key": nil}
-	if !attributesDrifted(state, apiResp) {
-		t.Error("expected drift when a user-set key's value changed")
+func readEqualsPrior(t *testing.T, prior string, api apiAttributes, wo bool) bool {
+	t.Helper()
+	v, d := readAttributes(api, prior, wo)
+	if d.HasError() {
+		t.Fatal(d)
+	}
+	eq, d := v.StringSemanticEquals(context.Background(), normalize.NewJSONSubsetValue(prior))
+	if d.HasError() {
+		t.Fatal(d)
+	}
+	return eq
+}
+
+// Server-added null keys and a heredoc spelling are not drift; a changed
+// configured value is (B-061, B-120).
+func TestReadAttributes_Subset(t *testing.T) {
+	heredoc := "{\n  \"authenticator\": \"cloudflare\",\n  \"api_token\": \"same\"\n}\n"
+	same := apiAttributes{M: map[string]any{"authenticator": "cloudflare", "api_token": "same", "cloudflare_email": nil, "api_key": nil}}
+	changed := apiAttributes{M: map[string]any{"authenticator": "cloudflare", "api_token": "new"}}
+	if !readEqualsPrior(t, heredoc, same, false) {
+		t.Error("server-added keys should not be drift")
+	}
+	if !readEqualsPrior(t, heredoc, same, true) {
+		t.Error("write-only projection of the same values should not be drift")
+	}
+	if readEqualsPrior(t, heredoc, changed, false) {
+		t.Error("a changed configured value should be drift")
 	}
 }
 
-// TestAttributesDrifted_APIAddedKeyIgnored verifies attributesDrifted does
-// not flag keys the API adds that weren't in the user's original state.
-func TestAttributesDrifted_APIAddedKeyIgnored(t *testing.T) {
-	state := map[string]any{"authenticator": "cloudflare", "api_token": "same"}
-	apiResp := map[string]any{"authenticator": "cloudflare", "api_token": "same", "cloudflare_email": nil, "api_key": nil}
-	if attributesDrifted(state, apiResp) {
-		t.Error("did not expect drift when only API-added keys differ")
+// A read-only session gets the whole attributes object as "********" (B-031):
+// the decode must not fail, Read keeps the prior value, the data source
+// reports null.
+func TestRedactedAttributes(t *testing.T) {
+	var api acmeDnsAuthenticatorAPI
+	if err := json.Unmarshal([]byte(`{"id": 3, "name": "x", "attributes": "********"}`), &api); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !api.Attributes.Redacted {
+		t.Fatal("Redacted not set")
+	}
+	prior := `{"authenticator":"cloudflare","api_token":"t"}`
+	v, d := readAttributes(api.Attributes, prior, false)
+	if d.HasError() || v.ValueString() != prior {
+		t.Errorf("readAttributes = %q (%v), want the prior value", v.ValueString(), d)
+	}
+	var ds AcmeDnsAuthenticatorDataSourceModel
+	if d := responseToDataSourceModel(&api, &ds); d.HasError() || !ds.Attributes.IsNull() {
+		t.Errorf("data source attributes = %v (%v), want null", ds.Attributes, d)
+	}
+	// A single masked key keeps its prior value.
+	got := unmaskRedacted(map[string]any{"api_token": "********", "authenticator": "cloudflare"}, prior)
+	if got["api_token"] != "t" {
+		t.Errorf("api_token = %v, want the prior value", got["api_token"])
 	}
 }

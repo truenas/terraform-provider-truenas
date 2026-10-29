@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
 )
@@ -34,6 +36,8 @@ const (
 var _ resource.Resource = &IPMILanResource{}
 var _ resource.ResourceWithImportState = &IPMILanResource{}
 var _ resource.ResourceWithIdentity = &IPMILanResource{}
+var _ resource.ResourceWithValidateConfig = &IPMILanResource{}
+var _ resource.ResourceWithModifyPlan = &IPMILanResource{}
 
 // IPMILanResource implements the truenas_ipmi_lan resource: the LAN
 // configuration of one pre-existing physical BMC/IPMI channel. See
@@ -132,7 +136,7 @@ func (r *IPMILanResource) lookupChannelSettled(ctx context.Context, channel int6
 // Live trace (.68 channel 1, immediately after an ipmi.lan.update that
 // changed "vlan"): the controller FLAPS for ~10-15s, cycling through BOTH
 // {"static","0.0.0.0"} AND {"unspecified","0.0.0.0"} reads before settling
-// back to its real {"static","192.168.1.103"} — see settlePollInterval's doc
+// back to its real {"static","192.0.2.103"} — see settlePollInterval's doc
 // comment. So the transient is not confined to a "static" source; it must be
 // recognized under "unspecified" too.
 //
@@ -198,6 +202,53 @@ func priorStateIsStatic(state *IPMILanModel) bool {
 	}
 	ip := state.IPAddress.ValueString()
 	return ip != "" && ip != "0.0.0.0"
+}
+
+// ValidateConfig rejects ipaddress/netmask/gateway together with
+// dhcp = true. They are only sent for a static channel, so with DHCP the
+// configured value would never reach the BMC while the plan promised it.
+func (r *IPMILanResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var cfg IPMILanModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() || cfg.DHCP.IsUnknown() || cfg.DHCP.IsNull() || !cfg.DHCP.ValueBool() {
+		return
+	}
+	for name, v := range map[string]types.String{"ipaddress": cfg.IPAddress, "netmask": cfg.Netmask, "gateway": cfg.Gateway} {
+		if !v.IsNull() {
+			resp.Diagnostics.AddAttributeError(path.Root(name),
+				name+" cannot be set with dhcp = true",
+				"With dhcp = true the BMC gets its address from DHCP; "+name+" is only sent for a static "+
+					"channel (dhcp = false). Remove it, or set dhcp = false.")
+		}
+	}
+}
+
+// ModifyPlan plans ipaddress/netmask/gateway unknown on any update of a
+// channel that is (or becomes) DHCP-managed. They carry UseStateForUnknown,
+// so a static-to-DHCP change kept the old static values in the plan while the
+// BMC reported its DHCP lease (or 0.0.0.0 while settling), and the apply
+// failed with "inconsistent result after apply" (B-129).
+func (r *IPMILanResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() || req.State.Raw.IsNull() || req.Plan.Raw.Equal(req.State.Raw) {
+		return
+	}
+	var plan, state IPMILanModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	// The BMC reports the 802.1p priority together with the VLAN tag; a tag
+	// change can change it, so do not pin it then.
+	if !plan.Vlan.Equal(state.Vlan) {
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("vlan_priority"), types.Int64Unknown())...)
+	}
+	if plan.DHCP.IsUnknown() || !plan.DHCP.ValueBool() {
+		return
+	}
+	for _, name := range []string{"ipaddress", "netmask", "gateway"} {
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root(name), types.StringUnknown())...)
+	}
 }
 
 func (r *IPMILanResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -325,6 +376,8 @@ func (r *IPMILanResource) Update(ctx context.Context, req resource.UpdateRequest
 		)
 		return
 	}
+
+	config.dropUnversionedPassword(state)
 
 	payload, err := config.updatePayload()
 	if err != nil {

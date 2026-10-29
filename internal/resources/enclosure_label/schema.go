@@ -4,9 +4,11 @@
 package enclosure_label
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 func resourceSchema() schema.Schema {
@@ -55,6 +57,11 @@ func resourceSchema() schema.Schema {
 			},
 			"label": schema.StringAttribute{
 				Required: true,
+				// An empty label means "no user label": enclosure2.query then
+				// reports the enclosure name, so "" read back as the name and
+				// failed the apply. Destroy restores the label found at create or
+				// import, including "no user label". (B-132)
+				Validators: []validator.String{stringvalidator.LengthAtLeast(1)},
 				Description: "New label to assign to the enclosure. Always sent on every apply — unlike " +
 					"truenas_ipmi_lan's Optional+Computed fields, there is no meaningful \"leave the label " +
 					"unmanaged\" state for a resource whose entire purpose is setting one. See the resource " +

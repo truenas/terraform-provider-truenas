@@ -62,6 +62,15 @@ func (r *NTPServerResource) Create(ctx context.Context, req resource.CreateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	// force is write-only: read from config, never from plan or state.
+	var cfg NTPServerModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !cfg.Force.IsNull() && !cfg.Force.IsUnknown() {
+		payload["force"] = cfg.Force.ValueBool()
+	}
 
 	raw, err := r.client.Call(ctx, "system.ntpserver.create", payload)
 	if err != nil {
@@ -146,6 +155,15 @@ func (r *NTPServerResource) Update(ctx context.Context, req resource.UpdateReque
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+	// force is write-only: read from config, never from plan or state.
+	var cfg NTPServerModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !cfg.Force.IsNull() && !cfg.Force.IsUnknown() {
+		payload["force"] = cfg.Force.ValueBool()
 	}
 
 	_, err := r.client.Call(ctx, "system.ntpserver.update", plan.ID.ValueInt64(), payload)

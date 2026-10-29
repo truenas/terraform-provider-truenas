@@ -42,9 +42,10 @@ func resourceSchema() schema.Schema {
 			"bridge": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
-				Description: "Network bridge interface used for LXC instance networking, or null if not " +
-					"configured (managed/created automatically). See the lxc.bridge_choices API method on the " +
-					"target box for the set of valid values; this schema does not validate them at plan time.",
+				Description: "Network bridge interface used for LXC instance networking, or \"[AUTO]\" for the " +
+					"automatically managed bridge (TrueNAS stores that as null; it is reported here as \"[AUTO]\"). " +
+					"See the lxc.bridge_choices API method on the target box for the set of valid values; this " +
+					"schema does not validate them at plan time.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"v4_network": schema.StringAttribute{

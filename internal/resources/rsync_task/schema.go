@@ -4,6 +4,9 @@
 package rsync_task
 
 import (
+	"regexp"
+
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -196,7 +199,15 @@ func resourceSchema() schema.Schema {
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "Additional rsync command-line options. Defaults to an empty list.",
+				Description: "Additional rsync command-line options, one argument per entry. Defaults to an " +
+					"empty list. An entry may not be empty or contain whitespace: TrueNAS joins the entries " +
+					"with spaces and splits them again, so \"--exclude=a b\" would become two arguments; " +
+					"use rsync's own escaping, e.g. \"--exclude=a?b\".",
+				Validators: []validator.List{
+					listvalidator.ValueStringsAre(stringvalidator.RegexMatches(regexp.MustCompile(`^\S+$`),
+						"must be one non-empty argument without whitespace (TrueNAS joins the entries with spaces "+
+							"and splits them again)")),
+				},
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.UseStateForUnknown(),
 				},
@@ -210,16 +221,20 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"validate_rpath": schema.BoolAttribute{
-				Optional: true,
-				Description: "Validate the existence of the remote path at create/update time. Write-only: " +
-					"rsynctask.query never returns this flag, so it is not read back from the API and is not " +
-					"verified on import.",
+				Optional:  true,
+				WriteOnly: true,
+				Description: "Validate the existence of the remote path when the task is created or updated. " +
+					"Write-only (a per-apply directive the API never returns): not stored in state, so changing " +
+					"it alone does not update the task, and an import plans no change for it. Requires " +
+					"Terraform >= 1.11.",
 			},
 			"ssh_keyscan": schema.BoolAttribute{
-				Optional: true,
-				Description: "Automatically add the remote host key to the run-as user's known_hosts file at " +
-					"create/update time. Write-only: rsynctask.query never returns this flag, so it is not read " +
-					"back from the API and is not verified on import.",
+				Optional:  true,
+				WriteOnly: true,
+				Description: "Add the remote host key to the run-as user's known_hosts file when the task is " +
+					"created or updated. Write-only (a per-apply directive the API never returns): not stored in " +
+					"state, so changing it alone does not update the task, and an import plans no change for it. " +
+					"Requires Terraform >= 1.11.",
 			},
 		},
 	}

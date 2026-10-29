@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ datasource.DataSource = &AppRegistryDataSource{}
@@ -37,8 +38,8 @@ func (d *AppRegistryDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			"id":          dschema.Int64Attribute{Computed: true, Description: "Numeric app registry entry ID assigned by TrueNAS."},
 			"name":        dschema.StringAttribute{Required: true, Description: "Name of the container registry to look up."},
 			"description": dschema.StringAttribute{Computed: true, Description: "Description of the container registry."},
-			"uri":         dschema.StringAttribute{Computed: true, Description: "Container registry URI endpoint."},
-			"username":    dschema.StringAttribute{Computed: true, Description: "Username for registry authentication."},
+			"uri":         dschema.StringAttribute{Computed: true, CustomType: normalize.URLType{}, Description: "Container registry URI endpoint."},
+			"username":    dschema.StringAttribute{Computed: true, Description: "Username for registry authentication. Null when the session cannot read it (the API redacts it for a read-only admin)."},
 		},
 	}
 }

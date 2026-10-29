@@ -27,9 +27,11 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"servers": schema.Int64Attribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "Number of NFS server threads. A value of 0 restores automatic thread management.",
+				Optional: true,
+				Computed: true,
+				Description: "Number of NFS server threads. 0 means automatic thread management (TrueNAS picks " +
+					"the count from the CPU count; managed_nfsd is then true), and reads back as 0. The " +
+					"truenas_nfs_config data source reports the effective count instead.",
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.UseStateForUnknown(),
 				},

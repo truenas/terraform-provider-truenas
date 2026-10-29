@@ -26,6 +26,7 @@ resource "truenas_user" "deploy" {
 
 ### Required
 
+- `full_name` (String) User's full name. Required: user.create rejects a user without one.
 - `username` (String) Login username. Changing this forces a new resource.
 
 ### Optional
@@ -33,24 +34,23 @@ resource "truenas_user" "deploy" {
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
 - `email` (String) User's email address.
-- `full_name` (String) User's full name.
 - `group` (Number) Primary group ID for the user. Either 'group' or 'group_create' must be set when creating a user.
-- `group_create` (Boolean) When true, creates a new primary group matching the username instead of using an existing group id from 'group'. Write-only: only sent on create, never read back into state.
+- `group_create` (Boolean) When true, the user's primary group is a group named after the username (TrueNAS creates it, or reuses an existing local group of that name) instead of the existing group id in 'group'. Only used when the user is created: changing it later has no effect on the server (the plan shows a warning). Read back as whether the primary group's name equals the username.
 - `groups` (List of Number) List of additional group IDs the user belongs to.
 - `home` (String) Home directory path.
-- `home_mode` (String) Octal permission mode for the user's home directory, e.g. "700". Write-only: accepted on create/update but not returned by the API, so it is not read back or drift-detected.
+- `home_mode` (String) Octal permission mode for the user's home directory, e.g. "700". Sent on create, and on update only when it changes. user.query does not return it, so it is not drift-detected; on import it is read from the mode of the home directory when that is under /mnt.
 - `locked` (Boolean) Whether the user account is locked.
-- `password` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) User password. Write-only: never stored in Terraform state. Requires Terraform >= 1.11.
+- `password` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) User password. Write-only: never stored in Terraform state. Requires Terraform >= 1.11. Sent on create; after that only when `password_wo_version` changes (see there).
 - `password_disabled` (Boolean) Whether password authentication is disabled.
-- `password_wo_version` (Number) Rotation trigger for the write-only 'password'. Because a write-only value is absent from state, Terraform cannot detect that the password changed; bump this integer whenever the password changes to make Terraform re-send it on the next apply. Optional; omit it if you do not need rotation.
+- `password_wo_version` (Number) Rotation trigger for the write-only 'password'. The password is sent when the user is created and, on later applies, only when this integer changes (or when `smb` is turned on, which TrueNAS only allows together with the password). A write-only value is absent from state, so Terraform cannot detect that the password changed: bump this integer whenever you change the password. An update that does not change it leaves the stored password, its hash and `last_password_change` alone, so password aging (`max_password_age`) works for Terraform-managed users.
 - `shell` (String) Login shell path.
 - `smb` (Boolean) Whether the user has SMB authentication enabled.
 - `ssh_password_enabled` (Boolean) Whether SSH password authentication is enabled.
-- `sshpubkey` (String) SSH public key(s) for the user.
+- `sshpubkey` (String) SSH public key(s) for the user. Surrounding whitespace (such as the trailing newline of a file() read) is ignored when comparing with the server, which strips it.
 - `sudo_commands` (List of String) List of allowed sudo commands.
 - `sudo_commands_nopasswd` (List of String) List of sudo commands allowed without password.
 - `uid` (Number) UNIX UID for the user (auto-assigned if omitted). Changing this forces a new resource.
-- `webshare` (Boolean) Grant the user access to the web-based file share. Requires TrueNAS 26.0 or newer; on older releases it is ignored (the API does not accept it).
+- `webshare` (Boolean) Grant the user access to the web-based file share. Requires TrueNAS 26.0 or newer; setting it to true on an older release is a plan-time error.
 
 ### Read-Only
 

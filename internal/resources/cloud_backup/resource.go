@@ -129,6 +129,7 @@ func (r *CloudBackupResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
+	resp.Diagnostics.Append(setImported(ctx, resp.Private, false)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -206,7 +207,11 @@ func (r *CloudBackupResource) Update(ctx context.Context, req resource.UpdateReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	injectWriteOnlyPassword(payload, &cfg)
+	// The write-only password is sent only when password_wo_version changed;
+	// cloud_backup.update keeps the stored password when it is absent. (B-141)
+	if !plan.PasswordWOVersion.Equal(state.PasswordWOVersion) {
+		injectWriteOnlyPassword(payload, &cfg)
+	}
 
 	_, err := r.client.Call(ctx, "cloud_backup.update", plan.ID.ValueInt64(), payload)
 	if err != nil {
@@ -232,6 +237,7 @@ func (r *CloudBackupResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
+	resp.Diagnostics.Append(setImported(ctx, resp.Private, false)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -281,5 +287,6 @@ func (r *CloudBackupResource) ImportState(ctx context.Context, req resource.Impo
 	state.Attributes = types.StringValue(attrJSON)
 
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, id)...)
+	resp.Diagnostics.Append(setImported(ctx, resp.Private, true)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // resourceSchema returns the schema for truenas_app_registry.
@@ -85,11 +86,14 @@ func resourceSchema() schema.Schema {
 				Description: "Optional description of the container registry.",
 			},
 			"uri": schema.StringAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "Container registry URI endpoint. Defaults to \"https://index.docker.io/v1/\" (Docker Hub) when omitted.",
+				Optional: true,
+				Computed: true,
+				Description: "Container registry URI endpoint. Defaults to \"https://index.docker.io/v1/\" (Docker Hub) when omitted. " +
+					"TrueNAS stores an http(s) URI with a trailing slash; either spelling compares equal.",
+				CustomType: normalize.URLType{},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+					normalize.KeepStateIfEquivalent(normalize.URLType{}),
 				},
 			},
 			"username": schema.StringAttribute{
@@ -110,7 +114,8 @@ func resourceSchema() schema.Schema {
 				Required: true,
 				Description: "Rotation trigger for password_wo. A write-only value is absent from state, so a changed " +
 					"token cannot be detected automatically; bump this integer whenever password_wo changes to re-send " +
-					"it (the provider calls app.registry.update). Set it to 1 on initial configuration.",
+					"it (the provider calls app.registry.update). password_wo is sent on create and, after that, only when " +
+					"this integer changes; other updates leave the stored token alone. Set it to 1 on initial configuration.",
 			},
 		},
 	}

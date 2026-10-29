@@ -101,9 +101,16 @@ func responseToModel(ctx context.Context, api *nfsConfigAPI, m *NFSConfigModel) 
 	m.V4KrbEnabled = types.BoolValue(api.V4KrbEnabled)
 	m.KeytabHasNFSSPN = types.BoolValue(api.KeytabHasNFSSPN)
 
-	if api.Servers != nil {
+	// managed_nfsd is true exactly when the thread count is automatic (no
+	// servers value stored); nfs.config then reports the computed count in
+	// servers. The resource represents automatic as 0, the value its schema
+	// documents, so servers = 0 reads back as 0 rather than the count (B-068).
+	switch {
+	case api.ManagedNFSD:
+		m.Servers = types.Int64Value(0)
+	case api.Servers != nil:
 		m.Servers = types.Int64Value(*api.Servers)
-	} else {
+	default:
 		m.Servers = types.Int64Value(0)
 	}
 	if api.MountdPort != nil {
@@ -158,9 +165,13 @@ func responseToDataSourceModel(ctx context.Context, api *nfsConfigAPI, m *NFSCon
 	m.V4KrbEnabled = types.BoolValue(api.V4KrbEnabled)
 	m.KeytabHasNFSSPN = types.BoolValue(api.KeytabHasNFSSPN)
 
-	if api.Servers != nil {
+	// Same mapping as responseToModel: automatic thread management reads as 0.
+	switch {
+	case api.ManagedNFSD:
+		m.Servers = types.Int64Value(0)
+	case api.Servers != nil:
 		m.Servers = types.Int64Value(*api.Servers)
-	} else {
+	default:
 		m.Servers = types.Int64Value(0)
 	}
 	if api.MountdPort != nil {
