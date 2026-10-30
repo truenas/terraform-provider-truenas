@@ -157,7 +157,8 @@ func TestAccUser_sshpubkeyHomeModeSpelling(t *testing.T) {
 	name := acctest.RandName("tfaccukey")
 	base := acctest.ProviderConfig() + fmt.Sprintf(`
 resource "truenas_dataset" "home" {
-  name = "%s/%s"
+  name          = "%s/%s"
+  force_destroy = true # user.create seeds the home with skeleton files
 }
 `, acctest.TestPool(), name)
 	usr := fmt.Sprintf(`

@@ -160,20 +160,18 @@ func (r *VMDeviceResource) Read(ctx context.Context, req resource.ReadRequest, r
 	dropSecretAttributes(apiResp.Attributes)
 	scrubRedacted(apiResp.Attributes, stateAttrs)
 
-	if state.usesWriteOnlyAttributes() {
-		// Write-only secrets overlay in use: reconcile attributes by projecting
-		// the live device onto only the keys already in state, so the secret
-		// keys (present only in the write-only overlay) are never read back.
+	// Drift-aware attributes handling: only overwrite state Attributes when
+	// a user-set key's value differs in the API. API-added default keys are
+	// not considered drift, and are not absorbed into state on drift either:
+	// state takes the server values of the keys it already holds, so the
+	// plan shows only the keys that really changed (B-083). The projection
+	// also keeps write-only secret keys (present only in the
+	// attributes_secrets_wo overlay) out of state. It used to run
+	// unconditionally when the overlay was in use, which re-encoded the
+	// user's JSON string and made a hand-formatted (heredoc) `attributes`
+	// diff on every plan (hunt F10).
+	if attributesDrifted(stateAttrs, apiResp.Attributes) {
 		state.Attributes = types.StringValue(writeonly.ProjectOntoKeys(state.Attributes.ValueString(), apiResp.Attributes))
-	} else {
-		// Drift-aware attributes handling: only overwrite state Attributes when
-		// a user-set key's value differs in the API. API-added default keys are
-		// not considered drift, and are not absorbed into state on drift either:
-		// state takes the server values of the keys it already holds, so the
-		// plan shows only the keys that really changed. (BUGS B-083)
-		if attributesDrifted(stateAttrs, apiResp.Attributes) {
-			state.Attributes = types.StringValue(writeonly.ProjectOntoKeys(state.Attributes.ValueString(), apiResp.Attributes))
-		}
 	}
 
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueInt64())...)
@@ -236,7 +234,17 @@ func (r *VMDeviceResource) Update(ctx context.Context, req resource.UpdateReques
 	// Keep the plan's Attributes JSON string in state (write-what-you-said).
 	responseToModel(&apiResp, &plan)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
-	resp.Diagnostics.Append(setImported(ctx, resp.Private, false)...)
+	// The imported flag (see keepAttributesIfConfigMatchesState) stays set
+	// while attributes were not re-authored by this update: an update driven
+	// by another attribute (typically attributes_secrets_wo_version right
+	// after import) keeps the imported document in state, and clearing the
+	// flag here made the very next plan propose stripping the server-added
+	// keys from it (hunt F11).
+	imported := false
+	if raw, d := req.Private.GetKey(ctx, importedKey); len(raw) > 0 && !d.HasError() {
+		imported = plan.Attributes.Equal(state.Attributes)
+	}
+	resp.Diagnostics.Append(setImported(ctx, resp.Private, imported)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

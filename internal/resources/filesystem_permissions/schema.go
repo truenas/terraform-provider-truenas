@@ -16,6 +16,8 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
+		// v1 (1.6.x): see UpgradeState — attributes stored by <=1.5.24 are write-only now.
+		Version: 1,
 		Description: "Declaratively sets UNIX mode/owner/group on an existing filesystem path via " +
 			"filesystem.setperm (probed live: job:true). This is a wrapper around an imperative action, not " +
 			"an object TrueNAS itself tracks as a resource — every path on the box already has SOME mode/uid/" +

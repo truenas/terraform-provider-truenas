@@ -5,11 +5,11 @@ package webshare
 
 import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 )
 
 func resourceSchema() schema.Schema {
@@ -48,21 +48,21 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"enabled": schema.BoolAttribute{
-				Optional:      true,
-				Computed:      true,
-				Default:       booldefault.StaticBool(true),
-				Description:   "Whether the share is available. Defaults to true (matches the API's own default).",
-				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+				Optional:    true,
+				Computed:    true,
+				Description: "Whether the share is available. Defaults to true (matches the API's own default).",
+				PlanModifiers: []planmodifier.Bool{
+					planmod.ResetWhenUnsetBool(true), boolplanmodifier.UseStateForUnknown()},
 			},
 			"is_home_base": schema.BoolAttribute{
 				Optional: true,
 				Computed: true,
-				Default:  booldefault.StaticBool(false),
 				Description: "If set, this share is used as the base path for user home directories. Only one " +
 					"share on the system can have this enabled — setting it here on more than one " +
 					"truenas_webshare resource, or on a system where another share already has it set outside " +
 					"Terraform, produces undefined API-side behavior. Defaults to false.",
-				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+				PlanModifiers: []planmodifier.Bool{
+					planmod.ResetWhenUnsetBool(false), boolplanmodifier.UseStateForUnknown()},
 			},
 			// Computed only — server generated, changes independently of Terraform.
 			"dataset": schema.StringAttribute{

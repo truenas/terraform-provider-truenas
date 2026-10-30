@@ -205,3 +205,81 @@ func plural(n int, one, many string) string {
 	}
 	return fmt.Sprintf("%d %s", n, many)
 }
+
+// NonEmptyContents lists up to three entries in the dataset's mountpoint
+// (the .zfs control directory excluded). An empty result means the dataset
+// holds no files. Errors (not mounted, locked, path missing) are returned to
+// the caller, which treats "cannot tell" as "do not block".
+func NonEmptyContents(ctx context.Context, c caller, mountpoint string) ([]string, error) {
+	if mountpoint == "" {
+		return nil, nil
+	}
+	raw, err := c.Call(ctx, "filesystem.listdir", mountpoint,
+		[]any{[]any{"name", "!=", ".zfs"}},
+		map[string]any{"select": []string{"name"}, "limit": 3})
+	if err != nil {
+		return nil, err
+	}
+	var entries []struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return nil, fmt.Errorf("parse filesystem.listdir: %w", err)
+	}
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name)
+	}
+	return names, nil
+}
+
+// Fresh-zvol logicalreferenced baselines measured on 25.10, 26.0 and 28.0
+// (independent of pool and volblocksize): dnode + metadata, and the extra
+// encryption metadata for an encrypted volume. One written block adds at
+// least volblocksize on top.
+const (
+	zvolEmptyLogicalReferenced          = 28672
+	zvolEmptyLogicalReferencedEncrypted = 41472
+)
+
+// zvolHoldsData is the pure decision behind ZvolHoldsData.
+func zvolHoldsData(logicalReferenced, volBlockSize int64, encrypted bool) bool {
+	if volBlockSize <= 0 {
+		volBlockSize = 16384
+	}
+	base := int64(zvolEmptyLogicalReferenced)
+	if encrypted {
+		base = zvolEmptyLogicalReferencedEncrypted
+	}
+	return logicalReferenced > base+volBlockSize/2
+}
+
+// ZvolHoldsData reports whether the volume has had data written to it, from
+// ZFS logicalreferenced compared with the empty baseline for its encryption
+// state. Errors mean "cannot tell"; callers do not block on them.
+func ZvolHoldsData(ctx context.Context, c caller, name string) (bool, int64, error) {
+	raw, err := c.Call(ctx, "pool.dataset.query",
+		[]any{[]any{"name", "=", name}},
+		map[string]any{"extra": map[string]any{"flat": true, "retrieve_children": false,
+			// "encryption" (the ZFS property) must be requested for the API to
+			// populate its derived top-level "encrypted" flag; with
+			// extra.properties set it returns only what is asked for.
+			"properties": []string{"logicalreferenced", "volblocksize", "encryption"}}})
+	if err != nil {
+		return false, 0, err
+	}
+	var rows []struct {
+		LogicalReferenced struct {
+			Parsed int64 `json:"parsed"`
+		} `json:"logicalreferenced"`
+		VolBlockSize struct {
+			Parsed int64 `json:"parsed"`
+		} `json:"volblocksize"`
+		Encrypted bool `json:"encrypted"`
+	}
+	if err := json.Unmarshal(raw, &rows); err != nil || len(rows) == 0 {
+		return false, 0, fmt.Errorf("parse pool.dataset.query for %s: %v", name, err)
+	}
+	r := rows[0]
+	return zvolHoldsData(r.LogicalReferenced.Parsed, r.VolBlockSize.Parsed, r.Encrypted), r.LogicalReferenced.Parsed, nil
+}

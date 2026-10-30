@@ -8,9 +8,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 )
 
 func resourceSchema() schema.Schema {
@@ -42,9 +42,12 @@ func resourceSchema() schema.Schema {
 			"peeruser": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
-				Default:  stringdefault.StaticString(""),
 				Description: "Peer username for mutual CHAP (target authenticates to initiator). Leave unset (or " +
-					"\"\") for one-way CHAP: removing it from config turns mutual CHAP off and clears the peer secret.",
+					"\"\") for one-way CHAP: removing it from config turns mutual CHAP off and clears the peer secret. " +
+					"An imported entry keeps its server-side peer user until the attribute is configured.",
+				// F9: a plain Default "" rewrote imported mutual-CHAP entries to
+				// one-way CHAP on the first apply.
+				PlanModifiers: []planmodifier.String{planmod.ResetWhenUnsetString("")},
 			},
 			"peersecret": schema.StringAttribute{
 				Optional:  true,

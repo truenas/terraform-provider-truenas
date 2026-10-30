@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -113,6 +114,9 @@ func (r *WebshareResource) Create(ctx context.Context, req resource.CreateReques
 
 	responseToModel(apiResp, &plan)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
+	// Remember which attributes the configuration owns (planmod.ResetWhenUnset*);
+	// plan-time private state is discarded on create, so record it here.
+	resp.Diagnostics.Append(planmod.RecordManaged(ctx, req.Config, resp.Private, "enabled", "is_home_base")...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

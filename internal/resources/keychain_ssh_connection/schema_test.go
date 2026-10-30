@@ -4,11 +4,10 @@
 package keychain_ssh_connection
 
 import (
-	"context"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/defaults"
 )
 
 // TestSchema_IDComputedOnly verifies "id" is Computed-only.
@@ -74,32 +73,39 @@ func TestSchema_OptionalComputedDefaultedFields(t *testing.T) {
 // verbatim (port 0, connect_timeout 0) and broke replication. Assert the
 // documented defaults are actually wired as schema Defaults.
 func TestSchema_DocumentedDefaultsApplied(t *testing.T) {
-	ctx := context.Background()
+	// port/username/connect_timeout have server defaults (22/root/10) but no
+	// schema Default: a Default rewrote imported connections (hunt F9). They
+	// use planmod.ResetWhenUnset*, which keeps the server value when the
+	// attribute was never configured and resets it when it is removed.
 	s := resourceSchema()
-
-	intDefault := func(field string) int64 {
-		attr := s.Attributes[field].(schema.Int64Attribute)
-		if attr.Default == nil {
-			t.Fatalf("%q has no Default", field)
+	for _, name := range []string{"port", "username", "connect_timeout"} {
+		var mods []any
+		switch a := s.Attributes[name].(type) {
+		case schema.Int64Attribute:
+			if a.Default != nil {
+				t.Errorf("%q must not carry a schema Default", name)
+			}
+			for _, m := range a.PlanModifiers {
+				mods = append(mods, m)
+			}
+		case schema.StringAttribute:
+			if a.Default != nil {
+				t.Errorf("%q must not carry a schema Default", name)
+			}
+			for _, m := range a.PlanModifiers {
+				mods = append(mods, m)
+			}
+		default:
+			t.Fatalf("%q: unexpected attribute type %T", name, s.Attributes[name])
 		}
-		var resp defaults.Int64Response
-		attr.Default.DefaultInt64(ctx, defaults.Int64Request{}, &resp)
-		return resp.PlanValue.ValueInt64()
-	}
-	if got := intDefault("port"); got != 22 {
-		t.Errorf("port default = %d, want 22", got)
-	}
-	if got := intDefault("connect_timeout"); got != 10 {
-		t.Errorf("connect_timeout default = %d, want 10", got)
-	}
-
-	uAttr := s.Attributes["username"].(schema.StringAttribute)
-	if uAttr.Default == nil {
-		t.Fatal("username has no Default")
-	}
-	var uResp defaults.StringResponse
-	uAttr.Default.DefaultString(ctx, defaults.StringRequest{}, &uResp)
-	if got := uResp.PlanValue.ValueString(); got != "root" {
-		t.Errorf("username default = %q, want root", got)
+		found := false
+		for _, m := range mods {
+			if planmod.IsResetWhenUnset(m) {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%q should use planmod.ResetWhenUnset*", name)
+		}
 	}
 }

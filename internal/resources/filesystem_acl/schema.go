@@ -14,6 +14,8 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
+		// v1 (1.6.x): see UpgradeState — attributes stored by <=1.5.24 are write-only now.
+		Version: 1,
 		Description: "Declaratively sets the Access Control List (ACL) on an existing filesystem path via " +
 			"filesystem.setacl (probed live: job:true), keyed by path rather than a TrueNAS-assigned id - " +
 			"the sibling of truenas_filesystem_permissions for ACL entries instead of mode bits. " +

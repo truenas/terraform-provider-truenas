@@ -390,7 +390,8 @@ resource "truenas_dataset" "dst" {
 }
 
 resource "truenas_dataset" "sshuser_home" {
-  name = %[3]q
+  name          = %[3]q
+  force_destroy = true # user.create seeds the home with skeleton files
 }
 
 resource "truenas_user" "sshuser" {
@@ -466,7 +467,8 @@ resource "truenas_dataset" "dst" {
 # Terraform-managed dataset as a home — destroyed along with the user
 # fixture, never touching any pre-existing pool path.
 resource "truenas_dataset" "sshuser_home" {
-  name = %[3]q
+  name          = %[3]q
+  force_destroy = true # user.create seeds the home with skeleton files
 }
 
 resource "truenas_user" "sshuser" {

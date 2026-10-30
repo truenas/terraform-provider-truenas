@@ -194,7 +194,7 @@ func (m *ZvolModel) apiPayload() map[string]any {
 		}
 	}
 	if !m.Compression.IsNull() && !m.Compression.IsUnknown() {
-		p["compression"] = strings.ToUpper(m.Compression.ValueString())
+		p["compression"] = compressionAPI(m.Compression.ValueString())
 	}
 	if !m.Sync.IsNull() && !m.Sync.IsUnknown() {
 		p["sync"] = strings.ToUpper(m.Sync.ValueString())
@@ -349,11 +349,19 @@ func preserveCase(current types.String, apiVal string) types.String {
 // (zstd-fast-10, zstd-5, gzip-9) is stored verbatim. Case-insensitive.
 func compressionCanon(v string) string {
 	s := strings.ToLower(strings.TrimSpace(v))
-	if s == "zstd-fast-1" {
+	switch s {
+	case "zstd-fast-1":
 		return "zstd-fast"
+	case "gzip-6":
+		// gzip level 6 is ZFS's default: 28.0 stores it as "gzip" (hunt F7),
+		// 25.10/26.0 reject the alias outright, so it is sent as GZIP too.
+		return "gzip"
 	}
 	return s
 }
+
+// compressionAPI is the value sent to the API: upper-case, aliases folded.
+func compressionAPI(v string) string { return strings.ToUpper(compressionCanon(v)) }
 
 // preserveCompression is preserveCase for the compression property: current is
 // kept when it is the same compression as apiVal under ZFS's own folding

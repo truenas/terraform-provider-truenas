@@ -6,6 +6,84 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-10-30
+
+### Fixed
+- **Upgrading from 1.5.x no longer blocks Terraform.** 1.6.0 made these
+  stored attributes write-only without migrating state, so any 1.5.x state
+  containing them failed every `plan`, `apply` and `destroy` with
+  "Invalid resource state upgrade ... returned a value for the write-only
+  attribute": `truenas_filesystem_acl` and `truenas_filesystem_permissions`
+  `recursive`/`traverse`, `truenas_rsync_task` `validate_rpath`/`ssh_keyscan`,
+  `truenas_ntp_server` `force`, `truenas_tunable` `update_initramfs`,
+  `truenas_ipmi_lan` `apply_remote`. Each resource now carries a schema
+  version and a state upgrader that drops the stored value; the configuration
+  still supplies it.
+- `truenas_nfs_share` and `truenas_smb_share`: importing an existing share with
+  a minimal configuration (or upgrading from 1.5.x) no longer rewrites it on
+  the next apply. 1.6.0 gave `comment`, `enabled`, `ro`, `browsable`, `abe`,
+  `audit` (SMB) and `comment`, `enabled`, `ro`, `networks`, `hosts`,
+  `maproot_*`, `mapall_*`, `security`, `expose_snapshots` (NFS) schema
+  defaults, so an adopted read-only, disabled, subnet-restricted export was
+  planned (and applied) as writable, enabled and exported to everyone, and
+  SMB shares created by 1.5.x were silently enabled on the first apply after
+  upgrading. An attribute the configuration never set now keeps the server's
+  value; one that was set and later removed from the configuration is still
+  reset to the server default (the 1.6.0 behaviour for B-113/B-114), tracked
+  per resource in private state. `purpose` and `audit` no longer show as
+  "(known after apply)" on unrelated SMB share updates.
+- The same import rewrite was fixed on `truenas_reporting_exporter`
+  (`attributes.prefix`, `update_every`, `buffer_on_failures`,
+  `send_names_instead_of_ids`, `matching_charts`),
+  `truenas_keychain_ssh_connection` (`port`, `username`, `connect_timeout`),
+  `truenas_webshare` (`enabled`, `is_home_base`), `truenas_cloud_backup`
+  (`description`), `truenas_iscsi_auth` (`peeruser`: importing a mutual-CHAP
+  entry with a minimal configuration used to turn mutual CHAP off on the
+  first apply) and `truenas_replication_task` (`transport`). A replication
+  task configured with `ssh_credentials` and no `transport` is no longer
+  rejected at plan time: on create it is SSH, and an imported task keeps the
+  transport it has. A provider-wide test now fails on any new schema default
+  of this shape.
+- `truenas_vm_device`: with `attributes_secrets_wo` in use, an `attributes`
+  JSON string that was not byte-identical to the provider's own encoding (a
+  heredoc, different key order or spacing) planned a "whitespace changes"
+  update on every run. State now keeps the configured string unless a value
+  actually changed on the server. After importing a device, an update driven
+  by another attribute (such as setting `attributes_secrets_wo_version`) no
+  longer makes the following plan strip server-added keys from `attributes`.
+- `truenas_iscsi_auth`: on TrueNAS 25.10, updating the mutual-CHAP entry
+  (`discovery_auth = "CHAP_MUTUAL"`), for example to rotate a secret, failed
+  with "Cannot specify CHAP_MUTUAL as only one such entry is permitted"
+  because the server counted the entry being updated (fixed in TrueNAS 26.0).
+  The provider now applies such an update as CHAP and switches back to
+  CHAP_MUTUAL in a second call on 25.10.
+- `truenas_certificate`: an imported CSR with `digest_algorithm` in the
+  configuration planned an update on every run (the API returns null for a
+  CSR's digest). The digest is now read from the CSR's or certificate's
+  signature algorithm.
+- `truenas_user`: the smallest configuration (`username`, `full_name`,
+  `password`) failed at apply with the API's "Enter either a group name or
+  create a new group". A new user with neither `group` nor `group_create`
+  now gets `group_create = true`, as in the UI; a new user with no `password`
+  and no `password_disabled = true` is a plan-time error that names both
+  options instead of the API's "Password is required" at apply.
+- `truenas_dataset` and `truenas_zvol`: `compression = "GZIP-6"` created the
+  dataset and then failed with "inconsistent result after apply" on TrueNAS
+  28.0 (ZFS stores its default gzip level as plain `gzip`) and was rejected
+  outright by 25.10/26.0. It is now sent and compared as `GZIP`, so the
+  configured spelling round-trips on every release.
+- `truenas_dataset` and `truenas_zvol`: destroying a dataset that still holds
+  files, or a zvol that holds data, is now refused unless
+  `force_destroy = true` — like a dataset with children or snapshots already
+  was. This also covers the destroy half of a replacement: changing `name`
+  (which recreates the dataset, since Terraform does not allow the resource
+  identity to change in place) used to silently take the contents with it.
+  To rename a dataset keep the data: rename it on TrueNAS, then
+  `terraform state rm` + `terraform import` under the new name. A dataset
+  used as a `truenas_user` home counts as non-empty (TrueNAS seeds it with
+  shell profile files), so give it `force_destroy = true` if it is meant to
+  go with the user.
+
 ## [1.6.0] - 2026-10-29
 
 ### Changed

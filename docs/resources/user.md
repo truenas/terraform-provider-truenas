@@ -34,7 +34,7 @@ resource "truenas_user" "deploy" {
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
 - `email` (String) User's email address.
-- `group` (Number) Primary group ID for the user. Either 'group' or 'group_create' must be set when creating a user.
+- `group` (Number) Primary group ID for the user. When neither 'group' nor 'group_create' is set, a new user gets group_create = true (a primary group named after the user), as in the UI.
 - `group_create` (Boolean) When true, the user's primary group is a group named after the username (TrueNAS creates it, or reuses an existing local group of that name) instead of the existing group id in 'group'. Only used when the user is created: changing it later has no effect on the server (the plan shows a warning). Read back as whether the primary group's name equals the username.
 - `groups` (List of Number) List of additional group IDs the user belongs to.
 - `home` (String) Home directory path.

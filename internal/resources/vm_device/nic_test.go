@@ -25,13 +25,21 @@ func nicAttach(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("vm.device.nic_attach_choices: %v", err)
 	}
-	var choices map[string][]string
+	// 26.0+: {"BRIDGE": [...], "MACVLAN": [...]}; 25.10: {"enp6s18": "enp6s18"}.
+	var choices map[string]any
 	if err := json.Unmarshal(raw, &choices); err != nil {
 		t.Fatalf("parse nic_attach_choices %s: %v", raw, err)
 	}
 	for _, k := range []string{"BRIDGE", "MACVLAN"} {
-		if len(choices[k]) > 0 {
-			return choices[k][0]
+		if list, ok := choices[k].([]any); ok && len(list) > 0 {
+			if s, ok := list[0].(string); ok {
+				return s
+			}
+		}
+	}
+	for _, v := range choices {
+		if s, ok := v.(string); ok && s != "" {
+			return s
 		}
 	}
 	t.Skipf("no NIC attach choices on this server: %s", raw)

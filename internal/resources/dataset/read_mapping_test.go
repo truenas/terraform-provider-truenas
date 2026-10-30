@@ -23,6 +23,8 @@ func TestPreserveCompression(t *testing.T) {
 	}{
 		{"fast-1 alias kept", types.StringValue("ZSTD-FAST-1"), "zstd-fast", "ZSTD-FAST-1"},
 		{"fast-1 alias lowercase kept", types.StringValue("zstd-fast-1"), "zstd-fast", "zstd-fast-1"},
+		{"gzip-6 alias kept (F7: 28.0 stores gzip)", types.StringValue("GZIP-6"), "gzip", "GZIP-6"},
+		{"gzip-9 is not an alias", types.StringValue("GZIP-9"), "gzip", "gzip"},
 		{"equal-fold casing kept", types.StringValue("ZSTD-5"), "zstd-5", "ZSTD-5"},
 		{"real drift overwrites", types.StringValue("lz4"), "zstd", "zstd"},
 		{"null current -> lowercased api", types.StringNull(), "lz4", "lz4"},

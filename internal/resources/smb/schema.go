@@ -7,16 +7,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 )
 
 func resourceSchema() schema.Schema {
@@ -37,18 +35,29 @@ func resourceSchema() schema.Schema {
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"name":    schema.StringAttribute{Required: true, Description: "NetBIOS share name."},
-			"comment": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), Description: "Optional share description."},
+			"name": schema.StringAttribute{Required: true, Description: "NetBIOS share name."},
+			"comment": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					planmod.ResetWhenUnsetString(""),
+				},
+				Description: "Optional share description.",
+			},
 			"ro": schema.BoolAttribute{
-				Optional:    true,
-				Computed:    true,
-				Default:     booldefault.StaticBool(false),
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					planmod.ResetWhenUnsetBool(false),
+				},
 				Description: "Defaults to `false`. Export share as read-only. Sent to TrueNAS 26.0 as the top-level `readonly` field (renamed from `ro` on the wire; the Terraform attribute name is unchanged for backward compatibility).",
 			},
 			"browsable": schema.BoolAttribute{
-				Optional:    true,
-				Computed:    true,
-				Default:     booldefault.StaticBool(true),
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					planmod.ResetWhenUnsetBool(true),
+				},
 				Description: "Defaults to `true`. Allow share to appear in Windows network browsing. Sent as the top-level `browsable` field.",
 			},
 			"recyclebin": schema.BoolAttribute{
@@ -74,9 +83,11 @@ func resourceSchema() schema.Schema {
 				Description: "List of hosts/IPs denied from connecting. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.",
 			},
 			"abe": schema.BoolAttribute{
-				Optional:    true,
-				Computed:    true,
-				Default:     booldefault.StaticBool(false),
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					planmod.ResetWhenUnsetBool(false),
+				},
 				Description: "Defaults to `false`. Enable Access-Based Enumeration. Sent to TrueNAS 26.0 as the top-level `access_based_share_enumeration` field (renamed from `abe` on the wire; the Terraform attribute name is unchanged for backward compatibility).",
 			},
 			"acl": schema.BoolAttribute{
@@ -105,9 +116,11 @@ func resourceSchema() schema.Schema {
 				Description: "Per-machine Time Machine quota in GiB (0 = unlimited). LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.",
 			},
 			"enabled": schema.BoolAttribute{
-				Optional:    true,
-				Computed:    true,
-				Default:     booldefault.StaticBool(true),
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					planmod.ResetWhenUnsetBool(true),
+				},
 				Description: "Enable this share. Defaults to `true`.",
 			},
 			"home": schema.BoolAttribute{
@@ -116,9 +129,12 @@ func resourceSchema() schema.Schema {
 				Description: "Use this share as user home-directory share. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.",
 			},
 			"purpose": schema.StringAttribute{
-				Validators:  []validator.String{stringvalidator.OneOf("DEFAULT_SHARE", "EXTERNAL_SHARE", "FCP_SHARE", "LEGACY_SHARE", "MULTIPROTOCOL_SHARE", "PRIVATE_DATASETS_SHARE", "TIMEMACHINE_SHARE", "TIME_LOCKED_SHARE", "VEEAM_REPOSITORY_SHARE")},
-				Optional:    true,
-				Computed:    true,
+				Validators: []validator.String{stringvalidator.OneOf("DEFAULT_SHARE", "EXTERNAL_SHARE", "FCP_SHARE", "LEGACY_SHARE", "MULTIPROTOCOL_SHARE", "PRIVATE_DATASETS_SHARE", "TIMEMACHINE_SHARE", "TIME_LOCKED_SHARE", "VEEAM_REPOSITORY_SHARE")},
+				Optional:   true,
+				Computed:   true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 				Description: "Purpose preset. One of: DEFAULT_SHARE, LEGACY_SHARE, TIMEMACHINE_SHARE, MULTIPROTOCOL_SHARE, TIME_LOCKED_SHARE, PRIVATE_DATASETS_SHARE, EXTERNAL_SHARE, VEEAM_REPOSITORY_SHARE, FCP_SHARE. On TrueNAS 26.0 this drives a discriminated `options` object on the wire. When left unset (or set to an unrecognized value), the provider defaults to LEGACY_SHARE so this resource's flat legacy attributes (recyclebin, hostsallow, hostsdeny, guestok, streams, durablehandle, home, acl, timemachine, timemachine_quota) continue to work as before. Setting purpose to any other enum value switches the share to that purpose's variant defaults server-side; the flat legacy attributes are then a plan-time error (use `options` instead). Changing purpose on an existing share resets `options` to the new purpose's server defaults unless `options` is configured.",
 			},
 			"options": schema.SingleNestedAttribute{
@@ -155,15 +171,15 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"audit": schema.SingleNestedAttribute{
-				Optional: true,
-				Computed: true,
-				Default: objectdefault.StaticValue(types.ObjectValueMust(smbAuditAttrTypes, map[string]attr.Value{
-					"enable":      types.BoolValue(false),
-					"watch_list":  types.ListValueMust(types.StringType, []attr.Value{}),
-					"ignore_list": types.ListValueMust(types.StringType, []attr.Value{}),
-				})),
-				Description: "Per-share audit logging configuration. Omitted, auditing is off (the server default), so removing the block disables auditing on the share.",
+				Optional:    true,
+				Computed:    true,
+				Description: "Per-share audit logging configuration. Omitted on a share Terraform created, auditing is off (the server default); removing a previously configured block disables auditing on the share; on an imported share the existing setting is kept.",
 				PlanModifiers: []planmodifier.Object{
+					planmod.ResetWhenUnsetObject(types.ObjectValueMust(smbAuditAttrTypes, map[string]attr.Value{
+						"enable":      types.BoolValue(false),
+						"watch_list":  types.ListValueMust(types.StringType, []attr.Value{}),
+						"ignore_list": types.ListValueMust(types.StringType, []attr.Value{}),
+					})),
 					objectplanmodifier.UseStateForUnknown(),
 				},
 				Attributes: map[string]schema.Attribute{

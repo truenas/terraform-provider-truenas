@@ -85,7 +85,7 @@ func (m *DatasetModel) apiPayload() map[string]any {
 		p["type"] = strings.ToUpper(m.Type.ValueString())
 	}
 	if !m.Compression.IsNull() && !m.Compression.IsUnknown() {
-		p["compression"] = strings.ToUpper(m.Compression.ValueString())
+		p["compression"] = compressionAPI(m.Compression.ValueString())
 	}
 	if !m.AClType.IsNull() && !m.AClType.IsUnknown() {
 		p["acltype"] = strings.ToUpper(m.AClType.ValueString())

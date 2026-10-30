@@ -24,13 +24,6 @@ type VMDeviceModel struct {
 	AttributesSecretsWOVersion types.Int64  `tfsdk:"attributes_secrets_wo_version"`
 }
 
-// usesWriteOnlyAttributes reports whether the write-only secrets overlay is in
-// use, in which case attributes is reconciled on read by projecting the live
-// device onto the keys already in state (secret keys are never absorbed).
-func (m *VMDeviceModel) usesWriteOnlyAttributes() bool {
-	return !m.AttributesSecretsWOVersion.IsNull() && !m.AttributesSecretsWOVersion.IsUnknown()
-}
-
 // VMDeviceDataSourceModel is the read-only lookup model for the
 // truenas_vm_device datasource.
 type VMDeviceDataSourceModel struct {

@@ -254,6 +254,27 @@ func (r *DatasetResource) Delete(ctx context.Context, req resource.DeleteRequest
 	// of a replacement) used to be recursive and silently took child datasets
 	// and snapshots Terraform does not manage with it. (B-001)
 	force := !state.ForceDestroy.IsNull() && state.ForceDestroy.ValueBool()
+	// Without force_destroy also refuse to destroy a dataset that still holds
+	// files: a removed resource or the destroy half of a replacement must not
+	// take data with it silently. A mountpoint that cannot be listed (locked,
+	// unmounted) does not block the delete.
+	if !force {
+		// Child datasets and snapshots are reported by DeleteDataset with their
+		// own message; a mounted child also shows up as a directory here, so
+		// only look at the contents when there are none.
+		children, snaps, berr := deleteBlockers(ctx, r.client, state.Name.ValueString())
+		var entries []string
+		var err error
+		if berr == nil && len(children) == 0 && len(snaps) == 0 {
+			entries, err = NonEmptyContents(ctx, r.client, state.MountPoint.ValueString())
+		}
+		if err == nil && len(entries) > 0 {
+			resp.Diagnostics.AddError("Delete dataset refused",
+				fmt.Sprintf("dataset %q is not empty (for example: %s). Set force_destroy = true to destroy it together "+
+					"with its contents, or move the data first.", state.Name.ValueString(), strings.Join(entries, ", ")))
+			return
+		}
+	}
 	resp.Diagnostics.Append(DeleteDataset(ctx, r.client, state.Name.ValueString(), "dataset", force)...)
 }
 
@@ -403,11 +424,21 @@ func preserveCase(current types.String, apiVal string) types.String {
 // (zstd-fast-10, zstd-5, gzip-9) is stored verbatim. Case-insensitive.
 func compressionCanon(v string) string {
 	s := strings.ToLower(strings.TrimSpace(v))
-	if s == "zstd-fast-1" {
+	switch s {
+	case "zstd-fast-1":
 		return "zstd-fast"
+	case "gzip-6":
+		// gzip level 6 is ZFS's default: 28.0 stores it as "gzip" (hunt F7),
+		// 25.10/26.0 reject the alias outright, so it is sent as GZIP too.
+		return "gzip"
 	}
 	return s
 }
+
+// compressionAPI is the value sent to the API for a configured compression:
+// upper-case, with ZFS aliases folded to the form every supported release
+// accepts and reads back.
+func compressionAPI(v string) string { return strings.ToUpper(compressionCanon(v)) }
 
 // preserveCompression is preserveCase for the compression property: current is
 // kept when it is the same compression as apiVal under ZFS's own folding

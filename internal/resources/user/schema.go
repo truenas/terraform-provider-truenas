@@ -161,7 +161,7 @@ func resourceSchema() schema.Schema {
 			"group": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Primary group ID for the user. Either 'group' or 'group_create' must be set when creating a user.",
+				Description: "Primary group ID for the user. When neither 'group' nor 'group_create' is set, a new user gets group_create = true (a primary group named after the user), as in the UI.",
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.UseStateForUnknown(),
 				},

@@ -13,10 +13,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/defaults"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	tfresource "github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 
 	"github.com/truenas/terraform-provider-truenas/internal/acctest"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 	"github.com/truenas/terraform-provider-truenas/internal/provider"
 )
 
@@ -42,6 +44,11 @@ func schemaDefaults(t *testing.T, typ string) map[string]any {
 			switch a := attr.(type) {
 			case schema.BoolAttribute:
 				if a.Default == nil {
+					for _, m := range a.PlanModifiers {
+						if v, ok := planmod.ResetWhenUnsetDefault(m); ok {
+							out[name] = v.(types.Bool).ValueBool()
+						}
+					}
 					continue
 				}
 				var resp defaults.BoolResponse
@@ -51,6 +58,11 @@ func schemaDefaults(t *testing.T, typ string) map[string]any {
 				}
 			case schema.Int64Attribute:
 				if a.Default == nil {
+					for _, m := range a.PlanModifiers {
+						if v, ok := planmod.ResetWhenUnsetDefault(m); ok {
+							out[name] = v.(types.Int64).ValueInt64()
+						}
+					}
 					continue
 				}
 				var resp defaults.Int64Response
@@ -60,6 +72,11 @@ func schemaDefaults(t *testing.T, typ string) map[string]any {
 				}
 			case schema.StringAttribute:
 				if a.Default == nil {
+					for _, m := range a.PlanModifiers {
+						if v, ok := planmod.ResetWhenUnsetDefault(m); ok {
+							out[name] = v.(types.String).ValueString()
+						}
+					}
 					continue
 				}
 				var resp defaults.StringResponse

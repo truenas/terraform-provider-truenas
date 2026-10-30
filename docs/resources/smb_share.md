@@ -41,7 +41,7 @@ resource "truenas_smb_share" "data" {
 
 - `abe` (Boolean) Defaults to `false`. Enable Access-Based Enumeration. Sent to TrueNAS 26.0 as the top-level `access_based_share_enumeration` field (renamed from `abe` on the wire; the Terraform attribute name is unchanged for backward compatibility).
 - `acl` (Boolean) Enable ACL support on this share. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.
-- `audit` (Attributes) Per-share audit logging configuration. Omitted, auditing is off (the server default), so removing the block disables auditing on the share. (see [below for nested schema](#nestedatt--audit))
+- `audit` (Attributes) Per-share audit logging configuration. Omitted on a share Terraform created, auditing is off (the server default); removing a previously configured block disables auditing on the share; on an imported share the existing setting is kept. (see [below for nested schema](#nestedatt--audit))
 - `browsable` (Boolean) Defaults to `true`. Allow share to appear in Windows network browsing. Sent as the top-level `browsable` field.
 - `comment` (String) Optional share description.
 - `durablehandle` (Boolean) Enable SMB2 durable handles. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.

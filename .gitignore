@@ -17,3 +17,5 @@ results/
 __pycache__/
 *.log
 original-git-log
+.hunt-env/
+.hunt-work/

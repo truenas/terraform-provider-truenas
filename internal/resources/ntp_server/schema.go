@@ -12,6 +12,8 @@ import (
 
 func resourceSchema() schema.Schema {
 	return schema.Schema{
+		// v1 (1.6.x): see UpgradeState — attributes stored by <=1.5.24 are write-only now.
+		Version:     1,
 		Description: "Manages an NTP server on TrueNAS.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{

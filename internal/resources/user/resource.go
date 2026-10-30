@@ -290,6 +290,31 @@ func (r *UserResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRe
 	}
 
 	if req.State.Raw.IsNull() {
+		// Create (hunt F2): the API needs either group or group_create, and
+		// either a password or password_disabled; the minimal configuration a
+		// newcomer writes had neither and failed at apply with a raw API
+		// message. Default the primary group the way the UI does (create one
+		// named after the user) and make the password choice a plan-time error.
+		var cfgGroup types.Int64
+		var cfgGroupCreate, cfgPwDisabled types.Bool
+		var cfgPassword types.String
+		resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("group"), &cfgGroup)...)
+		resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("group_create"), &cfgGroupCreate)...)
+		resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("password_disabled"), &cfgPwDisabled)...)
+		resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("password"), &cfgPassword)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if cfgGroup.IsNull() && cfgGroupCreate.IsNull() {
+			resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("group_create"), types.BoolValue(true))...)
+		}
+		if cfgPassword.IsNull() && (cfgPwDisabled.IsNull() || (!cfgPwDisabled.IsUnknown() && !cfgPwDisabled.ValueBool())) {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("password"),
+				"A new user needs a password or password_disabled = true",
+				"TrueNAS requires one of the two when a user is created. Set password (write-only, Terraform >= 1.11) or password_disabled = true.",
+			)
+		}
 		return
 	}
 	var stateGC, planGC types.Bool

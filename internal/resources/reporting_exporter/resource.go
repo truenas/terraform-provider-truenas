@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
@@ -84,6 +85,9 @@ func (r *ReportingExporterResource) Create(ctx context.Context, req resource.Cre
 		return
 	}
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
+	// Remember which attributes the configuration owns (planmod.ResetWhenUnset*);
+	// plan-time private state is discarded on create, so record it here.
+	resp.Diagnostics.Append(planmod.RecordManaged(ctx, req.Config, resp.Private, "attributes.prefix", "attributes.update_every", "attributes.buffer_on_failures", "attributes.send_names_instead_of_ids", "attributes.matching_charts")...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

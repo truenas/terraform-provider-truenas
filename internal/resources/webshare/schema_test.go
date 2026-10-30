@@ -4,6 +4,7 @@
 package webshare
 
 import (
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -63,8 +64,17 @@ func TestWebshareSchema_EnabledAndIsHomeBaseHaveDefaults(t *testing.T) {
 		if !attr.IsOptional() || !attr.IsComputed() {
 			t.Errorf("%q should be Optional+Computed", name)
 		}
-		if attr.Default == nil {
-			t.Errorf("%q should carry a Default (matches the API's own probed default)", name)
+		if attr.Default != nil {
+			t.Errorf("%q must not carry a schema Default: it rewrote imported shares (hunt F9); use planmod.ResetWhenUnsetBool", name)
+		}
+		found := false
+		for _, m := range attr.PlanModifiers {
+			if planmod.IsResetWhenUnset(m) {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%q should use planmod.ResetWhenUnsetBool", name)
 		}
 	}
 }

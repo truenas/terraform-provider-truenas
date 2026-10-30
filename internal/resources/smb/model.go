@@ -748,11 +748,14 @@ func (m *SMBModel) overlayFlatOnOptions(ctx context.Context) (types.Object, bool
 // configuration then resets it on the share instead of keeping the old value
 // with an empty plan (B-113). Only used on a LEGACY_SHARE update without a
 // configured options object.
-func (m *SMBModel) resetUnsetFlatLegacy(cfg *SMBModel) []string {
+func (m *SMBModel) resetUnsetFlatLegacy(cfg *SMBModel, shouldReset func(key string) bool) []string {
 	empty := types.ListValueMust(types.StringType, []attr.Value{})
 	var set []string
 	reset := func(key string, cfgV attr.Value, dst any, def attr.Value) {
-		if !cfgV.IsNull() {
+		// Only an attribute the configuration owned (and has now dropped) is
+		// reset; one that was never configured keeps the planned (state) value,
+		// so an imported or upgraded share is not rewritten.
+		if !cfgV.IsNull() || (shouldReset != nil && !shouldReset(key)) {
 			return
 		}
 		switch d := dst.(type) {

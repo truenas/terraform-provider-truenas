@@ -361,6 +361,17 @@ func (r *ZvolResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	// truenas_dataset: a zvol with snapshots is refused with a message naming
 	// them instead of the server's version-dependent ENOTEMPTY text.
 	force := !state.ForceDestroy.IsNull() && state.ForceDestroy.ValueBool()
+	// Without force_destroy also refuse to destroy a zvol that holds data: a
+	// removed resource or the destroy half of a replacement (a rename, a pool
+	// move) must not wipe a LUN silently. "Cannot tell" does not block.
+	if !force {
+		if has, lr, err := dataset.ZvolHoldsData(ctx, r.client, state.Name.ValueString()); err == nil && has {
+			resp.Diagnostics.AddError("Delete zvol refused",
+				fmt.Sprintf("zvol %q holds data (%d bytes referenced). Set force_destroy = true to destroy it together "+
+					"with its contents, or copy the data off first.", state.Name.ValueString(), lr))
+			return
+		}
+	}
 	resp.Diagnostics.Append(dataset.DeleteDataset(ctx, r.client, state.Name.ValueString(), "zvol", force)...)
 }
 

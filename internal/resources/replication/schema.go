@@ -16,11 +16,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/normalize"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 )
 
 func resourceSchema() schema.Schema {
@@ -51,14 +51,16 @@ func resourceSchema() schema.Schema {
 			"transport": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
-				Description: "LOCAL (default) replicates within the same system; SSH replicates to/from a " +
+				Description: "LOCAL (the default, or SSH when only ssh_credentials is set) replicates within the same system; SSH replicates to/from a " +
 					"remote system over a truenas_keychain_ssh_connection credential (\"ssh_credentials\"); " +
 					"SSH+NETCAT authenticates over SSH but transfers data over an unencrypted netcat " +
 					"connection for higher throughput on trusted networks (configure the netcat_* attributes). " +
 					"Changing this forces a new resource.",
 				Validators: []validator.String{stringvalidator.OneOf("LOCAL", "SSH", "SSH+NETCAT")},
-				Default:    stringdefault.StaticString("LOCAL"),
 				PlanModifiers: []planmodifier.String{
+					// F9: a plain Default "LOCAL" planned an imported SSH task back to
+					// LOCAL — and, with the replace-on-change below, a destroy/recreate.
+					planmod.ResetWhenUnsetString("LOCAL"),
 					replaceIfTransportChanged(),
 				},
 			},

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -167,7 +168,16 @@ func (r *SMBShareResource) ModifyPlan(ctx context.Context, req resource.ModifyPl
 	if newPurpose != legacySharePurpose || !cfg.Options.IsNull() || plan.Options.IsNull() || plan.Options.IsUnknown() {
 		return
 	}
-	for _, key := range plan.resetUnsetFlatLegacy(&cfg) {
+	// Flat legacy attributes removed from the configuration reset to the
+	// LEGACY_SHARE defaults only when the configuration owned them before;
+	// one that was never configured (import, upgrade) keeps the server's
+	// value. Configured ones are recorded for the next plan.
+	for _, key := range cfg.configuredFlatLegacyKeys() {
+		resp.Diagnostics.Append(planmod.SetManaged(ctx, resp.Private, key)...)
+	}
+	managed := func(key string) bool { return planmod.IsManaged(ctx, req.Private, key) }
+	for _, key := range plan.resetUnsetFlatLegacy(&cfg, managed) {
+		resp.Diagnostics.Append(planmod.ClearManaged(ctx, resp.Private, key)...)
 		for _, f := range plan.flatLegacyAttrs() {
 			if f.key == key {
 				resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root(key), f.value)...)
@@ -225,6 +235,9 @@ func (r *SMBShareResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
+	// Remember which attributes the configuration owns (see
+	// planmod.ResetWhenUnset* and the legacy-flat reset in ModifyPlan).
+	resp.Diagnostics.Append(planmod.RecordManaged(ctx, req.Config, resp.Private, smbManagedAttrs...)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -346,3 +359,9 @@ func (r *SMBShareResource) ImportState(ctx context.Context, req resource.ImportS
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, id)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
+
+// smbManagedAttrs are the attributes whose "removed from configuration"
+// handling depends on whether the configuration owned them: the
+// ResetWhenUnset* schema attributes and the flat legacy attributes.
+var smbManagedAttrs = []string{"comment", "ro", "browsable", "abe", "enabled", "audit",
+	"recyclebin", "guestok", "hostsallow", "hostsdeny", "acl", "durablehandle", "streams", "timemachine", "timemachine_quota", "home"}

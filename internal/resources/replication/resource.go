@@ -8,15 +8,42 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 )
 
 var _ resource.Resource = &ReplicationResource{}
 var _ resource.ResourceWithImportState = &ReplicationResource{}
 var _ resource.ResourceWithValidateConfig = &ReplicationResource{}
 var _ resource.ResourceWithIdentity = &ReplicationResource{}
+var _ resource.ResourceWithModifyPlan = &ReplicationResource{}
+
+// ModifyPlan: transport has no plain Default (F9: it rewrote imported SSH
+// tasks to LOCAL and, through replaceIfTransportChanged, destroyed them).
+// On create with the configuration silent, planmod.ResetWhenUnset gives
+// LOCAL; infer SSH instead when ssh_credentials is configured, so a task
+// written with only ssh_credentials keeps working as before.
+func (r *ReplicationResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() || !req.State.Raw.IsNull() {
+		return // destroy, or an update: nothing to infer
+	}
+	var cfg ReplicationModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() || !cfg.Transport.IsNull() {
+		return
+	}
+	// The create payload always sends transport, so decide it here rather
+	// than leaving it unknown.
+	transport := "LOCAL"
+	if sshCredentialsSet(&cfg) {
+		transport = "SSH"
+	}
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("transport"), types.StringValue(transport))...)
+}
 
 // ReplicationResource implements the truenas_replication_task resource.
 type ReplicationResource struct{ client *client.Client }
@@ -76,11 +103,12 @@ func nameRegexConflict(config *ReplicationModel) bool {
 // nameRegexConflict gives unknown naming_schema/also_include_naming_schema
 // values.
 func transportOrDefault(config *ReplicationModel) string {
-	if config.Transport.IsUnknown() {
+	// A null transport is not "LOCAL" at config time any more (F9): on create
+	// it becomes LOCAL, or SSH when ssh_credentials is set (ModifyPlan); on an
+	// imported or upgraded task it keeps the server's value. Treat it as not
+	// knowable here and let the API validate the final combination.
+	if config.Transport.IsUnknown() || config.Transport.IsNull() {
 		return ""
-	}
-	if config.Transport.IsNull() {
-		return "LOCAL"
 	}
 	return config.Transport.ValueString()
 }
@@ -261,6 +289,7 @@ func (r *ReplicationResource) Create(ctx context.Context, req resource.CreateReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	resp.Diagnostics.Append(planmod.RecordManaged(ctx, req.Config, resp.Private, "transport")...)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }

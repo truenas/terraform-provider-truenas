@@ -69,10 +69,18 @@ var (
 // resource type(s) its package registers.
 func scanImportIgnores(t *testing.T, root string) map[string]bool {
 	t.Helper()
+	// Hunt tests carry ImportStateVerifyIgnore lists too; an unjustified
+	// ignore there hides a round-trip bug just as well as one in
+	// acceptance_test.go does (2026-10-30: three such ignores slipped in).
 	files, err := filepath.Glob(filepath.Join(root, "internal", "resources", "*", "acceptance_test.go"))
 	if err != nil {
 		t.Fatalf("glob: %v", err)
 	}
+	hunt, err := filepath.Glob(filepath.Join(root, "internal", "resources", "*", "hunt_test.go"))
+	if err != nil {
+		t.Fatalf("glob: %v", err)
+	}
+	files = append(files, hunt...)
 	out := map[string]bool{}
 	for _, f := range files {
 		raw, err := os.ReadFile(f)

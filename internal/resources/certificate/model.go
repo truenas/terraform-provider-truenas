@@ -5,6 +5,8 @@ package certificate
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"net"
 	"strings"
 
@@ -344,8 +346,14 @@ func responseToModel(ctx context.Context, api *certificateAPI, m *CertificateMod
 	// it is absent, keep the configured value (so a generated CSR does not produce
 	// "inconsistent result after apply") but resolve an unset/unknown value to
 	// null so it is known after apply.
+	// For a CSR the API returns null on every release, which left an imported
+	// CSR diffing forever against its configured value (hunt F1): the digest
+	// is still knowable from the signature algorithm of the CSR (or
+	// certificate) PEM, so derive it from there.
 	if api.DigestAlgorithm != nil {
 		m.DigestAlgorithm = types.StringValue(*api.DigestAlgorithm)
+	} else if d := digestFromPEM(api.CSR, api.Certificate); d != "" {
+		m.DigestAlgorithm = types.StringValue(d)
 	} else if m.DigestAlgorithm.IsUnknown() {
 		m.DigestAlgorithm = types.StringNull()
 	}
@@ -614,4 +622,46 @@ func sanPayload(san []string) []string {
 		out[i] = s
 	}
 	return out
+}
+
+// digestFromPEM returns the digest_algorithm value (SHA224/SHA256/SHA384/SHA512)
+// implied by the signature algorithm of the first PEM that parses: the CSR,
+// then the certificate. "" when neither is present or the digest is not one
+// the API accepts.
+func digestFromPEM(pems ...*string) string {
+	for _, p := range pems {
+		if p == nil || *p == "" {
+			continue
+		}
+		block, _ := pem.Decode([]byte(*p))
+		if block == nil {
+			continue
+		}
+		var alg x509.SignatureAlgorithm
+		switch block.Type {
+		case "CERTIFICATE REQUEST", "NEW CERTIFICATE REQUEST":
+			csr, err := x509.ParseCertificateRequest(block.Bytes)
+			if err != nil {
+				continue
+			}
+			alg = csr.SignatureAlgorithm
+		case "CERTIFICATE":
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				continue
+			}
+			alg = cert.SignatureAlgorithm
+		default:
+			continue
+		}
+		switch alg {
+		case x509.SHA256WithRSA, x509.ECDSAWithSHA256, x509.SHA256WithRSAPSS:
+			return "SHA256"
+		case x509.SHA384WithRSA, x509.ECDSAWithSHA384, x509.SHA384WithRSAPSS:
+			return "SHA384"
+		case x509.SHA512WithRSA, x509.ECDSAWithSHA512, x509.SHA512WithRSAPSS:
+			return "SHA512"
+		}
+	}
+	return ""
 }

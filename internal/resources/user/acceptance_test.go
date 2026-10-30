@@ -246,7 +246,8 @@ func testAccUserFullConfig(username, dsName, gPrimary, gAux string, v26 bool) st
 	}
 	return fmt.Sprintf(`
 resource "truenas_dataset" "home" {
-  name = %q
+  name          = %q
+  force_destroy = true # user.create seeds the home with skeleton files
 }
 
 resource "truenas_group" "primary" {

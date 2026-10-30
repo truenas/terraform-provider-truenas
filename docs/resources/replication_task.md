@@ -97,7 +97,7 @@ resource "truenas_replication_task" "local_backup" {
 - `speed_limit` (Number) Limits the speed of the SSH stream, in bytes per second. Available only for transport = "SSH"; must be unset for transport = "LOCAL".
 - `ssh_credentials` (Number) Numeric id of a truenas_keychain_ssh_connection (keychaincredential of type SSH_CREDENTIALS) to replicate over. Required when transport = "SSH"; must be unset (0) for transport = "LOCAL".
 - `sudo` (Boolean) Use sudo (expected to be passwordless on the remote system) to run zfs commands over SSH. Only meaningful for transport = "SSH".
-- `transport` (String) LOCAL (default) replicates within the same system; SSH replicates to/from a remote system over a truenas_keychain_ssh_connection credential ("ssh_credentials"); SSH+NETCAT authenticates over SSH but transfers data over an unencrypted netcat connection for higher throughput on trusted networks (configure the netcat_* attributes). Changing this forces a new resource.
+- `transport` (String) LOCAL (the default, or SSH when only ssh_credentials is set) replicates within the same system; SSH replicates to/from a remote system over a truenas_keychain_ssh_connection credential ("ssh_credentials"); SSH+NETCAT authenticates over SSH but transfers data over an unencrypted netcat connection for higher throughput on trusted networks (configure the netcat_* attributes). Changing this forces a new resource.
 
 ### Read-Only
 

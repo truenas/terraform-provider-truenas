@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 )
 
 var _ resource.Resource = &ISCSIAuthResource{}
@@ -98,6 +99,7 @@ func (r *ISCSIAuthResource) Create(ctx context.Context, req resource.CreateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	resp.Diagnostics.Append(planmod.RecordManaged(ctx, req.Config, resp.Private, "peeruser")...)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -159,6 +161,27 @@ func (r *ISCSIAuthResource) Update(ctx context.Context, req resource.UpdateReque
 	plan.dropUnversionedSecrets(state)
 
 	payload := plan.apiPayload()
+
+	// TrueNAS 25.10 counts the entry being updated among the existing
+	// CHAP_MUTUAL discovery entries, so every update of the (single) mutual
+	// CHAP entry fails with "Cannot specify CHAP_MUTUAL as only one such entry
+	// is permitted" (fixed in 26.0: do_update subtracts the entry itself).
+	// Work around it by updating as CHAP first and switching back in a second
+	// call, which then sees zero other CHAP_MUTUAL entries.
+	if state.DiscoveryAuth.ValueString() == "CHAP_MUTUAL" && payload["discovery_auth"] == "CHAP_MUTUAL" {
+		if ok, verr := r.client.VersionAtLeast(ctx, 26, 0); verr == nil && !ok {
+			first := make(map[string]any, len(payload))
+			for k, v := range payload {
+				first[k] = v
+			}
+			first["discovery_auth"] = "CHAP"
+			if _, err := r.client.Call(ctx, "iscsi.auth.update", plan.ID.ValueInt64(), first); err != nil {
+				resp.Diagnostics.AddError("Update iSCSI auth failed", err.Error())
+				return
+			}
+			payload = map[string]any{"discovery_auth": "CHAP_MUTUAL"}
+		}
+	}
 
 	_, err := r.client.Call(ctx, "iscsi.auth.update", plan.ID.ValueInt64(), payload)
 	if err != nil {

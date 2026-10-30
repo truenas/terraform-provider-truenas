@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -74,6 +75,11 @@ func (r *NFSShareResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueString())...)
+	// Remember which share attributes the configuration owns, so removing one
+	// later resets it to the server default while an unset one keeps the
+	// server's value (see planmod.ResetWhenUnset*). Plan-time private state is
+	// discarded on create, so this must happen here.
+	resp.Diagnostics.Append(planmod.RecordManaged(ctx, req.Config, resp.Private, nfsManagedAttrs...)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -240,3 +246,7 @@ func (r *NFSShareResource) responseToModel(ctx context.Context, api *apiResponse
 	m.Hosts = hosts
 	return diags
 }
+
+// nfsManagedAttrs are the Optional+Computed attributes with a server default
+// that use planmod.ResetWhenUnset*.
+var nfsManagedAttrs = []string{"comment", "enabled", "ro", "networks", "hosts", "maproot_user", "maproot_group", "mapall_user", "mapall_group", "security", "expose_snapshots"}

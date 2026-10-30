@@ -5,8 +5,10 @@ package replication
 
 import (
 	"context"
-	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 	"testing"
+
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -61,8 +63,17 @@ func TestReplicationSchema(t *testing.T) {
 	if transStr.IsRequired() {
 		t.Error("'transport' should not be Required")
 	}
-	if transStr.StringDefaultValue() == nil {
-		t.Error("'transport' should have a Default")
+	if transStr.StringDefaultValue() != nil {
+		t.Error("'transport' must not use a plain Default (F9: it rewrote imported SSH tasks to LOCAL and replaced them)")
+	}
+	reset := false
+	for _, m := range transStr.PlanModifiers {
+		if planmod.IsResetWhenUnset(m) {
+			reset = true
+		}
+	}
+	if !reset {
+		t.Error("'transport' should use planmod.ResetWhenUnsetString(\"LOCAL\")")
 	}
 	if len(transStr.PlanModifiers) == 0 {
 		t.Error("'transport' should have RequiresReplace plan modifier")
@@ -788,8 +799,10 @@ func TestTransportSSHCredentialsMismatch(t *testing.T) {
 		{"SSH with unknown credentials", types.StringValue("SSH"), types.Int64Unknown(), false},
 		{"LOCAL without credentials", types.StringValue("LOCAL"), types.Int64Null(), false},
 		{"LOCAL with credentials", types.StringValue("LOCAL"), types.Int64Value(7), true},
-		{"unset transport (defaults LOCAL) without credentials", types.StringNull(), types.Int64Null(), false},
-		{"unset transport (defaults LOCAL) with credentials", types.StringNull(), types.Int64Value(7), true},
+		{"unset transport without credentials", types.StringNull(), types.Int64Null(), false},
+		// F9: null is not LOCAL at config time (create infers SSH from the
+		// credentials; an imported task keeps the server's transport).
+		{"unset transport with credentials: not knowable, skips validation", types.StringNull(), types.Int64Value(7), false},
 		{"unknown transport (not yet knowable) skips validation", types.StringUnknown(), types.Int64Value(7), false},
 	}
 
@@ -820,7 +833,9 @@ func TestSSHOnlyFieldsWithoutSSH(t *testing.T) {
 		{"LOCAL with neither set", types.StringValue("LOCAL"), types.StringNull(), types.Int64Null(), false},
 		{"LOCAL with compression set", types.StringValue("LOCAL"), types.StringValue("LZ4"), types.Int64Null(), true},
 		{"LOCAL with speed_limit set", types.StringValue("LOCAL"), types.StringNull(), types.Int64Value(100), true},
-		{"unset transport (defaults LOCAL) with compression set", types.StringNull(), types.StringValue("LZ4"), types.Int64Null(), true},
+		// F9: null transport is not knowable at config time; the API rejects
+		// compression on a LOCAL task at apply.
+		{"unset transport with compression set: skips validation", types.StringNull(), types.StringValue("LZ4"), types.Int64Null(), false},
 	}
 
 	for _, tc := range cases {

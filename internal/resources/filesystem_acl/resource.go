@@ -15,9 +15,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
+	"github.com/truenas/terraform-provider-truenas/internal/stateupgrade"
 )
 
 var _ resource.Resource = &FilesystemAclResource{}
+var _ resource.ResourceWithUpgradeState = &FilesystemAclResource{}
 var _ resource.ResourceWithImportState = &FilesystemAclResource{}
 var _ resource.ResourceWithIdentity = &FilesystemAclResource{}
 var _ resource.ResourceWithModifyPlan = &FilesystemAclResource{}
@@ -309,4 +311,16 @@ func (r *FilesystemAclResource) ImportState(ctx context.Context, req resource.Im
 
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueString())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
+
+// UpgradeState migrates state written by provider <= 1.5.24 (schema version
+// 0), where entries, recursive, traverse were ordinary stored
+// attributes. They are write-only since 1.6.0, and Terraform
+// refuses a prior state that still carries a value for a write-only attribute
+// ("Invalid resource state upgrade"), blocking plan, apply and destroy. The
+// upgrader drops the stored values; the config still supplies them.
+func (r *FilesystemAclResource) UpgradeState(context.Context) map[int64]resource.StateUpgrader {
+	return map[int64]resource.StateUpgrader{
+		0: stateupgrade.DropAttrs("recursive", "traverse"),
+	}
 }

@@ -11,9 +11,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
+	"github.com/truenas/terraform-provider-truenas/internal/stateupgrade"
 )
 
 var _ resource.Resource = &RsyncTaskResource{}
+var _ resource.ResourceWithUpgradeState = &RsyncTaskResource{}
 var _ resource.ResourceWithImportState = &RsyncTaskResource{}
 var _ resource.ResourceWithIdentity = &RsyncTaskResource{}
 
@@ -201,4 +203,16 @@ func (r *RsyncTaskResource) ImportState(ctx context.Context, req resource.Import
 	// validate_rpath and ssh_keyscan are write-only; they stay null.
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, id)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
+
+// UpgradeState migrates state written by provider <= 1.5.24 (schema version
+// 0), where validate_rpath, ssh_keyscan were ordinary stored
+// attributes. They are write-only since 1.6.0, and Terraform
+// refuses a prior state that still carries a value for a write-only attribute
+// ("Invalid resource state upgrade"), blocking plan, apply and destroy. The
+// upgrader drops the stored values; the config still supplies them.
+func (r *RsyncTaskResource) UpgradeState(context.Context) map[int64]resource.StateUpgrader {
+	return map[int64]resource.StateUpgrader{
+		0: stateupgrade.DropAttrs("validate_rpath", "ssh_keyscan"),
+	}
 }

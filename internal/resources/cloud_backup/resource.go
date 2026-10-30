@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -130,6 +131,9 @@ func (r *CloudBackupResource) Create(ctx context.Context, req resource.CreateReq
 	}
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
 	resp.Diagnostics.Append(setImported(ctx, resp.Private, false)...)
+	// Remember which attributes the configuration owns (planmod.ResetWhenUnset*);
+	// plan-time private state is discarded on create, so record it here.
+	resp.Diagnostics.Append(planmod.RecordManaged(ctx, req.Config, resp.Private, "description")...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
