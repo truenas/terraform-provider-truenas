@@ -6,6 +6,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-10-31
+
+### Fixed
+- **1.6.1 could not be installed.** The Terraform Registry holds checksums
+  from a first build of the 1.6.1 release that was deleted and rebuilt a few
+  minutes later, so `terraform init` failed with "checksum list has unexpected
+  SHA-256 hash" on every platform (#63). 1.6.2 is the same code, released
+  once. Do not pin 1.6.1.
+
 ## [1.6.1] - 2026-10-30
 
 ### Fixed
