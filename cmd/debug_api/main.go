@@ -77,6 +77,24 @@ func main() {
 		section = os.Args[1]
 	}
 
+	// call <method> [json-param ...]: generic JSON-RPC call, prints the result.
+	if section == "call" && len(os.Args) > 2 {
+		var params []any
+		for _, a := range os.Args[3:] {
+			var v any
+			if err := json.Unmarshal([]byte(a), &v); err != nil {
+				v = a
+			}
+			params = append(params, v)
+		}
+		raw, err := c.Call(context.Background(), os.Args[2], params...)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(string(raw))
+		return
+	}
+
 	if section == "pool" || section == "all" {
 		pp("pool.query (first item)", firstItem(call(c, "pool.query", []any{})))
 	}

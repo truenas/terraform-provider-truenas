@@ -5,6 +5,23 @@ resource "truenas_dataset" "data" {
   comments    = "managed by terraform"
 }
 
+# Renaming: changing `name` renames the dataset in place (data, child datasets
+# and snapshots move with it; `guid` is unchanged). TrueNAS performs NO safety
+# checks on a rename: shares, iSCSI extents, NVMe-oF namespaces, snapshot /
+# replication / rsync / cloud sync tasks and VM disks that point at the old
+# path are not updated and break until re-pointed. The provider refuses the
+# rename while any of them references the dataset; allow_rename_in_use = true
+# overrides that. Resources that reference `mountpoint`, like the share below,
+# plan their own update in the same apply, so the share is briefly broken.
+resource "truenas_dataset" "projects" {
+  name = "tank/projects" # was "tank/project": applied as a rename
+}
+
+resource "truenas_smb_share" "projects" {
+  name = "projects"
+  path = truenas_dataset.projects.mountpoint
+}
+
 # A passphrase-encrypted dataset. The encryption inputs are create-only:
 # changing any of them recreates the dataset. encryption_passphrase is
 # write-only — it is used at create time and never stored in state, so supply

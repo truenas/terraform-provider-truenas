@@ -20,6 +20,23 @@ resource "truenas_dataset" "data" {
   comments    = "managed by terraform"
 }
 
+# Renaming: changing `name` renames the dataset in place (data, child datasets
+# and snapshots move with it; `guid` is unchanged). TrueNAS performs NO safety
+# checks on a rename: shares, iSCSI extents, NVMe-oF namespaces, snapshot /
+# replication / rsync / cloud sync tasks and VM disks that point at the old
+# path are not updated and break until re-pointed. The provider refuses the
+# rename while any of them references the dataset; allow_rename_in_use = true
+# overrides that. Resources that reference `mountpoint`, like the share below,
+# plan their own update in the same apply, so the share is briefly broken.
+resource "truenas_dataset" "projects" {
+  name = "tank/projects" # was "tank/project": applied as a rename
+}
+
+resource "truenas_smb_share" "projects" {
+  name = "projects"
+  path = truenas_dataset.projects.mountpoint
+}
+
 # A passphrase-encrypted dataset. The encryption inputs are create-only:
 # changing any of them recreates the dataset. encryption_passphrase is
 # write-only — it is used at create time and never stored in state, so supply
@@ -56,7 +73,7 @@ resource "truenas_dataset" "keyed" {
 
 ### Required
 
-- `name` (String) Full dataset path, e.g. tank/mydata.
+- `name` (String) Full dataset path, e.g. tank/mydata. Changing it renames the dataset in place (pool.dataset.rename): data, child datasets and snapshots move with it and the ZFS guid is unchanged. WARNING: TrueNAS performs no safety checks on a rename. SMB/NFS shares, iSCSI extents, NVMe-oF namespaces, snapshot, replication, rsync and cloud sync tasks and VM disks that point at the old path are NOT updated and break until re-pointed; a zvol under a live iSCSI extent or NVMe-oF namespace goes offline for its initiators. The provider refuses the rename while any of those reference the dataset unless allow_rename_in_use = true. Other Terraform resources that reference the dataset's name or mountpoint plan their own update (or replacement) in the same apply, so there is a window with a broken path. The pool component cannot change.
 
 ### Optional
 
@@ -64,6 +81,7 @@ resource "truenas_dataset" "keyed" {
 
 - `aclmode` (String) ACL inheritance mode: PASSTHROUGH, RESTRICTED, or DISCARD. Null (unset) inherits from the parent.
 - `acltype` (String) ACL type: posix, nfsv4, off, or inherit. Case-insensitive. Changing it (other than its letter case) recreates the dataset.
+- `allow_rename_in_use` (Boolean) When true, a rename proceeds even though SMB/NFS shares, iSCSI extents, NVMe-oF namespaces, snapshot/replication/rsync/cloud sync tasks or VM disks still reference the dataset or its descendants. Default false: such a rename fails and lists them. TrueNAS does not re-point any of them; Terraform-managed references plan their own update on the next apply, anything else must be fixed by hand.
 - `atime` (String) Update access time on read: ON or OFF. Null inherits.
 - `checksum` (String) Checksum algorithm: ON, OFF, FLETCHER2, FLETCHER4, SHA256, SHA512, SKEIN, EDONR, or BLAKE3. Null inherits.
 - `comments` (String) Human-readable description stored as org.freenas:description.
@@ -94,9 +112,10 @@ resource "truenas_dataset" "keyed" {
 ### Read-Only
 
 - `encrypted` (Boolean) Whether the dataset is encrypted.
-- `id` (String) Dataset name (used as Terraform ID).
+- `guid` (String) ZFS guid of the dataset. Stable across renames; it is the resource identity (import { identity = { guid = ... } }) and also accepted as the import id.
+- `id` (String) Dataset name (used as Terraform ID). Changes with name on a rename; the resource identity is guid.
 - `key_format` (String) Encryption key format: PASSPHRASE or HEX (null when not encrypted).
 - `locked` (Boolean) Whether the encrypted dataset is currently locked.
-- `mountpoint` (String) Dataset mountpoint path.
+- `mountpoint` (String) Dataset mountpoint path. Changes on a rename: resources that use it plan their own update on the next apply.
 - `pool` (String) Name of the pool containing this dataset.
 - `xattr` (String) ZFS extended-attribute storage mode: SA (system-attribute), ON/DIR (directory-based), or OFF. Read-only — TrueNAS does not expose xattr in the writable create/update API, so it is set at dataset creation or inherited and only surfaced here for reading and drift-awareness.

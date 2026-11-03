@@ -44,7 +44,9 @@ func TestResourceIdentitySetInUpdate(t *testing.T) {
 		if strings.Contains(m, "Update not supported") || strings.Contains(m, "immutable") {
 			continue
 		}
-		if !strings.Contains(m, "SetIdentity") {
+		// listing.SetIdentity, or dataset.SetGuidIdentity for the guid-keyed
+		// dataset/zvol (F8).
+		if !strings.Contains(m, "SetIdentity") && !strings.Contains(m, "SetGuidIdentity") {
 			t.Errorf("%s: Update does not call SetIdentity — in-place updates will fail with "+
 				"\"no resource identity data after update\" (issue #20). Mirror this resource's Create.", res(f))
 		}

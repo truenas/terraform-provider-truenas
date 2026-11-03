@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
 )
@@ -17,6 +18,40 @@ import (
 var _ resource.Resource = &SnapshotResource{}
 var _ resource.ResourceWithImportState = &SnapshotResource{}
 var _ resource.ResourceWithIdentity = &SnapshotResource{}
+var _ resource.ResourceWithModifyPlan = &SnapshotResource{}
+
+// ModifyPlan refuses a replacement unless allow_recreate = true. dataset, name
+// and recursive force a replace, and replacing a snapshot destroys a point in
+// time that cannot be taken again; TrueNAS can rename a snapshot in place
+// (pool.snapshot.rename) on 25.10 and 28.0 but not on 26.0 (its middleware
+// points at a zfs.resource.snapshot.rename that does not exist), so the safe
+// default is to stop and let the user decide.
+func (r *SnapshotResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() || req.State.Raw.IsNull() {
+		return // destroy or create
+	}
+	var plan, state SnapshotModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	// Decide from the values, not from resp.RequiresReplace: the paths the
+	// attribute modifiers collected are not visible here on every framework
+	// version (probed: the error did not fire on 28.0 when it relied on them).
+	changed := !plan.Dataset.Equal(state.Dataset) || !plan.Name.Equal(state.Name) ||
+		(!plan.Recursive.IsUnknown() && !plan.Recursive.IsNull() && !state.Recursive.IsNull() && !plan.Recursive.Equal(state.Recursive))
+	if !changed || plan.AllowRecreate.ValueBool() {
+		return
+	}
+	resp.Diagnostics.AddError(
+		"Snapshot replacement refused",
+		fmt.Sprintf("The change to truenas_snapshot %q would destroy this snapshot and take a new one of the "+
+			"data as it is now; the point-in-time copy would be lost. Keep dataset, name and recursive as they "+
+			"are, rename the snapshot on TrueNAS and re-import it, or set allow_recreate = true to permit the "+
+			"destroy and recreate.", state.ID.ValueString()),
+	)
+}
 
 // SnapshotResource implements the truenas_snapshot resource.
 // Snapshots are immutable — there is no Update method.
@@ -116,6 +151,11 @@ func (r *SnapshotResource) Read(ctx context.Context, req resource.ReadRequest, r
 
 	// preserve write-only recursive from state
 	responseToModel(&api, &state)
+	// allow_recreate is provider-only: pre-1.6.2 state and imports have it
+	// null, which reads as false (an import never grants it).
+	if state.AllowRecreate.IsNull() || state.AllowRecreate.IsUnknown() {
+		state.AllowRecreate = types.BoolValue(false)
+	}
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueString())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -132,6 +172,12 @@ func (r *SnapshotResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 	state.Recursive = plan.Recursive
+	state.AllowRecreate = plan.AllowRecreate
+	// allow_recreate is provider-only: pre-1.6.2 state and imports have it
+	// null, which reads as false (an import never grants it).
+	if state.AllowRecreate.IsNull() || state.AllowRecreate.IsUnknown() {
+		state.AllowRecreate = types.BoolValue(false)
+	}
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueString())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -183,6 +229,11 @@ func (r *SnapshotResource) ImportState(ctx context.Context, req resource.ImportS
 	var state SnapshotModel
 	// recursive is unknown after import; leave it null
 	responseToModel(&api, &state)
+	// allow_recreate is provider-only: pre-1.6.2 state and imports have it
+	// null, which reads as false (an import never grants it).
+	if state.AllowRecreate.IsNull() || state.AllowRecreate.IsUnknown() {
+		state.AllowRecreate = types.BoolValue(false)
+	}
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueString())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

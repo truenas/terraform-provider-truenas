@@ -11,6 +11,9 @@ type SnapshotModel struct {
 	Dataset   types.String `tfsdk:"dataset"`
 	Name      types.String `tfsdk:"name"`      // snapshot name only (no "@")
 	Recursive types.Bool   `tfsdk:"recursive"` // write-only; not in API response
+	// AllowRecreate is provider-only: it gates the plan-time refusal of a
+	// destroy/recreate (see ModifyPlan) and is never read from the server.
+	AllowRecreate types.Bool `tfsdk:"allow_recreate"`
 	// Computed
 	Pool      types.String `tfsdk:"pool"`
 	CreateTxg types.String `tfsdk:"createtxg"`

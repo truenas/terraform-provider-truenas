@@ -42,18 +42,23 @@ func resourceSchema() schema.Schema {
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:    true,
-				Description: "Dataset name (used as Terraform ID).",
+				Description: "Dataset name (used as Terraform ID). Changes with name on a rename; the resource identity is guid.",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					IDFollowsName(),
 				},
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
-				Description: "Full dataset path, e.g. tank/mydata.",
+				Description: NameDescription("dataset", "tank/mydata"),
+			},
+			"guid": schema.StringAttribute{
+				Computed:    true,
+				Description: "ZFS guid of the dataset. Stable across renames; it is the resource identity (import { identity = { guid = ... } }) and also accepted as the import id.",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"allow_rename_in_use": AllowRenameInUseAttribute("dataset"),
 			"type": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
@@ -199,14 +204,14 @@ func resourceSchema() schema.Schema {
 			},
 			"mountpoint": schema.StringAttribute{
 				Computed: true,
-				// Derived from name, which is RequiresReplace, so an in-place
-				// update cannot change it. Keep the known value instead of
-				// planning (known after apply), which would otherwise replace
-				// consumers that use it as a RequiresReplace path. (#27)
+				// Derived from name. Kept known on an update that does not
+				// rename (a planned (known after apply) would replace consumers
+				// that use it as a RequiresReplace path, #27); on a rename it is
+				// planned as the new /mnt path. (F8)
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					MountpointFollowsName(),
 				},
-				Description: "Dataset mountpoint path.",
+				Description: "Dataset mountpoint path. Changes on a rename: resources that use it plan their own update on the next apply.",
 			},
 			"encrypted": schema.BoolAttribute{
 				Computed:    true,
@@ -285,8 +290,9 @@ func resourceSchema() schema.Schema {
 			},
 			"pool": schema.StringAttribute{
 				Computed: true,
-				// Derived from name (RequiresReplace); keep the known value on
-				// update rather than planning (known after apply). (#27)
+				// Derived from name; a rename cannot change the pool (ModifyPlan
+				// rejects it), so keep the known value on update rather than
+				// planning (known after apply). (#27)
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},

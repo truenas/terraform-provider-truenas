@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
-	"github.com/truenas/terraform-provider-truenas/internal/listing"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
 )
 
@@ -23,6 +22,12 @@ var _ resource.ResourceWithImportState = &ZvolResource{}
 var _ resource.ResourceWithIdentity = &ZvolResource{}
 var _ resource.ResourceWithValidateConfig = &ZvolResource{}
 var _ resource.ResourceWithModifyPlan = &ZvolResource{}
+var _ resource.ResourceWithUpgradeIdentity = &ZvolResource{}
+
+// UpgradeIdentity upgrades identity v0 {id = name} (<= 1.6.1) to v1 {guid}.
+func (r *ZvolResource) UpgradeIdentity(context.Context) map[int64]resource.IdentityUpgrader {
+	return dataset.IdentityUpgraders(func() *client.Client { return r.client })
+}
 
 // ValidateConfig rejects setting `encryption` together with
 // `inherit_encryption = true`: with inheritance the parent determines
@@ -68,6 +73,10 @@ func (r *ZvolResource) ValidateConfig(ctx context.Context, req resource.Validate
 // in place.
 func (r *ZvolResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	resp.Diagnostics.Append(dataset.CheckEncryptionAlgorithm(ctx, r.client, req)...)
+	// A name change is an in-place rename (F8); one ZFS cannot do (another
+	// pool, into itself) fails at plan time.
+	_, _, _, renameDiags := dataset.CheckRenamePlan(ctx, req, "zvol")
+	resp.Diagnostics.Append(renameDiags...)
 	// A zvol being replaced anyway is created with the configured sparse.
 	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() || len(resp.RequiresReplace) > 0 {
 		return
@@ -114,7 +123,7 @@ func (r *ZvolResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 }
 
 func (r *ZvolResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
-	resp.IdentitySchema = listing.StringIDIdentitySchema()
+	resp.IdentitySchema = dataset.IdentitySchema()
 }
 
 func (r *ZvolResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -218,7 +227,13 @@ func (r *ZvolResource) Create(ctx context.Context, req resource.CreateRequest, r
 	if plan.Sparse.IsUnknown() || plan.Sparse.IsNull() {
 		plan.Sparse = types.BoolValue(sparseFromAPI(&apiResp))
 	}
-	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueString())...)
+	guid, err := dataset.LookupGuid(ctx, r.client, apiResp.Name)
+	if err != nil {
+		resp.Diagnostics.AddError("Read zvol guid after create failed", err.Error())
+		return
+	}
+	plan.Guid = types.StringValue(guid)
+	resp.Diagnostics.Append(dataset.SetGuidIdentity(ctx, resp.Identity, guid)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -283,7 +298,19 @@ func (r *ZvolResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		return
 	}
 
-	raw, err := r.client.CallRead(ctx, "pool.dataset.get_instance", state.Name.ValueString())
+	// The guid is the identity: a zvol renamed outside Terraform is found
+	// under its new name. State written by <= 1.6.1 has no guid; it is read
+	// by name and the guid backfilled, which plans no change.
+	name, guid, found, err := dataset.ResolveByGuid(ctx, r.client, state.Guid, state.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read zvol failed", err.Error())
+		return
+	}
+	if !found {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+	raw, err := r.client.CallRead(ctx, "pool.dataset.get_instance", name)
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -300,6 +327,7 @@ func (r *ZvolResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	}
 
 	responseToModel(&apiResp, &state.ZvolModel)
+	state.Guid = types.StringValue(guid)
 	// State written before sparse was Computed has it null when the
 	// configuration never set it; fill it from the zvol so the upgrade does not
 	// plan sparse as (known after apply).
@@ -309,7 +337,7 @@ func (r *ZvolResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	// State written before force_destroy existed has it null; read it as the
 	// default so the upgrade plans no change.
 	state.ForceDestroy = dataset.ForceDestroyOrFalse(state.ForceDestroy)
-	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueString())...)
+	resp.Diagnostics.Append(dataset.SetGuidIdentity(ctx, resp.Identity, guid)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -319,6 +347,17 @@ func (r *ZvolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	// A name change is an in-place rename (F8), done before the property
+	// update so the latter addresses the new name.
+	if plan.Name.ValueString() != state.Name.ValueString() {
+		_, diags := dataset.PerformRename(ctx, r.client, "zvol", state.Guid.ValueString(), state.Name.ValueString(),
+			plan.Name.ValueString(), "", plan.AllowRenameInUse.ValueBool())
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 
 	payload := plan.updateAPIPayload(&state.ZvolModel)
@@ -346,7 +385,15 @@ func (r *ZvolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	responseToModel(&apiResp, &plan.ZvolModel)
-	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueString())...)
+	// The guid must not change on an update, a rename included; reading it
+	// back proves the renamed zvol is the same ZFS object.
+	guid, err := dataset.LookupGuid(ctx, r.client, apiResp.Name)
+	if err != nil {
+		resp.Diagnostics.AddError("Read zvol guid after update failed", err.Error())
+		return
+	}
+	plan.Guid = types.StringValue(guid)
+	resp.Diagnostics.Append(dataset.SetGuidIdentity(ctx, resp.Identity, guid)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -376,17 +423,19 @@ func (r *ZvolResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 }
 
 func (r *ZvolResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	id, idDiags := listing.ImportString(ctx, req)
+	// Import by zvol name, by ZFS guid, or by identity { guid = ... }.
+	name, guid, idDiags := dataset.ResolveImportID(ctx, r.client, req)
 	resp.Diagnostics.Append(idDiags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	var state zvolResourceModel
-	state.Name = types.StringValue(id)
-	state.ID = types.StringValue(id)
+	state.Name = types.StringValue(name)
+	state.ID = types.StringValue(name)
+	state.Guid = types.StringValue(guid)
 
-	raw, err := r.client.CallRead(ctx, "pool.dataset.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "pool.dataset.get_instance", name)
 	if err != nil {
 		resp.Diagnostics.AddError("Import zvol failed", err.Error())
 		return
@@ -403,6 +452,6 @@ func (r *ZvolResource) ImportState(ctx context.Context, req resource.ImportState
 	// an imported zvol matches a configuration that sets it. (B-109)
 	state.Sparse = types.BoolValue(sparseFromAPI(&apiResp))
 	state.ForceDestroy = types.BoolValue(false)
-	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueString())...)
+	resp.Diagnostics.Append(dataset.SetGuidIdentity(ctx, resp.Identity, guid)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

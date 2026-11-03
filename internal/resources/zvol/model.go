@@ -12,7 +12,9 @@ import (
 
 // ZvolModel is the Terraform state/plan model for a TrueNAS zvol.
 type ZvolModel struct {
-	ID           types.String `tfsdk:"id"`
+	ID types.String `tfsdk:"id"`
+	// Guid is the ZFS guid: the resource identity, unchanged by a rename (F8).
+	Guid         types.String `tfsdk:"guid"`
 	Name         types.String `tfsdk:"name"`
 	VolSize      types.Int64  `tfsdk:"volsize"`
 	VolBlockSize types.Int64  `tfsdk:"volblocksize"`
@@ -132,7 +134,8 @@ func volblocksizeStr(b int64) string {
 // resource has.
 type zvolResourceModel struct {
 	ZvolModel
-	ForceDestroy types.Bool `tfsdk:"force_destroy"`
+	ForceDestroy     types.Bool `tfsdk:"force_destroy"`
+	AllowRenameInUse types.Bool `tfsdk:"allow_rename_in_use"`
 }
 
 // updatableFields is apiPayload without the keys pool.dataset.update does not

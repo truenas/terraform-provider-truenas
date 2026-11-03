@@ -29,6 +29,7 @@ config database to restore state, and delete leftovers.
 | `box-state.sh <ip>...` | workstation (ssh) | leftovers + restore state (sshd port, 2FA, FTP TLS, UPS driver, boot environments) |
 | `clean-hunt-vms.sh <ip>` | workstation (ssh) | delete stranded `tfhuntvmd*` VMs, keep `tfhuntrovm` |
 | `restore-ups.sh <ip>` | workstation (ssh) | reset UPS driver/port to unconfigured via the config DB |
+| `rename-probe.sh <ip>` | workstation (ssh) | F8 data-survival probe: signature into a zvol + file into a dataset over ssh, rename both through Terraform (current build), check signature, file, snapshots, guid and an empty plan |
 | `restore-ssh.sh <ip>...` | workstation (ssh) | restore `ssh.config` from the box's daily config snapshot when a test stranded sshd on 2222 |
 | `lib.sh` | sourced | repo root, env dir, work dir, help, env sourcing |
 

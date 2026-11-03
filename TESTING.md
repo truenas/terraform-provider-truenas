@@ -436,7 +436,9 @@ the environment at run time.
   every test object carries the prefix.
 - **`cmd/debug_api`** is the discovery/diagnosis tool used to build this
   suite: `methods <prefix>` dumps live method schemas (check the `"job"`
-  flag), `namespaces` lists the API surface, and the `smbprobe`/`csprobe`
+  flag), `namespaces` lists the API surface, `call <method> [json-param ...]`
+  makes one raw call (`call pool.dataset.rename '"tank/a"' '{"new_name":"tank/b","force":true}'`),
+  and the `smbprobe`/`csprobe`
   sections create-inspect-delete throwaway objects to capture real response
   shapes.
 

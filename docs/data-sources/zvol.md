@@ -32,6 +32,7 @@ Fetches a TrueNAS zvol by name.
 - `encryption_generate_key` (Boolean)
 - `encryption_key` (String, Sensitive)
 - `encryption_passphrase` (String, Sensitive)
+- `guid` (String) ZFS guid of the zvol (stable across renames).
 - `id` (String) The ID of this resource.
 - `inherit_encryption` (Boolean)
 - `key_format` (String)

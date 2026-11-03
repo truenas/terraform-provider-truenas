@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -31,6 +32,7 @@ func (d *DatasetDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 		Description: "Fetches a TrueNAS dataset by name.",
 		Attributes: map[string]dschema.Attribute{
 			"id":          dschema.StringAttribute{Computed: true},
+			"guid":        dschema.StringAttribute{Computed: true, Description: "ZFS guid of the dataset (stable across renames)."},
 			"name":        dschema.StringAttribute{Required: true, Description: "Full dataset path, e.g. tank/mydata."},
 			"type":        dschema.StringAttribute{Computed: true},
 			"compression": dschema.StringAttribute{Computed: true},
@@ -106,5 +108,11 @@ func (d *DatasetDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	guid, err := LookupGuid(ctx, d.client, apiResp.Name)
+	if err != nil {
+		resp.Diagnostics.AddError("Read dataset guid failed", err.Error())
+		return
+	}
+	state.Guid = types.StringValue(guid)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

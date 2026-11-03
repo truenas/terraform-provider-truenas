@@ -12,6 +12,7 @@ import (
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
 )
 
 var _ datasource.DataSource = &ZvolDataSource{}
@@ -31,6 +32,7 @@ func (d *ZvolDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 		Description: "Fetches a TrueNAS zvol by name.",
 		Attributes: map[string]dschema.Attribute{
 			"id":           dschema.StringAttribute{Computed: true},
+			"guid":         dschema.StringAttribute{Computed: true, Description: "ZFS guid of the zvol (stable across renames)."},
 			"name":         dschema.StringAttribute{Required: true, Description: "Full zvol path, e.g. tank/myvol."},
 			"volsize":      dschema.Int64Attribute{Computed: true},
 			"volblocksize": dschema.Int64Attribute{Computed: true},
@@ -92,6 +94,12 @@ func (d *ZvolDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	}
 
 	responseToModel(&apiResp, &state)
+	guid, err := dataset.LookupGuid(ctx, d.client, apiResp.Name)
+	if err != nil {
+		resp.Diagnostics.AddError("Read zvol guid failed", err.Error())
+		return
+	}
+	state.Guid = types.StringValue(guid)
 	state.Sparse = types.BoolValue(sparseFromAPI(&apiResp))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

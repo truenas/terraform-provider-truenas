@@ -97,3 +97,68 @@ func CheckEncryptionAlgorithm(ctx context.Context, c *client.Client, req resourc
 	)
 	return diags
 }
+
+// IDFollowsName plans id as the planned name: the Terraform id of a dataset
+// or zvol is its name, which an in-place rename changes. (F8)
+func IDFollowsName() planmodifier.String { return idFollowsName{} }
+
+type idFollowsName struct{}
+
+func (idFollowsName) Description(context.Context) string { return "Plans id as the dataset name." }
+func (m idFollowsName) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (idFollowsName) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+	var name types.String
+	if d := req.Plan.GetAttribute(ctx, path.Root("name"), &name); d.HasError() || name.IsNull() {
+		return
+	}
+	if name.IsUnknown() {
+		resp.PlanValue = types.StringUnknown()
+		return
+	}
+	resp.PlanValue = name
+}
+
+// MountpointFollowsName keeps the known mountpoint on an update that does not
+// rename the dataset (so consumers that use it as a RequiresReplace path are
+// not replaced, #27) and, on a rename, plans the new mountpoint: /mnt/<new
+// name> when the old one was /mnt/<old name>, otherwise unknown. (F8)
+func MountpointFollowsName() planmodifier.String { return mountpointFollowsName{} }
+
+type mountpointFollowsName struct{}
+
+func (mountpointFollowsName) Description(context.Context) string {
+	return "Keeps the mountpoint unless the dataset is renamed, then plans /mnt/<new name>."
+}
+
+func (m mountpointFollowsName) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (mountpointFollowsName) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() || !req.PlanValue.IsUnknown() {
+		return
+	}
+	if req.StateValue.IsNull() || req.StateValue.IsUnknown() {
+		return
+	}
+	var prior, planned types.String
+	if d := req.State.GetAttribute(ctx, path.Root("name"), &prior); d.HasError() || prior.IsNull() {
+		return
+	}
+	if d := req.Plan.GetAttribute(ctx, path.Root("name"), &planned); d.HasError() || planned.IsNull() || planned.IsUnknown() {
+		return
+	}
+	if prior.ValueString() == planned.ValueString() {
+		resp.PlanValue = req.StateValue
+		return
+	}
+	if req.StateValue.ValueString() == "/mnt/"+prior.ValueString() {
+		resp.PlanValue = types.StringValue("/mnt/" + planned.ValueString())
+	}
+}

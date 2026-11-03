@@ -29,8 +29,10 @@ var defaultOnComputedJustified = map[string]string{
 	"truenas_system_advanced.syslogservers.transport": "default inside a user-authored list element",
 	// provider-only flags: the server has no such value, so nothing can be
 	// rewritten; the only effect is a one-shot no-op diff after import (F6).
-	"truenas_dataset.force_destroy": "provider-only flag, never read from the server",
-	"truenas_zvol.force_destroy":    "provider-only flag, never read from the server",
+	"truenas_dataset.force_destroy":   "provider-only flag, never read from the server",
+	"truenas_zvol.force_destroy":      "provider-only flag, never read from the server",
+	"truenas_pool.force_destroy":      "provider-only flag, never read from the server",
+	"truenas_snapshot.allow_recreate": "provider-only flag, never read from the server",
 	// create-time directives the API does not return; Update never sends them.
 	"truenas_certificate.add_to_trusted_store": "create-time directive, not read back, never sent on update",
 	"truenas_certificate.store_privatekey":     "create-time directive, not read back, never sent on update",

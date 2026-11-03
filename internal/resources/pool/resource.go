@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/dataset"
 )
 
 var _ resource.Resource = &PoolResource{}
@@ -268,6 +269,9 @@ func (r *PoolResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		return
 	}
 	r.applyRootProps(ctx, state.Name.ValueString(), &state, &resp.Diagnostics)
+	// force_destroy is provider-only: pre-1.6.2 state and imports have it null,
+	// which reads as false (an import never grants it).
+	state.ForceDestroy = dataset.ForceDestroyOrFalse(state.ForceDestroy)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueInt64())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -318,6 +322,20 @@ func (r *PoolResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	// Data-safety guard (see destroy_guard.go): without force_destroy the
+	// destroy is refused while anything lives on the pool.
+	if !state.ForceDestroy.ValueBool() {
+		contents, err := poolContents(ctx, r.client, state.Name.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Destroy pool refused", fmt.Sprintf("could not verify that pool %q is empty: %s", state.Name.ValueString(), err))
+			return
+		}
+		if len(contents) > 0 {
+			resp.Diagnostics.AddError("Destroy pool refused", refusalMessage(state.Name.ValueString(), contents))
+			return
+		}
 	}
 
 	// TrueNAS has no pool.delete; a pool is destroyed via pool.export with
@@ -377,6 +395,9 @@ func (r *PoolResource) ImportState(ctx context.Context, req resource.ImportState
 		return
 	}
 	r.applyRootProps(ctx, state.Name.ValueString(), &state, &resp.Diagnostics)
+	// force_destroy is provider-only: pre-1.6.2 state and imports have it null,
+	// which reads as false (an import never grants it).
+	state.ForceDestroy = dataset.ForceDestroyOrFalse(state.ForceDestroy)
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueInt64())...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

@@ -6,6 +6,62 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-03
+
+### Changed
+- **`truenas_dataset` and `truenas_zvol` rename in place.** Changing `name`
+  no longer plans a replacement (hunt finding F8: the destroy half took the
+  data with it). It is applied with `pool.dataset.rename`: data, child
+  datasets and snapshots move with the dataset and its ZFS guid is unchanged.
+  The resource identity is now that guid (new Computed `guid` attribute,
+  identity schema v1 with an upgrader from the v0 name identity; state from
+  1.6.1 and earlier gets the guid on the first refresh without planning a
+  change). `id` stays the name and import still takes the name; the guid and
+  `import { identity = { guid = ... } }` are accepted too. A dataset renamed
+  outside Terraform is found again by guid (the plan renames it back).
+  **Read the warning before renaming anything in production:**
+  - TrueNAS performs **no safety checks** on a rename (the API says so).
+    SMB and NFS shares, iSCSI extents, NVMe-oF namespaces, periodic snapshot,
+    replication, rsync and cloud sync tasks and VM disks that point at the old
+    path or name are **not updated** by TrueNAS and are broken until
+    re-pointed. A zvol under a live iSCSI extent or NVMe-oF namespace goes
+    offline for its initiators.
+  - The provider therefore queries those services first and **refuses the
+    rename** while any of them references the dataset, zvol or a descendant,
+    listing them. `allow_rename_in_use = true` (new attribute on both
+    resources) skips the refusal.
+  - Other Terraform resources that reference the dataset's `name` or
+    `mountpoint` plan their own update or replacement in the same apply
+    (`mountpoint` is planned as the new `/mnt/<name>`), so there is a window
+    between the rename and their update with a broken path. A
+    `truenas_snapshot` that references the dataset plans a replacement, which
+    is a new snapshot, not the old point in time.
+  - A rename cannot change the pool or move the dataset into itself; both
+    fail at plan time.
+  The 1.6.1 destroy guard is unchanged: destroying a non-empty dataset or a
+  zvol that holds data still needs `force_destroy = true`.
+- `truenas_dataset` / `truenas_zvol` data sources and list resources (`terraform
+  query`) expose `guid`.
+- **`truenas_pool` no longer destroys a pool that holds data.** `terraform
+  destroy` (or removing the resource from the configuration) ran `pool.export`
+  with `destroy = true` unconditionally, erasing every dataset, zvol, snapshot
+  and file on the pool. It is now refused while the pool holds anything, and
+  the error lists what it found; `force_destroy = true` on the pool restores
+  the old behaviour deliberately. An empty, freshly created pool still
+  destroys without the flag.
+- **`truenas_snapshot` refuses a destroy-and-recreate at plan time.** A change
+  to `dataset`, `name` or `recursive` replaces the snapshot, which destroys the
+  point-in-time copy and takes a new one of the data as it is now. The plan now
+  fails with an explanation unless `allow_recreate = true`. (TrueNAS can rename
+  a snapshot in place on 25.10 and 28.0 but not on 26.0, so an automatic rename
+  is not offered yet.)
+
+### Added
+- A **Data Safety** guide listing every way the provider can destroy data, the
+  guard in front of each, and the opt-in that removes it; and a unit test that
+  fails the build when a destructive API call appears outside a guarded,
+  listed call site.
+
 ## [1.6.2] - 2026-10-31
 
 ### Fixed

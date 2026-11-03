@@ -36,18 +36,23 @@ func resourceSchema() schema.Schema {
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:    true,
-				Description: "Zvol name (used as Terraform ID).",
+				Description: "Zvol name (used as Terraform ID). Changes with name on a rename; the resource identity is guid.",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					dataset.IDFollowsName(),
 				},
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
-				Description: "Full zvol path, e.g. tank/myvol.",
+				Description: dataset.NameDescription("zvol", "tank/myvol"),
+			},
+			"guid": schema.StringAttribute{
+				Computed:    true,
+				Description: "ZFS guid of the zvol. Stable across renames; it is the resource identity (import { identity = { guid = ... } }) and also accepted as the import id.",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"allow_rename_in_use": dataset.AllowRenameInUseAttribute("zvol"),
 			"volsize": schema.Int64Attribute{
 				Required:    true,
 				Description: "Volume size in bytes.",
@@ -121,8 +126,8 @@ func resourceSchema() schema.Schema {
 			},
 			"pool": schema.StringAttribute{
 				Computed: true,
-				// Derived from name (RequiresReplace), so it never changes on an
-				// in-place update; keep the known value instead of planning "known
+				// Derived from name; a rename cannot change the pool (ModifyPlan
+				// rejects it), so keep the known value instead of planning "known
 				// after apply" (parity with truenas_dataset, #27).
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),

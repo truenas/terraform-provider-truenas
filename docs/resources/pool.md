@@ -73,6 +73,7 @@ resource "truenas_dataset" "data" {
 - `autotrim` (Boolean)
 - `checksum` (String) Checksum algorithm on the pool's root dataset: ON, OFF, FLETCHER2, FLETCHER4, SHA256, SHA512, SKEIN, EDONR, or BLAKE3. Reads back null when inherited/default.
 - `deduplication` (String) Deduplication on the pool's root dataset (inherited by children): ON, VERIFY, or OFF. Reads back null when inherited/default.
+- `force_destroy` (Boolean) When true, `terraform destroy` (or removing this resource from the configuration) destroys the pool and everything on it (`pool.export` with destroy). Default false: the destroy is refused while the pool holds any dataset, zvol, snapshot or file, and the error lists what it found. Changing it updates state only; set it and apply before the destroy that needs it. Import sets it to false.
 
 ### Read-Only
 

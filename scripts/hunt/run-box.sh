@@ -46,7 +46,9 @@ grep -c -- '--- PASS' "$LOG" | sed 's/^/passed=/'
 # ends") are marked; anything else is an unbuilt fixture or a stale gate and
 # fails the run. Version gates ("below TrueNAS", "from TrueNAS 28.0", "needs
 # TrueNAS < 26.0") are dead ends on the box they skip on.
-ACCEPTED='failover|vmware|enclosure|tn_connect|TrueNASConnect|Enterprise|ds_auth|container|not available on this release|requires TrueNAS|accepted from TrueNAS|below TrueNAS|needs TrueNAS <|from TrueNAS [0-9]'
+ACCEPTED='failover|vmware|enclosure|tn_connect|TrueNASConnect|Enterprise|ds_auth|container|not available on this release|requires TrueNAS|accepted from TrueNAS|below TrueNAS|needs TrueNAS <|needs TrueNAS [0-9]|from TrueNAS [0-9]'
+# pool-create tests need blank disks (TRUENAS_TEST_DISKS); a box whose env file sets none cannot run them
+[ -z "${TRUENAS_TEST_DISKS:-}" ] && ACCEPTED="$ACCEPTED|TRUENAS_TEST_DISKS"
 skip_lines() {
   grep -B1 -- '--- SKIP' "$LOG" | grep -v -- '^--$' | paste - - \
     | sed -E 's/^\s+[a-z_0-9]+\.go:[0-9]+: (.*)\t--- SKIP: (\S+).*/  \2: \1/'

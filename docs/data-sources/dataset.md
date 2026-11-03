@@ -36,6 +36,7 @@ Fetches a TrueNAS dataset by name.
 - `encryption_key` (String, Sensitive)
 - `encryption_passphrase` (String, Sensitive)
 - `exec` (String)
+- `guid` (String) ZFS guid of the dataset (stable across renames).
 - `id` (String) The ID of this resource.
 - `inherit_encryption` (Boolean)
 - `key_format` (String)

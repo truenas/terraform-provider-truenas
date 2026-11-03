@@ -14,6 +14,8 @@ import (
 // DatasetModel maps to the TrueNAS pool.dataset API fields.
 type DatasetModel struct {
 	ID types.String `tfsdk:"id"`
+	// Guid is the ZFS guid: the resource identity, unchanged by a rename (F8).
+	Guid types.String `tfsdk:"guid"`
 
 	// Required
 	Name types.String `tfsdk:"name"`
@@ -75,7 +77,8 @@ type DatasetModel struct {
 // only the resource has.
 type datasetResourceModel struct {
 	DatasetModel
-	ForceDestroy types.Bool `tfsdk:"force_destroy"`
+	ForceDestroy     types.Bool `tfsdk:"force_destroy"`
+	AllowRenameInUse types.Bool `tfsdk:"allow_rename_in_use"`
 }
 
 // apiPayload converts the model to the create/update JSON payload.

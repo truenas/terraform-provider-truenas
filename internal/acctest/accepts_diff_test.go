@@ -282,7 +282,12 @@ func attrHasRequiresReplace(schemaSrc, attr string) bool {
 }
 
 func hasReplaceToken(s string) bool {
-	return strings.Contains(s, "RequiresReplace") || strings.Contains(s, "replaceIf")
+	// planmod.ReplaceFromKnown* (certificate create-only inputs, container.image)
+	// is a conditional replace too: a known prior value that changes replaces,
+	// and Update never resends the attribute. Pre-2026-11-02 the audit missed it
+	// and reported 9 false positives on 28.0.
+	return strings.Contains(s, "RequiresReplace") || strings.Contains(s, "replaceIf") ||
+		strings.Contains(s, "ReplaceFromKnown")
 }
 
 // fieldStrippedInUpdate reports whether the package explicitly removes the API

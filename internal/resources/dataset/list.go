@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/list"
 	listschema "github.com/hashicorp/terraform-plugin-framework/list/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
 	"github.com/truenas/terraform-provider-truenas/internal/listing"
 )
@@ -48,10 +50,24 @@ func (l *DatasetListResource) Configure(_ context.Context, req resource.Configur
 }
 
 func (l *DatasetListResource) List(ctx context.Context, req list.ListRequest, stream *list.ListResultsStream) {
-	listing.StreamCollectionFiltered(ctx, l.client, "pool.dataset.query", [][]any{{"type", "=", "FILESYSTEM"}}, req, stream, l.mapRow)
+	filter := [][]any{{"type", "=", "FILESYSTEM"}}
+	// The identity is the ZFS guid, which the default row set does not carry
+	// (extra.properties replaces that set), so the guids come from a second
+	// query joined on name.
+	guids, err := GuidsByName(ctx, l.client, filter)
+	if err != nil {
+		var diags diag.Diagnostics
+		diags.AddError("List query failed", fmt.Sprintf("pool.dataset.query guid: %v", err))
+		stream.Results = list.ListResultsStreamDiagnostics(diags)
+		return
+	}
+	listing.StreamCollectionFiltered(ctx, l.client, "pool.dataset.query", filter, req, stream,
+		func(ctx context.Context, req list.ListRequest, raw json.RawMessage) list.ListResult {
+			return l.mapRow(ctx, req, raw, guids)
+		})
 }
 
-func (l *DatasetListResource) mapRow(ctx context.Context, req list.ListRequest, raw json.RawMessage) list.ListResult {
+func (l *DatasetListResource) mapRow(ctx context.Context, req list.ListRequest, raw json.RawMessage, guids map[string]string) list.ListResult {
 	res := req.NewListResult(ctx)
 	var api apiResponse
 	if err := json.Unmarshal(raw, &api); err != nil {
@@ -59,11 +75,12 @@ func (l *DatasetListResource) mapRow(ctx context.Context, req list.ListRequest, 
 		return res
 	}
 	res.DisplayName = api.Name
-	res.Diagnostics.Append(listing.SetIdentity(ctx, res.Identity, api.Name)...)
+	res.Diagnostics.Append(SetGuidIdentity(ctx, res.Identity, guids[api.Name])...)
 	if req.IncludeResource {
 		var m datasetResourceModel
 		var dr DatasetResource
 		res.Diagnostics.Append(dr.responseToModel(&api, &m.DatasetModel)...)
+		m.Guid = types.StringValue(guids[api.Name])
 		m.ForceDestroy = ForceDestroyOrFalse(m.ForceDestroy)
 		res.Diagnostics.Append(res.Resource.Set(ctx, &m)...)
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
@@ -113,6 +114,16 @@ func resourceSchema() schema.Schema {
 			// sdX to its serial, or "DISK" vs "STRIPE") would still show a
 			// spurious in-place update of every computed field (issue #9). On a
 			// genuine replace they are recomputed regardless.
+			"force_destroy": schema.BoolAttribute{
+				Optional: true,
+				Computed: true,
+				Default:  booldefault.StaticBool(false),
+				Description: "When true, `terraform destroy` (or removing this resource from the configuration) " +
+					"destroys the pool and everything on it (`pool.export` with destroy). Default false: the " +
+					"destroy is refused while the pool holds any dataset, zvol, snapshot or file, and the error " +
+					"lists what it found. Changing it updates state only; set it and apply before the destroy " +
+					"that needs it. Import sets it to false.",
+			},
 			"guid":      schema.StringAttribute{Computed: true, PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
 			"status":    schema.StringAttribute{Computed: true, PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
 			"healthy":   schema.BoolAttribute{Computed: true, PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()}},

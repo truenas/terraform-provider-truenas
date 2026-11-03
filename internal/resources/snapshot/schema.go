@@ -5,6 +5,7 @@ package snapshot
 
 import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/truenas/terraform-provider-truenas/internal/planmod"
@@ -43,6 +44,15 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.Bool{
 					planmod.ReplaceFromKnownBool(),
 				},
+			},
+			"allow_recreate": schema.BoolAttribute{
+				Optional: true,
+				Computed: true,
+				Default:  booldefault.StaticBool(false),
+				Description: "A snapshot is a point in time: replacing it (a change to `dataset`, `name` or " +
+					"`recursive`) destroys that copy and takes a new one of the data as it is now. Default false: " +
+					"such a change is refused at plan time. Set true to allow the destroy and recreate. Changing " +
+					"it updates state only.",
 			},
 			"pool": schema.StringAttribute{
 				Computed:    true,

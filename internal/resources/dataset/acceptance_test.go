@@ -141,10 +141,10 @@ func TestAccDataset_identityAfterUpdate(t *testing.T) {
 				Config: acctest.ProviderConfig() + testAccDatasetConfig(name, "lz4", "identity initial"),
 			},
 			{
-				// In-place update; assert the identity's id matches state id.
+				// In-place update; assert the identity's guid matches state guid.
 				Config: acctest.ProviderConfig() + testAccDatasetConfig(name, "lz4", "identity updated"),
 				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectIdentityValueMatchesState("truenas_dataset.test", tfjsonpath.New("id")),
+					statecheck.ExpectIdentityValueMatchesState("truenas_dataset.test", tfjsonpath.New("guid")),
 				},
 			},
 		},

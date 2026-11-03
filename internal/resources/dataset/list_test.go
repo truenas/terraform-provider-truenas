@@ -24,7 +24,11 @@ func TestDatasetIdentitySchema(t *testing.T) {
 	r := &DatasetResource{}
 	resp := &resource.IdentitySchemaResponse{}
 	r.IdentitySchema(context.Background(), resource.IdentitySchemaRequest{}, resp)
-	if _, ok := resp.IdentitySchema.Attributes["id"]; !ok {
-		t.Error("identity schema missing 'id' attribute")
+	// The identity is the ZFS guid (F8: a rename keeps it), schema v1.
+	if _, ok := resp.IdentitySchema.Attributes["guid"]; !ok {
+		t.Error("identity schema missing 'guid' attribute")
+	}
+	if resp.IdentitySchema.Version != IdentityVersion || IdentityVersion != 1 {
+		t.Errorf("identity schema version = %d, want 1", resp.IdentitySchema.Version)
 	}
 }

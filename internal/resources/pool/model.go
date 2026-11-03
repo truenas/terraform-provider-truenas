@@ -62,6 +62,9 @@ type PoolModel struct {
 	Name     types.String  `tfsdk:"name"`
 	Topology TopologyModel `tfsdk:"topology"`
 	AutoTrim types.Bool    `tfsdk:"autotrim"`
+	// ForceDestroy is provider-only: it gates Delete (see destroy_guard.go)
+	// and is never read from the server.
+	ForceDestroy types.Bool `tfsdk:"force_destroy"`
 	// Root-dataset properties set at pool.create; read back from the pool's
 	// root dataset (pool.query returns null for them). See readRootProps.
 	Deduplication types.String `tfsdk:"deduplication"`

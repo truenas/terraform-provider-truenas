@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
-	"github.com/truenas/terraform-provider-truenas/internal/listing"
 	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
@@ -23,11 +22,20 @@ var _ resource.ResourceWithImportState = &DatasetResource{}
 var _ resource.ResourceWithIdentity = &DatasetResource{}
 var _ resource.ResourceWithValidateConfig = &DatasetResource{}
 var _ resource.ResourceWithModifyPlan = &DatasetResource{}
+var _ resource.ResourceWithUpgradeIdentity = &DatasetResource{}
 
 // ModifyPlan rejects at plan time what the connected release cannot create
-// (see CheckEncryptionAlgorithm).
+// (see CheckEncryptionAlgorithm) and a rename that ZFS cannot perform (to
+// another pool, into itself; see CheckRenamePlan).
 func (r *DatasetResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	resp.Diagnostics.Append(CheckEncryptionAlgorithm(ctx, r.client, req)...)
+	_, _, _, diags := CheckRenamePlan(ctx, req, "dataset")
+	resp.Diagnostics.Append(diags...)
+}
+
+// UpgradeIdentity upgrades identity v0 {id = name} (<= 1.6.1) to v1 {guid}.
+func (r *DatasetResource) UpgradeIdentity(context.Context) map[int64]resource.IdentityUpgrader {
+	return IdentityUpgraders(func() *client.Client { return r.client })
 }
 
 // ValidateConfig rejects configurations that set `encryption` together with
@@ -70,7 +78,7 @@ func (r *DatasetResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 }
 
 func (r *DatasetResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
-	resp.IdentitySchema = listing.StringIDIdentitySchema()
+	resp.IdentitySchema = IdentitySchema()
 }
 
 func (r *DatasetResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -161,7 +169,13 @@ func (r *DatasetResource) Create(ctx context.Context, req resource.CreateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueString())...)
+	guid, err := LookupGuid(ctx, r.client, apiResp.Name)
+	if err != nil {
+		resp.Diagnostics.AddError("Read dataset guid after create failed", err.Error())
+		return
+	}
+	plan.Guid = types.StringValue(guid)
+	resp.Diagnostics.Append(SetGuidIdentity(ctx, resp.Identity, guid)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -172,7 +186,20 @@ func (r *DatasetResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	raw, err := r.client.CallRead(ctx, "pool.dataset.get_instance", state.Name.ValueString())
+	// The guid is the identity: a dataset renamed outside Terraform is found
+	// under its new name (the plan then renames it back). State written by
+	// <= 1.6.1 has no guid; it is read by name and the guid backfilled, which
+	// plans no change.
+	name, guid, found, err := ResolveByGuid(ctx, r.client, state.Guid, state.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read dataset failed", err.Error())
+		return
+	}
+	if !found {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+	raw, err := r.client.CallRead(ctx, "pool.dataset.get_instance", name)
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -192,10 +219,11 @@ func (r *DatasetResource) Read(ctx context.Context, req resource.ReadRequest, re
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	state.Guid = types.StringValue(guid)
 	// State written before force_destroy existed has it null; read it as the
 	// default so the upgrade plans no change.
 	state.ForceDestroy = ForceDestroyOrFalse(state.ForceDestroy)
-	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueString())...)
+	resp.Diagnostics.Append(SetGuidIdentity(ctx, resp.Identity, guid)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -205,6 +233,17 @@ func (r *DatasetResource) Update(ctx context.Context, req resource.UpdateRequest
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	// A name change is an in-place rename (F8), done before the property
+	// update so the latter addresses the new name.
+	if plan.Name.ValueString() != state.Name.ValueString() {
+		_, diags := PerformRename(ctx, r.client, "dataset", state.Guid.ValueString(), state.Name.ValueString(),
+			plan.Name.ValueString(), state.MountPoint.ValueString(), plan.AllowRenameInUse.ValueBool())
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 
 	// Only what changed against prior state is sent (StripUnchanged), so an
@@ -239,7 +278,15 @@ func (r *DatasetResource) Update(ctx context.Context, req resource.UpdateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueString())...)
+	// The guid must not change on an update, a rename included; reading it
+	// back proves the renamed dataset is the same ZFS object.
+	guid, err := LookupGuid(ctx, r.client, apiResp.Name)
+	if err != nil {
+		resp.Diagnostics.AddError("Read dataset guid after update failed", err.Error())
+		return
+	}
+	plan.Guid = types.StringValue(guid)
+	resp.Diagnostics.Append(SetGuidIdentity(ctx, resp.Identity, guid)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -279,18 +326,20 @@ func (r *DatasetResource) Delete(ctx context.Context, req resource.DeleteRequest
 }
 
 func (r *DatasetResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Import by dataset name (e.g. "terraform import truenas_dataset.example tank/mydata")
-	id, idDiags := listing.ImportString(ctx, req)
+	// Import by dataset name ("terraform import truenas_dataset.example
+	// tank/mydata"), by ZFS guid, or by identity { guid = ... }.
+	name, guid, idDiags := ResolveImportID(ctx, r.client, req)
 	resp.Diagnostics.Append(idDiags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	var state datasetResourceModel
-	state.Name = types.StringValue(id)
-	state.ID = types.StringValue(id)
+	state.Name = types.StringValue(name)
+	state.ID = types.StringValue(name)
+	state.Guid = types.StringValue(guid)
 
-	raw, err := r.client.CallRead(ctx, "pool.dataset.get_instance", id)
+	raw, err := r.client.CallRead(ctx, "pool.dataset.get_instance", name)
 	if err != nil {
 		resp.Diagnostics.AddError("Import dataset failed", err.Error())
 		return
@@ -307,7 +356,7 @@ func (r *DatasetResource) ImportState(ctx context.Context, req resource.ImportSt
 		return
 	}
 	state.ForceDestroy = types.BoolValue(false)
-	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, state.ID.ValueString())...)
+	resp.Diagnostics.Append(SetGuidIdentity(ctx, resp.Identity, guid)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
