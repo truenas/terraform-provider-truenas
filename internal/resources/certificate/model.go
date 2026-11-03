@@ -37,39 +37,45 @@ import (
 // subset of computed metadata is (certificate_path, privatekey_path,
 // csr_path, root_path, cert_type, fingerprint, expired).
 type CertificateModel struct {
-	ID                 types.Int64     `tfsdk:"id"`
-	Name               types.String    `tfsdk:"name"`
-	CreateType         types.String    `tfsdk:"create_type"`
-	AddToTrustedStore  types.Bool      `tfsdk:"add_to_trusted_store"`
-	RenewDays          types.Int64     `tfsdk:"renew_days"`
-	Certificate        types.String    `tfsdk:"certificate"`
-	Privatekey         types.String    `tfsdk:"privatekey"`
-	StorePrivatekey    types.Bool      `tfsdk:"store_privatekey"`
-	CSR                types.String    `tfsdk:"csr"`
-	KeyType            types.String    `tfsdk:"key_type"`
-	KeyLength          types.Int64     `tfsdk:"key_length"`
-	ECCurve            types.String    `tfsdk:"ec_curve"`
-	Passphrase         types.String    `tfsdk:"passphrase"`
-	City               types.String    `tfsdk:"city"`
-	Common             types.String    `tfsdk:"common"`
-	Country            types.String    `tfsdk:"country"`
-	Email              normalize.Email `tfsdk:"email"`
-	Organization       types.String    `tfsdk:"organization"`
-	OrganizationalUnit types.String    `tfsdk:"organizational_unit"`
-	State              types.String    `tfsdk:"state"`
-	DigestAlgorithm    types.String    `tfsdk:"digest_algorithm"`
-	San                types.List      `tfsdk:"san"`
-	AcmeDirectoryURI   types.String    `tfsdk:"acme_directory_uri"`
-	CsrID              types.Int64     `tfsdk:"csr_id"`
-	Tos                types.Bool      `tfsdk:"tos"`
-	DNSMapping         types.Map       `tfsdk:"dns_mapping"`
-	CertificatePath    types.String    `tfsdk:"certificate_path"`
-	PrivatekeyPath     types.String    `tfsdk:"privatekey_path"`
-	CsrPath            types.String    `tfsdk:"csr_path"`
-	RootPath           types.String    `tfsdk:"root_path"`
-	CertType           types.String    `tfsdk:"cert_type"`
-	Fingerprint        types.String    `tfsdk:"fingerprint"`
-	Expired            types.Bool      `tfsdk:"expired"`
+	ID                types.Int64  `tfsdk:"id"`
+	Name              types.String `tfsdk:"name"`
+	CreateType        types.String `tfsdk:"create_type"`
+	AddToTrustedStore types.Bool   `tfsdk:"add_to_trusted_store"`
+	RenewDays         types.Int64  `tfsdk:"renew_days"`
+	Certificate       types.String `tfsdk:"certificate"`
+	Privatekey        types.String `tfsdk:"privatekey"`
+	// Write-only alternatives (#65): read from req.Config in Create only, never
+	// stored. CertificateWOVersion is the stored trigger for the pair; non-null
+	// means the configuration manages the certificate and key write-only.
+	CertificateWO        types.String    `tfsdk:"certificate_wo"`
+	PrivatekeyWO         types.String    `tfsdk:"privatekey_wo"`
+	CertificateWOVersion types.Int64     `tfsdk:"certificate_wo_version"`
+	StorePrivatekey      types.Bool      `tfsdk:"store_privatekey"`
+	CSR                  types.String    `tfsdk:"csr"`
+	KeyType              types.String    `tfsdk:"key_type"`
+	KeyLength            types.Int64     `tfsdk:"key_length"`
+	ECCurve              types.String    `tfsdk:"ec_curve"`
+	Passphrase           types.String    `tfsdk:"passphrase"`
+	City                 types.String    `tfsdk:"city"`
+	Common               types.String    `tfsdk:"common"`
+	Country              types.String    `tfsdk:"country"`
+	Email                normalize.Email `tfsdk:"email"`
+	Organization         types.String    `tfsdk:"organization"`
+	OrganizationalUnit   types.String    `tfsdk:"organizational_unit"`
+	State                types.String    `tfsdk:"state"`
+	DigestAlgorithm      types.String    `tfsdk:"digest_algorithm"`
+	San                  types.List      `tfsdk:"san"`
+	AcmeDirectoryURI     types.String    `tfsdk:"acme_directory_uri"`
+	CsrID                types.Int64     `tfsdk:"csr_id"`
+	Tos                  types.Bool      `tfsdk:"tos"`
+	DNSMapping           types.Map       `tfsdk:"dns_mapping"`
+	CertificatePath      types.String    `tfsdk:"certificate_path"`
+	PrivatekeyPath       types.String    `tfsdk:"privatekey_path"`
+	CsrPath              types.String    `tfsdk:"csr_path"`
+	RootPath             types.String    `tfsdk:"root_path"`
+	CertType             types.String    `tfsdk:"cert_type"`
+	Fingerprint          types.String    `tfsdk:"fingerprint"`
+	Expired              types.Bool      `tfsdk:"expired"`
 }
 
 // CertificateDataSourceModel is the read-only lookup model for the
@@ -182,9 +188,13 @@ func (m *CertificateModel) createPayload(ctx context.Context) (map[string]any, d
 	}
 	if !m.Certificate.IsNull() && !m.Certificate.IsUnknown() {
 		p["certificate"] = m.Certificate.ValueString()
+	} else if !m.CertificateWO.IsNull() && !m.CertificateWO.IsUnknown() {
+		p["certificate"] = m.CertificateWO.ValueString()
 	}
 	if !m.Privatekey.IsNull() && !m.Privatekey.IsUnknown() {
 		p["privatekey"] = m.Privatekey.ValueString()
+	} else if !m.PrivatekeyWO.IsNull() && !m.PrivatekeyWO.IsUnknown() {
+		p["privatekey"] = m.PrivatekeyWO.ValueString()
 	}
 	if !m.CSR.IsNull() && !m.CSR.IsUnknown() {
 		p["CSR"] = m.CSR.ValueString()
@@ -325,7 +335,8 @@ func responseToModel(ctx context.Context, api *certificateAPI, m *CertificateMod
 	// trailing newline added), so when the prior plan/state key is the same key
 	// as the server's, that prior text is kept (B-013; see samePrivateKey).
 	storeKey := storesPrivatekey(m.StorePrivatekey)
-	if m.CreateType.ValueString() == CreateTypeACME || !storeKey {
+	writeOnlyKey := !m.CertificateWOVersion.IsNull() && !m.CertificateWOVersion.IsUnknown() // privatekey_wo in use (#65)
+	if m.CreateType.ValueString() == CreateTypeACME || !storeKey || writeOnlyKey {
 		m.Privatekey = types.StringNull()
 	} else if api.Privatekey == nil || m.Privatekey.IsNull() || m.Privatekey.IsUnknown() ||
 		!samePrivateKey(m.Privatekey.ValueString(), *api.Privatekey, boundPEM(api)) {
@@ -537,18 +548,18 @@ func (m *CertificateModel) preflight() diag.Diagnostics {
 
 	switch m.CreateType.ValueString() {
 	case CreateTypeImported:
-		if !isSet(m.Certificate) {
-			diags.AddError("Missing required field for create_type "+CreateTypeImported, "\"certificate\" is required.")
+		if !isSet(m.Certificate) && !isSet(m.CertificateWO) {
+			diags.AddError("Missing required field for create_type "+CreateTypeImported, "\"certificate\" (or \"certificate_wo\") is required.")
 		}
-		if !isSet(m.Privatekey) {
-			diags.AddError("Missing required field for create_type "+CreateTypeImported, "\"privatekey\" is required.")
+		if !isSet(m.Privatekey) && !isSet(m.PrivatekeyWO) {
+			diags.AddError("Missing required field for create_type "+CreateTypeImported, "\"privatekey\" (or \"privatekey_wo\") is required.")
 		}
 	case CreateTypeImportedCSR:
 		if !isSet(m.CSR) {
 			diags.AddError("Missing required field for create_type "+CreateTypeImportedCSR, "\"csr\" is required.")
 		}
-		if !isSet(m.Privatekey) {
-			diags.AddError("Missing required field for create_type "+CreateTypeImportedCSR, "\"privatekey\" is required.")
+		if !isSet(m.Privatekey) && !isSet(m.PrivatekeyWO) {
+			diags.AddError("Missing required field for create_type "+CreateTypeImportedCSR, "\"privatekey\" (or \"privatekey_wo\") is required.")
 		}
 	case CreateTypeCSR:
 		if m.San.IsNull() || m.San.IsUnknown() || len(m.San.Elements()) == 0 {

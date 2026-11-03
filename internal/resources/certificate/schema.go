@@ -6,6 +6,7 @@ package certificate
 import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -97,6 +98,52 @@ func resourceSchema() schema.Schema {
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"certificate_wo": schema.StringAttribute{
+				Optional:  true,
+				Sensitive: true,
+				WriteOnly: true,
+				Description: "Write-only alternative to `certificate` for create_type CERTIFICATE_CREATE_IMPORTED: the " +
+					"PEM-encoded certificate to import, typically from an ephemeral resource. Never stored in state " +
+					"or in saved plans and not read back (the public PEM TrueNAS holds is still read into " +
+					"`certificate`, so expiry and fingerprint stay visible). Requires `certificate_wo_version`; " +
+					"exactly one of `certificate` or `certificate_wo`. Requires Terraform >= 1.11.",
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.MatchRoot("certificate")),
+					stringvalidator.AlsoRequires(path.MatchRoot("certificate_wo_version")),
+				},
+			},
+			"privatekey_wo": schema.StringAttribute{
+				Optional:  true,
+				Sensitive: true,
+				WriteOnly: true,
+				Description: "Write-only alternative to `privatekey` for create_type CERTIFICATE_CREATE_IMPORTED and " +
+					"CERTIFICATE_CREATE_IMPORTED_CSR: the PEM-encoded private key, typically from an ephemeral " +
+					"resource. Never stored in state or in saved plans, and the key TrueNAS holds is not read back " +
+					"(`privatekey` stays null). Requires `certificate_wo_version`; exactly one of `privatekey` or " +
+					"`privatekey_wo`. Requires Terraform >= 1.11.",
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.MatchRoot("privatekey")),
+					stringvalidator.AlsoRequires(path.MatchRoot("certificate_wo_version")),
+				},
+			},
+			"certificate_wo_version": schema.Int64Attribute{
+				Optional: true,
+				Description: "Version trigger for `certificate_wo` and `privatekey_wo` (one trigger for the pair, " +
+					"because a certificate and its key change together). Terraform cannot see a write-only value " +
+					"change, so bump this integer when you rotate them. TrueNAS cannot replace the key under an " +
+					"existing certificate (certificate.update accepts only name, renew_days and " +
+					"add_to_trusted_store), so a bump **replaces** the resource: a new certificate with a new id. Add " +
+					"`lifecycle { create_before_destroy = true }` so the new certificate is created and every resource " +
+					"that references its id is re-pointed before the old one is destroyed; TrueNAS requires certificate " +
+					"names to be unique, so with create_before_destroy the `name` must change as well (for example " +
+					"`name = \"web-${var.cert_version}\"`), otherwise the create fails with \"A certificate with this " +
+					"name already exists\". After importing an existing " +
+					"certificate into a configuration that uses the write-only attributes, the first apply records " +
+					"this value in place (nothing is sent).",
+				PlanModifiers: []planmodifier.Int64{
+					planmod.ReplaceFromKnownInt64(),
+				},
+			},
 			"privatekey": schema.StringAttribute{
 				Optional:  true,
 				Computed:  true,
@@ -113,6 +160,7 @@ func resourceSchema() schema.Schema {
 					"as long as it is the same key. Changing the key itself replaces the certificate.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+					nullWhenWriteOnlyKey{},
 					replaceIfPrivatekeyChanged(),
 				},
 			},

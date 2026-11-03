@@ -69,6 +69,17 @@ func (r *CertificateResource) ValidateConfig(ctx context.Context, req resource.V
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	ct := cfg.CreateType.ValueString()
+	if !cfg.CertificateWO.IsNull() && !cfg.CreateType.IsUnknown() && ct != CreateTypeImported {
+		resp.Diagnostics.AddAttributeError(path.Root("certificate_wo"),
+			"certificate_wo is only valid for create_type "+CreateTypeImported,
+			"The certificate to import is the only certificate input the API takes; "+ct+" produces its own.")
+	}
+	if !cfg.PrivatekeyWO.IsNull() && !cfg.CreateType.IsUnknown() && ct != CreateTypeImported && ct != CreateTypeImportedCSR {
+		resp.Diagnostics.AddAttributeError(path.Root("privatekey_wo"),
+			"privatekey_wo is only valid for create_type "+CreateTypeImported+" or "+CreateTypeImportedCSR,
+			"For "+ct+" TrueNAS generates the key; use store_privatekey to keep it out of state.")
+	}
 	if storePrivatekeyFalseRejected(cfg.CreateType.ValueString(), cfg.StorePrivatekey) {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("store_privatekey"),
@@ -92,6 +103,12 @@ func (r *CertificateResource) Create(ctx context.Context, req resource.CreateReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// Write-only inputs (#65) exist only in the configuration: the framework
+	// nulls them in the plan. Carry them for preflight and the create payload,
+	// then drop them again before anything is written to state.
+	plan.CertificateWO = config.CertificateWO
+	plan.PrivatekeyWO = config.PrivatekeyWO
 
 	resp.Diagnostics.Append(plan.preflight()...)
 	resp.Diagnostics.Append(validateRenewDays(plan.CreateType.ValueString(), config.RenewDays)...)
@@ -138,6 +155,10 @@ func (r *CertificateResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	resp.Diagnostics.Append(listing.SetIdentity(ctx, resp.Identity, plan.ID.ValueInt64())...)
+	// Write-only attributes must be null in state; the values were only needed
+	// for the create payload.
+	plan.CertificateWO = types.StringNull()
+	plan.PrivatekeyWO = types.StringNull()
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

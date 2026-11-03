@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -125,9 +126,43 @@ func samePrivateKey(configured, server, bound string) bool {
 // configuration holds PKCS#1/SEC1 or an encrypted key) is an in-place update
 // that only records the configured text; certificate.update never sends the
 // key.
+// nullWhenWriteOnlyKey plans privatekey as null while the configuration manages
+// the key write-only (certificate_wo_version set, #65): the key is never kept in
+// state then, and an imported certificate that still carries the key in state
+// drops it on the first apply instead of failing with an inconsistent result.
+type nullWhenWriteOnlyKey struct{}
+
+func (nullWhenWriteOnlyKey) Description(context.Context) string {
+	return "null while privatekey_wo manages the key (certificate_wo_version is set)"
+}
+func (m nullWhenWriteOnlyKey) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+func (nullWhenWriteOnlyKey) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if writeOnlyKeyConfigured(ctx, req.Config) {
+		resp.PlanValue = types.StringNull()
+	}
+}
+
+func writeOnlyKeyConfigured(ctx context.Context, cfg tfsdk.Config) bool {
+	if cfg.Raw.IsNull() {
+		return false
+	}
+	var ver types.Int64
+	if d := cfg.GetAttribute(ctx, path.Root("certificate_wo_version"), &ver); d.HasError() {
+		return false
+	}
+	return !ver.IsNull()
+}
+
 func replaceIfPrivatekeyChanged() planmodifier.String {
 	return stringplanmodifier.RequiresReplaceIf(
 		func(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+			if writeOnlyKeyConfigured(ctx, req.Config) {
+				// rotation of a write-only key is driven by certificate_wo_version
+				resp.RequiresReplace = false
+				return
+			}
 			if req.StateValue.IsNull() || req.PlanValue.IsUnknown() || req.PlanValue.IsNull() {
 				resp.RequiresReplace = !req.StateValue.Equal(req.PlanValue)
 				return

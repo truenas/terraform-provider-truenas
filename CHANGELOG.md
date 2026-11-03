@@ -6,6 +6,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-11-03
+
+### Added
+- `truenas_certificate`: write-only `certificate_wo` and `privatekey_wo` (#65)
+  for `CERTIFICATE_CREATE_IMPORTED` (`privatekey_wo` also for
+  `CERTIFICATE_CREATE_IMPORTED_CSR`), so both can come from an ephemeral
+  resource and never reach state or saved plans. The public PEM is still read
+  back into `certificate`; `privatekey` stays null. One trigger,
+  `certificate_wo_version`, covers the pair; bumping it **replaces** the
+  certificate (TrueNAS cannot change the key under an existing one), so use
+  `lifecycle { create_before_destroy = true }` to have dependents re-pointed
+  before the old certificate is destroyed, and change `name` with the version
+  (TrueNAS requires unique certificate names). Requires Terraform 1.11.
+
 ## [1.7.0] - 2026-11-03
 
 ### Changed

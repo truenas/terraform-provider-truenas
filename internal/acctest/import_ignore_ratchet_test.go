@@ -16,6 +16,10 @@ var importIgnoreJustified = map[string]string{
 	// --- write-only secrets ---
 	"truenas_api_key.key":                               "secret: the key is returned only once at create, never by query",
 	"truenas_certificate.passphrase":                    "secret: private-key passphrase, write-only",
+	"truenas_certificate.certificate_wo":                "secret: WriteOnly attribute, never persisted to state (#65)",
+	"truenas_certificate.privatekey_wo":                 "secret: WriteOnly attribute, never persisted to state (#65)",
+	"truenas_certificate.privatekey":                    "server: an import cannot tell a privatekey_wo configuration from a privatekey one, so it reads the key back; the first apply records certificate_wo_version and drops it (#65)",
+	"truenas_certificate.certificate_wo_version":        "secret: _wo_version is a config-only trigger, not sent to or returned by the API (#65)",
 	"truenas_cloud_backup.password":                     "secret: write-only repo password",
 	"truenas_cloudsync_credentials.provider_config":     "secret: provider_config carries credentials, not returned verbatim",
 	"truenas_dataset.encryption_key":                    "secret: write-only hex key",

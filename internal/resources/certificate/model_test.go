@@ -613,3 +613,38 @@ func TestImportedCreateType(t *testing.T) {
 		}
 	}
 }
+
+// #65: the write-only alternatives satisfy preflight and feed the create
+// payload under the API's field names; the plain attributes win when both are
+// somehow present (the schema forbids that).
+func TestPreflightAndPayload_WriteOnlyAlternatives(t *testing.T) {
+	m := &CertificateModel{
+		Name:                 types.StringValue("c"),
+		CreateType:           types.StringValue(CreateTypeImported),
+		Certificate:          types.StringNull(),
+		Privatekey:           types.StringNull(),
+		CertificateWO:        types.StringValue("-----BEGIN CERTIFICATE-----\nx\n-----END CERTIFICATE-----\n"),
+		PrivatekeyWO:         types.StringValue("-----BEGIN PRIVATE KEY-----\ny\n-----END PRIVATE KEY-----\n"),
+		CertificateWOVersion: types.Int64Value(1),
+	}
+	if d := m.preflight(); d.HasError() {
+		t.Fatalf("preflight rejected write-only inputs: %v", d)
+	}
+	p, d := m.createPayload(context.Background())
+	if d.HasError() {
+		t.Fatal(d)
+	}
+	if p["certificate"] != m.CertificateWO.ValueString() || p["privatekey"] != m.PrivatekeyWO.ValueString() {
+		t.Errorf("payload did not use the write-only values: %v", p)
+	}
+	for _, k := range []string{"certificate_wo", "privatekey_wo", "certificate_wo_version"} {
+		if _, ok := p[k]; ok {
+			t.Errorf("payload must not carry provider-only key %q", k)
+		}
+	}
+	// without either form, preflight still fails
+	m.CertificateWO = types.StringNull()
+	if d := m.preflight(); !d.HasError() {
+		t.Error("preflight accepted IMPORTED with neither certificate nor certificate_wo")
+	}
+}
