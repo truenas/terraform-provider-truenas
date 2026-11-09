@@ -50,6 +50,8 @@ Working examples for every resource are under [`examples/resources/`](examples/r
   against the provider's list resources (see `examples/list/`), `import { identity = { ... } }` blocks (see
   `examples/import-identity/main.tf`), and Terraform Actions (e.g. `truenas_scrub_run`; see `examples/actions/`). Everything else in
   the provider works on Terraform >= 1.11.
+- OpenTofu >= 1.9 for everything except actions, which OpenTofu does not have; every operation an action offers that
+  belongs in a plan is also a resource or attribute (see the OpenTofu guide in `docs/guides/`).
 - [Go](https://go.dev/doc/install) >= 1.25 (to build from source)
 - TrueNAS 25.04+ (the provider speaks the versioned JSON-RPC 2.0 API
   at `/api/current`, introduced in 25.04; older releases only offer the

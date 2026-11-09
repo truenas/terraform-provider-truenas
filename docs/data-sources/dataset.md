@@ -42,6 +42,7 @@ Fetches a TrueNAS dataset by name.
 - `key_format` (String)
 - `locked` (Boolean)
 - `mountpoint` (String)
+- `origin` (String) Snapshot the dataset was cloned from, null when it is not a clone.
 - `pool` (String)
 - `quota` (Number)
 - `readonly` (String)

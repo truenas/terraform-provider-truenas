@@ -14,7 +14,10 @@ import (
 type ZvolModel struct {
 	ID types.String `tfsdk:"id"`
 	// Guid is the ZFS guid: the resource identity, unchanged by a rename (F8).
-	Guid         types.String `tfsdk:"guid"`
+	Guid types.String `tfsdk:"guid"`
+	// Origin is the snapshot this zvol was cloned from (create-only), null
+	// when it is not a clone; see dataset/clone.go.
+	Origin       types.String `tfsdk:"origin"`
 	Name         types.String `tfsdk:"name"`
 	VolSize      types.Int64  `tfsdk:"volsize"`
 	VolBlockSize types.Int64  `tfsdk:"volblocksize"`
@@ -88,9 +91,13 @@ type zvolAPI struct {
 	} `json:"volblocksize"`
 
 	// Source-aware ZFS tuning properties (coverage audit); see zfsprops.go.
-	ChecksumP  zfsSourced `json:"checksum"`
-	ReadOnlyP  zfsSourced `json:"readonly"`
-	SnapdevP   zfsSourced `json:"snapdev"`
+	ChecksumP zfsSourced `json:"checksum"`
+	ReadOnlyP zfsSourced `json:"readonly"`
+	SnapdevP  zfsSourced `json:"snapdev"`
+	// Origin is the ZFS origin property: "pool/ds@snap" for a clone, "" otherwise.
+	Origin struct {
+		Parsed string `json:"parsed"`
+	} `json:"origin"`
 	CopiesP    zfsSourced `json:"copies"`
 	ReservP    zfsSourced `json:"reservation"`
 	RefReservP zfsSourced `json:"refreservation"`
@@ -136,6 +143,32 @@ type zvolResourceModel struct {
 	ZvolModel
 	ForceDestroy     types.Bool `tfsdk:"force_destroy"`
 	AllowRenameInUse types.Bool `tfsdk:"allow_rename_in_use"`
+}
+
+// anyEncryptionInput reports whether any create-only encryption input is set
+// in the configuration (they cannot be combined with origin).
+func (m *ZvolModel) anyEncryptionInput() bool {
+	for _, v := range []interface{ IsNull() bool }{m.Encryption, m.InheritEncryption, m.EncryptionAlgorithm,
+		m.EncryptionGenerateKey, m.EncryptionPassphrase, m.EncryptionKey} {
+		if !v.IsNull() {
+			return true
+		}
+	}
+	return false
+}
+
+// clonePropertiesPayload is the pool.dataset.update payload applied to a
+// fresh clone: every updatable configured property, plus refreservation =
+// volsize for a thick (sparse = false) zvol, since a clone starts with the
+// origin's volsize and no refreservation whatever the origin had.
+func (m *ZvolModel) clonePropertiesPayload() map[string]any {
+	p := m.updatableFields()
+	if !m.Sparse.IsNull() && !m.Sparse.IsUnknown() && !m.Sparse.ValueBool() {
+		if _, set := p["refreservation"]; !set {
+			p["refreservation"] = m.VolSize.ValueInt64()
+		}
+	}
+	return p
 }
 
 // updatableFields is apiPayload without the keys pool.dataset.update does not
@@ -314,6 +347,7 @@ func responseToModel(api *zvolAPI, m *ZvolModel) {
 	m.Checksum = localStringOrInherit(api.ChecksumP)
 	m.ReadOnly = localStringOrInherit(api.ReadOnlyP)
 	m.Snapdev = localStringOrInherit(api.SnapdevP)
+	m.Origin = dataset.OriginValue(api.Origin.Parsed)
 	m.Copies = localInt(api.CopiesP)
 	m.Reservation = localInt(api.ReservP)
 	m.RefReservation = localInt(api.RefReservP)

@@ -205,3 +205,72 @@ func TestAccVMDevice_attributesSecretsWO(t *testing.T) {
 		},
 	})
 }
+
+// TestAccVMDevice_displayPortsAutoAssigned (usage log #4): a SPICE DISPLAY
+// device with port and web_port left out (or null) is created with ports
+// from vm.port_wizard instead of failing "Spice server port must not be same
+// as web port"; the server's ports are not drift, so the plan stays empty.
+func TestAccVMDevice_displayPortsAutoAssigned(t *testing.T) {
+	vmName := "tfaccvmport" + strings.ReplaceAll(acctest.RandName(""), "-", "")
+	cfg := func(ports string) string {
+		return acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_vm" "test" {
+  name      = %q
+  memory    = 512
+  vcpus     = 1
+  autostart = false
+  running   = false
+}
+
+resource "truenas_vm_device" "test" {
+  vm = truenas_vm.test.id
+  attributes = jsonencode({
+    dtype      = "DISPLAY"
+    type       = "SPICE"
+    bind       = "0.0.0.0"
+    resolution = "1024x768"
+    wait       = false
+    web        = true
+%s  })
+  attributes_secrets_wo         = jsonencode({ password = "tfacc-spice-pw" })
+  attributes_secrets_wo_version = 1
+}
+`, vmName, ports)
+	}
+	portsAssigned := func(s *terraform.State) error {
+		rs := s.RootModule().Resources["truenas_vm_device.test"]
+		raw, err := acctest.Client().Call(context.Background(), "vm.device.get_instance", mustInt(rs.Primary.ID))
+		if err != nil {
+			return err
+		}
+		var dev struct {
+			Attributes map[string]any `json:"attributes"`
+		}
+		if err := json.Unmarshal(raw, &dev); err != nil {
+			return err
+		}
+		port, _ := dev.Attributes["port"].(float64)
+		web, _ := dev.Attributes["web_port"].(float64)
+		if port == 0 || web == 0 || port == web {
+			return fmt.Errorf("ports not auto-assigned: port=%v web_port=%v", dev.Attributes["port"], dev.Attributes["web_port"])
+		}
+		return nil
+	}
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckVMDeviceDestroyed,
+		Steps: []resource.TestStep{
+			{Config: cfg(""), Check: portsAssigned},
+			{Config: cfg(""), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			// Explicit nulls, as the API documents for auto-assignment.
+			{Config: cfg("    port       = null\n    web_port   = null\n"), Check: portsAssigned},
+			{Config: cfg("    port       = null\n    web_port   = null\n"), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+		},
+	})
+}
+
+func mustInt(s string) int64 {
+	n, _ := strconv.ParseInt(s, 10, 64)
+	return n
+}

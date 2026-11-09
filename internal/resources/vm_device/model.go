@@ -4,7 +4,9 @@
 package vm_device
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -153,6 +155,7 @@ func (m *VMDeviceModel) updatePayload() (map[string]any, diag.Diagnostics) {
 	if diags.HasError() {
 		return nil, diags
 	}
+	dropNullDisplayPorts(attrs)
 	p := map[string]any{
 		"attributes": attrs,
 	}
@@ -188,4 +191,68 @@ func responseToDataSourceModel(api *deviceAPI, m *VMDeviceDataSourceModel) diag.
 	}
 	m.Attributes = types.StringValue(string(b))
 	return diags
+}
+
+// portWizard is the slice of the client autoAssignDisplayPorts needs.
+type portWizard interface {
+	CallRead(ctx context.Context, method string, params ...any) (json.RawMessage, error)
+}
+
+// autoAssignDisplayPorts fills a DISPLAY device's port and web_port from
+// vm.port_wizard when the configuration leaves both unset or null. The API
+// documents null as "auto-assign", but vm.device.create validates the device
+// (port must differ from web_port) before it fills the nulls, so two nulls
+// fail with "Spice server port must not be same as web port" (usage log #4,
+// middleware stable/27). The UI avoids it by calling vm.port_wizard itself;
+// so does this. A single explicit port is left alone for the server to pair.
+func autoAssignDisplayPorts(ctx context.Context, c portWizard, attrs map[string]any) error {
+	if dtype, _ := attrs["dtype"].(string); dtype != "DISPLAY" {
+		return nil
+	}
+	if attrs["port"] != nil || attrs["web_port"] != nil {
+		return nil
+	}
+	raw, err := c.CallRead(ctx, "vm.port_wizard")
+	if err != nil {
+		return fmt.Errorf("vm.port_wizard: %w", err)
+	}
+	var ports struct {
+		Port int64 `json:"port"`
+		Web  int64 `json:"web"`
+	}
+	if err := json.Unmarshal(raw, &ports); err != nil {
+		return fmt.Errorf("parse vm.port_wizard: %w", err)
+	}
+	attrs["port"] = ports.Port
+	attrs["web_port"] = ports.Web
+	return nil
+}
+
+// dropNullDisplayPorts removes a DISPLAY device's null port / web_port from an
+// update: null means "keep the auto-assigned port", and vm.device.update
+// merges the attributes it gets into the stored ones, while sending the nulls
+// fails the same way create did (usage log #4).
+func dropNullDisplayPorts(attrs map[string]any) {
+	if dtype, _ := attrs["dtype"].(string); dtype != "DISPLAY" {
+		return
+	}
+	for _, k := range []string{"port", "web_port"} {
+		if v, present := attrs[k]; present && v == nil {
+			delete(attrs, k)
+		}
+	}
+}
+
+// withoutNullKeys returns a copy of the user's attributes without the keys
+// whose value is null. A null in the configuration means "the server
+// decides" (a DISPLAY device's auto-assigned port / web_port), so the value
+// the server chose is not drift.
+func withoutNullKeys(attrs map[string]any) map[string]any {
+	out := make(map[string]any, len(attrs))
+	for k, v := range attrs {
+		if v != nil {
+			out[k] = v
+		}
+	}
+	return out
 }

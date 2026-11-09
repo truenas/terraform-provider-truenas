@@ -57,6 +57,7 @@ func (d *DatasetDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 			"special_small_block_size": dschema.Int64Attribute{Computed: true},
 			"refreservation":           dschema.Int64Attribute{Computed: true},
 			"xattr":                    dschema.StringAttribute{Computed: true},
+			"origin":                   dschema.StringAttribute{Computed: true, Description: "Snapshot the dataset was cloned from, null when it is not a clone."},
 			"mountpoint":               dschema.StringAttribute{Computed: true},
 			"encrypted":                dschema.BoolAttribute{Computed: true},
 			"encryption":               dschema.BoolAttribute{Computed: true},

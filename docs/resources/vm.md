@@ -52,7 +52,8 @@ resource "truenas_vm" "worker" {
 - `min_memory` (Number) Minimum memory for ballooning, in MiB (mebibytes). Set to 0 to clear it (no ballooning); removing the attribute leaves the current value unchanged.
 - `nodeset` (String) Host NUMA nodes to pin the VM's memory to, e.g. "0-1". Set to "" to clear it; removing the attribute leaves the current value unchanged.
 - `pin_vcpus` (Boolean) Pin the VM's vCPUs to the physical CPUs given in cpuset.
-- `running` (Boolean) Whether the VM is currently running. Set to true to start, false to stop.
+- `restart_on_update` (Boolean) When true, a change to the VM's settings (memory, CPUs, cpu_mode, devices are not covered) restarts a running VM (vm.restart) so the change takes effect now; TrueNAS otherwise applies it at the guest's next start. Default false: the VM keeps running on its old settings. Never sent to the API.
+- `running` (Boolean) Whether the VM is currently running. Set to true to start, false to stop. Left unset, the provider does not manage the power state: use that with truenas_vm_power, which can be ordered after the VM's truenas_vm_device resources so a new VM boots with its disks and NICs attached.
 - `shutdown_timeout` (Number) Seconds to wait for a graceful shutdown before forcing it.
 - `suspend_on_snapshot` (Boolean) Suspend the VM while a snapshot of it is taken. Defaults to true server-side.
 - `threads` (Number) Number of threads per core.

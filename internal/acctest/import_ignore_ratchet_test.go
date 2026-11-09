@@ -15,6 +15,8 @@ package acctest_test
 var importIgnoreJustified = map[string]string{
 	// --- write-only secrets ---
 	"truenas_api_key.key":                               "secret: the key is returned only once at create, never by query",
+	"truenas_s3_access_key.secret":                      "secret: the generated secret is stored from the create/rotate response only, never read back (the API would return it)",
+	"truenas_s3_access_key.rotate_version":              "secret: config-only rotation trigger, not sent to or returned by the API",
 	"truenas_certificate.passphrase":                    "secret: private-key passphrase, write-only",
 	"truenas_certificate.certificate_wo":                "secret: WriteOnly attribute, never persisted to state (#65)",
 	"truenas_certificate.privatekey_wo":                 "secret: WriteOnly attribute, never persisted to state (#65)",
@@ -71,6 +73,8 @@ var importIgnoreJustified = map[string]string{
 	"truenas_alert_service.attributes":          "server: service attributes blob re-normalized server-side",
 	"truenas_cloud_backup.attributes":           "server: provider attributes blob re-normalized server-side",
 	"truenas_vm_device.attributes":              "server: device attributes JSON re-normalized server-side (key order, defaults)",
+	"truenas_vm_power.overcommit":               "create: provider-only vm.start option, never stored on the server",
+	"truenas_vm_power.restart_triggers":         "create: provider-only restart trigger map, never sent to the server",
 
 	"truenas_user.home_mode": "create: user.query returns only 'home', not 'home_mode' (a filesystem mode applied at create, not stored in the user record) — confirmed live",
 

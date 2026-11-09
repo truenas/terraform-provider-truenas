@@ -37,6 +37,7 @@ Fetches a TrueNAS zvol by name.
 - `inherit_encryption` (Boolean)
 - `key_format` (String)
 - `locked` (Boolean)
+- `origin` (String) Snapshot the zvol was cloned from, null when it is not a clone.
 - `pool` (String)
 - `readonly` (String)
 - `refreservation` (Number)

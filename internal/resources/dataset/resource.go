@@ -61,6 +61,9 @@ func (r *DatasetResource) ValidateConfig(ctx context.Context, req resource.Valid
 				"or set inherit_encryption = false to manage encryption on this dataset.",
 		)
 	}
+	if isSet(cfg.Origin) {
+		resp.Diagnostics.Append(CheckOriginConfig(cfg.Origin.ValueString(), "dataset", cfg.anyEncryptionInput())...)
+	}
 }
 
 type DatasetResource struct {
@@ -122,10 +125,27 @@ func (r *DatasetResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
-	_, err := r.client.Call(ctx, "pool.dataset.create", payload)
-	if err != nil {
-		resp.Diagnostics.AddError("Create dataset failed", err.Error())
-		return
+	if isSet(plan.Origin) {
+		// Clone from a snapshot, then apply the configured properties with an
+		// update (pool.snapshot.clone takes no create options; see clone.go).
+		if err := CloneSnapshot(ctx, r.client, plan.Origin.ValueString(), plan.Name.ValueString()); err != nil {
+			resp.Diagnostics.AddError("Clone dataset failed",
+				fmt.Sprintf("pool.snapshot.clone %s -> %s: %v", plan.Origin.ValueString(), plan.Name.ValueString(), err))
+			return
+		}
+		if props := plan.updateAPIPayload(nil); len(props) > 0 {
+			if _, err := r.client.Call(ctx, "pool.dataset.update", plan.Name.ValueString(), props); err != nil {
+				resp.Diagnostics.AddError("Set properties on cloned dataset failed",
+					fmt.Sprintf("the clone %s exists; pool.dataset.update: %v", plan.Name.ValueString(), err))
+				return
+			}
+		}
+	} else {
+		_, err := r.client.Call(ctx, "pool.dataset.create", payload)
+		if err != nil {
+			resp.Diagnostics.AddError("Create dataset failed", err.Error())
+			return
+		}
 	}
 
 	// Read back via get_instance for canonical state (create response omits some properties).
@@ -450,6 +470,7 @@ func (r *DatasetResource) responseToModel(api *apiResponse, m *DatasetModel) dia
 	} else {
 		m.XAttr = types.StringNull()
 	}
+	m.Origin = OriginValue(api.Origin.Parsed)
 	return nil
 }
 

@@ -6,6 +6,74 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-11-09
+
+Fixes and additions from a user's OpenTofu usage log (TrueNAS 27, provider
+1.8.0). The rule they asked for, now in the OpenTofu guide: everything a
+configuration needs as part of a plan is a resource or attribute, available
+in OpenTofu as well as Terraform; actions stay an extra for one-off
+operations.
+
+### Added
+- `truenas_vm_power`: the power state of a VM as its own resource (`vm_id`,
+  `running`, `overcommit`, `restart_triggers`), so it can be ordered after the
+  VM's `truenas_vm_device` resources and a new VM boots with its disks and
+  NICs attached (log #1; `running = true` on `truenas_vm` started the VM
+  before its devices existed, and the VM cannot depend on its own devices).
+  `restart_triggers` restarts a running VM when a referenced value changes
+  (for example a disk device's `attributes`). Read back from `vm.status`, so a
+  VM started or stopped outside Terraform plans its way back. Destroying the
+  resource leaves the VM as it is. Leave `running` unset on the `truenas_vm`.
+  Works in OpenTofu (the `truenas_vm_start` / `_stop` / `_restart` actions do
+  not).
+- `truenas_vm`: `restart_on_update` (log #6). When true, a settings change
+  (memory, CPUs, cpu_mode, ...) on a running VM restarts it with `vm.restart`
+  so the change takes effect now instead of at the guest's next start.
+  Default false, the previous behaviour.
+- `truenas_dataset` and `truenas_zvol`: `origin` clones the dataset or zvol from
+  a snapshot (`pool.snapshot.clone`) instead of creating it empty, for golden
+  images (log #7): `origin = truenas_snapshot.golden.id` ("pool/ds@snap"). The
+  clone shares the snapshot's blocks until it diverges; the configured
+  properties (compression, comments, a larger `volsize`, thick provisioning via
+  `refreservation = volsize` when `sparse = false`) are applied after the clone.
+  Create-only: a different origin is a different disk, so changing it replaces
+  the resource (the destroy half needs `force_destroy = true`). A clone keeps
+  its origin's `volblocksize` (another value is an error) and inherits its
+  encryption (the encryption inputs cannot be combined with `origin`). ZFS
+  cannot destroy a snapshot while clones exist: referencing the
+  `truenas_snapshot` in `origin` makes Terraform destroy clones first. Read
+  back from the ZFS `origin` property (null when not a clone), so an imported
+  clone round-trips; also exposed on the data sources. Works on 25.10, 26.0
+  and 28.0.
+- `truenas_s3_config` and `truenas_s3_access_key` (TrueNAS 27.0 and later; the
+  `s3.*` API; log #2): the S3 service configuration (listeners, servers,
+  certificate, region, log level, default audit list, global grants,
+  `managed_root_dataset`) and S3 access keys (generated, or supplied via the
+  write-only `secret_wo`; rotation with `rotate_version`; expiry;
+  `manage_buckets`), plus data sources for both. Buckets have no TrueNAS API:
+  a key with `manage_buckets` creates them through the S3 protocol (the aws or
+  minio provider). On older releases the resources fail with "S3 API not
+  available on this TrueNAS release". A non-empty `default_audit` needs an
+  Enterprise licence (TrueNAS refuses it otherwise).
+- Guides: "OpenTofu" (what is shared, what is Terraform-only, and the
+  resource or attribute for each Terraform-only operation; log #9) and "S3
+  state backend" (a TrueNAS S3 service as the Terraform/OpenTofu
+  `backend "s3"`, with the settings that work).
+
+### Fixed
+- `truenas_vm_device`: a SPICE `DISPLAY` device with `port` and `web_port`
+  left out or null is created with ports from `vm.port_wizard`, as the UI
+  does, instead of failing "Spice server port must not be same as web port"
+  (log #4: the middleware validates the device before it fills the
+  documented auto-assignment). On an update the null ports are not sent (the
+  server keeps the assigned ones), and a null-valued key in `attributes` is
+  never drift. A device delete refused because the VM is running now says to
+  stop the VM first (Terraform destroys devices before the VM).
+- `truenas_app` docs: `running` now says that a new app runs once at create
+  whatever it is set to (`app.create` installs and starts; TrueNAS has no
+  create-stopped option), so first-start initialisation happens before any
+  data can be put in place (log #8).
+
 ## [1.8.0] - 2026-11-03
 
 ### Added

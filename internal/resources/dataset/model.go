@@ -16,6 +16,9 @@ type DatasetModel struct {
 	ID types.String `tfsdk:"id"`
 	// Guid is the ZFS guid: the resource identity, unchanged by a rename (F8).
 	Guid types.String `tfsdk:"guid"`
+	// Origin is the snapshot this dataset was cloned from (create-only), null
+	// when it is not a clone; see clone.go.
+	Origin types.String `tfsdk:"origin"`
 
 	// Required
 	Name types.String `tfsdk:"name"`
@@ -152,6 +155,18 @@ func (m *DatasetModel) apiPayload() map[string]any {
 		p["encryption_options"] = eo
 	}
 	return p
+}
+
+// anyEncryptionInput reports whether any create-only encryption input is set
+// in the configuration (they cannot be combined with origin, see clone.go).
+func (m *DatasetModel) anyEncryptionInput() bool {
+	for _, v := range []interface{ IsNull() bool }{m.Encryption, m.InheritEncryption, m.EncryptionAlgorithm,
+		m.EncryptionGenerateKey, m.EncryptionPassphrase, m.EncryptionKey} {
+		if !v.IsNull() {
+			return true
+		}
+	}
+	return false
 }
 
 // encryptionOptions builds the non-secret encryption_options from the model.
@@ -352,6 +367,10 @@ type apiResponse struct {
 	SSBSP       zfsSourced `json:"special_small_block_size"`
 	RefResP     zfsSourced `json:"refreservation"`
 	XAttrP      zfsSourced `json:"xattr"` // read-only
+	// Origin is the ZFS origin property: "pool/ds@snap" for a clone, "" otherwise.
+	Origin struct {
+		Parsed string `json:"parsed"`
+	} `json:"origin"`
 
 	// Comments live under user_properties in TrueNAS 24+
 	UserProperties struct {

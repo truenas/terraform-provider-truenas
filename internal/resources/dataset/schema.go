@@ -59,6 +59,7 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"allow_rename_in_use": AllowRenameInUseAttribute("dataset"),
+			"origin":              OriginAttribute("dataset"),
 			"type": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,

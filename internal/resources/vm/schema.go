@@ -125,12 +125,20 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"running": schema.BoolAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "Whether the VM is currently running. Set to true to start, false to stop.",
+				Optional: true,
+				Computed: true,
+				Description: "Whether the VM is currently running. Set to true to start, false to stop. Left unset, the " +
+					"provider does not manage the power state: use that with truenas_vm_power, which can be ordered after " +
+					"the VM's truenas_vm_device resources so a new VM boots with its disks and NICs attached.",
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
 				},
+			},
+			"restart_on_update": schema.BoolAttribute{
+				Optional: true,
+				Description: "When true, a change to the VM's settings (memory, CPUs, cpu_mode, devices are not covered) " +
+					"restarts a running VM (vm.restart) so the change takes effect now; TrueNAS otherwise applies it at the " +
+					"guest's next start. Default false: the VM keeps running on its old settings. Never sent to the API.",
 			},
 			// --- Hardware / boot / CPU options (coverage audit) ---
 			"machine_type":                  vmStrAttr("QEMU machine type, e.g. \"q35\" or \"i440fx\"; cleared means the hypervisor default." + vmClearNote),

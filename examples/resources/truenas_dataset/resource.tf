@@ -51,3 +51,18 @@ resource "truenas_dataset" "keyed" {
   inherit_encryption      = false
   encryption_generate_key = true
 }
+
+# Cloning a dataset from a snapshot: the clone starts with the snapshot's
+# contents and shares its blocks until it diverges. `origin` is create-only
+# (changing it replaces the dataset); reference the snapshot resource so the
+# clone is destroyed before the snapshot, which ZFS cannot remove while clones
+# of it exist.
+resource "truenas_snapshot" "template" {
+  dataset = truenas_dataset.data.name
+  name    = "template"
+}
+
+resource "truenas_dataset" "from_template" {
+  name   = "tank/data-copy"
+  origin = truenas_snapshot.template.id # "tank/data@template"
+}

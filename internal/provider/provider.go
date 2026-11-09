@@ -110,6 +110,8 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/reporting_exporter"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/resilver_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/rsync_task"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/s3_access_key"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/s3_config"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/scrub_task"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/service"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/smb"
@@ -130,6 +132,7 @@ import (
 	"github.com/truenas/terraform-provider-truenas/internal/resources/user"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/vm"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/vm_device"
+	"github.com/truenas/terraform-provider-truenas/internal/resources/vm_power"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/vmware"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/webshare"
 	"github.com/truenas/terraform-provider-truenas/internal/resources/webshare_config"
@@ -350,6 +353,8 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		reporting_exporter.NewResource,
 		resilver_config.NewResource,
 		rsync_task.NewResource,
+		s3_access_key.NewResource,
+		s3_config.NewResource,
 		scrub_task.NewResource,
 		service.NewResource,
 		smb.NewResource,
@@ -370,6 +375,7 @@ func (p *TrueNASProvider) Resources(_ context.Context) []func() resource.Resourc
 		ups_config.NewResource,
 		vm.NewResource,
 		vm_device.NewResource,
+		vm_power.NewResource,
 		vmware.NewResource,
 		webshare.NewResource,
 		webshare_config.NewResource,
@@ -443,6 +449,8 @@ func (p *TrueNASProvider) DataSources(_ context.Context) []func() datasource.Dat
 		reporting_exporter.NewDataSource,
 		resilver_config.NewDataSource,
 		rsync_task.NewDataSource,
+		s3_access_key.NewDataSource,
+		s3_config.NewDataSource,
 		scrub_task.NewDataSource,
 		service.NewDataSource,
 		smb.NewDataSource,

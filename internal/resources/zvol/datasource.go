@@ -45,6 +45,7 @@ func (d *ZvolDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 			"checksum":                dschema.StringAttribute{Computed: true},
 			"readonly":                dschema.StringAttribute{Computed: true},
 			"snapdev":                 dschema.StringAttribute{Computed: true},
+			"origin":                  dschema.StringAttribute{Computed: true, Description: "Snapshot the zvol was cloned from, null when it is not a clone."},
 			"copies":                  dschema.Int64Attribute{Computed: true},
 			"reservation":             dschema.Int64Attribute{Computed: true},
 			"refreservation":          dschema.Int64Attribute{Computed: true},

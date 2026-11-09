@@ -131,3 +131,27 @@ func TestZvolDevicePath(t *testing.T) {
 		t.Errorf("zvolDevicePath = %q", got)
 	}
 }
+
+// clonePropertiesPayload: a fresh clone gets every configured updatable
+// property; a thick clone also gets refreservation = volsize, since a clone
+// starts with no refreservation whatever the origin had.
+func TestClonePropertiesPayload(t *testing.T) {
+	m := ZvolModel{Name: types.StringValue("tank/c"), VolSize: types.Int64Value(33554432),
+		Sparse: types.BoolValue(false), Comments: types.StringValue("c")}
+	p := m.clonePropertiesPayload()
+	if p["refreservation"] != int64(33554432) || p["volsize"] != int64(33554432) || p["comments"] != "c" {
+		t.Errorf("thick clone payload = %v", p)
+	}
+	if _, has := p["name"]; has {
+		t.Error("name must not be in the update payload")
+	}
+	m.Sparse = types.BoolValue(true)
+	if _, has := m.clonePropertiesPayload()["refreservation"]; has {
+		t.Error("sparse clone must not get a refreservation")
+	}
+	m.Sparse = types.BoolValue(false)
+	m.RefReservation = types.Int64Value(1048576)
+	if m.clonePropertiesPayload()["refreservation"] != int64(1048576) {
+		t.Error("a configured refreservation must win over volsize")
+	}
+}

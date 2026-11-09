@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -48,6 +49,9 @@ func (r *ZvolResource) ValidateConfig(ctx context.Context, req resource.Validate
 				"its encryption from the parent, which determines the value. Remove encryption, "+
 				"or set inherit_encryption = false to manage encryption on this zvol.",
 		)
+	}
+	if !cfg.Origin.IsNull() && !cfg.Origin.IsUnknown() && cfg.Origin.ValueString() != "" {
+		resp.Diagnostics.Append(dataset.CheckOriginConfig(cfg.Origin.ValueString(), "zvol", cfg.anyEncryptionInput())...)
 	}
 	// A sparse zvol has no refreservation: the server overrides a configured
 	// one with 0, which then reads back different from the plan.
@@ -167,10 +171,17 @@ func (r *ZvolResource) Create(ctx context.Context, req resource.CreateRequest, r
 		}
 	}
 
-	_, err := r.client.Call(ctx, "pool.dataset.create", payload)
-	if err != nil {
-		resp.Diagnostics.AddError("Create zvol failed", err.Error())
-		return
+	if !plan.Origin.IsNull() && !plan.Origin.IsUnknown() && plan.Origin.ValueString() != "" {
+		resp.Diagnostics.Append(r.createClone(ctx, &plan)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	} else {
+		_, err := r.client.Call(ctx, "pool.dataset.create", payload)
+		if err != nil {
+			resp.Diagnostics.AddError("Create zvol failed", err.Error())
+			return
+		}
 	}
 
 	// Read back via get_instance for canonical state (create response omits some properties).
@@ -235,6 +246,45 @@ func (r *ZvolResource) Create(ctx context.Context, req resource.CreateRequest, r
 	plan.Guid = types.StringValue(guid)
 	resp.Diagnostics.Append(dataset.SetGuidIdentity(ctx, resp.Identity, guid)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// createClone creates the zvol as a clone of plan.Origin (pool.snapshot.clone)
+// and applies the configured properties with pool.dataset.update, since the
+// clone API takes no create options. A clone keeps the origin's volblocksize,
+// so a different configured value is refused before anything is created.
+func (r *ZvolResource) createClone(ctx context.Context, plan *zvolResourceModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+	origin := plan.Origin.ValueString()
+	if !plan.VolBlockSize.IsNull() && !plan.VolBlockSize.IsUnknown() && plan.VolBlockSize.ValueInt64() != 0 {
+		raw, err := r.client.CallRead(ctx, "pool.dataset.get_instance", dataset.OriginDataset(origin))
+		if err != nil {
+			diags.AddError("Clone zvol failed", fmt.Sprintf("reading the origin %s: %v", dataset.OriginDataset(origin), err))
+			return diags
+		}
+		var src zvolAPI
+		if err := json.Unmarshal(raw, &src); err != nil {
+			diags.AddError("Parse origin response", err.Error())
+			return diags
+		}
+		if src.VolBlockSize.Parsed != plan.VolBlockSize.ValueInt64() {
+			diags.AddAttributeError(path.Root("volblocksize"), "volblocksize cannot differ from the origin's",
+				fmt.Sprintf("A clone keeps the block size of its origin: %s has volblocksize %d, the configuration asks for %d. "+
+					"Remove volblocksize or set it to %d.", dataset.OriginDataset(origin), src.VolBlockSize.Parsed,
+					plan.VolBlockSize.ValueInt64(), src.VolBlockSize.Parsed))
+			return diags
+		}
+	}
+	if err := dataset.CloneSnapshot(ctx, r.client, origin, plan.Name.ValueString()); err != nil {
+		diags.AddError("Clone zvol failed", fmt.Sprintf("pool.snapshot.clone %s -> %s: %v", origin, plan.Name.ValueString(), err))
+		return diags
+	}
+	if props := plan.clonePropertiesPayload(); len(props) > 0 {
+		if _, err := r.client.Call(ctx, "pool.dataset.update", plan.Name.ValueString(), props); err != nil {
+			diags.AddError("Set properties on cloned zvol failed",
+				fmt.Sprintf("the clone %s exists; pool.dataset.update: %v", plan.Name.ValueString(), err))
+		}
+	}
+	return diags
 }
 
 // deviceStater is the slice of the client waitForZvolDevice needs: a stat of a

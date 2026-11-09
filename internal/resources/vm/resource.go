@@ -198,6 +198,14 @@ func (r *VMResource) Update(ctx context.Context, req resource.UpdateRequest, res
 				return
 			}
 		}
+	} else if wasRunning && plan.RestartOnUpdate.ValueBool() && settingsChanged(&plan, &state) {
+		// restart_on_update: a running guest picks a settings change up only
+		// at its next start (usage log #6); restart it now when asked to. A
+		// VM started or stopped by this same update needs no restart.
+		if _, err := r.client.CallJob(ctx, "vm.restart", plan.ID.ValueInt64()); err != nil {
+			resp.Diagnostics.AddError("Restart VM failed", err.Error())
+			return
+		}
 	}
 
 	apiResp, err := r.getInstance(ctx, plan.ID.ValueInt64())

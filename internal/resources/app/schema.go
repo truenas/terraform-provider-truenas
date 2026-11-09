@@ -96,7 +96,11 @@ func resourceSchema() schema.Schema {
 				Optional:      true,
 				Computed:      true,
 				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
-				Description:   "Whether the app should be running. Set false to stop.",
+				Description: "Whether the app should be running. Set false to stop. A NEW app runs once whatever this is set to: " +
+					"app.create installs and starts it (docker compose up is its last step, and TrueNAS has no option to create " +
+					"an app stopped), and the provider stops it right after when running = false. A container that initialises " +
+					"its data on first start therefore does so before anything else can be put in place; put the data in place " +
+					"before the first apply that creates the app.",
 			},
 			"state": schema.StringAttribute{
 				Computed:      true,

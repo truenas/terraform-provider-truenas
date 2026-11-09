@@ -124,6 +124,7 @@ skip is the correct outcome, not something to build a fixture for):
 | `ds_auth` | `system_general.ds_auth` requires directory services joined (and an Enterprise license on some releases); the DS lab is only joined during the DS test tier |
 | `container` | the `container.*` / `lxc` / `webshare` namespaces are absent on 25.10; the same tests run on 26.0+ |
 | `not available on this release`, `requires TrueNAS`, `accepted from TrueNAS`, `below TrueNAS`, `needs TrueNAS <`, `from TrueNAS N` | version gates: the test exercises a field or value one release does not accept (e.g. dataset `encryption_algorithm` below 26.0, GZIP-2..8 from 28.0, user import shape below 26.0). It is a dead end on the box that skips and must pass on another box in the cross-version run |
+| `cannot start a guest` | a VM start test (`truenas_vm_power`, `restart_on_update`) checks `vm.get_available_memory` first; a box that cannot give a 512 MiB guest memory skips. It must pass on a box that can (.70) |
 
 Anything else that skips is an unbuilt fixture (missing env, missing object
 on the box) or a stale gate (a `t.Skip` whose condition no longer holds) and

@@ -26,6 +26,7 @@ type VMModel struct {
 	CPUMode         types.String `tfsdk:"cpu_mode"`  // CUSTOM, HOST-MODEL, HOST-PASSTHROUGH
 	CPUModel        types.String `tfsdk:"cpu_model"` // "" = unset
 	Running         types.Bool   `tfsdk:"running"`
+	RestartOnUpdate types.Bool   `tfsdk:"restart_on_update"` // provider-only: restart a running VM after a settings change
 
 	// Hardware / boot / CPU options (coverage audit). Plain VM settings (not source-
 	// aware); each is Optional+Computed and read back directly from vm.query.
@@ -260,6 +261,12 @@ func putVMBool(p map[string]any, key string, v types.Bool) {
 
 // nullUnknowns replaces every unknown value in m with null, so a model built
 // from the plan can be saved as state when the read-back failed.
+// settingsChanged reports whether the vm.update payload differs between the
+// plan and the prior state: what restart_on_update restarts the VM for.
+func settingsChanged(plan, state *VMModel) bool {
+	return !reflect.DeepEqual(plan.apiUpdatePayload(), state.apiUpdatePayload())
+}
+
 func nullUnknowns(m *VMModel) {
 	v := reflect.ValueOf(m).Elem()
 	for i := 0; i < v.NumField(); i++ {

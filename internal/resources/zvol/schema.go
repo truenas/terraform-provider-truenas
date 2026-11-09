@@ -53,6 +53,7 @@ func resourceSchema() schema.Schema {
 				},
 			},
 			"allow_rename_in_use": dataset.AllowRenameInUseAttribute("zvol"),
+			"origin":              dataset.OriginAttribute("zvol"),
 			"volsize": schema.Int64Attribute{
 				Required:    true,
 				Description: "Volume size in bytes.",
@@ -60,7 +61,7 @@ func resourceSchema() schema.Schema {
 			"volblocksize": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Block size in bytes (512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072). Set at create time only.",
+				Description: "Block size in bytes (512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072). Set at create time only. A clone (origin set) keeps the origin's block size; configuring another value is an error.",
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.UseStateForUnknown(),
 					int64planmodifier.RequiresReplace(),

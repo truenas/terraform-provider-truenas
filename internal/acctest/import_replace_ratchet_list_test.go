@@ -9,6 +9,8 @@ package acctest_test
 // See TestImportReplace_Audit. An attribute the API does not return belongs on
 // planmod.ReplaceFromKnown*, not here.
 var importReplaceReadBack = map[string]string{
+	"truenas_dataset.origin":                   "dataset/resource.go responseToModel: ZFS origin property (null when not a clone)",
+	"truenas_zvol.origin":                      "zvol/model.go responseToModel: ZFS origin property (null when not a clone)",
 	"truenas_api_key.username":                 "api_key/model.go responseToModel: username",
 	"truenas_app.catalog_app":                  "app/model.go responseToModel: metadata.name (catalog apps; custom apps keep null)",
 	"truenas_app.custom_app":                   "app/model.go responseToModel: custom_app",
@@ -68,6 +70,7 @@ var importReplaceReadBack = map[string]string{
 	"truenas_vm.bootloader_ovmf":               "vm/model.go: bootloader_ovmf",
 	"truenas_vm.enable_secure_boot":            "vm/model.go: enable_secure_boot",
 	"truenas_vm_device.vm":                     "vm_device/model.go: vm",
+	"truenas_vm_power.vm_id":                   "vm_power/resource.go ImportState: the import id is the VM id",
 	"truenas_webshare.path":                    "webshare/model.go: path",
 }
 

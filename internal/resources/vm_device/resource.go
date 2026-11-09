@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -90,6 +91,12 @@ func (r *VMDeviceResource) Create(ctx context.Context, req resource.CreateReques
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if attrs, ok := payload["attributes"].(map[string]any); ok {
+		if err := autoAssignDisplayPorts(ctx, r.client, attrs); err != nil {
+			resp.Diagnostics.AddError("Create VM device failed", err.Error())
+			return
+		}
+	}
 
 	raw, err := r.client.Call(ctx, "vm.device.create", payload)
 	if err != nil {
@@ -170,7 +177,7 @@ func (r *VMDeviceResource) Read(ctx context.Context, req resource.ReadRequest, r
 	// unconditionally when the overlay was in use, which re-encoded the
 	// user's JSON string and made a hand-formatted (heredoc) `attributes`
 	// diff on every plan (hunt F10).
-	if attributesDrifted(stateAttrs, apiResp.Attributes) {
+	if attributesDrifted(withoutNullKeys(stateAttrs), apiResp.Attributes) {
 		state.Attributes = types.StringValue(writeonly.ProjectOntoKeys(state.Attributes.ValueString(), apiResp.Attributes))
 	}
 
@@ -261,7 +268,15 @@ func (r *VMDeviceResource) Delete(ctx context.Context, req resource.DeleteReques
 		"zvol":     false,
 	})
 	if err != nil && !client.IsNotFound(err) {
-		resp.Diagnostics.AddError("Delete VM device failed", err.Error())
+		msg := err.Error()
+		// TrueNAS refuses to detach a device from a running VM. Terraform
+		// destroys the devices before the VM (they depend on it), so a destroy
+		// of a running VM stops here; say what to do rather than echo EFAULT.
+		if strings.Contains(msg, "stop/resume associated VM") {
+			msg += ". The VM is running: stop it first (running = false on truenas_vm or truenas_vm_power, " +
+				"applied before the destroy), then destroy."
+		}
+		resp.Diagnostics.AddError("Delete VM device failed", msg)
 	}
 }
 
