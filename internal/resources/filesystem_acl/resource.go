@@ -71,13 +71,18 @@ func (r *FilesystemAclResource) Configure(_ context.Context, req resource.Config
 // CallJob result directly instead of a follow-up filesystem.getacl call.
 // filesystem.getacl itself is job:false (plain synchronous Call).
 
-// applyACL calls filesystem.setacl with the plan's entries/uid/gid and the
-// configuration's write-only recursive/traverse options, and parses its job
-// result (same shape as filesystem.getacl's response).
+// applyACL calls filesystem.setacl with the plan's entries, the
+// configuration's uid/gid (see withConfiguredOwner) and the configuration's
+// write-only recursive/traverse options, and parses its job result (same
+// shape as filesystem.getacl's response).
 func (r *FilesystemAclResource) applyACL(ctx context.Context, m *FilesystemAclModel, cfg tfsdk.Config) (*fsGetAclAPI, error) {
 	withOpts := *m
 	cfg.GetAttribute(ctx, path.Root("recursive"), &withOpts.Recursive)
 	cfg.GetAttribute(ctx, path.Root("traverse"), &withOpts.Traverse)
+	var cfgUID, cfgGID types.Int64
+	cfg.GetAttribute(ctx, path.Root("uid"), &cfgUID)
+	cfg.GetAttribute(ctx, path.Root("gid"), &cfgGID)
+	withOpts = withOpts.withConfiguredOwner(cfgUID, cfgGID)
 	raw, err := r.client.CallFilesystemMutation(ctx, "filesystem.setacl", withOpts.setaclPayload())
 	if err != nil {
 		return nil, fmt.Errorf("filesystem.setacl: %w", err)

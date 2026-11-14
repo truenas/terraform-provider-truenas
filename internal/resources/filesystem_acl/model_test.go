@@ -86,6 +86,52 @@ func TestSetaclPayload_UIDGIDOmittedWhenUnset(t *testing.T) {
 	}
 }
 
+// TestSetaclPayload_OwnerOmittedWhenUnconfigured: on Update, uid/gid are
+// planned from state (UseStateForUnknown) even when the configuration omits
+// them. They must not reach filesystem.setacl, or a recursive apply chowns
+// every file under the path to the root's owner (#67).
+func TestSetaclPayload_OwnerOmittedWhenUnconfigured(t *testing.T) {
+	plan := FilesystemAclModel{
+		Path:      types.StringValue("/mnt/tank/tf-acc"),
+		Entries:   types.StringValue(nfs4OwnerGroupACL),
+		UID:       types.Int64Value(0), // root's owner, carried from state
+		GID:       types.Int64Value(0),
+		Recursive: types.BoolValue(true),
+	}
+
+	m := plan.withConfiguredOwner(types.Int64Null(), types.Int64Null())
+	p := m.setaclPayload()
+
+	if _, ok := p["uid"]; ok {
+		t.Errorf("payload should omit uid when not configured, got %v", p["uid"])
+	}
+	if _, ok := p["gid"]; ok {
+		t.Errorf("payload should omit gid when not configured, got %v", p["gid"])
+	}
+	if !plan.UID.Equal(types.Int64Value(0)) {
+		t.Errorf("withConfiguredOwner mutated the plan: uid = %v", plan.UID)
+	}
+}
+
+func TestSetaclPayload_OwnerSentWhenConfigured(t *testing.T) {
+	plan := FilesystemAclModel{
+		Path:    types.StringValue("/mnt/tank/tf-acc"),
+		Entries: types.StringValue(nfs4OwnerGroupACL),
+		UID:     types.Int64Value(0),
+		GID:     types.Int64Value(0),
+	}
+
+	m := plan.withConfiguredOwner(types.Int64Value(1000), types.Int64Null())
+	p := m.setaclPayload()
+
+	if p["uid"] != int64(1000) {
+		t.Errorf("payload[uid] = %v, want 1000", p["uid"])
+	}
+	if _, ok := p["gid"]; ok {
+		t.Errorf("payload should omit gid when not configured, got %v", p["gid"])
+	}
+}
+
 // TestDeleteACLPayload verifies the exact stripacl=true payload shape
 // (probed live, confirmed a clean strip on both NFS4 and POSIX1E).
 func TestDeleteACLPayload(t *testing.T) {

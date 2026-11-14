@@ -260,6 +260,20 @@ func (m *FilesystemAclModel) setaclPayload() map[string]any {
 	return p
 }
 
+// withConfiguredOwner returns a copy of m whose UID/GID are the
+// configuration's values instead of the plan's. When uid/gid are omitted
+// from configuration, UseStateForUnknown plans the path's current owner
+// from state, so sending the plan's values would always pass an explicit
+// owner to filesystem.setacl. With options.recursive the middleware hands
+// that owner to nfs4xdr_winacl (-O/-G), which chown()s every file under
+// the path to the root's owner. Omitting them lets the middleware default
+// to ACL_UNDEFINED_ID (-1, "leave unchanged") for every file.
+func (m FilesystemAclModel) withConfiguredOwner(cfgUID, cfgGID types.Int64) FilesystemAclModel {
+	m.UID = cfgUID
+	m.GID = cfgGID
+	return m
+}
+
 // deleteACLPayload builds the filesystem.setacl payload used by Delete:
 // options.stripacl=true converts the path's ACL to a trivial, mode-derived
 // one (probed live and confirmed clean on both NFS4 and POSIX1E - see

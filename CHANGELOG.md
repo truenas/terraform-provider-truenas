@@ -6,6 +6,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+- `truenas_filesystem_acl`: an update with `recursive = true` and no `uid`/`gid`
+  in configuration no longer re-owns every file under the path to the root's
+  owner. The planned owner (carried from state) was sent to `filesystem.setacl`
+  as an explicit owner, which the recursive apply wrote to every file. Owner IDs
+  are now sent only when configured, so omitting them leaves each file's owner
+  unchanged, as documented
+  ([#67](https://github.com/truenas/terraform-provider-truenas/issues/67)).
+
 ## [1.9.1] - 2026-11-14
 
 ### Security
