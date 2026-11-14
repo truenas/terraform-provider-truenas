@@ -6,6 +6,19 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-11-14
+
+### Fixed
+- `truenas_pool`: a mirror, RAIDZ, log, cache, or spare whose member disks are
+  listed in configuration in a different order than TrueNAS reports them — which
+  happens whenever the disks are named by their stable serials (or any form
+  other than the kernel `sdX` order `pool.query` returns) — no longer reads as a
+  topology change. The plan compared members positionally, so a re-ordered list
+  of the same physical disks looked like a different vdev and the apply was
+  refused with "Pool topology cannot be changed in place". Members are now
+  compared as a set, so only a genuine membership change forces replacement
+  ([#66](https://github.com/truenas/terraform-provider-truenas/issues/66)).
+
 ## [1.9.0] - 2026-11-09
 
 Fixes and additions from a user's OpenTofu usage log (TrueNAS 27, provider

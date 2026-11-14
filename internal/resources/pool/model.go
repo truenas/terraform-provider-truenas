@@ -516,17 +516,19 @@ func reconcileVdevList(ctx context.Context, planList types.List, stateList *type
 
 		var planDisks []string
 		diags.Append(planVdevs[i].Disks.ElementsAs(ctx, &planDisks, false)...)
-		for j := range planDisks {
-			// Same physical disk as state, just a different name form: keep the
-			// state value (a normalization Terraform permits). Otherwise leave
-			// the config value (a real disk change → replacement).
-			if j < len(stateDisks) && res.sameDisk(planDisks[j], stateDisks[j]) {
-				planDisks[j] = stateDisks[j]
-			}
+		// A vdev's members are a SET: config may list them in a different order
+		// (and a different name form) than state stores them. When plan and
+		// state name the same physical disks, adopt the STATE list verbatim —
+		// erasing the spurious diff. Terraform permits a Required attribute's
+		// planned value to equal the prior-state value, so the whole state list
+		// is a legal normalization; a positionally-rebuilt mix would be a
+		// forbidden third value. A set difference is a real membership change,
+		// left as the config value so it still forces replacement (issue #66).
+		if sameDiskSet(res, planDisks, stateDisks) {
+			dl, dd := types.ListValueFrom(ctx, types.StringType, stateDisks)
+			diags.Append(dd...)
+			planVdevs[i].Disks = dl
 		}
-		dl, dd := types.ListValueFrom(ctx, types.StringType, planDisks)
-		diags.Append(dd...)
-		planVdevs[i].Disks = dl
 	}
 
 	out, d := types.ListValueFrom(ctx, vdevObjectType, planVdevs)
@@ -549,16 +551,49 @@ func reconcileDiskList(ctx context.Context, planList types.List, stateList *type
 		diags.Append(stateList.ElementsAs(ctx, &stateDisks, false)...)
 	}
 
-	for i := range planDisks {
-		// Keep the state value only when it is the same physical disk (a
-		// permitted normalization); otherwise leave the config value.
-		if i < len(stateDisks) && res.sameDisk(planDisks[i], stateDisks[i]) {
-			planDisks[i] = stateDisks[i]
-		}
+	// cache/spare are also a set (see reconcileVdevList): when plan and state
+	// name the same physical disks in any order or form, adopt the state list
+	// verbatim; otherwise keep the config value as a real change (issue #66).
+	if sameDiskSet(res, planDisks, stateDisks) {
+		out, d := types.ListValueFrom(ctx, types.StringType, stateDisks)
+		diags.Append(d...)
+		return out, diags
 	}
 	out, d := types.ListValueFrom(ctx, types.StringType, planDisks)
 	diags.Append(d...)
 	return out, diags
+}
+
+// sameDiskSet reports whether two disk-name lists name the same multiset of
+// physical disks, under res.sameDisk (so differences of order, and of naming
+// form — serial, kernel sdX, identifier, by-id path — are ignored). It is the
+// set-identity test the plan reconcilers use to tell a harmless re-listing of
+// a vdev's members from a real membership change. Equal lengths are required:
+// a length difference is always a real change. Matching is greedy over
+// unmatched state entries, which is correct because sameDisk is an equivalence
+// over physical disks and a vdev cannot list one physical disk twice.
+func sameDiskSet(res *diskResolver, plan, state []string) bool {
+	if len(plan) != len(state) || len(plan) == 0 {
+		return false
+	}
+	used := make([]bool, len(state))
+	for _, p := range plan {
+		matched := false
+		for j := range state {
+			if used[j] {
+				continue
+			}
+			if res.sameDisk(p, state[j]) {
+				used[j] = true
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
 }
 
 // apiPayload builds the JSON payload for pool.create. res translates each

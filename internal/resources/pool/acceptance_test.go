@@ -317,6 +317,46 @@ func TestAccPool_stableDiskSerialMirror(t *testing.T) {
 	})
 }
 
+// TestAccPool_mirrorMembersReordered is the live verification for issue #66.
+// A vdev's members are a set, but the plan reconciler used to match them
+// positionally, so listing the same mirror members in a DIFFERENT order than
+// state stores them (which a user does whenever they write serials in physical
+// / label order rather than pool.query order) read as a real topology change
+// and the apply was refused. This creates a mirror by sdX device name (so state
+// stores [dev0, dev1] in that order), then re-applies the SAME two disks by
+// their stable serials in SWAPPED order, and requires an empty plan. Pre-fix
+// this step errored with "topology cannot be changed in place".
+func TestAccPool_mirrorMembersReordered(t *testing.T) {
+	disks := testDisks(t, 2)
+	acctest.PreCheck(t)
+	dev0, dev1 := disks[0], disks[1]
+	serial0, serial1 := diskSerial(t, dev0), diskSerial(t, dev1)
+	name := acctest.RandName("tfaccpoolord")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckPoolDestroyed(name),
+		Steps: []resource.TestStep{
+			// Create by sdX in order: state stores [dev0, dev1].
+			{
+				Config: acctest.ProviderConfig() + testAccPoolConfig(name, "MIRROR", []string{dev0, dev1}, false),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_pool.test", "topology.data.0.type", "MIRROR"),
+					resource.TestCheckResourceAttr("truenas_pool.test", "healthy", "true"),
+				),
+			},
+			// Same two disks, by serial, in the OPPOSITE order: must be a no-op
+			// plan, not a refused topology change (issue #66).
+			{
+				Config:             acctest.ProviderConfig() + testAccPoolConfig(name, "MIRROR", []string{serial1, serial0}, false),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+		},
+	})
+}
+
 // TestAccPool_topologyChangeRefused verifies the data-safety guard: a REAL
 // topology change (swapping the data disk for a different physical disk) is
 // refused with an error rather than planned as a destroy/recreate of the pool.
