@@ -8,6 +8,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [1.9.1] - 2026-11-14
 
+### Security
+- Built with Go 1.26.11, which fixes an HTTP/1 server crash caused by a
+  `MaxBytesReader` header race in the standard library's `net/http`
+  ([GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859)).
+
 ### Fixed
 - `truenas_pool`: a mirror, RAIDZ, log, cache, or spare whose member disks are
   listed in configuration in a different order than TrueNAS reports them — which
