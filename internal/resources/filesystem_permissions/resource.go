@@ -66,19 +66,22 @@ func (r *FilesystemPermissionsResource) Configure(_ context.Context, req resourc
 // real CallJob round trip) - dispatched via CallJob. filesystem.stat is
 // job:false (plain synchronous Call).
 
-// applyAndStat calls filesystem.setperm (only when the model actually
-// specifies mode/uid/gid — an all-omitted model is a read-only "adopt
-// whatever's already there" configuration, so no write call is made) and
-// then always reads back the current state via filesystem.stat.
+// applyAndStat calls filesystem.setperm (or filesystem.chown, see writeCall)
+// with the mode/uid/gid that change against prior state (nil on create; see setpermPayload, #67 class) — no
+// write call is made when none does, e.g. an all-omitted "adopt whatever's
+// already there" configuration — and then always reads back the current
+// state via filesystem.stat.
 //
 // recursive/traverse are write-only, so they come from the configuration.
-func (r *FilesystemPermissionsResource) applyAndStat(ctx context.Context, m *FilesystemPermissionsModel, cfg tfsdk.Config) (*fsStatAPI, error) {
-	if m.hasWrite() {
-		withOpts := *m
-		cfg.GetAttribute(ctx, path.Root("recursive"), &withOpts.Recursive)
-		cfg.GetAttribute(ctx, path.Root("traverse"), &withOpts.Traverse)
-		if _, err := r.client.CallFilesystemMutation(ctx, "filesystem.setperm", withOpts.setpermPayload()); err != nil {
-			return nil, fmt.Errorf("filesystem.setperm: %w", err)
+func (r *FilesystemPermissionsResource) applyAndStat(ctx context.Context, m, prior *FilesystemPermissionsModel, cfg tfsdk.Config) (*fsStatAPI, error) {
+	withOpts := *m
+	cfg.GetAttribute(ctx, path.Root("recursive"), &withOpts.Recursive)
+	cfg.GetAttribute(ctx, path.Root("traverse"), &withOpts.Traverse)
+	// setperm when the mode changes; chown for an owner-only change (setperm
+	// refuses a payload without a mode); nothing when neither does.
+	if method, payload := withOpts.writeCall(prior); method != "" {
+		if _, err := r.client.CallFilesystemMutation(ctx, method, payload); err != nil {
+			return nil, fmt.Errorf("%s: %w", method, err)
 		}
 	}
 
@@ -100,7 +103,7 @@ func (r *FilesystemPermissionsResource) Create(ctx context.Context, req resource
 		return
 	}
 
-	api, err := r.applyAndStat(ctx, &plan, req.Config)
+	api, err := r.applyAndStat(ctx, &plan, nil, req.Config)
 	if err != nil {
 		resp.Diagnostics.AddError("Create filesystem permissions failed", err.Error())
 		return
@@ -146,13 +149,14 @@ func (r *FilesystemPermissionsResource) Read(ctx context.Context, req resource.R
 }
 
 func (r *FilesystemPermissionsResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan FilesystemPermissionsModel
+	var plan, state FilesystemPermissionsModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	api, err := r.applyAndStat(ctx, &plan, req.Config)
+	api, err := r.applyAndStat(ctx, &plan, &state, req.Config)
 	if err != nil {
 		resp.Diagnostics.AddError("Update filesystem permissions failed", err.Error())
 		return

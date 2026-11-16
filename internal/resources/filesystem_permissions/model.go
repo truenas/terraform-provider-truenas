@@ -6,6 +6,7 @@ package filesystem_permissions
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -64,12 +65,21 @@ func permModeString(stMode int64) string {
 }
 
 // setpermPayload builds the map expected by filesystem.setperm. "path" is
-// always included; "mode"/"uid"/"gid" are included only when set in the
-// model (filesystem.setperm treats a null/omitted value as "leave
-// unchanged", probed live via core.get_methods), and "options" always
-// carries recursive/traverse (both default false server-side; sending them
-// explicitly is harmless and keeps the payload deterministic in tests).
-func (m *FilesystemPermissionsModel) setpermPayload() map[string]any {
+// always included and "options" always carries recursive/traverse (both
+// default false server-side; sending them explicitly is harmless and keeps
+// the payload deterministic in tests).
+//
+// "mode"/"uid"/"gid" are sent only when they CHANGE: on create when
+// configured (an unconfigured one is unknown in the plan), on update when the
+// planned value differs from prior state. Unconfigured and unchanged values
+// are carried into every update plan by UseStateForUnknown, and sending them
+// back is not a no-op: with options.recursive the middleware applies each one
+// to every file under the path, so changing only the mode re-owned the whole
+// tree to the root's owner, and changing only the owner gave every file the
+// directory's mode (#67 class, verified on 25.10, 26.0 and 28.0). Omitted,
+// filesystem.setperm leaves that property of each file alone. prior is nil on
+// create.
+func (m *FilesystemPermissionsModel) setpermPayload(prior *FilesystemPermissionsModel) map[string]any {
 	p := map[string]any{
 		"path": m.Path.ValueString(),
 		"options": map[string]any{
@@ -77,24 +87,69 @@ func (m *FilesystemPermissionsModel) setpermPayload() map[string]any {
 			"traverse":  !m.Traverse.IsNull() && !m.Traverse.IsUnknown() && m.Traverse.ValueBool(),
 		},
 	}
-	if !m.Mode.IsNull() && !m.Mode.IsUnknown() {
+	if m.modeChanged(prior) {
 		p["mode"] = m.Mode.ValueString()
 	}
-	if !m.UID.IsNull() && !m.UID.IsUnknown() {
+	if idChanged(m.UID, prior, func(pm *FilesystemPermissionsModel) types.Int64 { return pm.UID }) {
 		p["uid"] = m.UID.ValueInt64()
 	}
-	if !m.GID.IsNull() && !m.GID.IsUnknown() {
+	if idChanged(m.GID, prior, func(pm *FilesystemPermissionsModel) types.Int64 { return pm.GID }) {
 		p["gid"] = m.GID.ValueInt64()
 	}
 	return p
 }
 
-// hasWrite reports whether the model specifies any of mode/uid/gid, i.e.
-// whether calling filesystem.setperm would actually change anything.
-func (m *FilesystemPermissionsModel) hasWrite() bool {
-	return (!m.Mode.IsNull() && !m.Mode.IsUnknown()) ||
-		(!m.UID.IsNull() && !m.UID.IsUnknown()) ||
-		(!m.GID.IsNull() && !m.GID.IsUnknown())
+// modeChanged reports a known planned mode that differs from prior state as
+// permission bits ("750" and "0750" are the same mode).
+func (m *FilesystemPermissionsModel) modeChanged(prior *FilesystemPermissionsModel) bool {
+	if m.Mode.IsNull() || m.Mode.IsUnknown() {
+		return false
+	}
+	if prior == nil || prior.Mode.IsNull() || prior.Mode.IsUnknown() {
+		return true
+	}
+	return strings.TrimLeft(m.Mode.ValueString(), "0") != strings.TrimLeft(prior.Mode.ValueString(), "0")
+}
+
+// idChanged reports a known planned uid/gid that differs from prior state.
+func idChanged(planned types.Int64, prior *FilesystemPermissionsModel, get func(*FilesystemPermissionsModel) types.Int64) bool {
+	if planned.IsNull() || planned.IsUnknown() {
+		return false
+	}
+	if prior == nil {
+		return true
+	}
+	pv := get(prior)
+	return pv.IsNull() || pv.IsUnknown() || planned.ValueInt64() != pv.ValueInt64()
+}
+
+// writeCall picks the API call for a change. filesystem.setperm needs a mode
+// ("Payload must either explicitly specify permissions or contain the stripacl
+// option" on 25.10, 26.0 and 28.0), so a change of owner alone goes through
+// filesystem.chown, which takes the same uid/gid/options and leaves every
+// file's mode alone. Returns "" when nothing changes.
+func (m *FilesystemPermissionsModel) writeCall(prior *FilesystemPermissionsModel) (method string, payload map[string]any) {
+	p := m.setpermPayload(prior)
+	_, mode := p["mode"]
+	_, uid := p["uid"]
+	_, gid := p["gid"]
+	switch {
+	case mode:
+		return "filesystem.setperm", p
+	case uid || gid:
+		return "filesystem.chown", p
+	}
+	return "", nil
+}
+
+// hasWrite reports whether the payload would change anything, i.e. whether
+// a write call is needed at all.
+func (m *FilesystemPermissionsModel) hasWrite(prior *FilesystemPermissionsModel) bool {
+	p := m.setpermPayload(prior)
+	_, mode := p["mode"]
+	_, uid := p["uid"]
+	_, gid := p["gid"]
+	return mode || uid || gid
 }
 
 // responseToModel maps an fsStatAPI response's mode/uid/gid into the

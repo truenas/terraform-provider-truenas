@@ -69,20 +69,20 @@ var destructiveOptions = map[string]bool{
 // destructiveCallSites: "<package dir>.<enclosing function>" -> why it is safe.
 // The function must contain, or be called only after, the guard named here.
 var destructiveCallSites = map[string]string{
-	"dataset.DeleteDataset":                                                "the only pool.dataset.delete call; recursive only when force_destroy, else refused while children/snapshots/contents exist (NonEmptyContents, ZvolHoldsData in the resources' Delete)",
-	"dataset.Rename":                                                       "pool.dataset.rename with force (the API refuses every rename without it) and recursive=false; the only caller is dataset.PerformRename, which runs RenameBlockers first unless allow_rename_in_use",
-	"pool.(*PoolResource).Delete":                                          "pool.export destroy=true only after poolContents is empty or force_destroy = true",
-	"snapshot.(*SnapshotResource).Delete":                                  "a Terraform-managed snapshot is destroyed only on resource destroy; replacement is refused at plan time unless allow_recreate (ModifyPlan)",
-	"iscsi_extent.(*ISCSIExtentResource).Delete":                           "remove=false: the backing file/zvol is kept",
-	"nvmet_namespace.(*NVMetNamespaceResource).Delete":                     "no remove option: the backing file/zvol is kept",
-	"vm.(*VMResource).Delete":                                              "zvols=false: disks are kept",
-	"vm_device.(*VMDeviceResource).Delete":                                 "zvol=false, raw_file=false: backing storage is kept",
-	"app.(*AppResource).Delete":                                            "remove_ix_volumes=false: app data is kept (images are removed)",
-	"container.(*ContainerResource).Delete":                                "the container's own root filesystem goes with it, like a VM's config; disks attached from datasets are not touched",
-	"boot_environment.(*BootEnvironmentResource).Delete":                   "refuses the active or activated boot environment",
-	"filesystem_acl.(*FilesystemAclResource).applyACL":                     "setacl of the configured path; recursive/traverse only when the configuration says so (permissions, not data)",
-	"filesystem_acl.(*FilesystemAclResource).Delete":                       "strips the ACL of the configured path on destroy (permissions, not data); documented on the resource",
-	"filesystem_permissions.(*FilesystemPermissionsResource).applyAndStat": "setperm of the configured path; recursive/traverse only when the configuration says so (permissions, not data)",
+	"dataset.DeleteDataset":                                          "the only pool.dataset.delete call; recursive only when force_destroy, else refused while children/snapshots/contents exist (NonEmptyContents, ZvolHoldsData in the resources' Delete)",
+	"dataset.Rename":                                                 "pool.dataset.rename with force (the API refuses every rename without it) and recursive=false; the only caller is dataset.PerformRename, which runs RenameBlockers first unless allow_rename_in_use",
+	"pool.(*PoolResource).Delete":                                    "pool.export destroy=true only after poolContents is empty or force_destroy = true",
+	"snapshot.(*SnapshotResource).Delete":                            "a Terraform-managed snapshot is destroyed only on resource destroy; replacement is refused at plan time unless allow_recreate (ModifyPlan)",
+	"iscsi_extent.(*ISCSIExtentResource).Delete":                     "remove=false: the backing file/zvol is kept",
+	"nvmet_namespace.(*NVMetNamespaceResource).Delete":               "no remove option: the backing file/zvol is kept",
+	"vm.(*VMResource).Delete":                                        "zvols=false: disks are kept",
+	"vm_device.(*VMDeviceResource).Delete":                           "zvol=false, raw_file=false: backing storage is kept",
+	"app.(*AppResource).Delete":                                      "remove_ix_volumes=false: app data is kept (images are removed)",
+	"container.(*ContainerResource).Delete":                          "the container's own root filesystem goes with it, like a VM's config; disks attached from datasets are not touched",
+	"boot_environment.(*BootEnvironmentResource).Delete":             "refuses the active or activated boot environment",
+	"filesystem_acl.(*FilesystemAclResource).applyACL":               "setacl of the configured path; recursive/traverse only when the configuration says so, and uid/gid only when they change, so a recursive ACL change never re-owns the tree (#67)",
+	"filesystem_acl.(*FilesystemAclResource).Delete":                 "strips the ACL of the configured path on destroy (permissions, not data); documented on the resource",
+	"filesystem_permissions.(*FilesystemPermissionsModel).writeCall": "setperm (or chown for an owner-only change) of the configured path; recursive/traverse only when the configuration says so, and only the changed ones of mode/uid/gid are sent (#67 class)",
 	// Actions run only when the user triggers them (lifecycle action_trigger /
 	// terraform apply -invoke); they are the explicit opt-in. Each passes the
 	// API's own force flag through from configuration, never defaults it on.

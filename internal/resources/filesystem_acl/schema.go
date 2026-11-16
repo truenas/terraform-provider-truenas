@@ -101,7 +101,9 @@ func resourceSchema() schema.Schema {
 				Computed: true,
 				Description: "Numeric user ID to set as the path's owner via filesystem.setacl's \"uid\" " +
 					"parameter (probed live). Read back from filesystem.getacl's \"uid\" field. Omit to leave " +
-					"the path's existing owner unchanged.",
+					"the path's existing owner unchanged. Sent only when it changes: with recursive = true a " +
+					"changed owner is applied to everything under the path, while an ACL-only change leaves " +
+					"every file's owner as it is.",
 				// -1 means "unchanged" to setacl but reads back as the real
 				// owner, so it failed the apply; leave the attribute unset
 				// instead. (B-091 class)
@@ -114,7 +116,7 @@ func resourceSchema() schema.Schema {
 				Computed: true,
 				Description: "Numeric group ID to set as the path's group owner via filesystem.setacl's " +
 					"\"gid\" parameter (probed live). Read back from filesystem.getacl's \"gid\" field. Omit " +
-					"to leave the path's existing group owner unchanged.",
+					"to leave the path's existing group owner unchanged. Sent only when it changes (see uid).",
 				Validators:    []validator.Int64{int64validator.Between(0, 2147483647)},
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 			},
@@ -122,7 +124,9 @@ func resourceSchema() schema.Schema {
 				Optional:  true,
 				WriteOnly: true,
 				Description: "Apply the ACL recursively to everything under \"path\" (filesystem.setacl's " +
-					"\"options.recursive\") whenever the ACL or owner is applied. Write-only: an apply-time " +
+					"\"options.recursive\") whenever the ACL or owner is applied: the ACL replaces the ACL of " +
+					"every file and directory under the path, and the owner only when uid or gid changed in that " +
+					"apply (an ACL-only change never re-owns the tree). Write-only: an apply-time " +
 					"instruction with nothing to read back, so it is never stored in state, an import never " +
 					"differs from it, and changing it alone plans nothing (it is used on the next apply that " +
 					"changes entries, uid or gid). Defaults to false. Never used by Delete, which only ever " +

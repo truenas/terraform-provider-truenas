@@ -71,14 +71,15 @@ func (r *FilesystemAclResource) Configure(_ context.Context, req resource.Config
 // CallJob result directly instead of a follow-up filesystem.getacl call.
 // filesystem.getacl itself is job:false (plain synchronous Call).
 
-// applyACL calls filesystem.setacl with the plan's entries/uid/gid and the
-// configuration's write-only recursive/traverse options, and parses its job
-// result (same shape as filesystem.getacl's response).
-func (r *FilesystemAclResource) applyACL(ctx context.Context, m *FilesystemAclModel, cfg tfsdk.Config) (*fsGetAclAPI, error) {
+// applyACL calls filesystem.setacl with the plan's entries, the owner only
+// where it changes against prior state (nil on create; see setaclPayload,
+// #67) and the configuration's write-only recursive/traverse options, and
+// parses its job result (same shape as filesystem.getacl's response).
+func (r *FilesystemAclResource) applyACL(ctx context.Context, m, prior *FilesystemAclModel, cfg tfsdk.Config) (*fsGetAclAPI, error) {
 	withOpts := *m
 	cfg.GetAttribute(ctx, path.Root("recursive"), &withOpts.Recursive)
 	cfg.GetAttribute(ctx, path.Root("traverse"), &withOpts.Traverse)
-	raw, err := r.client.CallFilesystemMutation(ctx, "filesystem.setacl", withOpts.setaclPayload())
+	raw, err := r.client.CallFilesystemMutation(ctx, "filesystem.setacl", withOpts.setaclPayload(prior))
 	if err != nil {
 		return nil, fmt.Errorf("filesystem.setacl: %w", err)
 	}
@@ -148,7 +149,7 @@ func (r *FilesystemAclResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	api, err := r.applyACL(ctx, &plan, req.Config)
+	api, err := r.applyACL(ctx, &plan, nil, req.Config)
 	if err != nil {
 		resp.Diagnostics.AddError("Create filesystem ACL failed", err.Error())
 		return
@@ -230,7 +231,7 @@ func (r *FilesystemAclResource) Update(ctx context.Context, req resource.UpdateR
 	}
 	var api *fsGetAclAPI
 	if differ || !plan.UID.Equal(state.UID) || !plan.GID.Equal(state.GID) {
-		api, err = r.applyACL(ctx, &plan, req.Config)
+		api, err = r.applyACL(ctx, &plan, &state, req.Config)
 	} else {
 		api, err = r.getACL(ctx, plan.Path.ValueString())
 	}

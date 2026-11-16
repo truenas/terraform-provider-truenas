@@ -6,6 +6,34 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-11-16
+
+### Fixed
+- **`truenas_filesystem_acl` with `recursive = true` no longer re-owns the
+  tree on an ACL-only change**
+  ([#67](https://github.com/truenas/terraform-provider-truenas/issues/67),
+  reported with the full analysis by @deepflame). With `uid`/`gid` omitted the
+  plan carries the path's current owner from state, and the provider sent it
+  back to `filesystem.setacl`, which with `options.recursive` chowns every file
+  and directory under the path: every child ended up owned by the root's
+  owner, contrary to "omit to leave the path's existing owner unchanged".
+  `uid` and `gid` are now sent only when they change (on create when
+  configured, on update when they differ from state), so the middleware
+  leaves each file's owner alone. A configured owner change is still applied
+  recursively, and only the half that changed. Reproduced and verified on
+  TrueNAS 25.10, 26.0 and 28.0. **If you applied an ACL change with
+  `recursive = true` on 1.9.1 or earlier, check the ownership of the files
+  under that path.**
+- `truenas_filesystem_permissions` had the same fault for all three
+  attributes: with `recursive = true`, changing only `mode` re-owned every
+  file to the root's owner, and changing only `uid`/`gid` gave every file the
+  directory's mode (a `0640` file became `0755`). Only the attributes that
+  change are sent now; an update that changes none makes no call. An
+  owner-only change goes through `filesystem.chown`, because
+  `filesystem.setperm` refuses a request without a mode: this also fixes a
+  configuration that sets only `uid`/`gid` (no `mode`), which could not be
+  created.
+
 ## [1.9.1] - 2026-11-14
 
 ### Security

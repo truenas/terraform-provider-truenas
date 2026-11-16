@@ -28,7 +28,7 @@ func TestSetaclPayload_FullySet(t *testing.T) {
 		Traverse:  types.BoolValue(true),
 	}
 
-	p := m.setaclPayload()
+	p := m.setaclPayload(nil)
 
 	if p["path"] != "/mnt/tank/tf-acc" {
 		t.Errorf("payload[path] = %v, want /mnt/tank/tf-acc", p["path"])
@@ -69,7 +69,7 @@ func TestSetaclPayload_UIDGIDOmittedWhenUnset(t *testing.T) {
 		GID:     types.Int64Null(),
 	}
 
-	p := m.setaclPayload()
+	p := m.setaclPayload(nil)
 
 	if _, ok := p["uid"]; ok {
 		t.Errorf("payload should omit uid when unset, got %v", p["uid"])
@@ -333,5 +333,47 @@ func TestEntriesDiffer_WhoResolved(t *testing.T) {
 	entries, _ := NormalizeEntries(json.RawMessage(plain))
 	if err := ResolveWho(context.Background(), f, entries); err != nil || len(f.calls) != 0 {
 		t.Errorf("ResolveWho looked up %v (err %v), want no lookups", f.calls, err)
+	}
+}
+
+// TestSetaclPayload_OwnerSentOnlyWhenChanged guards issue #67: an
+// unconfigured owner is carried into every update plan from state
+// (UseStateForUnknown), and sending it back made a recursive setacl chown
+// every file under the path to the root's owner. uid/gid go out only when
+// they differ from prior state.
+func TestSetaclPayload_OwnerSentOnlyWhenChanged(t *testing.T) {
+	prior := &FilesystemAclModel{UID: types.Int64Value(0), GID: types.Int64Value(0)}
+	mk := func(uid, gid types.Int64) map[string]any {
+		m := &FilesystemAclModel{
+			Path: types.StringValue("/mnt/tank/x"), Entries: types.StringValue(nfs4OwnerGroupACL),
+			UID: uid, GID: gid, Recursive: types.BoolValue(true),
+		}
+		return m.setaclPayload(prior)
+	}
+	// The plan an entries-only update produces: owner copied from state.
+	p := mk(types.Int64Value(0), types.Int64Value(0))
+	if _, ok := p["uid"]; ok {
+		t.Errorf("unchanged uid must be omitted, got %v (recursive setacl would chown the tree)", p["uid"])
+	}
+	if _, ok := p["gid"]; ok {
+		t.Errorf("unchanged gid must be omitted, got %v", p["gid"])
+	}
+	// Only the changed one is sent.
+	p = mk(types.Int64Value(1000), types.Int64Value(0))
+	if p["uid"] != int64(1000) {
+		t.Errorf("changed uid = %v, want 1000", p["uid"])
+	}
+	if _, ok := p["gid"]; ok {
+		t.Errorf("unchanged gid must be omitted when only uid changes, got %v", p["gid"])
+	}
+	p = mk(types.Int64Value(0), types.Int64Value(1000))
+	if _, ok := p["uid"]; ok || p["gid"] != int64(1000) {
+		t.Errorf("gid-only change: payload uid=%v gid=%v", p["uid"], p["gid"])
+	}
+	// Unknown (create, unconfigured) is never sent.
+	p = (&FilesystemAclModel{Path: types.StringValue("/x"), Entries: types.StringValue("[]"),
+		UID: types.Int64Unknown(), GID: types.Int64Unknown()}).setaclPayload(nil)
+	if _, ok := p["uid"]; ok {
+		t.Error("unknown uid sent on create")
 	}
 }

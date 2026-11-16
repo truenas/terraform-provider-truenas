@@ -88,6 +88,8 @@ func resourceSchema() schema.Schema {
 				WriteOnly: true,
 				Description: "Apply mode/uid/gid recursively to everything under \"path\" (filesystem." +
 					"setperm's \"options.recursive\"), limited to the same dataset, whenever they are applied. " +
+					"Only the attributes that changed in that apply are applied to the tree: a mode change leaves " +
+					"every file's owner alone and an owner change leaves every file's mode alone. " +
 					"Write-only: an apply-time instruction with nothing to read back, so it is never stored in " +
 					"state, an import never differs from it, and changing it alone plans nothing (it is used on " +
 					"the next apply that changes mode, uid or gid). Defaults to false.",

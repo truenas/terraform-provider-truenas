@@ -41,7 +41,7 @@ func TestSetpermPayload_FullySet(t *testing.T) {
 		Traverse:  types.BoolValue(false),
 	}
 
-	p := m.setpermPayload()
+	p := m.setpermPayload(nil)
 
 	if p["path"] != "/mnt/tank/tf-acc-fsperm" {
 		t.Errorf("payload[path] = %v", p["path"])
@@ -81,7 +81,7 @@ func TestSetpermPayload_OmitsUnsetModeUidGid(t *testing.T) {
 		Traverse:  types.BoolNull(),
 	}
 
-	p := m.setpermPayload()
+	p := m.setpermPayload(nil)
 
 	if _, ok := p["mode"]; ok {
 		t.Errorf("payload should omit mode when unset, got %v", p["mode"])
@@ -116,7 +116,7 @@ func TestHasWrite(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := c.m.hasWrite(); got != c.want {
+			if got := c.m.hasWrite(nil); got != c.want {
 				t.Errorf("hasWrite() = %v, want %v", got, c.want)
 			}
 		})
@@ -178,5 +178,98 @@ func TestDeleteWarningDiagnostics(t *testing.T) {
 	}
 	if diags[0].Severity().String() != "Warning" {
 		t.Errorf("severity = %v, want Warning", diags[0].Severity())
+	}
+}
+
+// TestSetpermPayload_SendsOnlyWhatChanged guards the issue #67 class:
+// unconfigured or unchanged mode/uid/gid are carried into every update plan
+// from state, and sending them back made a recursive setperm apply each one
+// to every file under the path (a mode-only change re-owned the tree; an
+// owner-only change gave every file the directory's mode).
+func TestSetpermPayload_SendsOnlyWhatChanged(t *testing.T) {
+	prior := &FilesystemPermissionsModel{
+		Mode: normalize.NewOctalModeValue("0755"), UID: types.Int64Value(0), GID: types.Int64Value(0),
+	}
+	mk := func(mode string, uid, gid int64) *FilesystemPermissionsModel {
+		return &FilesystemPermissionsModel{
+			Path: types.StringValue("/mnt/tank/x"), Mode: normalize.NewOctalModeValue(mode),
+			UID: types.Int64Value(uid), GID: types.Int64Value(gid), Recursive: types.BoolValue(true),
+		}
+	}
+	keys := func(p map[string]any) string {
+		out := ""
+		for _, k := range []string{"mode", "uid", "gid"} {
+			if _, ok := p[k]; ok {
+				out += k + " "
+			}
+		}
+		return out
+	}
+	cases := []struct {
+		name string
+		m    *FilesystemPermissionsModel
+		want string
+	}{
+		{"nothing changed", mk("0755", 0, 0), ""},
+		{"same mode, other spelling", mk("755", 0, 0), ""},
+		{"mode only", mk("0750", 0, 0), "mode "},
+		{"uid only", mk("0755", 1000, 0), "uid "},
+		{"gid only", mk("0755", 0, 1000), "gid "},
+		{"all", mk("0700", 1000, 1000), "mode uid gid "},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := keys(c.m.setpermPayload(prior)); got != c.want {
+				t.Errorf("payload carries %q, want %q", got, c.want)
+			}
+			if got, want := c.m.hasWrite(prior), c.want != ""; got != want {
+				t.Errorf("hasWrite = %v, want %v", got, want)
+			}
+		})
+	}
+	// Create (no prior): every configured value is sent.
+	if got := keys(mk("0750", 1000, 1000).setpermPayload(nil)); got != "mode uid gid " {
+		t.Errorf("create payload carries %q", got)
+	}
+}
+
+// TestWriteCall: setperm needs a mode, so an owner-only change is a chown.
+func TestWriteCall(t *testing.T) {
+	prior := &FilesystemPermissionsModel{
+		Mode: normalize.NewOctalModeValue("0755"), UID: types.Int64Value(0), GID: types.Int64Value(0),
+	}
+	mk := func(mode string, uid, gid int64) *FilesystemPermissionsModel {
+		return &FilesystemPermissionsModel{Path: types.StringValue("/mnt/tank/x"), Mode: normalize.NewOctalModeValue(mode),
+			UID: types.Int64Value(uid), GID: types.Int64Value(gid), Recursive: types.BoolValue(true)}
+	}
+	for name, c := range map[string]struct {
+		m    *FilesystemPermissionsModel
+		want string
+	}{
+		"nothing":      {mk("0755", 0, 0), ""},
+		"mode":         {mk("0750", 0, 0), "filesystem.setperm"},
+		"mode and uid": {mk("0750", 1, 0), "filesystem.setperm"},
+		"uid only":     {mk("0755", 1, 0), "filesystem.chown"},
+		"gid only":     {mk("0755", 0, 1), "filesystem.chown"},
+	} {
+		method, p := c.m.writeCall(prior)
+		if method != c.want {
+			t.Errorf("%s: method %q, want %q", name, method, c.want)
+		}
+		if method == "filesystem.chown" {
+			if _, ok := p["mode"]; ok {
+				t.Errorf("%s: chown payload carries a mode", name)
+			}
+			if opts, _ := p["options"].(map[string]any); opts["recursive"] != true {
+				t.Errorf("%s: chown payload lost options.recursive", name)
+			}
+		}
+	}
+	// Create with only an owner configured (mode unknown): chown, not a
+	// setperm the server would reject.
+	m := &FilesystemPermissionsModel{Path: types.StringValue("/x"), Mode: normalize.NewOctalModeUnknown(),
+		UID: types.Int64Value(1), GID: types.Int64Unknown()}
+	if method, _ := m.writeCall(nil); method != "filesystem.chown" {
+		t.Errorf("owner-only create: method %q, want filesystem.chown", method)
 	}
 }

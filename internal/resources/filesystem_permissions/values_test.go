@@ -21,8 +21,9 @@ func permDS() string {
 func permCfg(ds, body string) string {
 	return acctest.ProviderConfig() + fmt.Sprintf(`
 resource "truenas_dataset" "fx" {
-  name    = %q
-  acltype = "posix"
+  name          = %q
+  acltype       = "posix"
+  force_destroy = true # recursiveWriteOnly leaves a sub directory behind
 }
 resource "truenas_filesystem_permissions" "test" {
   path = truenas_dataset.fx.mountpoint
@@ -96,8 +97,9 @@ func TestAccFilesystemPermissions_recursiveWriteOnly(t *testing.T) {
 			},
 			{Config: acctest.ProviderConfig() + fmt.Sprintf(`
 resource "truenas_dataset" "fx" {
-  name    = %q
-  acltype = "posix"
+  name          = %q
+  acltype       = "posix"
+  force_destroy = true
 }
 removed {
   from = truenas_filesystem_permissions.test

@@ -238,10 +238,17 @@ func entriesDrifted(ctx context.Context, c IDLookup, stateEntries string, apiACL
 // core.get_methods); "options.recursive"/"options.traverse" always sent
 // (default false server-side, sent explicitly for deterministic tests) and
 // "options.stripacl" is always false here (true is reserved for Delete,
-// see deleteACLPayload). "uid"/"gid" are included only when set in the
-// model (filesystem.setacl treats a null/omitted value as "leave
-// unchanged" per its description text, mirroring filesystem.setperm).
-func (m *FilesystemAclModel) setaclPayload() map[string]any {
+// see deleteACLPayload).
+//
+// "uid"/"gid" are sent only when they CHANGE: on create when configured (an
+// unconfigured owner is unknown in the plan), on update when the planned
+// value differs from prior state. An unconfigured owner is carried into every
+// update plan by UseStateForUnknown, and sending it back is not a no-op: with
+// options.recursive the middleware chowns every file under the path to it, so
+// an ACL-only change re-owned the whole tree to the root's owner (#67,
+// verified on 25.10, 26.0 and 28.0). Omitted, filesystem.setacl leaves each
+// file's owner alone. prior is nil on create.
+func (m *FilesystemAclModel) setaclPayload(prior *FilesystemAclModel) map[string]any {
 	p := map[string]any{
 		"path": m.Path.ValueString(),
 		"dacl": json.RawMessage(m.Entries.ValueString()),
@@ -251,13 +258,28 @@ func (m *FilesystemAclModel) setaclPayload() map[string]any {
 			"stripacl":  false,
 		},
 	}
-	if !m.UID.IsNull() && !m.UID.IsUnknown() {
+	var priorUID, priorGID types.Int64
+	if prior != nil {
+		priorUID, priorGID = prior.UID, prior.GID
+	} else {
+		priorUID, priorGID = types.Int64Null(), types.Int64Null()
+	}
+	if ownerChanged(m.UID, priorUID) {
 		p["uid"] = m.UID.ValueInt64()
 	}
-	if !m.GID.IsNull() && !m.GID.IsUnknown() {
+	if ownerChanged(m.GID, priorGID) {
 		p["gid"] = m.GID.ValueInt64()
 	}
 	return p
+}
+
+// ownerChanged reports a known planned uid/gid that differs from prior state
+// (always true for a known value when there is no prior state).
+func ownerChanged(planned, prior types.Int64) bool {
+	if planned.IsNull() || planned.IsUnknown() {
+		return false
+	}
+	return prior.IsNull() || prior.IsUnknown() || planned.ValueInt64() != prior.ValueInt64()
 }
 
 // deleteACLPayload builds the filesystem.setacl payload used by Delete:
