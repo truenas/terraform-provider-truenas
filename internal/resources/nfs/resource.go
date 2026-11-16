@@ -238,10 +238,10 @@ func (r *NFSShareResource) responseToModel(ctx context.Context, api *apiResponse
 	for _, n := range api.Networks {
 		nets = append(nets, normalize.NewNetworkValue(n))
 	}
-	networks, d := types.ListValue(normalize.NetworkType{}, nets)
+	networks, d := normalize.NewUnorderedListValue(normalize.NetworkType{}, nets)
 	diags.Append(d...)
 	m.Networks = networks
-	hosts, d := types.ListValueFrom(ctx, types.StringType, api.Hosts)
+	hosts, d := normalize.NewUnorderedListValueFrom(ctx, types.StringType, api.Hosts)
 	diags.Append(d...)
 	m.Hosts = hosts
 	return diags

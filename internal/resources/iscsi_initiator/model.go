@@ -8,13 +8,18 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // ISCSIInitiatorModel is the Terraform state model for truenas_iscsi_initiator.
 type ISCSIInitiatorModel struct {
-	ID         types.Int64  `tfsdk:"id"`
-	Comment    types.String `tfsdk:"comment"`
-	Initiators types.List   `tfsdk:"initiators"` // List[String] of IQN strings
+	ID      types.Int64  `tfsdk:"id"`
+	Comment types.String `tfsdk:"comment"`
+	// Initiators is an order-insensitive set of IQN strings: iscsi.initiator
+	// returns them in its own order, which need not match config, so an
+	// ordinary types.List would diff on every plan after a reorder.
+	Initiators normalize.UnorderedList `tfsdk:"initiators"`
 }
 
 // initiatorAPI is the JSON wire format for a TrueNAS iSCSI initiator object.
@@ -33,7 +38,7 @@ func responseToModel(ctx context.Context, api *initiatorAPI, m *ISCSIInitiatorMo
 	if inits == nil {
 		inits = []string{}
 	}
-	list, d := types.ListValueFrom(ctx, types.StringType, inits)
+	list, d := normalize.NewUnorderedListValueFrom(ctx, types.StringType, inits)
 	diags.Append(d...)
 	m.Initiators = list
 	return diags

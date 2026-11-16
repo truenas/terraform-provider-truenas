@@ -15,6 +15,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func resourceSchema() schema.Schema {
@@ -57,11 +59,15 @@ func resourceSchema() schema.Schema {
 			"hosts": schema.ListAttribute{
 				Optional:    true,
 				Computed:    true,
+				CustomType:  normalize.UnorderedListOf(types.StringType),
 				ElementType: types.StringType,
-				Description: "Additional /etc/hosts entries, one line per entry (non-empty, no leading or trailing whitespace, no newline: TrueNAS stores the list newline-separated and trims it).",
+				Description: "Additional /etc/hosts entries, one line per entry (non-empty, no leading or trailing whitespace, no newline: TrueNAS stores the list newline-separated and trims it). Order is not significant.",
 				Validators: []validator.List{listvalidator.ValueStringsAre(stringvalidator.RegexMatches(
 					regexp.MustCompile(`^[^\s](?:[^\n]*[^\s])?$`), "must be one non-empty line with no leading or trailing whitespace"))},
-				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType)),
+				},
 			},
 			"httpproxy": schema.StringAttribute{
 				Optional:      true,

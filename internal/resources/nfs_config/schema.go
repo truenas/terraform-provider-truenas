@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func resourceSchema() schema.Schema {
@@ -43,11 +44,15 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
 			"protocols": schema.ListAttribute{
-				Optional:      true,
-				Computed:      true,
-				ElementType:   types.StringType,
-				Description:   "NFS protocol versions to serve. One or more of NFSV3, NFSV4.",
-				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+				Optional:    true,
+				Computed:    true,
+				CustomType:  normalize.UnorderedListOf(types.StringType),
+				ElementType: types.StringType,
+				Description: "NFS protocol versions to serve. One or more of NFSV3, NFSV4. Order is not significant.",
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType)),
+				},
 			},
 			"v4_domain": schema.StringAttribute{
 				Optional:      true,
@@ -62,11 +67,15 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
 			"bindip": schema.ListAttribute{
-				Optional:      true,
-				Computed:      true,
-				ElementType:   types.StringType,
-				Description:   "IP addresses to bind the NFS service to. Empty list binds to all addresses.",
-				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+				Optional:    true,
+				Computed:    true,
+				CustomType:  normalize.UnorderedListOf(types.StringType),
+				ElementType: types.StringType,
+				Description: "IP addresses to bind the NFS service to. Order is not significant. Empty list binds to all addresses.",
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType)),
+				},
 			},
 			"mountd_port": schema.Int64Attribute{
 				Optional:    true,

@@ -117,6 +117,19 @@ func TestUserSchema(t *testing.T) {
 			t.Errorf("%q is %T, want schema.ListAttribute", listField, attr)
 		}
 	}
+
+	// sudo_commands lists are order-insensitive sets on the server, so they use
+	// the UnorderedList custom type; otherwise a server reorder diffs forever
+	// (the #66 bug class).
+	for _, sudoField := range []string{"sudo_commands", "sudo_commands_nopasswd"} {
+		la, ok := s.Attributes[sudoField].(schema.ListAttribute)
+		if !ok {
+			t.Fatalf("%q is %T, want schema.ListAttribute", sudoField, s.Attributes[sudoField])
+		}
+		if _, ok := la.CustomType.(normalize.UnorderedListType); !ok {
+			t.Errorf("%q CustomType is %T, want normalize.UnorderedListType", sudoField, la.CustomType)
+		}
+	}
 }
 
 // TestUserCreatePayload verifies that createPayload includes uid and username.
@@ -135,8 +148,8 @@ func TestUserCreatePayload(t *testing.T) {
 		SMB:                  types.BoolValue(true),
 		SSHPasswordEnabled:   types.BoolValue(false),
 		SSHPubKey:            normalize.NewTrimmedValue(""),
-		SudoCommands:         types.ListValueMust(types.StringType, []attr.Value{}),
-		SudoCommandsNoPasswd: types.ListValueMust(types.StringType, []attr.Value{}),
+		SudoCommands:         normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
+		SudoCommandsNoPasswd: normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
 		Groups:               types.ListValueMust(types.Int64Type, []attr.Value{}),
 		Password:             types.StringValue("secret123"),
 		Builtin:              types.BoolValue(false),
@@ -195,8 +208,8 @@ func TestUserCreatePayload_HomeModeAndWebshare(t *testing.T) {
 		Webshare:             types.BoolValue(true),
 		SSHPasswordEnabled:   types.BoolValue(false),
 		SSHPubKey:            normalize.NewTrimmedValue(""),
-		SudoCommands:         types.ListValueMust(types.StringType, []attr.Value{}),
-		SudoCommandsNoPasswd: types.ListValueMust(types.StringType, []attr.Value{}),
+		SudoCommands:         normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
+		SudoCommandsNoPasswd: normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
 		Groups:               types.ListValueMust(types.Int64Type, []attr.Value{}),
 		Password:             types.StringValue("secret123"),
 	}
@@ -237,8 +250,8 @@ func TestUserUpdatePayload(t *testing.T) {
 		SMB:                  types.BoolValue(false),
 		SSHPasswordEnabled:   types.BoolValue(false),
 		SSHPubKey:            normalize.NewTrimmedValue("oldkey"),
-		SudoCommands:         types.ListNull(types.StringType),
-		SudoCommandsNoPasswd: types.ListNull(types.StringType),
+		SudoCommands:         normalize.NewUnorderedListNull(types.StringType),
+		SudoCommandsNoPasswd: normalize.NewUnorderedListNull(types.StringType),
 		Groups:               types.ListNull(types.Int64Type),
 		Group:                types.Int64Value(1234),
 		Password:             types.StringNull(),
@@ -356,8 +369,8 @@ func TestUserUpdatePayload_UnchangedOmitsEverything(t *testing.T) {
 		SMB: types.BoolValue(false), Webshare: types.BoolValue(false),
 		SSHPasswordEnabled:   types.BoolValue(false),
 		SSHPubKey:            normalize.NewTrimmedValue("k"),
-		SudoCommands:         types.ListValueMust(types.StringType, []attr.Value{types.StringValue("ALL")}),
-		SudoCommandsNoPasswd: types.ListValueMust(types.StringType, []attr.Value{}),
+		SudoCommands:         normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{types.StringValue("ALL")})},
+		SudoCommandsNoPasswd: normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
 		Groups:               types.ListValueMust(types.Int64Type, []attr.Value{types.Int64Value(40)}),
 		Group:                types.Int64Value(950),
 		Password:             types.StringNull(),
@@ -392,8 +405,8 @@ func TestUserCreatePayload_GroupCreate(t *testing.T) {
 		SMB:                  types.BoolValue(false),
 		SSHPasswordEnabled:   types.BoolValue(false),
 		SSHPubKey:            normalize.NewTrimmedValue(""),
-		SudoCommands:         types.ListValueMust(types.StringType, []attr.Value{}),
-		SudoCommandsNoPasswd: types.ListValueMust(types.StringType, []attr.Value{}),
+		SudoCommands:         normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
+		SudoCommandsNoPasswd: normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
 		Groups:               types.ListValueMust(types.Int64Type, []attr.Value{}),
 		Group:                types.Int64Null(),
 		GroupCreate:          types.BoolValue(true),
@@ -430,8 +443,8 @@ func TestUserCreatePayload_GroupID(t *testing.T) {
 		SMB:                  types.BoolValue(false),
 		SSHPasswordEnabled:   types.BoolValue(false),
 		SSHPubKey:            normalize.NewTrimmedValue(""),
-		SudoCommands:         types.ListValueMust(types.StringType, []attr.Value{}),
-		SudoCommandsNoPasswd: types.ListValueMust(types.StringType, []attr.Value{}),
+		SudoCommands:         normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
+		SudoCommandsNoPasswd: normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
 		Groups:               types.ListValueMust(types.Int64Type, []attr.Value{}),
 		Group:                types.Int64Value(3000),
 		GroupCreate:          types.BoolNull(),
@@ -469,8 +482,8 @@ func TestUserUpdatePayload_GroupIncluded(t *testing.T) {
 		SMB:                  types.BoolValue(false),
 		SSHPasswordEnabled:   types.BoolValue(false),
 		SSHPubKey:            normalize.NewTrimmedValue(""),
-		SudoCommands:         types.ListNull(types.StringType),
-		SudoCommandsNoPasswd: types.ListNull(types.StringType),
+		SudoCommands:         normalize.NewUnorderedListNull(types.StringType),
+		SudoCommandsNoPasswd: normalize.NewUnorderedListNull(types.StringType),
 		Groups:               types.ListNull(types.Int64Type),
 		Group:                types.Int64Value(4000),
 		GroupCreate:          types.BoolValue(true), // must never leak into update
@@ -762,8 +775,8 @@ func TestUserCreatePayload_OmitsUnsetOptionals(t *testing.T) {
 		Webshare:             types.BoolUnknown(),
 		SSHPasswordEnabled:   types.BoolUnknown(),
 		SSHPubKey:            normalize.NewTrimmedUnknown(),
-		SudoCommands:         types.ListUnknown(types.StringType),
-		SudoCommandsNoPasswd: types.ListUnknown(types.StringType),
+		SudoCommands:         normalize.NewUnorderedListUnknown(types.StringType),
+		SudoCommandsNoPasswd: normalize.NewUnorderedListUnknown(types.StringType),
 		Groups:               types.ListUnknown(types.Int64Type),
 		Group:                types.Int64Unknown(),
 		Password:             types.StringValue("secret123"),
@@ -836,8 +849,8 @@ func TestUserUpdatePayload_HomeModeOnlyWhenChanged(t *testing.T) {
 	prior := UserModel{
 		FullName:             types.StringValue("n"),
 		HomeMode:             normalize.NewOctalModeValue("700"),
-		SudoCommands:         types.ListNull(types.StringType),
-		SudoCommandsNoPasswd: types.ListNull(types.StringType),
+		SudoCommands:         normalize.NewUnorderedListNull(types.StringType),
+		SudoCommandsNoPasswd: normalize.NewUnorderedListNull(types.StringType),
 		Groups:               types.ListNull(types.Int64Type),
 	}
 	m := prior

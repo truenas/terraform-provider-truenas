@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func smbBptr(b bool) *bool          { return &b }
@@ -96,6 +97,46 @@ func TestSMBSchema(t *testing.T) {
 	}
 }
 
+// TestSMBSchema_UnorderedListTypes verifies the set-valued list attributes
+// (hostsallow/hostsdeny flat and under options, audit.watch_list/ignore_list)
+// use normalize.UnorderedListType so a reordered API response plans no diff
+// (the pool #66 bug class). The model field type and schema attribute type
+// must match or State.Set fails at runtime.
+func TestSMBSchema_UnorderedListTypes(t *testing.T) {
+	s := resourceSchema()
+
+	assertUnordered := func(name string, a schema.Attribute) {
+		t.Helper()
+		la, ok := a.(schema.ListAttribute)
+		if !ok {
+			t.Fatalf("%s is %T, want schema.ListAttribute", name, a)
+		}
+		if _, ok := la.CustomType.(normalize.UnorderedListType); !ok {
+			t.Errorf("%s CustomType is %T, want normalize.UnorderedListType", name, la.CustomType)
+		}
+	}
+
+	for _, name := range []string{"hostsallow", "hostsdeny"} {
+		assertUnordered(name, s.Attributes[name])
+	}
+
+	opts, ok := s.Attributes["options"].(schema.SingleNestedAttribute)
+	if !ok {
+		t.Fatalf("options is %T, want schema.SingleNestedAttribute", s.Attributes["options"])
+	}
+	for _, name := range []string{"hostsallow", "hostsdeny"} {
+		assertUnordered("options."+name, opts.Attributes[name])
+	}
+
+	audit, ok := s.Attributes["audit"].(schema.SingleNestedAttribute)
+	if !ok {
+		t.Fatalf("audit is %T, want schema.SingleNestedAttribute", s.Attributes["audit"])
+	}
+	for _, name := range []string{"watch_list", "ignore_list"} {
+		assertUnordered("audit."+name, audit.Attributes[name])
+	}
+}
+
 // baseLegacyModel returns an SMBModel with every field set to a
 // non-null/non-unknown value and Purpose unset, matching the common case of
 // a share that relies on the LEGACY_SHARE default.
@@ -108,8 +149,8 @@ func baseLegacyModel() SMBModel {
 		Browsable:        types.BoolValue(true),
 		Recyclebin:       types.BoolValue(false),
 		GuestOK:          types.BoolValue(false),
-		HostsAllow:       types.ListValueMust(types.StringType, []attr.Value{types.StringValue("192.168.1.0/24")}),
-		HostsDeny:        types.ListValueMust(types.StringType, []attr.Value{}),
+		HostsAllow:       normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{types.StringValue("192.168.1.0/24")})},
+		HostsDeny:        normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
 		ABE:              types.BoolValue(false),
 		ACL:              types.BoolValue(true),
 		DurableHandle:    types.BoolValue(true),
@@ -288,8 +329,8 @@ func TestSMBApiPayload_LegacyFlagsGuardedByNullUnknown(t *testing.T) {
 	m := baseLegacyModel()
 	m.Recyclebin = types.BoolNull()
 	m.GuestOK = types.BoolUnknown()
-	m.HostsAllow = types.ListNull(types.StringType)
-	m.HostsDeny = types.ListUnknown(types.StringType)
+	m.HostsAllow = normalize.NewUnorderedListNull(types.StringType)
+	m.HostsDeny = normalize.NewUnorderedListUnknown(types.StringType)
 
 	payload, diags := m.apiPayload(ctx)
 	if diags.HasError() {
@@ -550,8 +591,8 @@ func TestSMBApiPayload_Audit(t *testing.T) {
 	m := baseLegacyModel()
 	auditObj, d := types.ObjectValueFrom(ctx, smbAuditAttrTypes, SMBAuditModel{
 		Enable:     types.BoolValue(true),
-		WatchList:  types.ListValueMust(types.StringType, []attr.Value{types.StringValue("grp")}),
-		IgnoreList: types.ListValueMust(types.StringType, []attr.Value{}),
+		WatchList:  normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{types.StringValue("grp")})},
+		IgnoreList: normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
 	})
 	if d.HasError() {
 		t.Fatalf("build audit object: %v", d)
@@ -652,7 +693,7 @@ func optsObject(t *testing.T, m SMBOptionsModel) types.Object {
 func nullOpts() SMBOptionsModel {
 	return SMBOptionsModel{
 		Recyclebin: types.BoolNull(), PathSuffix: types.StringNull(),
-		HostsAllow: types.ListNull(types.StringType), HostsDeny: types.ListNull(types.StringType),
+		HostsAllow: normalize.NewUnorderedListNull(types.StringType), HostsDeny: normalize.NewUnorderedListNull(types.StringType),
 		GuestOK: types.BoolNull(), Streams: types.BoolNull(), DurableHandle: types.BoolNull(),
 		Shadowcopy: types.BoolNull(), FSRVP: types.BoolNull(), Home: types.BoolNull(),
 		ACL: types.BoolNull(), AFP: types.BoolNull(), TimeMachine: types.BoolNull(),
@@ -706,7 +747,7 @@ func TestApiPayload_TimeMachineOptions(t *testing.T) {
 // DEFAULT_SHARE can carry hostsallow + aapl_name_mangling (the issue's point 2).
 func TestApiPayload_DefaultShareHostRestriction(t *testing.T) {
 	o := nullOpts()
-	o.HostsAllow, _ = types.ListValueFrom(context.Background(), types.StringType, []string{"192.168.1.0/24"})
+	o.HostsAllow, _ = normalize.NewUnorderedListValueFrom(context.Background(), types.StringType, []string{"192.168.1.0/24"})
 	o.AaplNameMangling = types.BoolValue(true)
 	o.Recyclebin = types.BoolValue(true) // not valid for DEFAULT — dropped
 	m := baseLegacyModel()
@@ -815,7 +856,7 @@ func TestInvalidOptionKeys_MisfiledTimeMachine(t *testing.T) {
 // All-valid options for a purpose produce no findings.
 func TestInvalidOptionKeys_AllValid(t *testing.T) {
 	o := nullOpts()
-	o.HostsAllow = types.ListValueMust(types.StringType, []attr.Value{types.StringValue("10.0.0.0/8")})
+	o.HostsAllow = normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{types.StringValue("10.0.0.0/8")})}
 	o.AaplNameMangling = types.BoolValue(true)
 	m := SMBModel{Purpose: types.StringValue("DEFAULT_SHARE"), Options: optsObject(t, o)}
 
@@ -866,7 +907,7 @@ func TestOverlayFlatOnOptions(t *testing.T) {
 	o := nullOpts()
 	o.GuestOK = types.BoolValue(false)
 	o.Streams = types.BoolValue(true)
-	o.HostsAllow = types.ListValueMust(types.StringType, []attr.Value{types.StringValue("10.0.0.0/8")})
+	o.HostsAllow = normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{types.StringValue("10.0.0.0/8")})}
 	o.VUID = types.StringValue("abc")
 
 	m := baseLegacyModel()
@@ -874,7 +915,7 @@ func TestOverlayFlatOnOptions(t *testing.T) {
 	m.Options = optsObject(t, o)
 	m.GuestOK = types.BoolValue(true)
 	m.Streams = types.BoolUnknown()
-	m.HostsAllow = types.ListValueMust(types.StringType, []attr.Value{types.StringValue("192.168.0.0/16")})
+	m.HostsAllow = normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{types.StringValue("192.168.0.0/16")})}
 
 	obj, changed, diags := m.overlayFlatOnOptions(ctx)
 	if diags.HasError() {
@@ -920,8 +961,8 @@ func TestConfiguredFlatLegacyKeys(t *testing.T) {
 	m := SMBModel{
 		Recyclebin:       types.BoolNull(),
 		GuestOK:          types.BoolValue(true),
-		HostsAllow:       types.ListUnknown(types.StringType),
-		HostsDeny:        types.ListNull(types.StringType),
+		HostsAllow:       normalize.NewUnorderedListUnknown(types.StringType),
+		HostsDeny:        normalize.NewUnorderedListNull(types.StringType),
 		ACL:              types.BoolNull(),
 		DurableHandle:    types.BoolNull(),
 		Streams:          types.BoolNull(),

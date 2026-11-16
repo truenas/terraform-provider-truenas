@@ -14,6 +14,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func resourceSchema() schema.Schema {
@@ -110,10 +112,12 @@ func resourceSchema() schema.Schema {
 			"bridge_members": schema.ListAttribute{
 				Optional:    true,
 				Computed:    true,
+				CustomType:  normalize.UnorderedListOf(types.StringType),
 				ElementType: types.StringType,
-				Description: "Member interfaces for a BRIDGE.",
+				Description: "Member interfaces for a BRIDGE. Order is not significant.",
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.UseStateForUnknown(),
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType)),
 				},
 			},
 			"stp": schema.BoolAttribute{
@@ -136,10 +140,12 @@ func resourceSchema() schema.Schema {
 			"lag_ports": schema.ListAttribute{
 				Optional:    true,
 				Computed:    true,
+				CustomType:  normalize.UnorderedListOf(types.StringType),
 				ElementType: types.StringType,
-				Description: "Member ports for a LINK_AGGREGATION interface.",
+				Description: "Member ports for a LINK_AGGREGATION interface. Order is not significant.",
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.UseStateForUnknown(),
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType)),
 				},
 			},
 			"vlan_parent_interface": schema.StringAttribute{

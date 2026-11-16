@@ -147,6 +147,43 @@ resource "truenas_nfs_share" "test" {
 `, datasetName, comment, networksHCL)
 }
 
+// TestAccNFSShare_reorderNoDiff verifies the pool #66 bug class fix for the
+// NFS share allowlists: networks and hosts are order-insensitive sets, so
+// re-applying the same elements in a different order than they were created
+// (and than sharing.nfs returns them) must produce an empty plan, not a
+// perpetual update diff.
+func TestAccNFSShare_reorderNoDiff(t *testing.T) {
+	ds := fmt.Sprintf("%s/%s", acctest.TestPool(), acctest.RandName("tf-acc-nfs-ord"))
+	create := nfsShareConfig(ds, `
+  networks = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+  hosts    = ["192.0.2.1", "192.0.2.2", "192.0.2.3"]
+`)
+	// Same three networks and hosts, each reordered: must be a no-op plan.
+	reordered := nfsShareConfig(ds, `
+  networks = ["192.168.0.0/16", "10.0.0.0/8", "172.16.0.0/12"]
+  hosts    = ["192.0.2.3", "192.0.2.1", "192.0.2.2"]
+`)
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckNFSShareDestroyed(ds),
+		Steps: []resource.TestStep{
+			{
+				Config: create,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_nfs_share.test", "networks.#", "3"),
+					resource.TestCheckResourceAttr("truenas_nfs_share.test", "hosts.#", "3"),
+				),
+			},
+			{
+				Config:             reordered,
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+		},
+	})
+}
+
 // nfsShareSummary is the subset of sharing.nfs.query fields this test
 // package needs directly (outside of the provider's own resource code).
 type nfsShareSummary struct {

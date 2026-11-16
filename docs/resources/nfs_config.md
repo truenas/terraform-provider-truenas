@@ -26,10 +26,10 @@ resource "truenas_nfs_config" "config" {
 ### Optional
 
 - `allow_nonroot` (Boolean) Whether NFS client mount requests from unprivileged (non-root) ports are allowed.
-- `bindip` (List of String) IP addresses to bind the NFS service to. Empty list binds to all addresses.
+- `bindip` (List of String) IP addresses to bind the NFS service to. Order is not significant. Empty list binds to all addresses.
 - `mountd_log` (Boolean) Whether mountd logging is enabled.
 - `mountd_port` (Number) TCP/UDP port used by mountd. A value of 0 restores the default (dynamic) port.
-- `protocols` (List of String) NFS protocol versions to serve. One or more of NFSV3, NFSV4.
+- `protocols` (List of String) NFS protocol versions to serve. One or more of NFSV3, NFSV4. Order is not significant.
 - `rdma` (Boolean) Whether NFS over RDMA is enabled.
 - `rpclockd_port` (Number) TCP/UDP port used by rpc.lockd. A value of 0 restores the default (dynamic) port.
 - `rpcstatd_port` (Number) TCP/UDP port used by rpc.statd. A value of 0 restores the default (dynamic) port.

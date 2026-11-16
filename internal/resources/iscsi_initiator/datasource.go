@@ -12,6 +12,7 @@ import (
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ datasource.DataSource = &ISCSIInitiatorDataSource{}
@@ -32,7 +33,7 @@ func (d *ISCSIInitiatorDataSource) Schema(_ context.Context, _ datasource.Schema
 		Attributes: map[string]dschema.Attribute{
 			"id":         dschema.Int64Attribute{Required: true, Description: "Numeric iSCSI initiator ID to look up."},
 			"comment":    dschema.StringAttribute{Computed: true},
-			"initiators": dschema.ListAttribute{Computed: true, ElementType: types.StringType},
+			"initiators": dschema.ListAttribute{Computed: true, CustomType: normalize.UnorderedListOf(types.StringType), ElementType: types.StringType},
 		},
 	}
 }

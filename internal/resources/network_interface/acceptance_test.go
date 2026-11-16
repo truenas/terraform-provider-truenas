@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -612,6 +613,64 @@ resource "truenas_network_interface" "test" {
 					resource.TestCheckResourceAttr(r, "lacpdu_rate", "SLOW"),
 					resource.TestCheckResourceAttr(r, "xmit_hash_policy", "LAYER2+3"),
 				),
+			},
+		},
+	})
+}
+
+// TestAccNetworkInterface_bridgeMembersReorderNoDiff guards the pool #66 bug
+// class for bridge_members: the attribute is an order-insensitive set, so
+// re-applying the same member NICs in a different order than interface.query
+// returns them must produce an empty plan, not a perpetual update diff.
+//
+// DISRUPTIVE: this creates a real BRIDGE (br995) that absorbs physical NICs
+// and drives it through interface.commit/checkin against the box's live
+// networking stack, so it is gated on acctest.DisruptiveCheck (never runs
+// without TRUENAS_DISRUPTIVE=1) in addition to needing three spare,
+// non-management physical NICs in TRUENAS_FREE_NICS (space- or
+// comma-separated). The 60s commit auto-rollback is the connectivity backstop.
+func TestAccNetworkInterface_bridgeMembersReorderNoDiff(t *testing.T) {
+	acctest.DisruptiveCheck(t)
+
+	nics := strings.FieldsFunc(os.Getenv("TRUENAS_FREE_NICS"), func(r rune) bool {
+		return r == ',' || r == ' '
+	})
+	if len(nics) < 3 {
+		t.Skipf("set TRUENAS_FREE_NICS to three or more spare, non-management physical NICs (space- or comma-separated) to run the bridge_members reorder test; got %d", len(nics))
+	}
+	nics = nics[:3]
+
+	hcl := func(order []string) string {
+		quoted := make([]string, len(order))
+		for i, n := range order {
+			quoted[i] = fmt.Sprintf("%q", n)
+		}
+		return acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_network_interface" "test" {
+  name           = "br995"
+  type           = "BRIDGE"
+  bridge_members = [%s]
+}
+`, strings.Join(quoted, ", "))
+	}
+
+	const r = "truenas_network_interface.test"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckInterfaceDestroyed("br995"),
+		Steps: []resource.TestStep{
+			{
+				Config: hcl([]string{nics[0], nics[1], nics[2]}),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(r, "bridge_members.#", "3"),
+				),
+			},
+			// Same three members, different order: must be a no-op plan.
+			{
+				Config:             hcl([]string{nics[2], nics[0], nics[1]}),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
 			},
 		},
 	})

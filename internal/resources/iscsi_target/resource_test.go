@@ -11,6 +11,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // TestISCSITargetSchema verifies that the resource schema has the expected
@@ -56,13 +58,19 @@ func TestISCSITargetSchema(t *testing.T) {
 		t.Errorf("'groups' attribute is %T, want schema.ListNestedAttribute", groupsAttr)
 	}
 
-	// auth_networks must be ListAttribute.
+	// auth_networks must be ListAttribute whose CustomType is the
+	// order-insensitive UnorderedListType (pool #66 bug class: the API
+	// reorders CIDRs, so a plain types.List would diff forever).
 	anAttr, ok := s.Attributes["auth_networks"]
 	if !ok {
 		t.Fatal("schema missing 'auth_networks' attribute")
 	}
-	if _, ok := anAttr.(schema.ListAttribute); !ok {
-		t.Errorf("'auth_networks' attribute is %T, want schema.ListAttribute", anAttr)
+	anList, ok := anAttr.(schema.ListAttribute)
+	if !ok {
+		t.Fatalf("'auth_networks' attribute is %T, want schema.ListAttribute", anAttr)
+	}
+	if _, ok := anList.CustomType.(normalize.UnorderedListType); !ok {
+		t.Errorf("'auth_networks' CustomType is %T, want normalize.UnorderedListType", anList.CustomType)
 	}
 
 	// rel_tgt_id must be Computed-only.
@@ -105,9 +113,9 @@ func TestISCSITargetApiPayload(t *testing.T) {
 		t.Fatalf("ListValue failed: %v", diags)
 	}
 
-	authNetworks, diags := types.ListValueFrom(ctx, types.StringType, []string{"10.0.0.0/8"})
+	authNetworks, diags := normalize.NewUnorderedListValueFrom(ctx, types.StringType, []string{"10.0.0.0/8"})
 	if diags.HasError() {
-		t.Fatalf("ListValueFrom (auth_networks) failed: %v", diags)
+		t.Fatalf("NewUnorderedListValueFrom (auth_networks) failed: %v", diags)
 	}
 
 	m := ISCSITargetModel{
@@ -193,7 +201,7 @@ func TestISCSITargetApiPayload_NullLists(t *testing.T) {
 		Alias:        types.StringValue(""),
 		Mode:         types.StringValue("ISCSI"),
 		Groups:       types.ListNull(types.ObjectType{AttrTypes: groupsAttrTypes}),
-		AuthNetworks: types.ListNull(types.StringType),
+		AuthNetworks: normalize.NewUnorderedListNull(types.StringType),
 		RelTgtID:     types.Int64Value(0),
 	}
 
@@ -247,7 +255,7 @@ func TestISCSITargetApiPayload_UnknownAuthmethod(t *testing.T) {
 			Alias:        types.StringUnknown(),
 			Mode:         types.StringUnknown(),
 			Groups:       groupList,
-			AuthNetworks: types.ListNull(types.StringType),
+			AuthNetworks: normalize.NewUnorderedListNull(types.StringType),
 		}
 		payload, diags := m.apiPayload(ctx)
 		if diags.HasError() {
@@ -345,7 +353,7 @@ func TestISCSITargetApiPayload_IscsiParameters(t *testing.T) {
 			Alias:           types.StringNull(),
 			Mode:            types.StringNull(),
 			Groups:          types.ListNull(types.ObjectType{AttrTypes: groupsAttrTypes}),
-			AuthNetworks:    types.ListNull(types.StringType),
+			AuthNetworks:    normalize.NewUnorderedListNull(types.StringType),
 			IscsiParameters: params,
 		}
 	}
@@ -428,7 +436,7 @@ func TestISCSITargetApiPayload_AliasClear(t *testing.T) {
 			Alias:        c.alias,
 			Mode:         types.StringUnknown(),
 			Groups:       types.ListNull(types.ObjectType{AttrTypes: groupsAttrTypes}),
-			AuthNetworks: types.ListNull(types.StringType),
+			AuthNetworks: normalize.NewUnorderedListNull(types.StringType),
 		}
 		payload, diags := m.apiPayload(ctx)
 		if diags.HasError() {

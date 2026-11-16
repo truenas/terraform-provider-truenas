@@ -126,7 +126,11 @@ func resourceSchema() schema.Schema {
 			"source_datasets": schema.ListAttribute{
 				Required:    true,
 				ElementType: types.StringType,
-				Description: "Source dataset paths to replicate.",
+				CustomType:  normalize.UnorderedListOf(types.StringType),
+				Description: "Source dataset paths to replicate. Order does not matter.",
+				PlanModifiers: []planmodifier.List{
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType)),
+				},
 			},
 			"target_dataset": schema.StringAttribute{
 				Required:    true,
@@ -140,8 +144,10 @@ func resourceSchema() schema.Schema {
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "Dataset paths to exclude from a recursive replication.",
+				CustomType:  normalize.UnorderedListOf(types.StringType),
+				Description: "Dataset paths to exclude from a recursive replication. Order does not matter.",
 				PlanModifiers: []planmodifier.List{
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType)),
 					listplanmodifier.UseStateForUnknown(),
 				},
 			},
@@ -176,8 +182,10 @@ func resourceSchema() schema.Schema {
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "Naming schemas of snapshots to replicate. Mutually exclusive with name_regex.",
+				CustomType:  normalize.UnorderedListOf(types.StringType),
+				Description: "Naming schemas of snapshots to replicate. Mutually exclusive with name_regex. Order does not matter.",
 				PlanModifiers: []planmodifier.List{
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType)),
 					listplanmodifier.UseStateForUnknown(),
 				},
 			},
@@ -185,8 +193,10 @@ func resourceSchema() schema.Schema {
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "Additional naming schemas to include. Mutually exclusive with name_regex.",
+				CustomType:  normalize.UnorderedListOf(types.StringType),
+				Description: "Additional naming schemas to include. Mutually exclusive with name_regex. Order does not matter.",
 				PlanModifiers: []planmodifier.List{
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType)),
 					listplanmodifier.UseStateForUnknown(),
 				},
 			},
@@ -279,8 +289,10 @@ func resourceSchema() schema.Schema {
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "Dataset property names to exclude from replication.",
+				CustomType:  normalize.UnorderedListOf(types.StringType),
+				Description: "Dataset property names to exclude from replication. Order does not matter.",
 				PlanModifiers: []planmodifier.List{
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType)),
 					listplanmodifier.UseStateForUnknown(),
 				},
 			},

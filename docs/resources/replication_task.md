@@ -51,7 +51,7 @@ resource "truenas_replication_task" "local_backup" {
 - `name` (String) Name of the replication task.
 - `recursive` (Boolean) Replicate child datasets recursively.
 - `retention_policy` (String) SOURCE, CUSTOM, or NONE.
-- `source_datasets` (List of String) Source dataset paths to replicate.
+- `source_datasets` (List of String) Source dataset paths to replicate. Order does not matter.
 - `target_dataset` (String) Target dataset path.
 
 ### Optional
@@ -59,7 +59,7 @@ resource "truenas_replication_task" "local_backup" {
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
 - `allow_from_scratch` (Boolean) Destroy all snapshots on the target and replicate everything from scratch if the incremental base is missing.
-- `also_include_naming_schema` (List of String) Additional naming schemas to include. Mutually exclusive with name_regex.
+- `also_include_naming_schema` (List of String) Additional naming schemas to include. Mutually exclusive with name_regex. Order does not matter.
 - `compressed` (Boolean) Enable compressed ZFS send streams (zfs send -c).
 - `compression` (String) Compresses the SSH stream: LZ4, PIGZ, or PLZIP. Available only for transport = "SSH"; must be unset for transport = "LOCAL".
 - `embed` (Boolean) Enable embedded-block ZFS send streams (zfs send -e).
@@ -70,7 +70,7 @@ resource "truenas_replication_task" "local_backup" {
 - `encryption_key_format` (String) Format of encryption_key: HEX or PASSPHRASE.
 - `encryption_key_location` (String) Path on the target system where the encryption key is stored ($TrueNAS-managed location if omitted).
 - `encryption_key_wo_version` (Number) Version trigger for encryption_key. It is write-only, so changing it alone is not a change Terraform can see; bump this to send the new key. The key is sent on create and, after that, only when this integer changes or encryption with its own key (not inherited) is turned on; other updates leave the stored key alone.
-- `exclude` (List of String) Dataset paths to exclude from a recursive replication.
+- `exclude` (List of String) Dataset paths to exclude from a recursive replication. Order does not matter.
 - `hold_pending_snapshots` (Boolean) Prevent source snapshots from being deleted by retention while a replication is pending.
 - `large_block` (Boolean) Enable large-block ZFS send streams (zfs send -L).
 - `lifetime_unit` (String) HOUR, DAY, WEEK, MONTH, or YEAR. Only valid with retention_policy = CUSTOM; null otherwise.
@@ -78,7 +78,7 @@ resource "truenas_replication_task" "local_backup" {
 - `lifetimes` (Attributes List) Per-schedule snapshot retention rules on the target (used with retention_policy = CUSTOM). Each rule keeps snapshots matching its schedule for lifetime_value lifetime_units. Omit it (rather than []) for none. (see [below for nested schema](#nestedatt--lifetimes))
 - `logging_level` (String) Log verbosity for task execution, e.g. DEBUG, INFO, WARNING, ERROR. Null uses the system default.
 - `name_regex` (String) Regular expression matching snapshot names to replicate. Mutually exclusive with naming_schema/also_include_naming_schema.
-- `naming_schema` (List of String) Naming schemas of snapshots to replicate. Mutually exclusive with name_regex.
+- `naming_schema` (List of String) Naming schemas of snapshots to replicate. Mutually exclusive with name_regex. Order does not matter.
 - `netcat_active_side` (String) For transport = "SSH+NETCAT", which side actively opens the netcat data connection: LOCAL or REMOTE. Required for SSH+NETCAT; must be unset for other transports.
 - `netcat_active_side_listen_address` (String) For transport = "SSH+NETCAT", the IP address the active side listens on. Only valid for SSH+NETCAT.
 - `netcat_active_side_port_max` (Number) For transport = "SSH+NETCAT", the high end of the port range the active side may listen on (1-65535). Only valid for SSH+NETCAT.
@@ -87,7 +87,7 @@ resource "truenas_replication_task" "local_backup" {
 - `only_matching_schedule` (Boolean) Only replicate snapshots that match `schedule` or `restrict_schedule`.
 - `periodic_snapshot_tasks` (List of Number) IDs of periodic snapshot tasks that feed this replication task. Order does not matter (the server sorts them).
 - `properties` (Boolean) Include dataset properties in the replication stream.
-- `properties_exclude` (List of String) Dataset property names to exclude from replication.
+- `properties_exclude` (List of String) Dataset property names to exclude from replication. Order does not matter.
 - `properties_override` (Map of String) ZFS properties to force to specific values on the target datasets (property name -> value). Omit it (rather than {}) for none.
 - `readonly` (String) SET, REQUIRE, or IGNORE.
 - `replicate` (Boolean) Replicate the full dataset tree.

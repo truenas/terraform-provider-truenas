@@ -7,22 +7,26 @@ import (
 	"context"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 type NFSShareModel struct {
-	ID        types.String `tfsdk:"id"`
-	Path      types.String `tfsdk:"path"`
-	Comment   types.String `tfsdk:"comment"`
-	Enabled   types.Bool   `tfsdk:"enabled"`
-	ReadOnly  types.Bool   `tfsdk:"ro"`
-	Networks  types.List   `tfsdk:"networks"` // list of CIDR strings
-	Hosts     types.List   `tfsdk:"hosts"`    // list of hostnames/IPs
-	MapRoot   types.String `tfsdk:"maproot_user"`
-	MapGroup  types.String `tfsdk:"maproot_group"`
-	MapAll    types.String `tfsdk:"mapall_user"`
-	MapAllGr  types.String `tfsdk:"mapall_group"`
-	Security  types.List   `tfsdk:"security"` // list of SYS|KRB5|KRB5I|KRB5P
-	ExposeSns types.Bool   `tfsdk:"expose_snapshots"`
+	ID       types.String `tfsdk:"id"`
+	Path     types.String `tfsdk:"path"`
+	Comment  types.String `tfsdk:"comment"`
+	Enabled  types.Bool   `tfsdk:"enabled"`
+	ReadOnly types.Bool   `tfsdk:"ro"`
+	// Networks and Hosts are order-insensitive allowlists: sharing.nfs returns
+	// them in the server's own order, which need not match config, so a plain
+	// types.List would diff on every plan after a reorder.
+	Networks  normalize.UnorderedList `tfsdk:"networks"` // list of CIDR strings
+	Hosts     normalize.UnorderedList `tfsdk:"hosts"`    // list of hostnames/IPs
+	MapRoot   types.String            `tfsdk:"maproot_user"`
+	MapGroup  types.String            `tfsdk:"maproot_group"`
+	MapAll    types.String            `tfsdk:"mapall_user"`
+	MapAllGr  types.String            `tfsdk:"mapall_group"`
+	Security  types.List              `tfsdk:"security"` // ordered preference list of SYS|KRB5|KRB5I|KRB5P
+	ExposeSns types.Bool              `tfsdk:"expose_snapshots"`
 }
 
 type apiResponse struct {

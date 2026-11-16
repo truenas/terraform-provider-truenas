@@ -113,16 +113,16 @@ type ReplicationModel struct {
 	NetcatActiveSidePortMin         types.Int64             `tfsdk:"netcat_active_side_port_min"`         // 1-65535
 	NetcatActiveSidePortMax         types.Int64             `tfsdk:"netcat_active_side_port_max"`         // 1-65535
 	NetcatPassiveSideConnectAddress types.String            `tfsdk:"netcat_passive_side_connect_address"` // IP the passive side connects to
-	SourceDatasets                  types.List              `tfsdk:"source_datasets"`                     // List[String], Required
+	SourceDatasets                  normalize.UnorderedList `tfsdk:"source_datasets"`                     // List[String], Required, any order
 	TargetDataset                   types.String            `tfsdk:"target_dataset"`
 	Recursive                       types.Bool              `tfsdk:"recursive"`
-	Exclude                         types.List              `tfsdk:"exclude"`
+	Exclude                         normalize.UnorderedList `tfsdk:"exclude"` // List[String], any order
 	Properties                      types.Bool              `tfsdk:"properties"`
 	Replicate                       types.Bool              `tfsdk:"replicate"`
-	PeriodicSnapshotTasks           normalize.UnorderedList `tfsdk:"periodic_snapshot_tasks"` // List[Int64], any order
-	NamingSchema                    types.List              `tfsdk:"naming_schema"`           // List[String]
-	AlsoIncludeNamingSchema         types.List              `tfsdk:"also_include_naming_schema"`
-	NameRegex                       types.String            `tfsdk:"name_regex"` // "" = unset -> null
+	PeriodicSnapshotTasks           normalize.UnorderedList `tfsdk:"periodic_snapshot_tasks"`    // List[Int64], any order
+	NamingSchema                    normalize.UnorderedList `tfsdk:"naming_schema"`              // List[String], any order
+	AlsoIncludeNamingSchema         normalize.UnorderedList `tfsdk:"also_include_naming_schema"` // List[String], any order
+	NameRegex                       types.String            `tfsdk:"name_regex"`                 // "" = unset -> null
 	Auto                            types.Bool              `tfsdk:"auto"`
 	Schedule                        types.Object            `tfsdk:"schedule"`         // optional nested; null when unset
 	RetentionPolicy                 types.String            `tfsdk:"retention_policy"` // SOURCE, CUSTOM, NONE
@@ -133,14 +133,14 @@ type ReplicationModel struct {
 	Retries                         types.Int64             `tfsdk:"retries"`
 
 	// Send-stream / behaviour options (coverage audit).
-	Compressed           types.Bool   `tfsdk:"compressed"`  // zfs send -c
-	Embed                types.Bool   `tfsdk:"embed"`       // zfs send -e
-	LargeBlock           types.Bool   `tfsdk:"large_block"` // zfs send -L
-	AllowFromScratch     types.Bool   `tfsdk:"allow_from_scratch"`
-	HoldPendingSnapshots types.Bool   `tfsdk:"hold_pending_snapshots"`
-	OnlyMatchingSchedule types.Bool   `tfsdk:"only_matching_schedule"`
-	LoggingLevel         types.String `tfsdk:"logging_level"` // null = default
-	PropertiesExclude    types.List   `tfsdk:"properties_exclude"`
+	Compressed           types.Bool              `tfsdk:"compressed"`  // zfs send -c
+	Embed                types.Bool              `tfsdk:"embed"`       // zfs send -e
+	LargeBlock           types.Bool              `tfsdk:"large_block"` // zfs send -L
+	AllowFromScratch     types.Bool              `tfsdk:"allow_from_scratch"`
+	HoldPendingSnapshots types.Bool              `tfsdk:"hold_pending_snapshots"`
+	OnlyMatchingSchedule types.Bool              `tfsdk:"only_matching_schedule"`
+	LoggingLevel         types.String            `tfsdk:"logging_level"`      // null = default
+	PropertiesExclude    normalize.UnorderedList `tfsdk:"properties_exclude"` // List[String], any order
 
 	// Encryption of the replicated (target) datasets. encryption_key is a
 	// write-only secret (read from req.Config, never stored/read back).
@@ -367,7 +367,7 @@ func responseToModel(ctx context.Context, api *replicationAPI, m *ReplicationMod
 	if sourceDatasets == nil {
 		sourceDatasets = []string{}
 	}
-	sdList, d := types.ListValueFrom(ctx, types.StringType, sourceDatasets)
+	sdList, d := normalize.NewUnorderedListValueFrom(ctx, types.StringType, sourceDatasets)
 	diags.Append(d...)
 	m.SourceDatasets = sdList
 
@@ -378,7 +378,7 @@ func responseToModel(ctx context.Context, api *replicationAPI, m *ReplicationMod
 	if exclude == nil {
 		exclude = []string{}
 	}
-	exList, d2 := types.ListValueFrom(ctx, types.StringType, exclude)
+	exList, d2 := normalize.NewUnorderedListValueFrom(ctx, types.StringType, exclude)
 	diags.Append(d2...)
 	m.Exclude = exList
 
@@ -394,7 +394,7 @@ func responseToModel(ctx context.Context, api *replicationAPI, m *ReplicationMod
 	if namingSchema == nil {
 		namingSchema = []string{}
 	}
-	nsList, d4 := types.ListValueFrom(ctx, types.StringType, namingSchema)
+	nsList, d4 := normalize.NewUnorderedListValueFrom(ctx, types.StringType, namingSchema)
 	diags.Append(d4...)
 	m.NamingSchema = nsList
 
@@ -402,7 +402,7 @@ func responseToModel(ctx context.Context, api *replicationAPI, m *ReplicationMod
 	if alsoInclude == nil {
 		alsoInclude = []string{}
 	}
-	aiList, d5 := types.ListValueFrom(ctx, types.StringType, alsoInclude)
+	aiList, d5 := normalize.NewUnorderedListValueFrom(ctx, types.StringType, alsoInclude)
 	diags.Append(d5...)
 	m.AlsoIncludeNamingSchema = aiList
 
@@ -454,7 +454,7 @@ func responseToModel(ctx context.Context, api *replicationAPI, m *ReplicationMod
 	if propsExclude == nil {
 		propsExclude = []string{}
 	}
-	peList, dpe := types.ListValueFrom(ctx, types.StringType, propsExclude)
+	peList, dpe := normalize.NewUnorderedListValueFrom(ctx, types.StringType, propsExclude)
 	diags.Append(dpe...)
 	m.PropertiesExclude = peList
 

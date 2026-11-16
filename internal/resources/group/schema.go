@@ -64,8 +64,10 @@ func resourceSchema() schema.Schema {
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "List of allowed sudo commands.",
+				CustomType:  normalize.UnorderedListOf(types.StringType),
+				Description: "List of allowed sudo commands. Order is not significant.",
 				PlanModifiers: []planmodifier.List{
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType)),
 					listplanmodifier.UseStateForUnknown(),
 				},
 			},
@@ -73,8 +75,10 @@ func resourceSchema() schema.Schema {
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "List of sudo commands allowed without password.",
+				CustomType:  normalize.UnorderedListOf(types.StringType),
+				Description: "List of sudo commands allowed without password. Order is not significant.",
 				PlanModifiers: []planmodifier.List{
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType)),
 					listplanmodifier.UseStateForUnknown(),
 				},
 			},

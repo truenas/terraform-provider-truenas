@@ -10,6 +10,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // TestISCSIInitiatorSchema verifies that the resource schema has the expected
@@ -66,9 +68,9 @@ func TestISCSIInitiatorApiPayload(t *testing.T) {
 
 	m := ISCSIInitiatorModel{
 		Comment: types.StringValue("test comment"),
-		Initiators: types.ListValueMust(types.StringType, []attr.Value{
+		Initiators: normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{
 			types.StringValue("iqn.2023-01.com.example:initiator1"),
-		}),
+		})},
 	}
 
 	payload, diags := m.apiPayload(ctx)
@@ -111,7 +113,7 @@ func TestISCSIInitiatorApiPayload_NullInitiators(t *testing.T) {
 
 	m := ISCSIInitiatorModel{
 		Comment:    types.StringValue(""),
-		Initiators: types.ListNull(types.StringType),
+		Initiators: normalize.NewUnorderedListNull(types.StringType),
 	}
 
 	payload, diags := m.apiPayload(ctx)
@@ -139,7 +141,7 @@ func TestISCSIInitiatorApiPayload_Unknown(t *testing.T) {
 
 	m := ISCSIInitiatorModel{
 		Comment:    types.StringUnknown(),
-		Initiators: types.ListUnknown(types.StringType),
+		Initiators: normalize.NewUnorderedListUnknown(types.StringType),
 	}
 
 	payload, diags := m.apiPayload(ctx)

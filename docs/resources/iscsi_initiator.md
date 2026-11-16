@@ -25,7 +25,7 @@ resource "truenas_iscsi_initiator" "all" {
 ### Optional
 
 - `comment` (String) Optional description for this initiator group. When omitted, the current value is kept.
-- `initiators` (List of String) List of IQN strings. An explicit empty list allows all initiators. When omitted, the current list on the server is kept (it is not cleared).
+- `initiators` (List of String) List of IQN strings. An explicit empty list allows all initiators. When omitted, the current list on the server is kept (it is not cleared). Order is not significant.
 
 ### Read-Only
 

@@ -60,21 +60,25 @@ func resourceSchema() schema.Schema {
 			"networks": schema.ListAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "List of allowed networks in CIDR notation. TrueNAS stores the network address (host bits cleared) and a bare address as /32 (/128), so 192.168.1.10/24 equals 192.168.1.0/24 and 10.1.2.3 equals 10.1.2.3/32. Empty or omitted allows every network.",
+				Description: "List of allowed networks in CIDR notation. TrueNAS stores the network address (host bits cleared) and a bare address as /32 (/128), so 192.168.1.10/24 equals 192.168.1.0/24 and 10.1.2.3 equals 10.1.2.3/32. Order is not significant. Empty or omitted allows every network.",
+				CustomType:  normalize.UnorderedListOf(normalize.NetworkType{}),
 				ElementType: normalize.NetworkType{},
 				PlanModifiers: []planmodifier.List{
-					normalize.KeepStateIfEquivalentList(types.ListType{ElemType: normalize.NetworkType{}}),
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(normalize.NetworkType{})),
 					// last, so a removal after having been configured still resets
 					planmod.ResetWhenUnsetList(types.ListValueMust(normalize.NetworkType{}, []attr.Value{})),
 				},
 			},
 			"hosts": schema.ListAttribute{
-				Optional: true,
-				Computed: true,
+				Optional:   true,
+				Computed:   true,
+				CustomType: normalize.UnorderedListOf(types.StringType),
 				PlanModifiers: []planmodifier.List{
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType)),
+					// last, so a removal after having been configured still resets
 					planmod.ResetWhenUnsetList(types.ListValueMust(types.StringType, []attr.Value{})),
 				},
-				Description: "List of allowed hosts (IP or hostname). Empty or omitted allows every host.",
+				Description: "List of allowed hosts (IP or hostname). Order is not significant. Empty or omitted allows every host.",
 				ElementType: types.StringType,
 			},
 			"maproot_user": schema.StringAttribute{

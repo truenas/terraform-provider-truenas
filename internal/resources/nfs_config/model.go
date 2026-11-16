@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // nfsConfigResourceID is the fixed Terraform ID for this singleton resource:
@@ -17,45 +18,47 @@ const nfsConfigResourceID = "nfs_config"
 
 // NFSConfigModel is the Terraform state model for truenas_nfs_config.
 type NFSConfigModel struct {
-	ID              types.String `tfsdk:"id"`      // fixed: "nfs_config"
-	Servers         types.Int64  `tfsdk:"servers"` // nullable; API nil -> 0
-	AllowNonroot    types.Bool   `tfsdk:"allow_nonroot"`
-	Protocols       types.List   `tfsdk:"protocols"` // List[String]: NFSV3, NFSV4
-	V4Domain        types.String `tfsdk:"v4_domain"`
-	V4Krb           types.Bool   `tfsdk:"v4_krb"`
-	BindIP          types.List   `tfsdk:"bindip"`        // List[String]
-	MountdPort      types.Int64  `tfsdk:"mountd_port"`   // nullable; API nil -> 0
-	RPCStatdPort    types.Int64  `tfsdk:"rpcstatd_port"` // nullable; API nil -> 0
-	RPCLockdPort    types.Int64  `tfsdk:"rpclockd_port"` // nullable; API nil -> 0
-	MountdLog       types.Bool   `tfsdk:"mountd_log"`
-	StatdLockdLog   types.Bool   `tfsdk:"statd_lockd_log"`
-	UserdManageGids types.Bool   `tfsdk:"userd_manage_gids"`
-	RDMA            types.Bool   `tfsdk:"rdma"`
-	ManagedNFSD     types.Bool   `tfsdk:"managed_nfsd"`       // computed-only, never in payload
-	V4KrbEnabled    types.Bool   `tfsdk:"v4_krb_enabled"`     // computed-only, never in payload
-	KeytabHasNFSSPN types.Bool   `tfsdk:"keytab_has_nfs_spn"` // computed-only, never in payload
+	ID           types.String `tfsdk:"id"`      // fixed: "nfs_config"
+	Servers      types.Int64  `tfsdk:"servers"` // nullable; API nil -> 0
+	AllowNonroot types.Bool   `tfsdk:"allow_nonroot"`
+	// Protocols and BindIP are order-insensitive: nfs.config returns them in
+	// the server's own order, so a plain types.List would diff on a reorder.
+	Protocols       normalize.UnorderedList `tfsdk:"protocols"` // List[String]: NFSV3, NFSV4
+	V4Domain        types.String            `tfsdk:"v4_domain"`
+	V4Krb           types.Bool              `tfsdk:"v4_krb"`
+	BindIP          normalize.UnorderedList `tfsdk:"bindip"`        // List[String]
+	MountdPort      types.Int64             `tfsdk:"mountd_port"`   // nullable; API nil -> 0
+	RPCStatdPort    types.Int64             `tfsdk:"rpcstatd_port"` // nullable; API nil -> 0
+	RPCLockdPort    types.Int64             `tfsdk:"rpclockd_port"` // nullable; API nil -> 0
+	MountdLog       types.Bool              `tfsdk:"mountd_log"`
+	StatdLockdLog   types.Bool              `tfsdk:"statd_lockd_log"`
+	UserdManageGids types.Bool              `tfsdk:"userd_manage_gids"`
+	RDMA            types.Bool              `tfsdk:"rdma"`
+	ManagedNFSD     types.Bool              `tfsdk:"managed_nfsd"`       // computed-only, never in payload
+	V4KrbEnabled    types.Bool              `tfsdk:"v4_krb_enabled"`     // computed-only, never in payload
+	KeytabHasNFSSPN types.Bool              `tfsdk:"keytab_has_nfs_spn"` // computed-only, never in payload
 }
 
 // NFSConfigDataSourceModel is the read-only model for the truenas_nfs_config
 // datasource.
 type NFSConfigDataSourceModel struct {
-	ID              types.String `tfsdk:"id"`
-	Servers         types.Int64  `tfsdk:"servers"`
-	AllowNonroot    types.Bool   `tfsdk:"allow_nonroot"`
-	Protocols       types.List   `tfsdk:"protocols"`
-	V4Domain        types.String `tfsdk:"v4_domain"`
-	V4Krb           types.Bool   `tfsdk:"v4_krb"`
-	BindIP          types.List   `tfsdk:"bindip"`
-	MountdPort      types.Int64  `tfsdk:"mountd_port"`
-	RPCStatdPort    types.Int64  `tfsdk:"rpcstatd_port"`
-	RPCLockdPort    types.Int64  `tfsdk:"rpclockd_port"`
-	MountdLog       types.Bool   `tfsdk:"mountd_log"`
-	StatdLockdLog   types.Bool   `tfsdk:"statd_lockd_log"`
-	UserdManageGids types.Bool   `tfsdk:"userd_manage_gids"`
-	RDMA            types.Bool   `tfsdk:"rdma"`
-	ManagedNFSD     types.Bool   `tfsdk:"managed_nfsd"`
-	V4KrbEnabled    types.Bool   `tfsdk:"v4_krb_enabled"`
-	KeytabHasNFSSPN types.Bool   `tfsdk:"keytab_has_nfs_spn"`
+	ID              types.String            `tfsdk:"id"`
+	Servers         types.Int64             `tfsdk:"servers"`
+	AllowNonroot    types.Bool              `tfsdk:"allow_nonroot"`
+	Protocols       normalize.UnorderedList `tfsdk:"protocols"`
+	V4Domain        types.String            `tfsdk:"v4_domain"`
+	V4Krb           types.Bool              `tfsdk:"v4_krb"`
+	BindIP          normalize.UnorderedList `tfsdk:"bindip"`
+	MountdPort      types.Int64             `tfsdk:"mountd_port"`
+	RPCStatdPort    types.Int64             `tfsdk:"rpcstatd_port"`
+	RPCLockdPort    types.Int64             `tfsdk:"rpclockd_port"`
+	MountdLog       types.Bool              `tfsdk:"mountd_log"`
+	StatdLockdLog   types.Bool              `tfsdk:"statd_lockd_log"`
+	UserdManageGids types.Bool              `tfsdk:"userd_manage_gids"`
+	RDMA            types.Bool              `tfsdk:"rdma"`
+	ManagedNFSD     types.Bool              `tfsdk:"managed_nfsd"`
+	V4KrbEnabled    types.Bool              `tfsdk:"v4_krb_enabled"`
+	KeytabHasNFSSPN types.Bool              `tfsdk:"keytab_has_nfs_spn"`
 }
 
 // nfsConfigAPI mirrors the JSON object returned by nfs.config and accepted
@@ -133,7 +136,7 @@ func responseToModel(ctx context.Context, api *nfsConfigAPI, m *NFSConfigModel) 
 	if protocols == nil {
 		protocols = []string{}
 	}
-	protocolsList, d := types.ListValueFrom(ctx, types.StringType, protocols)
+	protocolsList, d := normalize.NewUnorderedListValueFrom(ctx, types.StringType, protocols)
 	diags.Append(d...)
 	m.Protocols = protocolsList
 
@@ -141,7 +144,7 @@ func responseToModel(ctx context.Context, api *nfsConfigAPI, m *NFSConfigModel) 
 	if bindip == nil {
 		bindip = []string{}
 	}
-	bindipList, d := types.ListValueFrom(ctx, types.StringType, bindip)
+	bindipList, d := normalize.NewUnorderedListValueFrom(ctx, types.StringType, bindip)
 	diags.Append(d...)
 	m.BindIP = bindipList
 
@@ -194,7 +197,7 @@ func responseToDataSourceModel(ctx context.Context, api *nfsConfigAPI, m *NFSCon
 	if protocols == nil {
 		protocols = []string{}
 	}
-	protocolsList, d := types.ListValueFrom(ctx, types.StringType, protocols)
+	protocolsList, d := normalize.NewUnorderedListValueFrom(ctx, types.StringType, protocols)
 	diags.Append(d...)
 	m.Protocols = protocolsList
 
@@ -202,7 +205,7 @@ func responseToDataSourceModel(ctx context.Context, api *nfsConfigAPI, m *NFSCon
 	if bindip == nil {
 		bindip = []string{}
 	}
-	bindipList, d := types.ListValueFrom(ctx, types.StringType, bindip)
+	bindipList, d := normalize.NewUnorderedListValueFrom(ctx, types.StringType, bindip)
 	diags.Append(d...)
 	m.BindIP = bindipList
 

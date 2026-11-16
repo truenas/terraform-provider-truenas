@@ -10,6 +10,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // errPhysicalCreate is returned by validateCreateType when asked to create a
@@ -33,20 +35,24 @@ var aliasAttrTypes = map[string]attr.Type{
 
 // NetworkInterfaceModel is the Terraform state model for truenas_network_interface.
 type NetworkInterfaceModel struct {
-	ID                  types.String `tfsdk:"id"`   // interface name
-	Name                types.String `tfsdk:"name"` // e.g. br0, bond0, vlan100
-	Type                types.String `tfsdk:"type"` // PHYSICAL (import only), BRIDGE, LINK_AGGREGATION, VLAN
-	Description         types.String `tfsdk:"description"`
-	MTU                 types.Int64  `tfsdk:"mtu"` // 0 = unset -> omitted from payload
-	IPv4DHCP            types.Bool   `tfsdk:"ipv4_dhcp"`
-	IPv6Auto            types.Bool   `tfsdk:"ipv6_auto"`
-	Aliases             types.List   `tfsdk:"aliases"`        // List[AliasModel]
-	BridgeMembers       types.List   `tfsdk:"bridge_members"` // List[String]
-	STP                 types.Bool   `tfsdk:"stp"`
-	LagProtocol         types.String `tfsdk:"lag_protocol"` // "" = unset
-	LagPorts            types.List   `tfsdk:"lag_ports"`    // List[String]
-	VlanParentInterface types.String `tfsdk:"vlan_parent_interface"`
-	VlanTag             types.Int64  `tfsdk:"vlan_tag"` // 0 = unset
+	ID          types.String `tfsdk:"id"`   // interface name
+	Name        types.String `tfsdk:"name"` // e.g. br0, bond0, vlan100
+	Type        types.String `tfsdk:"type"` // PHYSICAL (import only), BRIDGE, LINK_AGGREGATION, VLAN
+	Description types.String `tfsdk:"description"`
+	MTU         types.Int64  `tfsdk:"mtu"` // 0 = unset -> omitted from payload
+	IPv4DHCP    types.Bool   `tfsdk:"ipv4_dhcp"`
+	IPv6Auto    types.Bool   `tfsdk:"ipv6_auto"`
+	Aliases     types.List   `tfsdk:"aliases"` // List[AliasModel]
+	// BridgeMembers and LagPorts are order-insensitive sets of interface
+	// names: interface.query returns them in its own order, which need not
+	// match config, so a plain types.List would diff on every plan after a
+	// reorder (the pool #66 bug class).
+	BridgeMembers       normalize.UnorderedList `tfsdk:"bridge_members"` // List[String]
+	STP                 types.Bool              `tfsdk:"stp"`
+	LagProtocol         types.String            `tfsdk:"lag_protocol"` // "" = unset
+	LagPorts            normalize.UnorderedList `tfsdk:"lag_ports"`    // List[String]
+	VlanParentInterface types.String            `tfsdk:"vlan_parent_interface"`
+	VlanTag             types.Int64             `tfsdk:"vlan_tag"` // 0 = unset
 
 	// Type-specific tuning (coverage audit).
 	EnableLearning types.Bool   `tfsdk:"enable_learning"`  // BRIDGE
@@ -174,7 +180,7 @@ func responseToModel(ctx context.Context, api *interfaceAPI, m *NetworkInterface
 	if bridgeMembers == nil {
 		bridgeMembers = []string{}
 	}
-	bmList, d := types.ListValueFrom(ctx, types.StringType, bridgeMembers)
+	bmList, d := normalize.NewUnorderedListValueFrom(ctx, types.StringType, bridgeMembers)
 	diags.Append(d...)
 	m.BridgeMembers = bmList
 
@@ -183,7 +189,7 @@ func responseToModel(ctx context.Context, api *interfaceAPI, m *NetworkInterface
 	if lagPorts == nil {
 		lagPorts = []string{}
 	}
-	lpList, d := types.ListValueFrom(ctx, types.StringType, lagPorts)
+	lpList, d := normalize.NewUnorderedListValueFrom(ctx, types.StringType, lagPorts)
 	diags.Append(d...)
 	m.LagPorts = lpList
 
@@ -308,7 +314,7 @@ func physicalDisallowedFieldsSet(m *NetworkInterfaceModel) []string {
 	strSet := func(v types.String) bool { return !v.IsNull() && !v.IsUnknown() && v.ValueString() != "" }
 	boolSet := func(v types.Bool) bool { return !v.IsNull() && !v.IsUnknown() }
 	intSet := func(v types.Int64) bool { return !v.IsNull() && !v.IsUnknown() && v.ValueInt64() != 0 }
-	listSet := func(v types.List) bool { return !v.IsNull() && !v.IsUnknown() && len(v.Elements()) > 0 }
+	listSet := func(v normalize.UnorderedList) bool { return !v.IsNull() && !v.IsUnknown() && len(v.Elements()) > 0 }
 
 	checks := []struct {
 		name string

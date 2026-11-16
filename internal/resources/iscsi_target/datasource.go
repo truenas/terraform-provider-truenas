@@ -12,6 +12,7 @@ import (
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ datasource.DataSource = &ISCSITargetDataSource{}
@@ -35,7 +36,7 @@ func (d *ISCSITargetDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			"alias":         dschema.StringAttribute{Computed: true},
 			"mode":          dschema.StringAttribute{Computed: true},
 			"rel_tgt_id":    dschema.Int64Attribute{Computed: true},
-			"auth_networks": dschema.ListAttribute{Computed: true, ElementType: types.StringType},
+			"auth_networks": dschema.ListAttribute{Computed: true, CustomType: normalize.UnorderedListOf(types.StringType), ElementType: types.StringType},
 			"iscsi_parameters": dschema.SingleNestedAttribute{
 				Computed: true,
 				Attributes: map[string]dschema.Attribute{

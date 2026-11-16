@@ -48,8 +48,8 @@ resource "truenas_smb_share" "data" {
 - `enabled` (Boolean) Enable this share. Defaults to `true`.
 - `guestok` (Boolean) Allow unauthenticated (guest) access. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.
 - `home` (Boolean) Use this share as user home-directory share. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.
-- `hostsallow` (List of String) List of hosts/IPs allowed to connect. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.
-- `hostsdeny` (List of String) List of hosts/IPs denied from connecting. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.
+- `hostsallow` (List of String) List of hosts/IPs allowed to connect. Order is not significant. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.
+- `hostsdeny` (List of String) List of hosts/IPs denied from connecting. Order is not significant. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.
 - `options` (Attributes) Purpose-specific SMB options (the discriminated `options` object on TrueNAS 26.0+). Only the fields valid for the share's `purpose` are sent; the rest read back null. This is the recommended surface for all purposes. For LEGACY_SHARE the flat top-level attributes still work; setting a flat attribute and its twin here is a plan-time error. When `options` is configured, any option left unset is reset to the server default on update (TrueNAS replaces the whole options object); when it is not configured, the current values are kept. (see [below for nested schema](#nestedatt--options))
 - `purpose` (String) Purpose preset. One of: DEFAULT_SHARE, LEGACY_SHARE, TIMEMACHINE_SHARE, MULTIPROTOCOL_SHARE, TIME_LOCKED_SHARE, PRIVATE_DATASETS_SHARE, EXTERNAL_SHARE, VEEAM_REPOSITORY_SHARE, FCP_SHARE. On TrueNAS 26.0 this drives a discriminated `options` object on the wire. When left unset (or set to an unrecognized value), the provider defaults to LEGACY_SHARE so this resource's flat legacy attributes (recyclebin, hostsallow, hostsdeny, guestok, streams, durablehandle, home, acl, timemachine, timemachine_quota) continue to work as before. Setting purpose to any other enum value switches the share to that purpose's variant defaults server-side; the flat legacy attributes are then a plan-time error (use `options` instead). Changing purpose on an existing share resets `options` to the new purpose's server defaults unless `options` is configured.
 - `recyclebin` (Boolean) Enable Windows Recycle Bin behaviour. Only valid when the share's `purpose` is (or defaults to) LEGACY_SHARE: it is sent nested under `options`, setting it with any other purpose is a plan-time error, and it reads back false for other purposes. Setting both this and the matching `options` field is a plan-time error. When neither this nor `options` is configured, the LEGACY_SHARE server default applies, so removing it from the configuration resets it on the share.
@@ -70,8 +70,8 @@ resource "truenas_smb_share" "data" {
 Optional:
 
 - `enable` (Boolean) Enable auditing for this share. Cannot be enabled if the SMB service minimum_protocol is SMB1.
-- `ignore_list` (List of String) Group names to exclude from auditing.
-- `watch_list` (List of String) Group names to audit. Empty means audit all groups.
+- `ignore_list` (List of String) Group names to exclude from auditing (order not significant).
+- `watch_list` (List of String) Group names to audit (order not significant). Empty means audit all groups.
 
 
 <a id="nestedatt--options"></a>
@@ -92,8 +92,8 @@ Optional:
 - `grace_period` (Number) TIME_LOCKED_SHARE: grace period in seconds before locking.
 - `guestok` (Boolean) LEGACY_SHARE: allow guest access.
 - `home` (Boolean) LEGACY_SHARE: use as a home-directory share.
-- `hostsallow` (List of String) Hosts/subnets allowed to connect. Valid for all purposes except EXTERNAL_SHARE.
-- `hostsdeny` (List of String) Hosts/subnets denied. Valid for all purposes except EXTERNAL_SHARE.
+- `hostsallow` (List of String) Hosts/subnets allowed to connect (order not significant). Valid for all purposes except EXTERNAL_SHARE.
+- `hostsdeny` (List of String) Hosts/subnets denied (order not significant). Valid for all purposes except EXTERNAL_SHARE.
 - `path_suffix` (String) LEGACY_SHARE: path suffix template (e.g. %D/%U).
 - `recyclebin` (Boolean) LEGACY_SHARE: move deleted files to a .recycle directory.
 - `remote_path` (List of String) EXTERNAL_SHARE: remote DFS target path(s).

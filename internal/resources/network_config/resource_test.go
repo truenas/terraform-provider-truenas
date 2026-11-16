@@ -10,11 +10,14 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // TestNetworkConfigSchema_IDIsComputed verifies that "id" is a Computed-only
@@ -200,17 +203,18 @@ func TestResponseToModel_ListsNilMapToEmpty(t *testing.T) {
 		t.Fatalf("unexpected error: %v", diags)
 	}
 
-	for name, l := range map[string]types.List{
-		"domains": m.Domains,
-		"hosts":   m.Hosts,
-	} {
-		if l.IsNull() {
+	// domains is an ordered types.List and hosts is a normalize.UnorderedList,
+	// so they cannot share a map literal; check each by its promoted methods.
+	check := func(name string, isNull bool, n int) {
+		if isNull {
 			t.Errorf("%s should be an empty list, not null", name)
 		}
-		if len(l.Elements()) != 0 {
-			t.Errorf("%s should have 0 elements, got %d", name, len(l.Elements()))
+		if n != 0 {
+			t.Errorf("%s should have 0 elements, got %d", name, n)
 		}
 	}
+	check("domains", m.Domains.IsNull(), len(m.Domains.Elements()))
+	check("hosts", m.Hosts.IsNull(), len(m.Hosts.Elements()))
 }
 
 // TestResponseToModel_ServiceAnnouncementMapping verifies that a present
@@ -293,7 +297,7 @@ func TestUpdatePayload_OnlyKnownFieldsSent(t *testing.T) {
 		Hostname:            types.StringNull(),
 		Domain:              types.StringValue("example.com"),
 		Domains:             types.ListNull(types.StringType),
-		Hosts:               types.ListUnknown(types.StringType),
+		Hosts:               normalize.NewUnorderedListUnknown(types.StringType),
 		HTTPProxy:           types.StringUnknown(),
 		IPv4Gateway:         types.StringNull(),
 		IPv6Gateway:         types.StringUnknown(),
@@ -330,7 +334,7 @@ func TestUpdatePayload_OnlyKnownFieldsSent(t *testing.T) {
 func TestUpdatePayload_AllKnownFieldsSent(t *testing.T) {
 	ctx := context.Background()
 	domains, _ := types.ListValueFrom(ctx, types.StringType, []string{"example.com"})
-	hosts, _ := types.ListValueFrom(ctx, types.StringType, []string{"192.168.1.1 foo"})
+	hosts, _ := normalize.NewUnorderedListValueFrom(ctx, types.StringType, []string{"192.168.1.1 foo"})
 	sa, _ := types.ObjectValueFrom(ctx, serviceAnnouncementAttrTypes, ServiceAnnouncementModel{
 		Mdns:    types.BoolValue(true),
 		Netbios: types.BoolValue(true),
@@ -409,7 +413,7 @@ func TestUpdatePayload_GatewayNameserverThreeWay(t *testing.T) {
 			Hostname:            types.StringNull(),
 			Domain:              types.StringNull(),
 			Domains:             types.ListNull(types.StringType),
-			Hosts:               types.ListNull(types.StringType),
+			Hosts:               normalize.NewUnorderedListNull(types.StringType),
 			HTTPProxy:           types.StringNull(),
 			IPv4Gateway:         types.StringNull(),
 			IPv6Gateway:         types.StringNull(),
@@ -481,7 +485,7 @@ func TestUpdatePayload_GatewayNameserverThreeWay(t *testing.T) {
 func TestUpdatePayload_DomainsHostsNilToEmpty(t *testing.T) {
 	ctx := context.Background()
 	emptyDomains, _ := types.ListValueFrom(ctx, types.StringType, []string{})
-	emptyHosts, _ := types.ListValueFrom(ctx, types.StringType, []string{})
+	emptyHosts, _ := normalize.NewUnorderedListValueFrom(ctx, types.StringType, []string{})
 
 	m := &NetworkConfigModel{
 		Hostname:            types.StringNull(),
@@ -529,7 +533,7 @@ func TestUpdatePayload_ServiceAnnouncementOnlyWhenKnown(t *testing.T) {
 			Hostname:            types.StringNull(),
 			Domain:              types.StringNull(),
 			Domains:             types.ListNull(types.StringType),
-			Hosts:               types.ListNull(types.StringType),
+			Hosts:               normalize.NewUnorderedListNull(types.StringType),
 			HTTPProxy:           types.StringNull(),
 			IPv4Gateway:         types.StringNull(),
 			IPv6Gateway:         types.StringNull(),
@@ -670,5 +674,42 @@ func TestSchema_HostsDomainsValidators(t *testing.T) {
 	}
 	if !check("domains", []string{"a.example", "b.example"}) {
 		t.Error("valid domains rejected")
+	}
+}
+
+// TestSchema_HostsUnorderedListCustomType verifies that hosts (an
+// order-insensitive set) carries the normalize.UnorderedListType custom type
+// in both the resource and datasource schemas, so a server reorder does not
+// perpetually diff (the pool #66 bug class), while domains stays an ordinary
+// ordered list (DNS search order is significant). The datasource CustomType is
+// required too: without it State.Set fails at runtime, which the build does
+// not catch.
+func TestSchema_HostsUnorderedListCustomType(t *testing.T) {
+	res := resourceSchema()
+
+	hosts, ok := res.Attributes["hosts"].(schema.ListAttribute)
+	if !ok {
+		t.Fatal("resource attribute \"hosts\" is not a ListAttribute")
+	}
+	if _, ok := hosts.CustomType.(normalize.UnorderedListType); !ok {
+		t.Errorf("resource hosts CustomType = %T, want normalize.UnorderedListType", hosts.CustomType)
+	}
+
+	domains, ok := res.Attributes["domains"].(schema.ListAttribute)
+	if !ok {
+		t.Fatal("resource attribute \"domains\" is not a ListAttribute")
+	}
+	if _, ok := domains.CustomType.(normalize.UnorderedListType); ok {
+		t.Error("resource domains must stay an ordered list (DNS search order is significant), got normalize.UnorderedListType")
+	}
+
+	var dresp datasource.SchemaResponse
+	(&NetworkConfigDataSource{}).Schema(context.Background(), datasource.SchemaRequest{}, &dresp)
+	dhosts, ok := dresp.Schema.Attributes["hosts"].(dschema.ListAttribute)
+	if !ok {
+		t.Fatal("datasource attribute \"hosts\" is not a ListAttribute")
+	}
+	if _, ok := dhosts.CustomType.(normalize.UnorderedListType); !ok {
+		t.Errorf("datasource hosts CustomType = %T, want normalize.UnorderedListType", dhosts.CustomType)
 	}
 }

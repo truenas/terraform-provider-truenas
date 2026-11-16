@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -163,6 +164,57 @@ list "truenas_user" "test" {
 			},
 		},
 	})
+}
+
+// TestAccUser_sudoCommandsReorderNoDiff verifies the #66 bug class fix for
+// sudo_commands: the server returns the list in its own order, so re-applying
+// the same commands in a different order than they were created must produce
+// an empty plan, not a perpetual update diff.
+func TestAccUser_sudoCommandsReorderNoDiff(t *testing.T) {
+	username := acctest.RandName("tf-acc-user-ord")
+	cmds := []string{"/usr/bin/id", "/usr/bin/whoami", "/usr/bin/uptime"}
+	reordered := []string{"/usr/bin/uptime", "/usr/bin/id", "/usr/bin/whoami"}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckUserDestroyed(username),
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccUserSudoConfig(username, cmds),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_user.test", "sudo_commands.#", "3"),
+				),
+			},
+			// Same three commands, different order: must be a no-op plan.
+			{
+				Config:             acctest.ProviderConfig() + testAccUserSudoConfig(username, reordered),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+		},
+	})
+}
+
+func testAccUserSudoConfig(username string, sudoCommands []string) string {
+	quoted := make([]string, len(sudoCommands))
+	for i, c := range sudoCommands {
+		quoted[i] = fmt.Sprintf("%q", c)
+	}
+	sudoCmdsHCL := "[" + strings.Join(quoted, ", ") + "]"
+	return fmt.Sprintf(`
+resource "truenas_user" "test" {
+  username          = %q
+  full_name         = "Sudo Reorder"
+  password          = "Tf-Acc-Test-Passw0rd!"
+  password_disabled = false
+  home              = "/var/empty"
+  shell             = "/usr/bin/bash"
+  smb               = false
+  group_create      = true
+  sudo_commands     = %s
+}
+`, username, sudoCmdsHCL)
 }
 
 func testAccUserConfig(username, fullName, shell string) string {

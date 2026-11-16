@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -338,4 +339,60 @@ func currentHostname(t *testing.T) string {
 		t.Fatalf("parsing network.configuration.config: %v", err)
 	}
 	return cfg.Hostname
+}
+
+// TestAccNetworkConfig_hostsReorderNoDiff guards the pool #66 bug class for
+// hosts: the attribute is an order-insensitive set, so re-applying the same
+// /etc/hosts lines in a different order than network.configuration.config
+// returns them must produce an empty plan, not a perpetual update diff.
+//
+// SAFETY: gated behind TRUENAS_TEST_NETWORK_CONFIG on a disposable box (same
+// gate as the other singleton write tests). The whole original config is
+// snapshotted first and written back by t.Cleanup regardless of outcome; the
+// config touches ONLY hosts (TEST-NET-1 addresses, RFC 5737), so hostname,
+// DNS, gateways and domains are never rewritten and connectivity is preserved.
+func TestAccNetworkConfig_hostsReorderNoDiff(t *testing.T) {
+	if os.Getenv("TRUENAS_TEST_NETWORK_CONFIG") == "" {
+		t.Skip("set TRUENAS_TEST_NETWORK_CONFIG=1 (on a disposable box) to run the network_config hosts reorder test")
+	}
+	acctest.PreCheck(t)
+
+	orig := readNetConfigSnapshot(t)
+	t.Cleanup(func() { orig.restore(t) })
+
+	cfg := func(lines ...string) string {
+		quoted := make([]string, len(lines))
+		for i, l := range lines {
+			quoted[i] = fmt.Sprintf("%q", l)
+		}
+		return acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_network_config" "test" {
+  hosts = [%s]
+}
+`, strings.Join(quoted, ", "))
+	}
+
+	a := "192.0.2.10 tftest-a-host.example"
+	b := "192.0.2.11 tftest-b-host.example"
+	c := "192.0.2.12 tftest-c-host.example"
+
+	const r = "truenas_network_config.test"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: cfg(a, b, c),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(r, "hosts.#", "3"),
+				),
+			},
+			// Same three entries, different order: must be a no-op plan.
+			{
+				Config:             cfg(c, a, b),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+		},
+	})
 }

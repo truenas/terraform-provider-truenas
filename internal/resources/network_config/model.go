@@ -10,6 +10,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // networkConfigResourceID is the fixed Terraform ID for this singleton
@@ -36,35 +38,39 @@ type ServiceAnnouncementModel struct {
 // NetworkConfigModel is the Terraform state model for
 // truenas_network_config.
 type NetworkConfigModel struct {
-	ID                  types.String `tfsdk:"id"` // fixed: "network_config"
-	Hostname            types.String `tfsdk:"hostname"`
-	Domain              types.String `tfsdk:"domain"`
-	Domains             types.List   `tfsdk:"domains"` // List[String]
-	Hosts               types.List   `tfsdk:"hosts"`   // List[String]
-	HTTPProxy           types.String `tfsdk:"httpproxy"`
-	IPv4Gateway         types.String `tfsdk:"ipv4gateway"` // "" -> nil on wire
-	IPv6Gateway         types.String `tfsdk:"ipv6gateway"` // "" -> nil on wire
-	Nameserver1         types.String `tfsdk:"nameserver1"` // "" -> nil on wire
-	Nameserver2         types.String `tfsdk:"nameserver2"` // "" -> nil on wire
-	Nameserver3         types.String `tfsdk:"nameserver3"` // "" -> nil on wire
-	ServiceAnnouncement types.Object `tfsdk:"service_announcement"`
+	ID       types.String `tfsdk:"id"` // fixed: "network_config"
+	Hostname types.String `tfsdk:"hostname"`
+	Domain   types.String `tfsdk:"domain"`
+	Domains  types.List   `tfsdk:"domains"` // List[String]; DNS search ORDER is significant, kept ordered
+	// Hosts is an order-insensitive set of /etc/hosts lines:
+	// network.configuration returns them in its own order, which need not
+	// match config, so a plain types.List would diff on every plan after a
+	// reorder (the pool #66 bug class).
+	Hosts               normalize.UnorderedList `tfsdk:"hosts"` // List[String]
+	HTTPProxy           types.String            `tfsdk:"httpproxy"`
+	IPv4Gateway         types.String            `tfsdk:"ipv4gateway"` // "" -> nil on wire
+	IPv6Gateway         types.String            `tfsdk:"ipv6gateway"` // "" -> nil on wire
+	Nameserver1         types.String            `tfsdk:"nameserver1"` // "" -> nil on wire
+	Nameserver2         types.String            `tfsdk:"nameserver2"` // "" -> nil on wire
+	Nameserver3         types.String            `tfsdk:"nameserver3"` // "" -> nil on wire
+	ServiceAnnouncement types.Object            `tfsdk:"service_announcement"`
 }
 
 // NetworkConfigDataSourceModel is the read-only model for the
 // truenas_network_config datasource.
 type NetworkConfigDataSourceModel struct {
-	ID                  types.String `tfsdk:"id"`
-	Hostname            types.String `tfsdk:"hostname"`
-	Domain              types.String `tfsdk:"domain"`
-	Domains             types.List   `tfsdk:"domains"`
-	Hosts               types.List   `tfsdk:"hosts"`
-	HTTPProxy           types.String `tfsdk:"httpproxy"`
-	IPv4Gateway         types.String `tfsdk:"ipv4gateway"`
-	IPv6Gateway         types.String `tfsdk:"ipv6gateway"`
-	Nameserver1         types.String `tfsdk:"nameserver1"`
-	Nameserver2         types.String `tfsdk:"nameserver2"`
-	Nameserver3         types.String `tfsdk:"nameserver3"`
-	ServiceAnnouncement types.Object `tfsdk:"service_announcement"`
+	ID                  types.String            `tfsdk:"id"`
+	Hostname            types.String            `tfsdk:"hostname"`
+	Domain              types.String            `tfsdk:"domain"`
+	Domains             types.List              `tfsdk:"domains"`
+	Hosts               normalize.UnorderedList `tfsdk:"hosts"`
+	HTTPProxy           types.String            `tfsdk:"httpproxy"`
+	IPv4Gateway         types.String            `tfsdk:"ipv4gateway"`
+	IPv6Gateway         types.String            `tfsdk:"ipv6gateway"`
+	Nameserver1         types.String            `tfsdk:"nameserver1"`
+	Nameserver2         types.String            `tfsdk:"nameserver2"`
+	Nameserver3         types.String            `tfsdk:"nameserver3"`
+	ServiceAnnouncement types.Object            `tfsdk:"service_announcement"`
 }
 
 // serviceAnnouncementAPI is the JSON wire format of the nested
@@ -129,7 +135,7 @@ func responseToModel(ctx context.Context, api *networkConfigAPI, m *NetworkConfi
 	if hosts == nil {
 		hosts = []string{}
 	}
-	hostsList, d2 := types.ListValueFrom(ctx, types.StringType, hosts)
+	hostsList, d2 := normalize.NewUnorderedListValueFrom(ctx, types.StringType, hosts)
 	diags.Append(d2...)
 	m.Hosts = hostsList
 
@@ -176,7 +182,7 @@ func responseToDataSourceModel(ctx context.Context, api *networkConfigAPI, m *Ne
 	if hosts == nil {
 		hosts = []string{}
 	}
-	hostsList, d2 := types.ListValueFrom(ctx, types.StringType, hosts)
+	hostsList, d2 := normalize.NewUnorderedListValueFrom(ctx, types.StringType, hosts)
 	diags.Append(d2...)
 	m.Hosts = hostsList
 

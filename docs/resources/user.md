@@ -47,8 +47,8 @@ resource "truenas_user" "deploy" {
 - `smb` (Boolean) Whether the user has SMB authentication enabled.
 - `ssh_password_enabled` (Boolean) Whether SSH password authentication is enabled.
 - `sshpubkey` (String) SSH public key(s) for the user. Surrounding whitespace (such as the trailing newline of a file() read) is ignored when comparing with the server, which strips it.
-- `sudo_commands` (List of String) List of allowed sudo commands.
-- `sudo_commands_nopasswd` (List of String) List of sudo commands allowed without password.
+- `sudo_commands` (List of String) List of allowed sudo commands. Order is not significant.
+- `sudo_commands_nopasswd` (List of String) List of sudo commands allowed without password. Order is not significant.
 - `uid` (Number) UNIX UID for the user (auto-assigned if omitted). Changing this forces a new resource.
 - `webshare` (Boolean) Grant the user access to the web-based file share. Requires TrueNAS 26.0 or newer; setting it to true on an older release is a plan-time error.
 

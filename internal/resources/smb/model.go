@@ -11,20 +11,24 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
-// SMBAuditModel maps to the nested "audit" object.
+// SMBAuditModel maps to the nested "audit" object. watch_list and ignore_list
+// are order-insensitive sets of group names: the server returns them in its
+// own order, so a plain types.List would diff on every plan after a reorder.
 type SMBAuditModel struct {
-	Enable     types.Bool `tfsdk:"enable"`
-	WatchList  types.List `tfsdk:"watch_list"`  // List[String] group names
-	IgnoreList types.List `tfsdk:"ignore_list"` // List[String] group names
+	Enable     types.Bool              `tfsdk:"enable"`
+	WatchList  normalize.UnorderedList `tfsdk:"watch_list"`  // set of group names
+	IgnoreList normalize.UnorderedList `tfsdk:"ignore_list"` // set of group names
 }
 
 // smbAuditAttrTypes is the attribute type map for SMBAuditModel.
 var smbAuditAttrTypes = map[string]attr.Type{
 	"enable":      types.BoolType,
-	"watch_list":  types.ListType{ElemType: types.StringType},
-	"ignore_list": types.ListType{ElemType: types.StringType},
+	"watch_list":  normalize.UnorderedListOf(types.StringType),
+	"ignore_list": normalize.UnorderedListOf(types.StringType),
 }
 
 // SMBOptionsModel is the typed `options` object: the superset of every
@@ -33,36 +37,36 @@ var smbAuditAttrTypes = map[string]attr.Type{
 // `purpose` is sent on the wire (see smbOptionFieldsByPurpose); the rest read
 // back null. Field sets verified identical on 25.10.7 and 27.0.
 type SMBOptionsModel struct {
-	Recyclebin          types.Bool   `tfsdk:"recyclebin"`
-	PathSuffix          types.String `tfsdk:"path_suffix"`
-	HostsAllow          types.List   `tfsdk:"hostsallow"`
-	HostsDeny           types.List   `tfsdk:"hostsdeny"`
-	GuestOK             types.Bool   `tfsdk:"guestok"`
-	Streams             types.Bool   `tfsdk:"streams"`
-	DurableHandle       types.Bool   `tfsdk:"durablehandle"`
-	Shadowcopy          types.Bool   `tfsdk:"shadowcopy"`
-	FSRVP               types.Bool   `tfsdk:"fsrvp"`
-	Home                types.Bool   `tfsdk:"home"`
-	ACL                 types.Bool   `tfsdk:"acl"`
-	AFP                 types.Bool   `tfsdk:"afp"`
-	TimeMachine         types.Bool   `tfsdk:"timemachine"`
-	TimeMachineQuota    types.Int64  `tfsdk:"timemachine_quota"`
-	AaplNameMangling    types.Bool   `tfsdk:"aapl_name_mangling"`
-	VUID                types.String `tfsdk:"vuid"`
-	AuxSMBConf          types.String `tfsdk:"auxsmbconf"`
-	AutoSnapshot        types.Bool   `tfsdk:"auto_snapshot"`
-	AutoDatasetCreation types.Bool   `tfsdk:"auto_dataset_creation"`
-	DatasetNamingSchema types.String `tfsdk:"dataset_naming_schema"`
-	GracePeriod         types.Int64  `tfsdk:"grace_period"`
-	AutoQuota           types.Int64  `tfsdk:"auto_quota"`
-	RemotePath          types.List   `tfsdk:"remote_path"`
+	Recyclebin          types.Bool              `tfsdk:"recyclebin"`
+	PathSuffix          types.String            `tfsdk:"path_suffix"`
+	HostsAllow          normalize.UnorderedList `tfsdk:"hostsallow"`
+	HostsDeny           normalize.UnorderedList `tfsdk:"hostsdeny"`
+	GuestOK             types.Bool              `tfsdk:"guestok"`
+	Streams             types.Bool              `tfsdk:"streams"`
+	DurableHandle       types.Bool              `tfsdk:"durablehandle"`
+	Shadowcopy          types.Bool              `tfsdk:"shadowcopy"`
+	FSRVP               types.Bool              `tfsdk:"fsrvp"`
+	Home                types.Bool              `tfsdk:"home"`
+	ACL                 types.Bool              `tfsdk:"acl"`
+	AFP                 types.Bool              `tfsdk:"afp"`
+	TimeMachine         types.Bool              `tfsdk:"timemachine"`
+	TimeMachineQuota    types.Int64             `tfsdk:"timemachine_quota"`
+	AaplNameMangling    types.Bool              `tfsdk:"aapl_name_mangling"`
+	VUID                types.String            `tfsdk:"vuid"`
+	AuxSMBConf          types.String            `tfsdk:"auxsmbconf"`
+	AutoSnapshot        types.Bool              `tfsdk:"auto_snapshot"`
+	AutoDatasetCreation types.Bool              `tfsdk:"auto_dataset_creation"`
+	DatasetNamingSchema types.String            `tfsdk:"dataset_naming_schema"`
+	GracePeriod         types.Int64             `tfsdk:"grace_period"`
+	AutoQuota           types.Int64             `tfsdk:"auto_quota"`
+	RemotePath          types.List              `tfsdk:"remote_path"`
 }
 
 var smbOptionsAttrTypes = map[string]attr.Type{
 	"recyclebin":            types.BoolType,
 	"path_suffix":           types.StringType,
-	"hostsallow":            types.ListType{ElemType: types.StringType},
-	"hostsdeny":             types.ListType{ElemType: types.StringType},
+	"hostsallow":            normalize.UnorderedListOf(types.StringType),
+	"hostsdeny":             normalize.UnorderedListOf(types.StringType),
 	"guestok":               types.BoolType,
 	"streams":               types.BoolType,
 	"durablehandle":         types.BoolType,
@@ -116,27 +120,27 @@ var smbOptionFieldsByPurpose = map[string]map[string]bool{
 // LEGACY_SHARE variant); the typed `options` object exposes the full
 // purpose-specific surface for every purpose.
 type SMBModel struct {
-	ID               types.Int64  `tfsdk:"id"`
-	Path             types.String `tfsdk:"path"`
-	Name             types.String `tfsdk:"name"`
-	Comment          types.String `tfsdk:"comment"`
-	ReadOnly         types.Bool   `tfsdk:"ro"`
-	Browsable        types.Bool   `tfsdk:"browsable"`
-	Recyclebin       types.Bool   `tfsdk:"recyclebin"`
-	GuestOK          types.Bool   `tfsdk:"guestok"`
-	HostsAllow       types.List   `tfsdk:"hostsallow"` // List[String]
-	HostsDeny        types.List   `tfsdk:"hostsdeny"`  // List[String]
-	ABE              types.Bool   `tfsdk:"abe"`
-	ACL              types.Bool   `tfsdk:"acl"`
-	DurableHandle    types.Bool   `tfsdk:"durablehandle"`
-	Streams          types.Bool   `tfsdk:"streams"`
-	TimeMachine      types.Bool   `tfsdk:"timemachine"`
-	TimeMachineQuota types.Int64  `tfsdk:"timemachine_quota"`
-	Enabled          types.Bool   `tfsdk:"enabled"`
-	Home             types.Bool   `tfsdk:"home"`
-	Purpose          types.String `tfsdk:"purpose"`
-	Options          types.Object `tfsdk:"options"` // typed superset, all purposes
-	Audit            types.Object `tfsdk:"audit"`   // nested {enable, watch_list, ignore_list}
+	ID               types.Int64             `tfsdk:"id"`
+	Path             types.String            `tfsdk:"path"`
+	Name             types.String            `tfsdk:"name"`
+	Comment          types.String            `tfsdk:"comment"`
+	ReadOnly         types.Bool              `tfsdk:"ro"`
+	Browsable        types.Bool              `tfsdk:"browsable"`
+	Recyclebin       types.Bool              `tfsdk:"recyclebin"`
+	GuestOK          types.Bool              `tfsdk:"guestok"`
+	HostsAllow       normalize.UnorderedList `tfsdk:"hostsallow"` // set of hosts/subnets
+	HostsDeny        normalize.UnorderedList `tfsdk:"hostsdeny"`  // set of hosts/subnets
+	ABE              types.Bool              `tfsdk:"abe"`
+	ACL              types.Bool              `tfsdk:"acl"`
+	DurableHandle    types.Bool              `tfsdk:"durablehandle"`
+	Streams          types.Bool              `tfsdk:"streams"`
+	TimeMachine      types.Bool              `tfsdk:"timemachine"`
+	TimeMachineQuota types.Int64             `tfsdk:"timemachine_quota"`
+	Enabled          types.Bool              `tfsdk:"enabled"`
+	Home             types.Bool              `tfsdk:"home"`
+	Purpose          types.String            `tfsdk:"purpose"`
+	Options          types.Object            `tfsdk:"options"` // typed superset, all purposes
+	Audit            types.Object            `tfsdk:"audit"`   // nested {enable, watch_list, ignore_list}
 	// Computed-only — server generated
 	VUID   types.String `tfsdk:"vuid"`
 	Locked types.Bool   `tfsdk:"locked"`
@@ -232,6 +236,21 @@ func strListPtrValue(ctx context.Context, p *[]string, diags *diag.Diagnostics) 
 	return l
 }
 
+// unorderedStrListPtrValue is strListPtrValue for order-insensitive set-valued
+// list attributes (hostsallow/hostsdeny), returning a normalize.UnorderedList.
+func unorderedStrListPtrValue(ctx context.Context, p *[]string, diags *diag.Diagnostics) normalize.UnorderedList {
+	if p == nil {
+		return normalize.NewUnorderedListNull(types.StringType)
+	}
+	v := *p
+	if v == nil {
+		v = []string{}
+	}
+	l, d := normalize.NewUnorderedListValueFrom(ctx, types.StringType, v)
+	diags.Append(d...)
+	return l
+}
+
 // optionsToObject maps the wire options onto the typed SMBOptionsModel object.
 // Fields the wire didn't carry (not part of this purpose's variant) read null.
 func optionsToObject(ctx context.Context, opts *smbOptionsAPI, diags *diag.Diagnostics) types.Object {
@@ -241,8 +260,8 @@ func optionsToObject(ctx context.Context, opts *smbOptionsAPI, diags *diag.Diagn
 	m := SMBOptionsModel{
 		Recyclebin:          boolPtrValue(opts.Recyclebin),
 		PathSuffix:          strPtrValue(opts.PathSuffix),
-		HostsAllow:          strListPtrValue(ctx, opts.HostsAllow, diags),
-		HostsDeny:           strListPtrValue(ctx, opts.HostsDeny, diags),
+		HostsAllow:          unorderedStrListPtrValue(ctx, opts.HostsAllow, diags),
+		HostsDeny:           unorderedStrListPtrValue(ctx, opts.HostsDeny, diags),
 		GuestOK:             boolPtrValue(opts.GuestOK),
 		Streams:             boolPtrValue(opts.Streams),
 		DurableHandle:       boolPtrValue(opts.DurableHandle),
@@ -307,8 +326,8 @@ func responseToModel(ctx context.Context, api *smbAPI, m *SMBModel) diag.Diagnos
 		m.TimeMachineQuota = int64OrZero(opts.TimeMachineQuota)
 		m.Home = boolOrFalse(opts.Home)
 		m.VUID = strOrEmpty(opts.VUID)
-		m.HostsAllow = strListOrEmpty(ctx, opts.HostsAllow, &diags)
-		m.HostsDeny = strListOrEmpty(ctx, opts.HostsDeny, &diags)
+		m.HostsAllow = unorderedStrListOrEmpty(ctx, opts.HostsAllow, &diags)
+		m.HostsDeny = unorderedStrListOrEmpty(ctx, opts.HostsDeny, &diags)
 	} else {
 		m.Recyclebin = types.BoolValue(false)
 		m.GuestOK = types.BoolValue(false)
@@ -319,7 +338,7 @@ func responseToModel(ctx context.Context, api *smbAPI, m *SMBModel) diag.Diagnos
 		m.TimeMachineQuota = types.Int64Value(0)
 		m.Home = types.BoolValue(false)
 		m.VUID = types.StringValue("")
-		empty, d := types.ListValueFrom(ctx, types.StringType, []string{})
+		empty, d := normalize.NewUnorderedListValueFrom(ctx, types.StringType, []string{})
 		diags.Append(d...)
 		m.HostsAllow = empty
 		m.HostsDeny = empty
@@ -338,9 +357,9 @@ func responseToModel(ctx context.Context, api *smbAPI, m *SMBModel) diag.Diagnos
 			ignore = api.Audit.IgnoreList
 		}
 	}
-	watchList, dw := types.ListValueFrom(ctx, types.StringType, watch)
+	watchList, dw := normalize.NewUnorderedListValueFrom(ctx, types.StringType, watch)
 	diags.Append(dw...)
-	ignoreList, di := types.ListValueFrom(ctx, types.StringType, ignore)
+	ignoreList, di := normalize.NewUnorderedListValueFrom(ctx, types.StringType, ignore)
 	diags.Append(di...)
 	auditObj, da := types.ObjectValueFrom(ctx, smbAuditAttrTypes, SMBAuditModel{
 		Enable:     types.BoolValue(enable),
@@ -371,12 +390,12 @@ func strOrEmpty(p *string) types.String {
 	}
 	return types.StringValue(*p)
 }
-func strListOrEmpty(ctx context.Context, p *[]string, diags *diag.Diagnostics) types.List {
+func unorderedStrListOrEmpty(ctx context.Context, p *[]string, diags *diag.Diagnostics) normalize.UnorderedList {
 	v := []string{}
 	if p != nil && *p != nil {
 		v = *p
 	}
-	l, d := types.ListValueFrom(ctx, types.StringType, v)
+	l, d := normalize.NewUnorderedListValueFrom(ctx, types.StringType, v)
 	diags.Append(d...)
 	return l
 }
@@ -441,7 +460,7 @@ func (m *SMBModel) apiPayload(ctx context.Context) (map[string]any, diag.Diagnos
 			options[key] = v.ValueString()
 		}
 	}
-	setList := func(key string, v types.List) {
+	setList := func(key string, v basetypes.ListValue) {
 		if valid[key] && !v.IsNull() && !v.IsUnknown() {
 			var xs []string
 			diags.Append(v.ElementsAs(ctx, &xs, false)...)
@@ -454,8 +473,8 @@ func (m *SMBModel) apiPayload(ctx context.Context) (map[string]any, diag.Diagnos
 	if haveOpt {
 		setBool("recyclebin", opt.Recyclebin)
 		setStr("path_suffix", opt.PathSuffix)
-		setList("hostsallow", opt.HostsAllow)
-		setList("hostsdeny", opt.HostsDeny)
+		setList("hostsallow", opt.HostsAllow.ListValue)
+		setList("hostsdeny", opt.HostsDeny.ListValue)
 		setBool("guestok", opt.GuestOK)
 		setBool("streams", opt.Streams)
 		setBool("durablehandle", opt.DurableHandle)
@@ -490,7 +509,7 @@ func (m *SMBModel) apiPayload(ctx context.Context) (map[string]any, diag.Diagnos
 				options[key] = v.ValueInt64()
 			}
 		}
-		fallbackList := func(key string, v types.List) {
+		fallbackList := func(key string, v basetypes.ListValue) {
 			if _, ok := options[key]; !ok && valid[key] && !v.IsNull() && !v.IsUnknown() {
 				var xs []string
 				diags.Append(v.ElementsAs(ctx, &xs, false)...)
@@ -508,8 +527,8 @@ func (m *SMBModel) apiPayload(ctx context.Context) (map[string]any, diag.Diagnos
 		fallbackBool("acl", m.ACL)
 		fallbackBool("timemachine", m.TimeMachine)
 		fallbackInt("timemachine_quota", m.TimeMachineQuota)
-		fallbackList("hostsallow", m.HostsAllow)
-		fallbackList("hostsdeny", m.HostsDeny)
+		fallbackList("hostsallow", m.HostsAllow.ListValue)
+		fallbackList("hostsdeny", m.HostsDeny.ListValue)
 	}
 
 	p["options"] = options
@@ -613,7 +632,7 @@ func setOptionKeys(opt *SMBOptionsModel) []string {
 	setB := func(v types.Bool) bool { return !v.IsNull() && !v.IsUnknown() }
 	setI := func(v types.Int64) bool { return !v.IsNull() && !v.IsUnknown() }
 	setS := func(v types.String) bool { return !v.IsNull() && !v.IsUnknown() }
-	setL := func(v types.List) bool { return !v.IsNull() && !v.IsUnknown() }
+	setL := func(v basetypes.ListValue) bool { return !v.IsNull() && !v.IsUnknown() }
 
 	type field struct {
 		key string
@@ -622,8 +641,8 @@ func setOptionKeys(opt *SMBOptionsModel) []string {
 	fields := []field{
 		{"recyclebin", setB(opt.Recyclebin)},
 		{"path_suffix", setS(opt.PathSuffix)},
-		{"hostsallow", setL(opt.HostsAllow)},
-		{"hostsdeny", setL(opt.HostsDeny)},
+		{"hostsallow", setL(opt.HostsAllow.ListValue)},
+		{"hostsdeny", setL(opt.HostsDeny.ListValue)},
 		{"guestok", setB(opt.GuestOK)},
 		{"streams", setB(opt.Streams)},
 		{"durablehandle", setB(opt.DurableHandle)},
@@ -750,6 +769,7 @@ func (m *SMBModel) overlayFlatOnOptions(ctx context.Context) (types.Object, bool
 // configured options object.
 func (m *SMBModel) resetUnsetFlatLegacy(cfg *SMBModel, shouldReset func(key string) bool) []string {
 	empty := types.ListValueMust(types.StringType, []attr.Value{})
+	emptyUnordered := normalize.UnorderedList{ListValue: empty}
 	var set []string
 	reset := func(key string, cfgV attr.Value, dst any, def attr.Value) {
 		// Only an attribute the configuration owned (and has now dropped) is
@@ -763,6 +783,8 @@ func (m *SMBModel) resetUnsetFlatLegacy(cfg *SMBModel, shouldReset func(key stri
 			*d = def.(types.Bool)
 		case *types.List:
 			*d = def.(types.List)
+		case *normalize.UnorderedList:
+			*d = def.(normalize.UnorderedList)
 		case *types.Int64:
 			*d = def.(types.Int64)
 		}
@@ -770,8 +792,8 @@ func (m *SMBModel) resetUnsetFlatLegacy(cfg *SMBModel, shouldReset func(key stri
 	}
 	reset("recyclebin", cfg.Recyclebin, &m.Recyclebin, types.BoolValue(false))
 	reset("guestok", cfg.GuestOK, &m.GuestOK, types.BoolValue(false))
-	reset("hostsallow", cfg.HostsAllow, &m.HostsAllow, empty)
-	reset("hostsdeny", cfg.HostsDeny, &m.HostsDeny, empty)
+	reset("hostsallow", cfg.HostsAllow, &m.HostsAllow, emptyUnordered)
+	reset("hostsdeny", cfg.HostsDeny, &m.HostsDeny, emptyUnordered)
 	reset("acl", cfg.ACL, &m.ACL, types.BoolValue(true))
 	reset("durablehandle", cfg.DurableHandle, &m.DurableHandle, types.BoolValue(true))
 	reset("streams", cfg.Streams, &m.Streams, types.BoolValue(true))

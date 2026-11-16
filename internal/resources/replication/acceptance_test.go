@@ -62,6 +62,69 @@ func TestAccReplication_basic(t *testing.T) {
 	})
 }
 
+// TestAccReplication_reorderNoDiff verifies the pool #66 bug-class fix for the
+// order-insensitive string-set attributes now backed by normalize.UnorderedList:
+// re-applying the same values in a different order than they were created (and
+// than replication.query returns them) must produce an empty plan, not a
+// perpetual update diff. properties_exclude is the representative attribute (it
+// needs no extra server fixtures); the same UnorderedList custom type backs
+// source_datasets, exclude, naming_schema and also_include_naming_schema.
+func TestAccReplication_reorderNoDiff(t *testing.T) {
+	name := acctest.RandName("tf-acc-replord")
+	pool := acctest.TestPool()
+	src := acctest.RandName("tf-acc-replord-src")
+	dst := acctest.RandName("tf-acc-replord-dst")
+	cfg := func(propsExclude []string) string {
+		quoted := make([]string, len(propsExclude))
+		for i, p := range propsExclude {
+			quoted[i] = fmt.Sprintf("%q", p)
+		}
+		return fmt.Sprintf(`
+resource "truenas_dataset" "src" {
+  name = "%[1]s/%[2]s"
+}
+
+resource "truenas_dataset" "dst" {
+  name = "%[1]s/%[3]s"
+}
+
+resource "truenas_replication_task" "test" {
+  name             = %[4]q
+  direction        = "PUSH"
+  transport        = "LOCAL"
+  source_datasets  = [truenas_dataset.src.name]
+  target_dataset   = truenas_dataset.dst.name
+  recursive        = false
+  auto             = false
+  retention_policy = "SOURCE"
+
+  also_include_naming_schema = ["auto-%%Y-%%m-%%d_%%H-%%M"]
+
+  properties         = true
+  properties_exclude = [%[5]s]
+}
+`, pool, src, dst, name, strings.Join(quoted, ", "))
+	}
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckReplicationDestroyed(name),
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + cfg([]string{"compression", "quota", "readonly"}),
+				Check: resource.TestCheckResourceAttr(
+					"truenas_replication_task.test", "properties_exclude.#", "3"),
+			},
+			// Same three property names, different order: must be a no-op plan.
+			{
+				Config:             acctest.ProviderConfig() + cfg([]string{"readonly", "compression", "quota"}),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+		},
+	})
+}
+
 func testAccReplicationConfig(name, srcDS, dstDS string, enabled bool) string {
 	pool := acctest.TestPool()
 	return fmt.Sprintf(`

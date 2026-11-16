@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 func strList(vals ...string) types.List {
@@ -34,8 +35,8 @@ func TestNFSApiPayload_MapallSecurityExpose(t *testing.T) {
 		ReadOnly: types.BoolNull(),
 		MapRoot:  types.StringNull(),
 		MapGroup: types.StringNull(),
-		Networks: types.ListNull(types.StringType),
-		Hosts:    types.ListNull(types.StringType),
+		Networks: normalize.NewUnorderedListNull(types.StringType),
+		Hosts:    normalize.NewUnorderedListNull(types.StringType),
 	}
 
 	p := m.apiPayload()
@@ -72,8 +73,8 @@ func TestNFSApiPayload_OmitsUnset(t *testing.T) {
 		ReadOnly:  types.BoolNull(),
 		MapRoot:   types.StringNull(),
 		MapGroup:  types.StringNull(),
-		Networks:  types.ListNull(types.StringType),
-		Hosts:     types.ListNull(types.StringType),
+		Networks:  normalize.NewUnorderedListNull(types.StringType),
+		Hosts:     normalize.NewUnorderedListNull(types.StringType),
 	}
 	p := m.apiPayload()
 	for _, k := range []string{"security", "expose_snapshots"} {

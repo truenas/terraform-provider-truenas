@@ -10,6 +10,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // TargetGroupModel maps to the nested groups list items.
@@ -32,14 +34,18 @@ var iscsiParamsAttrTypes = map[string]attr.Type{
 
 // ISCSITargetModel is the Terraform state model for truenas_iscsi_target.
 type ISCSITargetModel struct {
-	ID              types.Int64  `tfsdk:"id"`
-	Name            types.String `tfsdk:"name"`
-	Alias           types.String `tfsdk:"alias"`            // Optional, nullable
-	Mode            types.String `tfsdk:"mode"`             // ISCSI, FC, BOTH
-	Groups          types.List   `tfsdk:"groups"`           // List[TargetGroupModel]
-	AuthNetworks    types.List   `tfsdk:"auth_networks"`    // List[String]
-	IscsiParameters types.Object `tfsdk:"iscsi_parameters"` // nested; null when unset
-	RelTgtID        types.Int64  `tfsdk:"rel_tgt_id"`       // Computed only
+	ID     types.Int64  `tfsdk:"id"`
+	Name   types.String `tfsdk:"name"`
+	Alias  types.String `tfsdk:"alias"`  // Optional, nullable
+	Mode   types.String `tfsdk:"mode"`   // ISCSI, FC, BOTH
+	Groups types.List   `tfsdk:"groups"` // List[TargetGroupModel]
+	// AuthNetworks is an order-insensitive set of CIDR strings:
+	// iscsi.target.query returns them in its own order, which need not match
+	// config, so an ordinary types.List would diff on every plan after a
+	// reorder (pool #66 bug class).
+	AuthNetworks    normalize.UnorderedList `tfsdk:"auth_networks"`    // List[String]
+	IscsiParameters types.Object            `tfsdk:"iscsi_parameters"` // nested; null when unset
+	RelTgtID        types.Int64             `tfsdk:"rel_tgt_id"`       // Computed only
 }
 
 // targetGroupAPI is the JSON wire format for a group entry.
@@ -116,7 +122,7 @@ func responseToModel(ctx context.Context, api *targetAPI, m *ISCSITargetModel) d
 	if authNetworks == nil {
 		authNetworks = []string{}
 	}
-	anList, d := types.ListValueFrom(ctx, types.StringType, authNetworks)
+	anList, d := normalize.NewUnorderedListValueFrom(ctx, types.StringType, authNetworks)
 	diags.Append(d...)
 	m.AuthNetworks = anList
 

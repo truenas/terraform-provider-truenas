@@ -95,6 +95,19 @@ func TestGroupSchema(t *testing.T) {
 			t.Errorf("%q is %T, want schema.ListAttribute", listField, attr)
 		}
 	}
+
+	// sudo_commands lists are order-insensitive sets on the server, so they use
+	// the UnorderedList custom type; otherwise a server reorder diffs forever
+	// (the #66 bug class).
+	for _, sudoField := range []string{"sudo_commands", "sudo_commands_nopasswd"} {
+		la, ok := s.Attributes[sudoField].(schema.ListAttribute)
+		if !ok {
+			t.Fatalf("%q is %T, want schema.ListAttribute", sudoField, s.Attributes[sudoField])
+		}
+		if _, ok := la.CustomType.(normalize.UnorderedListType); !ok {
+			t.Errorf("%q CustomType is %T, want normalize.UnorderedListType", sudoField, la.CustomType)
+		}
+	}
 }
 
 // TestGroupCreatePayload verifies that createPayload includes gid and name,
@@ -106,8 +119,8 @@ func TestGroupCreatePayload(t *testing.T) {
 		GID:                  types.Int64Value(3000),
 		Name:                 types.StringValue("testgroup"),
 		SMB:                  types.BoolValue(true),
-		SudoCommands:         types.ListValueMust(types.StringType, []attr.Value{}),
-		SudoCommandsNoPasswd: types.ListValueMust(types.StringType, []attr.Value{}),
+		SudoCommands:         normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
+		SudoCommandsNoPasswd: normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
 		Builtin:              types.BoolValue(false),
 		Immutable:            types.BoolValue(false),
 		Local:                types.BoolValue(true),
@@ -154,8 +167,8 @@ func TestGroupCreatePayload_NullGID(t *testing.T) {
 		GID:                  types.Int64Null(),
 		Name:                 types.StringValue("testgroup"),
 		SMB:                  types.BoolValue(true),
-		SudoCommands:         types.ListValueMust(types.StringType, []attr.Value{}),
-		SudoCommandsNoPasswd: types.ListValueMust(types.StringType, []attr.Value{}),
+		SudoCommands:         normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
+		SudoCommandsNoPasswd: normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
 		Builtin:              types.BoolValue(false),
 		Immutable:            types.BoolValue(false),
 		Local:                types.BoolValue(true),
@@ -190,12 +203,12 @@ func TestGroupUpdatePayload(t *testing.T) {
 		Name:                 types.StringValue("testgroup"),
 		SMB:                  types.BoolValue(true),
 		Users:                mustUsers(),
-		SudoCommands:         types.ListValueMust(types.StringType, []attr.Value{types.StringValue("/usr/bin/ls")}),
-		SudoCommandsNoPasswd: types.ListValueMust(types.StringType, []attr.Value{}),
+		SudoCommands:         normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{types.StringValue("/usr/bin/ls")})},
+		SudoCommandsNoPasswd: normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
 	}
 	m := prior
 	m.SMB = types.BoolUnknown()
-	m.SudoCommandsNoPasswd = types.ListUnknown(types.StringType)
+	m.SudoCommandsNoPasswd = normalize.NewUnorderedListUnknown(types.StringType)
 	m.Users = mustUsers(types.Int64Value(7))
 
 	payload, diags := m.updatePayload(ctx, prior)
@@ -220,8 +233,8 @@ func TestGroupCreatePayload_OmitsUnset(t *testing.T) {
 		Name:                 types.StringValue("g"),
 		SMB:                  types.BoolUnknown(),
 		Users:                normalize.NewUnorderedListUnknown(types.Int64Type),
-		SudoCommands:         types.ListUnknown(types.StringType),
-		SudoCommandsNoPasswd: types.ListNull(types.StringType),
+		SudoCommands:         normalize.NewUnorderedListUnknown(types.StringType),
+		SudoCommandsNoPasswd: normalize.NewUnorderedListNull(types.StringType),
 	}
 	payload, diags := m.createPayload(context.Background())
 	if diags.HasError() {

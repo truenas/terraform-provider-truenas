@@ -12,6 +12,7 @@ import (
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ datasource.DataSource = &NetworkConfigDataSource{}
@@ -52,6 +53,7 @@ func (d *NetworkConfigDataSource) Schema(_ context.Context, _ datasource.SchemaR
 			},
 			"hosts": dschema.ListAttribute{
 				Computed:    true,
+				CustomType:  normalize.UnorderedListOf(types.StringType),
 				ElementType: types.StringType,
 				Description: "Additional /etc/hosts entries.",
 			},

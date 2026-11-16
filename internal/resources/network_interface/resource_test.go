@@ -7,12 +7,19 @@ import (
 	"context"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
-func stringList(t *testing.T, ctx context.Context, vals []string) types.List {
+// stringList builds the order-insensitive list value used by the converted
+// bridge_members / lag_ports model fields.
+func stringList(t *testing.T, ctx context.Context, vals []string) normalize.UnorderedList {
 	t.Helper()
-	l, diags := types.ListValueFrom(ctx, types.StringType, vals)
+	l, diags := normalize.NewUnorderedListValueFrom(ctx, types.StringType, vals)
 	if diags.HasError() {
 		t.Fatalf("building string list: %v", diags)
 	}
@@ -337,11 +344,11 @@ func cleanPhysicalConfig() NetworkInterfaceModel {
 		IPv4DHCP:            types.BoolValue(true),
 		IPv6Auto:            types.BoolValue(false),
 		Aliases:             types.ListNull(types.ObjectType{AttrTypes: aliasAttrTypes}),
-		BridgeMembers:       types.ListNull(types.StringType),
+		BridgeMembers:       normalize.NewUnorderedListNull(types.StringType),
 		STP:                 types.BoolNull(),
 		EnableLearning:      types.BoolNull(),
 		LagProtocol:         types.StringNull(),
-		LagPorts:            types.ListNull(types.StringType),
+		LagPorts:            normalize.NewUnorderedListNull(types.StringType),
 		LacpduRate:          types.StringNull(),
 		XmitHashPolicy:      types.StringNull(),
 		VlanParentInterface: types.StringNull(),
@@ -513,5 +520,36 @@ func TestResponseToModel_Aliases(t *testing.T) {
 	}
 	if aliases[0].Type.ValueString() != "INET" {
 		t.Errorf("alias type = %q, want INET", aliases[0].Type.ValueString())
+	}
+}
+
+// TestSchema_UnorderedListCustomType verifies that the set-valued string list
+// attributes (bridge_members, lag_ports) carry the normalize.UnorderedListType
+// custom type in both the resource and datasource schemas, so a server reorder
+// does not perpetually diff (the pool #66 bug class). The datasource CustomType
+// is required too: without it State.Set fails at runtime, which the build does
+// not catch.
+func TestSchema_UnorderedListCustomType(t *testing.T) {
+	res := resourceSchema()
+	for _, name := range []string{"bridge_members", "lag_ports"} {
+		attr, ok := res.Attributes[name].(schema.ListAttribute)
+		if !ok {
+			t.Fatalf("resource attribute %q is not a ListAttribute", name)
+		}
+		if _, ok := attr.CustomType.(normalize.UnorderedListType); !ok {
+			t.Errorf("resource %q CustomType = %T, want normalize.UnorderedListType", name, attr.CustomType)
+		}
+	}
+
+	var dresp datasource.SchemaResponse
+	(&NetworkInterfaceDataSource{}).Schema(context.Background(), datasource.SchemaRequest{}, &dresp)
+	for _, name := range []string{"bridge_members", "lag_ports"} {
+		attr, ok := dresp.Schema.Attributes[name].(dschema.ListAttribute)
+		if !ok {
+			t.Fatalf("datasource attribute %q is not a ListAttribute", name)
+		}
+		if _, ok := attr.CustomType.(normalize.UnorderedListType); !ok {
+			t.Errorf("datasource %q CustomType = %T, want normalize.UnorderedListType", name, attr.CustomType)
+		}
 	}
 }

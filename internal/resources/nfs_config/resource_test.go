@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 // int64Ptr is a small test helper for building *int64 API values.
@@ -26,11 +27,11 @@ func int64Ptr(v int64) *int64 { return &v }
 func baseModel(ctx context.Context, t *testing.T) *NFSConfigModel {
 	t.Helper()
 
-	protocols, diags := types.ListValueFrom(ctx, types.StringType, []string{"NFSV3", "NFSV4"})
+	protocols, diags := normalize.NewUnorderedListValueFrom(ctx, types.StringType, []string{"NFSV3", "NFSV4"})
 	if diags.HasError() {
 		t.Fatalf("unexpected error building list: %v", diags)
 	}
-	bindip, diags := types.ListValueFrom(ctx, types.StringType, []string{"192.0.2.10"})
+	bindip, diags := normalize.NewUnorderedListValueFrom(ctx, types.StringType, []string{"192.0.2.10"})
 	if diags.HasError() {
 		t.Fatalf("unexpected error building list: %v", diags)
 	}
@@ -209,7 +210,7 @@ func TestResponseToModel_ListsNilBecomeEmptyList(t *testing.T) {
 		t.Fatalf("unexpected error: %v", diags)
 	}
 
-	for name, l := range map[string]types.List{
+	for name, l := range map[string]normalize.UnorderedList{
 		"protocols": m.Protocols,
 		"bindip":    m.BindIP,
 	} {
@@ -377,10 +378,10 @@ func TestUpdatePayload_OnlyKnownFieldsSent(t *testing.T) {
 	m := &NFSConfigModel{
 		Servers:         types.Int64Null(),
 		AllowNonroot:    types.BoolNull(),
-		Protocols:       types.ListNull(types.StringType),
+		Protocols:       normalize.NewUnorderedListNull(types.StringType),
 		V4Domain:        types.StringUnknown(),
 		V4Krb:           types.BoolNull(),
-		BindIP:          types.ListUnknown(types.StringType),
+		BindIP:          normalize.NewUnorderedListUnknown(types.StringType),
 		MountdPort:      types.Int64Null(),
 		RPCStatdPort:    types.Int64Unknown(),
 		RPCLockdPort:    types.Int64Null(),
@@ -475,7 +476,7 @@ func TestUpdatePayload_AllKnownFieldsSent(t *testing.T) {
 // empty list is sent as an empty slice, not nil/null, for both list fields.
 func TestUpdatePayload_ListsKnownEmptyBecomeEmptySlice(t *testing.T) {
 	ctx := context.Background()
-	emptyList, diags := types.ListValueFrom(ctx, types.StringType, []string{})
+	emptyList, diags := normalize.NewUnorderedListValueFrom(ctx, types.StringType, []string{})
 	if diags.HasError() {
 		t.Fatalf("unexpected error building empty list: %v", diags)
 	}

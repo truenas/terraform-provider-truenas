@@ -21,8 +21,8 @@ type GroupModel struct {
 	Name                 types.String            `tfsdk:"name"`
 	SMB                  types.Bool              `tfsdk:"smb"`
 	Users                normalize.UnorderedList `tfsdk:"users"` // int64 user IDs who are members
-	SudoCommands         types.List              `tfsdk:"sudo_commands"`
-	SudoCommandsNoPasswd types.List              `tfsdk:"sudo_commands_nopasswd"`
+	SudoCommands         normalize.UnorderedList `tfsdk:"sudo_commands"`
+	SudoCommandsNoPasswd normalize.UnorderedList `tfsdk:"sudo_commands_nopasswd"`
 	// Computed only
 	Builtin   types.Bool `tfsdk:"builtin"`
 	Immutable types.Bool `tfsdk:"immutable"`
@@ -71,7 +71,7 @@ func responseToModel(ctx context.Context, api *groupAPI, primary map[int64]bool,
 	if sudoCmds == nil {
 		sudoCmds = []string{}
 	}
-	sl, d := types.ListValueFrom(ctx, types.StringType, sudoCmds)
+	sl, d := normalize.NewUnorderedListValueFrom(ctx, types.StringType, sudoCmds)
 	diags.Append(d...)
 	m.SudoCommands = sl
 
@@ -79,7 +79,7 @@ func responseToModel(ctx context.Context, api *groupAPI, primary map[int64]bool,
 	if sudoCmdsNP == nil {
 		sudoCmdsNP = []string{}
 	}
-	snl, d2 := types.ListValueFrom(ctx, types.StringType, sudoCmdsNP)
+	snl, d2 := normalize.NewUnorderedListValueFrom(ctx, types.StringType, sudoCmdsNP)
 	diags.Append(d2...)
 	m.SudoCommandsNoPasswd = snl
 

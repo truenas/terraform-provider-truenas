@@ -46,12 +46,12 @@ output "share_id" {
 - `comment` (String) Share comment. Removing it from the configuration clears it.
 - `enabled` (Boolean)
 - `expose_snapshots` (Boolean) Enterprise feature: expose the ZFS snapshot directory for the export. The export path must be the root directory of a ZFS dataset. Defaults to `false`.
-- `hosts` (List of String) List of allowed hosts (IP or hostname). Empty or omitted allows every host.
+- `hosts` (List of String) List of allowed hosts (IP or hostname). Order is not significant. Empty or omitted allows every host.
 - `mapall_group` (String) Map all client groups to this group. Mutually exclusive with maproot_group.
 - `mapall_user` (String) Map all client users to this user. Mutually exclusive with maproot_user.
 - `maproot_group` (String) Map root group to this group. Mutually exclusive with mapall_group.
 - `maproot_user` (String) Map root user to this user.
-- `networks` (List of String) List of allowed networks in CIDR notation. TrueNAS stores the network address (host bits cleared) and a bare address as /32 (/128), so 192.168.1.10/24 equals 192.168.1.0/24 and 10.1.2.3 equals 10.1.2.3/32. Empty or omitted allows every network.
+- `networks` (List of String) List of allowed networks in CIDR notation. TrueNAS stores the network address (host bits cleared) and a bare address as /32 (/128), so 192.168.1.10/24 equals 192.168.1.0/24 and 10.1.2.3 equals 10.1.2.3/32. Order is not significant. Empty or omitted allows every network.
 - `ro` (Boolean) Export as read-only. Defaults to `false`.
 - `security` (List of String) NFS security flavors for the export, in order of preference: SYS, KRB5, KRB5I, KRB5P. Empty or omitted uses the server's default flavors.
 

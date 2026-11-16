@@ -138,6 +138,52 @@ func TestAccNFSConfig_setAndRestore(t *testing.T) {
 	})
 }
 
+// TestAccNFSConfig_reorderNoDiff verifies the pool #66 bug class fix for the
+// NFS service configuration: protocols is an order-insensitive list, so
+// re-applying the same versions in a different order than nfs.config returns
+// them must produce an empty plan, not a perpetual update diff. It mutates
+// the live singleton, so it requires TRUENAS_DISRUPTIVE=1 and restores every
+// written key from t.Cleanup. protocols has only two valid values (NFSV3,
+// NFSV4), so the reorder is a two-element swap.
+func TestAccNFSConfig_reorderNoDiff(t *testing.T) {
+	acctest.DisruptiveCheck(t)
+	restoreConfigKeys(t,
+		"servers", "allow_nonroot", "protocols", "v4_krb", "bindip", "mountd_port", "rpcstatd_port",
+		"rpclockd_port", "mountd_log", "statd_lockd_log", "userd_manage_gids", "rdma", "v4_domain")
+
+	orig := readNFSConfigOriginal(t)
+	t.Cleanup(func() { restoreNFSConfig(t, orig) })
+
+	create := acctest.ProviderConfig() + testAccNFSConfigReorderConfig(`["NFSV3", "NFSV4"]`)
+	reordered := acctest.ProviderConfig() + testAccNFSConfigReorderConfig(`["NFSV4", "NFSV3"]`)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		TerraformVersionChecks:   []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_12_0)},
+		Steps: []resource.TestStep{
+			{
+				Config: create,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_nfs_config.test", "protocols.#", "2"),
+				),
+			},
+			{
+				Config:             reordered,
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+		},
+	})
+}
+
+func testAccNFSConfigReorderConfig(protocolsHCL string) string {
+	return fmt.Sprintf(`
+resource "truenas_nfs_config" "test" {
+  protocols = %s
+}
+`, protocolsHCL)
+}
+
 // endpointHost extracts the host (the box's management IP) from
 // TRUENAS_ENDPOINT (wss://<host>/api/current). NFS bindip must be a real
 // interface IP from nfs.bindip_choices — the box's own IP — so deriving it here

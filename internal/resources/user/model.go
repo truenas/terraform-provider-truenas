@@ -16,27 +16,27 @@ import (
 
 // UserModel is the Terraform state model for truenas_user.
 type UserModel struct {
-	ID                   types.Int64         `tfsdk:"id"`
-	UID                  types.Int64         `tfsdk:"uid"`
-	Username             types.String        `tfsdk:"username"`
-	FullName             types.String        `tfsdk:"full_name"`
-	Email                types.String        `tfsdk:"email"`
-	Home                 types.String        `tfsdk:"home"`
-	HomeMode             normalize.OctalMode `tfsdk:"home_mode"`
-	Shell                types.String        `tfsdk:"shell"`
-	Locked               types.Bool          `tfsdk:"locked"`
-	PasswordDisabled     types.Bool          `tfsdk:"password_disabled"`
-	SMB                  types.Bool          `tfsdk:"smb"`
-	Webshare             types.Bool          `tfsdk:"webshare"`
-	SSHPasswordEnabled   types.Bool          `tfsdk:"ssh_password_enabled"`
-	SSHPubKey            normalize.Trimmed   `tfsdk:"sshpubkey"`
-	SudoCommands         types.List          `tfsdk:"sudo_commands"`
-	SudoCommandsNoPasswd types.List          `tfsdk:"sudo_commands_nopasswd"`
-	Groups               types.List          `tfsdk:"groups"`
-	Group                types.Int64         `tfsdk:"group"`
-	GroupCreate          types.Bool          `tfsdk:"group_create"`
-	Password             types.String        `tfsdk:"password"`
-	PasswordWOVersion    types.Int64         `tfsdk:"password_wo_version"`
+	ID                   types.Int64             `tfsdk:"id"`
+	UID                  types.Int64             `tfsdk:"uid"`
+	Username             types.String            `tfsdk:"username"`
+	FullName             types.String            `tfsdk:"full_name"`
+	Email                types.String            `tfsdk:"email"`
+	Home                 types.String            `tfsdk:"home"`
+	HomeMode             normalize.OctalMode     `tfsdk:"home_mode"`
+	Shell                types.String            `tfsdk:"shell"`
+	Locked               types.Bool              `tfsdk:"locked"`
+	PasswordDisabled     types.Bool              `tfsdk:"password_disabled"`
+	SMB                  types.Bool              `tfsdk:"smb"`
+	Webshare             types.Bool              `tfsdk:"webshare"`
+	SSHPasswordEnabled   types.Bool              `tfsdk:"ssh_password_enabled"`
+	SSHPubKey            normalize.Trimmed       `tfsdk:"sshpubkey"`
+	SudoCommands         normalize.UnorderedList `tfsdk:"sudo_commands"`
+	SudoCommandsNoPasswd normalize.UnorderedList `tfsdk:"sudo_commands_nopasswd"`
+	Groups               types.List              `tfsdk:"groups"`
+	Group                types.Int64             `tfsdk:"group"`
+	GroupCreate          types.Bool              `tfsdk:"group_create"`
+	Password             types.String            `tfsdk:"password"`
+	PasswordWOVersion    types.Int64             `tfsdk:"password_wo_version"`
 	// Computed only
 	Builtin   types.Bool `tfsdk:"builtin"`
 	Immutable types.Bool `tfsdk:"immutable"`
@@ -45,26 +45,26 @@ type UserModel struct {
 
 // UserDatasourceModel is UserModel without the write-only password field.
 type UserDatasourceModel struct {
-	ID                   types.Int64  `tfsdk:"id"`
-	UID                  types.Int64  `tfsdk:"uid"`
-	Username             types.String `tfsdk:"username"`
-	FullName             types.String `tfsdk:"full_name"`
-	Email                types.String `tfsdk:"email"`
-	Home                 types.String `tfsdk:"home"`
-	Shell                types.String `tfsdk:"shell"`
-	Locked               types.Bool   `tfsdk:"locked"`
-	PasswordDisabled     types.Bool   `tfsdk:"password_disabled"`
-	SMB                  types.Bool   `tfsdk:"smb"`
-	Webshare             types.Bool   `tfsdk:"webshare"`
-	SSHPasswordEnabled   types.Bool   `tfsdk:"ssh_password_enabled"`
-	SSHPubKey            types.String `tfsdk:"sshpubkey"`
-	SudoCommands         types.List   `tfsdk:"sudo_commands"`
-	SudoCommandsNoPasswd types.List   `tfsdk:"sudo_commands_nopasswd"`
-	Groups               types.List   `tfsdk:"groups"`
-	Group                types.Int64  `tfsdk:"group"`
-	Builtin              types.Bool   `tfsdk:"builtin"`
-	Immutable            types.Bool   `tfsdk:"immutable"`
-	Local                types.Bool   `tfsdk:"local"`
+	ID                   types.Int64             `tfsdk:"id"`
+	UID                  types.Int64             `tfsdk:"uid"`
+	Username             types.String            `tfsdk:"username"`
+	FullName             types.String            `tfsdk:"full_name"`
+	Email                types.String            `tfsdk:"email"`
+	Home                 types.String            `tfsdk:"home"`
+	Shell                types.String            `tfsdk:"shell"`
+	Locked               types.Bool              `tfsdk:"locked"`
+	PasswordDisabled     types.Bool              `tfsdk:"password_disabled"`
+	SMB                  types.Bool              `tfsdk:"smb"`
+	Webshare             types.Bool              `tfsdk:"webshare"`
+	SSHPasswordEnabled   types.Bool              `tfsdk:"ssh_password_enabled"`
+	SSHPubKey            types.String            `tfsdk:"sshpubkey"`
+	SudoCommands         normalize.UnorderedList `tfsdk:"sudo_commands"`
+	SudoCommandsNoPasswd normalize.UnorderedList `tfsdk:"sudo_commands_nopasswd"`
+	Groups               types.List              `tfsdk:"groups"`
+	Group                types.Int64             `tfsdk:"group"`
+	Builtin              types.Bool              `tfsdk:"builtin"`
+	Immutable            types.Bool              `tfsdk:"immutable"`
+	Local                types.Bool              `tfsdk:"local"`
 }
 
 // responseToDataSourceModel maps an API response onto a UserDatasourceModel.
@@ -102,7 +102,7 @@ func responseToDataSourceModel(ctx context.Context, api *userAPI, m *UserDatasou
 	if sudoCmds == nil {
 		sudoCmds = []string{}
 	}
-	sl, d := types.ListValueFrom(ctx, types.StringType, sudoCmds)
+	sl, d := normalize.NewUnorderedListValueFrom(ctx, types.StringType, sudoCmds)
 	diags.Append(d...)
 	m.SudoCommands = sl
 
@@ -110,7 +110,7 @@ func responseToDataSourceModel(ctx context.Context, api *userAPI, m *UserDatasou
 	if sudoCmdsNP == nil {
 		sudoCmdsNP = []string{}
 	}
-	snl, d2 := types.ListValueFrom(ctx, types.StringType, sudoCmdsNP)
+	snl, d2 := normalize.NewUnorderedListValueFrom(ctx, types.StringType, sudoCmdsNP)
 	diags.Append(d2...)
 	m.SudoCommandsNoPasswd = snl
 
@@ -270,7 +270,7 @@ func responseToModel(ctx context.Context, api *userAPI, m *UserModel) diag.Diagn
 	if sudoCmds == nil {
 		sudoCmds = []string{}
 	}
-	sl, d := types.ListValueFrom(ctx, types.StringType, sudoCmds)
+	sl, d := normalize.NewUnorderedListValueFrom(ctx, types.StringType, sudoCmds)
 	diags.Append(d...)
 	m.SudoCommands = sl
 
@@ -278,7 +278,7 @@ func responseToModel(ctx context.Context, api *userAPI, m *UserModel) diag.Diagn
 	if sudoCmdsNP == nil {
 		sudoCmdsNP = []string{}
 	}
-	snl, d2 := types.ListValueFrom(ctx, types.StringType, sudoCmdsNP)
+	snl, d2 := normalize.NewUnorderedListValueFrom(ctx, types.StringType, sudoCmdsNP)
 	diags.Append(d2...)
 	m.SudoCommandsNoPasswd = snl
 

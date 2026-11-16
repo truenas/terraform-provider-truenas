@@ -12,6 +12,7 @@ import (
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ datasource.DataSource = &UserDataSource{}
@@ -43,8 +44,8 @@ func (d *UserDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 			"webshare":               dschema.BoolAttribute{Computed: true, Description: "Grant the user access to the web-based file share."},
 			"ssh_password_enabled":   dschema.BoolAttribute{Computed: true},
 			"sshpubkey":              dschema.StringAttribute{Computed: true},
-			"sudo_commands":          dschema.ListAttribute{Computed: true, ElementType: types.StringType},
-			"sudo_commands_nopasswd": dschema.ListAttribute{Computed: true, ElementType: types.StringType},
+			"sudo_commands":          dschema.ListAttribute{Computed: true, ElementType: types.StringType, CustomType: normalize.UnorderedListOf(types.StringType)},
+			"sudo_commands_nopasswd": dschema.ListAttribute{Computed: true, ElementType: types.StringType, CustomType: normalize.UnorderedListOf(types.StringType)},
 			"groups":                 dschema.ListAttribute{Computed: true, ElementType: types.Int64Type},
 			"group":                  dschema.Int64Attribute{Computed: true, Description: "Primary group ID for the user."},
 			"builtin":                dschema.BoolAttribute{Computed: true},

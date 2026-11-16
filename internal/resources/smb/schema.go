@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 	"github.com/truenas/terraform-provider-truenas/internal/planmod"
 )
 
@@ -73,14 +74,22 @@ func resourceSchema() schema.Schema {
 			"hostsallow": schema.ListAttribute{
 				Optional:    true,
 				Computed:    true,
+				CustomType:  normalize.UnorderedListOf(types.StringType),
 				ElementType: types.StringType,
-				Description: "List of hosts/IPs allowed to connect. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.",
+				Description: "List of hosts/IPs allowed to connect. Order is not significant. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.",
+				PlanModifiers: []planmodifier.List{
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType)),
+				},
 			},
 			"hostsdeny": schema.ListAttribute{
 				Optional:    true,
 				Computed:    true,
+				CustomType:  normalize.UnorderedListOf(types.StringType),
 				ElementType: types.StringType,
-				Description: "List of hosts/IPs denied from connecting. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.",
+				Description: "List of hosts/IPs denied from connecting. Order is not significant. LEGACY_SHARE-only on TrueNAS 26.0; see `recyclebin` for details on the options mapping.",
+				PlanModifiers: []planmodifier.List{
+					normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType)),
+				},
 			},
 			"abe": schema.BoolAttribute{
 				Optional: true,
@@ -147,8 +156,8 @@ func resourceSchema() schema.Schema {
 				Attributes: map[string]schema.Attribute{
 					"recyclebin":            schema.BoolAttribute{Optional: true, Computed: true, Description: "LEGACY_SHARE: move deleted files to a .recycle directory."},
 					"path_suffix":           schema.StringAttribute{Optional: true, Computed: true, Description: "LEGACY_SHARE: path suffix template (e.g. %D/%U)."},
-					"hostsallow":            schema.ListAttribute{Optional: true, Computed: true, ElementType: types.StringType, Description: "Hosts/subnets allowed to connect. Valid for all purposes except EXTERNAL_SHARE."},
-					"hostsdeny":             schema.ListAttribute{Optional: true, Computed: true, ElementType: types.StringType, Description: "Hosts/subnets denied. Valid for all purposes except EXTERNAL_SHARE."},
+					"hostsallow":            schema.ListAttribute{Optional: true, Computed: true, CustomType: normalize.UnorderedListOf(types.StringType), ElementType: types.StringType, Description: "Hosts/subnets allowed to connect (order not significant). Valid for all purposes except EXTERNAL_SHARE.", PlanModifiers: []planmodifier.List{normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType))}},
+					"hostsdeny":             schema.ListAttribute{Optional: true, Computed: true, CustomType: normalize.UnorderedListOf(types.StringType), ElementType: types.StringType, Description: "Hosts/subnets denied (order not significant). Valid for all purposes except EXTERNAL_SHARE.", PlanModifiers: []planmodifier.List{normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType))}},
 					"guestok":               schema.BoolAttribute{Optional: true, Computed: true, Description: "LEGACY_SHARE: allow guest access."},
 					"streams":               schema.BoolAttribute{Optional: true, Computed: true, Description: "LEGACY_SHARE: enable alternate data streams."},
 					"durablehandle":         schema.BoolAttribute{Optional: true, Computed: true, Description: "LEGACY_SHARE: enable SMB2 durable handles."},
@@ -177,8 +186,8 @@ func resourceSchema() schema.Schema {
 				PlanModifiers: []planmodifier.Object{
 					planmod.ResetWhenUnsetObject(types.ObjectValueMust(smbAuditAttrTypes, map[string]attr.Value{
 						"enable":      types.BoolValue(false),
-						"watch_list":  types.ListValueMust(types.StringType, []attr.Value{}),
-						"ignore_list": types.ListValueMust(types.StringType, []attr.Value{}),
+						"watch_list":  normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
+						"ignore_list": normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})},
 					})),
 					objectplanmodifier.UseStateForUnknown(),
 				},
@@ -191,14 +200,22 @@ func resourceSchema() schema.Schema {
 					"watch_list": schema.ListAttribute{
 						Optional:    true,
 						Computed:    true,
+						CustomType:  normalize.UnorderedListOf(types.StringType),
 						ElementType: types.StringType,
-						Description: "Group names to audit. Empty means audit all groups.",
+						Description: "Group names to audit (order not significant). Empty means audit all groups.",
+						PlanModifiers: []planmodifier.List{
+							normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType)),
+						},
 					},
 					"ignore_list": schema.ListAttribute{
 						Optional:    true,
 						Computed:    true,
+						CustomType:  normalize.UnorderedListOf(types.StringType),
 						ElementType: types.StringType,
-						Description: "Group names to exclude from auditing.",
+						Description: "Group names to exclude from auditing (order not significant).",
+						PlanModifiers: []planmodifier.List{
+							normalize.KeepStateIfEquivalentList(normalize.UnorderedListOf(types.StringType)),
+						},
 					},
 				},
 			},

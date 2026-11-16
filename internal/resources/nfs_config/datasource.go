@@ -12,6 +12,7 @@ import (
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ datasource.DataSource = &NFSConfigDataSource{}
@@ -45,6 +46,7 @@ func (d *NFSConfigDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 			},
 			"protocols": dschema.ListAttribute{
 				Computed:    true,
+				CustomType:  normalize.UnorderedListOf(types.StringType),
 				ElementType: types.StringType,
 				Description: "NFS protocol versions served. One or more of NFSV3, NFSV4.",
 			},
@@ -58,6 +60,7 @@ func (d *NFSConfigDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 			},
 			"bindip": dschema.ListAttribute{
 				Computed:    true,
+				CustomType:  normalize.UnorderedListOf(types.StringType),
 				ElementType: types.StringType,
 				Description: "IP addresses the NFS service is bound to. Empty list means all addresses.",
 			},

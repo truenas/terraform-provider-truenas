@@ -211,6 +211,32 @@ func TestReplicationSchema(t *testing.T) {
 	}
 }
 
+// TestReplicationUnorderedListCustomType verifies that every order-insensitive
+// string-set attribute uses the normalize.UnorderedListType custom type, so a
+// server reorder of the same elements plans no diff (the pool #66 bug class).
+func TestReplicationUnorderedListCustomType(t *testing.T) {
+	s := resourceSchema()
+	for _, name := range []string{
+		"source_datasets",
+		"exclude",
+		"naming_schema",
+		"also_include_naming_schema",
+		"properties_exclude",
+	} {
+		attr, ok := s.Attributes[name]
+		if !ok {
+			t.Fatalf("schema missing %q attribute", name)
+		}
+		listAttr, ok := attr.(schema.ListAttribute)
+		if !ok {
+			t.Fatalf("%q is %T, want schema.ListAttribute", name, attr)
+		}
+		if _, ok := listAttr.CustomType.(normalize.UnorderedListType); !ok {
+			t.Errorf("%q CustomType is %T, want normalize.UnorderedListType", name, listAttr.CustomType)
+		}
+	}
+}
+
 func TestReplicationPayload_LocalTransport(t *testing.T) {
 	ctx := context.Background()
 
@@ -650,15 +676,15 @@ func TestReplicationApiPayload_OmitsUnsetOptionals(t *testing.T) {
 		Sudo:                    types.BoolNull(),
 		Compression:             types.StringNull(),
 		SpeedLimit:              types.Int64Null(),
-		SourceDatasets:          types.ListValueMust(types.StringType, []attr.Value{types.StringValue("tank/data")}),
+		SourceDatasets:          normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{types.StringValue("tank/data")})},
 		TargetDataset:           types.StringValue("backup/data"),
 		Recursive:               types.BoolValue(true),
-		Exclude:                 types.ListNull(types.StringType),
+		Exclude:                 normalize.NewUnorderedListNull(types.StringType),
 		Properties:              types.BoolNull(),
 		Replicate:               types.BoolNull(),
 		PeriodicSnapshotTasks:   normalize.NewUnorderedListNull(types.Int64Type),
-		NamingSchema:            types.ListNull(types.StringType),
-		AlsoIncludeNamingSchema: types.ListNull(types.StringType),
+		NamingSchema:            normalize.NewUnorderedListNull(types.StringType),
+		AlsoIncludeNamingSchema: normalize.NewUnorderedListNull(types.StringType),
 		NameRegex:               types.StringNull(),
 		Auto:                    types.BoolValue(true),
 		Schedule:                types.ObjectNull(scheduleAttrTypes),
@@ -689,22 +715,22 @@ func TestReplicationApiPayload_OmitsUnsetOptionals(t *testing.T) {
 // plan time) are treated as absent so partially-unknown configs don't
 // falsely trip the check.
 func TestNameRegexConflict(t *testing.T) {
-	strList := func(vals ...string) types.List {
+	strList := func(vals ...string) normalize.UnorderedList {
 		elems := make([]attr.Value, 0, len(vals))
 		for _, v := range vals {
 			elems = append(elems, types.StringValue(v))
 		}
-		return types.ListValueMust(types.StringType, elems)
+		return normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, elems)}
 	}
-	emptyList := types.ListValueMust(types.StringType, []attr.Value{})
-	nullList := types.ListNull(types.StringType)
-	unknownList := types.ListUnknown(types.StringType)
+	emptyList := normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{})}
+	nullList := normalize.NewUnorderedListNull(types.StringType)
+	unknownList := normalize.NewUnorderedListUnknown(types.StringType)
 
 	cases := []struct {
 		name                    string
 		nameRegex               types.String
-		namingSchema            types.List
-		alsoIncludeNamingSchema types.List
+		namingSchema            normalize.UnorderedList
+		alsoIncludeNamingSchema normalize.UnorderedList
 		want                    bool
 	}{
 		{"regex alone", types.StringValue("^auto-.*$"), nullList, nullList, false},
@@ -1055,15 +1081,15 @@ func baseModel(ctx context.Context, t *testing.T) ReplicationModel {
 		Sudo:                    types.BoolValue(false),
 		Compression:             types.StringNull(),
 		SpeedLimit:              types.Int64Null(),
-		SourceDatasets:          types.ListValueMust(types.StringType, []attr.Value{types.StringValue("tank/data")}),
+		SourceDatasets:          normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{types.StringValue("tank/data")})},
 		TargetDataset:           types.StringValue("backup/data"),
 		Recursive:               types.BoolValue(true),
-		Exclude:                 types.ListValueMust(types.StringType, []attr.Value{}),
+		Exclude:                 mustUnordered(types.StringType),
 		Properties:              types.BoolValue(true),
 		Replicate:               types.BoolValue(false),
 		PeriodicSnapshotTasks:   mustUnordered(types.Int64Type),
-		NamingSchema:            types.ListValueMust(types.StringType, []attr.Value{types.StringValue("auto-%Y-%m-%d")}),
-		AlsoIncludeNamingSchema: types.ListValueMust(types.StringType, []attr.Value{}),
+		NamingSchema:            normalize.UnorderedList{ListValue: types.ListValueMust(types.StringType, []attr.Value{types.StringValue("auto-%Y-%m-%d")})},
+		AlsoIncludeNamingSchema: mustUnordered(types.StringType),
 		NameRegex:               types.StringValue(""),
 		Auto:                    types.BoolValue(true),
 		Schedule:                types.ObjectNull(scheduleAttrTypes),

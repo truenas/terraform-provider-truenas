@@ -12,6 +12,7 @@ import (
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ datasource.DataSource = &NetworkInterfaceDataSource{}
@@ -47,10 +48,10 @@ func (d *NetworkInterfaceDataSource) Schema(_ context.Context, _ datasource.Sche
 					},
 				},
 			},
-			"bridge_members":        dschema.ListAttribute{Computed: true, ElementType: types.StringType},
+			"bridge_members":        dschema.ListAttribute{Computed: true, CustomType: normalize.UnorderedListOf(types.StringType), ElementType: types.StringType},
 			"stp":                   dschema.BoolAttribute{Computed: true},
 			"lag_protocol":          dschema.StringAttribute{Computed: true},
-			"lag_ports":             dschema.ListAttribute{Computed: true, ElementType: types.StringType},
+			"lag_ports":             dschema.ListAttribute{Computed: true, CustomType: normalize.UnorderedListOf(types.StringType), ElementType: types.StringType},
 			"vlan_parent_interface": dschema.StringAttribute{Computed: true},
 			"vlan_tag":              dschema.Int64Attribute{Computed: true},
 			"enable_learning":       dschema.BoolAttribute{Computed: true},

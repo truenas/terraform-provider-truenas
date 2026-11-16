@@ -6,6 +6,30 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.9.3] - 2026-11-16
+
+### Fixed
+- **Set-valued list attributes no longer show a spurious in-place change when
+  TrueNAS returns the same elements in a different order.** A list whose order
+  is not meaningful (a host allow-list, a set of networks, member ports,
+  command lists, …) was compared position-by-position, so when the API
+  reported the same entries in another order than the configuration listed
+  them, every `plan` proposed an update that never converged. These attributes
+  now compare as sets, so a reorder is a no-op while a real membership change
+  still diffs — the same class of bug as the pool topology fix in 1.9.1
+  ([#66](https://github.com/truenas/terraform-provider-truenas/issues/66)).
+  Affected: `truenas_iscsi_initiator.initiators`; `truenas_smb_share`
+  `hostsallow`/`hostsdeny` (including the nested `options` and audit
+  `watch_list`/`ignore_list`); `truenas_nfs_share` `networks`/`hosts`;
+  `truenas_nfs_config` `bindip`/`protocols`; `truenas_user` and `truenas_group`
+  `sudo_commands`/`sudo_commands_nopasswd`; `truenas_replication_task`
+  `source_datasets`/`exclude`/`properties_exclude`/`naming_schema`/
+  `also_include_naming_schema`; `truenas_network_config.hosts`;
+  `truenas_network_interface` `bridge_members`/`lag_ports`; and
+  `truenas_iscsi_target.auth_networks`. Attributes whose order is significant
+  (NFS security flavors, DNS search domains, SMB DFS target paths) are
+  unchanged.
+
 ## [1.9.2] - 2026-11-16
 
 ### Fixed

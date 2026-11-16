@@ -111,6 +111,8 @@ resource "truenas_iscsi_target" "test" {
   groups = [
     {
       portal     = truenas_iscsi_portal.fixture.id
+      initiator  = 0
+      auth       = 0
       authmethod = "NONE"
     }
   ]
@@ -143,6 +145,62 @@ resource "truenas_iscsi_target" "test" {
 				ResourceName:      "truenas_iscsi_target.test",
 				ImportState:       true,
 				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+// TestAccISCSITarget_authNetworksReorderNoDiff verifies the fix for the pool
+// #66 bug class: auth_networks is an order-insensitive set, so re-applying the
+// same CIDRs in a different order than they were created (and than
+// iscsi.target.query returns them) must produce an empty plan, not a perpetual
+// update diff.
+func TestAccISCSITarget_authNetworksReorderNoDiff(t *testing.T) {
+	portalComment := acctest.RandName("tf-acc-tgtnetord-portal")
+	name := acctest.RandName("tfacctgtnetord")
+	cfg := func(nets string) string {
+		return acctest.ProviderConfig() + fmt.Sprintf(`
+resource "truenas_iscsi_portal" "fixture" {
+  comment = %q
+  listen = [
+    {
+      ip = %q
+    }
+  ]
+}
+
+resource "truenas_iscsi_target" "test" {
+  name = %q
+  mode = "ISCSI"
+  groups = [
+    {
+      portal     = truenas_iscsi_portal.fixture.id
+      initiator  = 0
+      auth       = 0
+      authmethod = "NONE"
+    }
+  ]
+  auth_networks = %s
+}
+`, portalComment, acctest.EndpointHost(), name, nets)
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckISCSITargetDestroyed(name),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg(`["10.20.0.0/16", "192.168.77.0/24", "172.16.5.0/24"]`),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_iscsi_target.test", "auth_networks.#", "3"),
+				),
+			},
+			// Same three CIDRs, different order: must be a no-op plan.
+			{
+				Config:             cfg(`["172.16.5.0/24", "10.20.0.0/16", "192.168.77.0/24"]`),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
 			},
 		},
 	})

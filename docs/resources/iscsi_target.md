@@ -35,7 +35,7 @@ resource "truenas_iscsi_target" "vm" {
 ### Optional
 
 - `alias` (String) Optional human-readable alias for the target. Set to "" to clear it; left out of config, the server value is kept.
-- `auth_networks` (List of String) List of authorized network CIDRs.
+- `auth_networks` (List of String) List of authorized network CIDRs. Order is not significant.
 - `groups` (Attributes List) List of portal/initiator/auth group associations. (see [below for nested schema](#nestedatt--groups))
 - `iscsi_parameters` (Attributes) Optional iSCSI-specific parameters for this target. (see [below for nested schema](#nestedatt--iscsi_parameters))
 - `mode` (String) Protocol mode: ISCSI (default), FC, or BOTH.

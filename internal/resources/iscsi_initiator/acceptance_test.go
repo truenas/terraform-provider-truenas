@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -50,14 +51,43 @@ func TestAccISCSIInitiator_basic(t *testing.T) {
 	})
 }
 
+// TestAccISCSIInitiator_reorderNoDiff verifies the fix for the pool #66 bug
+// class: initiators is an order-insensitive set, so re-applying the same IQNs
+// in a different order than they were created (and than iscsi.initiator.query
+// returns them) must produce an empty plan, not a perpetual update diff.
+func TestAccISCSIInitiator_reorderNoDiff(t *testing.T) {
+	comment := acctest.RandName("tf-acc-initiator-ord")
+	a := fmt.Sprintf("iqn.2023-01.com.example:%s", acctest.RandName("a"))
+	b := fmt.Sprintf("iqn.2023-01.com.example:%s", acctest.RandName("b"))
+	c := fmt.Sprintf("iqn.2023-01.com.example:%s", acctest.RandName("c"))
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckISCSIInitiatorDestroyed(),
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ProviderConfig() + testAccISCSIInitiatorConfig(comment, []string{a, b, c}),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("truenas_iscsi_initiator.test", "initiators.#", "3"),
+				),
+			},
+			// Same three IQNs, different order: must be a no-op plan.
+			{
+				Config:             acctest.ProviderConfig() + testAccISCSIInitiatorConfig(comment, []string{c, a, b}),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+		},
+	})
+}
+
 func testAccISCSIInitiatorConfig(comment string, initiators []string) string {
-	initsStr := "[]"
-	if len(initiators) > 0 {
-		initsStr = fmt.Sprintf(`["%s"]`, initiators[0])
-		for _, iqn := range initiators[1:] {
-			initsStr = fmt.Sprintf(`%s, "%s"`, initsStr, iqn)
-		}
+	quoted := make([]string, len(initiators))
+	for i, iqn := range initiators {
+		quoted[i] = fmt.Sprintf("%q", iqn)
 	}
+	initsStr := "[" + strings.Join(quoted, ", ") + "]"
 	return fmt.Sprintf(`
 resource "truenas_iscsi_initiator" "test" {
   comment    = %q

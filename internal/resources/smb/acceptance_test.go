@@ -10,7 +10,10 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/truenas/terraform-provider-truenas/internal/acctest"
 )
 
@@ -230,6 +233,124 @@ func TestAccSMBShare_options(t *testing.T) {
 				ResourceName:      "truenas_smb_share.test",
 				ImportState:       true,
 				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+// TestAccSMBShare_hostsallowReorderNoDiff verifies the pool #66 bug class for
+// SMB: hostsallow/hostsdeny are order-insensitive sets, so re-applying the
+// same hosts in a different order than they were created (and than the server
+// returns them) must produce an empty plan, not a perpetual update diff. The
+// flat hostsallow attribute maps to a LEGACY_SHARE options.hostsallow on the
+// wire.
+func TestAccSMBShare_hostsallowReorderNoDiff(t *testing.T) {
+	ds := fmt.Sprintf("%s/%s", acctest.TestPool(), acctest.RandName("tffixreord"))
+	name := acctest.RandName("tffixreord")
+	// The top-level LEGACY_SHARE Optional+Computed bools lack UseStateForUnknown,
+	// so leaving them unset makes every re-plan show them "known after apply" —
+	// a pre-existing churn unrelated to this fix. Pin them (to their server
+	// defaults) in both steps so the empty-plan assertion isolates the one thing
+	// under test: that reordering hostsallow/hostsdeny is a no-op.
+	pinned := `
+  acl               = true
+  durablehandle     = true
+  guestok           = false
+  home              = false
+  recyclebin        = false
+  streams           = true
+  timemachine       = false
+  timemachine_quota = 0
+`
+	c1 := smbShareConfig(ds, name, pinned+`
+  hostsallow = ["10.0.0.0/8", "192.168.1.0/24", "172.16.0.0/12"]
+  hostsdeny  = ["203.0.113.0/24", "198.51.100.0/24", "192.0.2.0/24"]
+`)
+	// Same elements, different order: must be a no-op plan.
+	c2 := smbShareConfig(ds, name, pinned+`
+  hostsallow = ["172.16.0.0/12", "10.0.0.0/8", "192.168.1.0/24"]
+  hostsdeny  = ["192.0.2.0/24", "203.0.113.0/24", "198.51.100.0/24"]
+`)
+	n := "truenas_smb_share.test"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: c1,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(n, "hostsallow.#", "3"),
+					resource.TestCheckResourceAttr(n, "hostsdeny.#", "3"),
+				),
+			},
+			{
+				Config:             c2,
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+		},
+	})
+}
+
+// TestAccSMBShare_optionsHostsallowReorderNoDiff is the nested-options twin of
+// TestAccSMBShare_hostsallowReorderNoDiff: options.hostsallow/hostsdeny on a
+// DEFAULT_SHARE (26.0+) must also treat a reorder as a no-op.
+//
+// A whole-plan empty assertion cannot be used here: a DEFAULT_SHARE's many other
+// Optional+Computed options.* fields lack per-field UseStateForUnknown, so they
+// re-read as "known after apply" on any re-plan (a pre-existing SMB churn,
+// unrelated to this fix). So we assert at the nested path instead — the reorder
+// must not replace the share, and options.hostsallow/hostsdeny must stay known
+// 3-element lists rather than flip to a change/unknown. The element-level
+// order-insensitivity itself is proven by TestAccSMBShare_hostsallowReorderNoDiff
+// (which passes empty-plan on 25.10 and 26.0) plus the normalize unit tests.
+func TestAccSMBShare_optionsHostsallowReorderNoDiff(t *testing.T) {
+	if !acctest.ServerVersionAtLeast(t, 26, 0) {
+		t.Skip("smb_share options requires TrueNAS 26.0+ (discriminated purpose/options model)")
+	}
+	ds := fmt.Sprintf("%s/%s", acctest.TestPool(), acctest.RandName("tffixoreord"))
+	name := acctest.RandName("tffixoreord")
+	c1 := smbShareConfig(ds, name, `
+  purpose = "DEFAULT_SHARE"
+  options = {
+    hostsallow = ["10.0.0.0/8", "192.168.1.0/24", "172.16.0.0/12"]
+    hostsdeny  = ["203.0.113.0/24", "198.51.100.0/24", "192.0.2.0/24"]
+  }
+`)
+	c2 := smbShareConfig(ds, name, `
+  purpose = "DEFAULT_SHARE"
+  options = {
+    hostsallow = ["172.16.0.0/12", "10.0.0.0/8", "192.168.1.0/24"]
+    hostsdeny  = ["192.0.2.0/24", "203.0.113.0/24", "198.51.100.0/24"]
+  }
+`)
+	n := "truenas_smb_share.test"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: c1,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(n, "options.hostsallow.#", "3"),
+					resource.TestCheckResourceAttr(n, "options.hostsdeny.#", "3"),
+				),
+			},
+			{
+				// Re-apply the reordered config. The plan is inspected before
+				// apply: the reorder must not replace the share, and
+				// options.hostsallow/hostsdeny must stay known 3-element lists
+				// rather than flip to a change or to unknown. (A whole-plan empty
+				// assertion can't be used — see the test doc comment.)
+				Config: c2,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						acctest.ExpectNoReplace(n),
+						plancheck.ExpectKnownValue(n, tfjsonpath.New("options").AtMapKey("hostsallow"), knownvalue.ListSizeExact(3)),
+						plancheck.ExpectKnownValue(n, tfjsonpath.New("options").AtMapKey("hostsdeny"), knownvalue.ListSizeExact(3)),
+					},
+				},
+				ExpectNonEmptyPlan: true, // unrelated options.* computed fields churn to unknown
 			},
 		},
 	})

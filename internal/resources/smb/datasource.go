@@ -12,6 +12,7 @@ import (
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/truenas/terraform-provider-truenas/internal/client"
+	"github.com/truenas/terraform-provider-truenas/internal/normalize"
 )
 
 var _ datasource.DataSource = &SMBShareDataSource{}
@@ -38,8 +39,8 @@ func (d *SMBShareDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 			"browsable":         dschema.BoolAttribute{Computed: true},
 			"recyclebin":        dschema.BoolAttribute{Computed: true},
 			"guestok":           dschema.BoolAttribute{Computed: true},
-			"hostsallow":        dschema.ListAttribute{Computed: true, ElementType: types.StringType},
-			"hostsdeny":         dschema.ListAttribute{Computed: true, ElementType: types.StringType},
+			"hostsallow":        dschema.ListAttribute{Computed: true, CustomType: normalize.UnorderedListOf(types.StringType), ElementType: types.StringType},
+			"hostsdeny":         dschema.ListAttribute{Computed: true, CustomType: normalize.UnorderedListOf(types.StringType), ElementType: types.StringType},
 			"abe":               dschema.BoolAttribute{Computed: true},
 			"acl":               dschema.BoolAttribute{Computed: true},
 			"durablehandle":     dschema.BoolAttribute{Computed: true},
@@ -55,8 +56,8 @@ func (d *SMBShareDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 				Attributes: map[string]dschema.Attribute{
 					"recyclebin":            dschema.BoolAttribute{Computed: true},
 					"path_suffix":           dschema.StringAttribute{Computed: true},
-					"hostsallow":            dschema.ListAttribute{Computed: true, ElementType: types.StringType},
-					"hostsdeny":             dschema.ListAttribute{Computed: true, ElementType: types.StringType},
+					"hostsallow":            dschema.ListAttribute{Computed: true, CustomType: normalize.UnorderedListOf(types.StringType), ElementType: types.StringType},
+					"hostsdeny":             dschema.ListAttribute{Computed: true, CustomType: normalize.UnorderedListOf(types.StringType), ElementType: types.StringType},
 					"guestok":               dschema.BoolAttribute{Computed: true},
 					"streams":               dschema.BoolAttribute{Computed: true},
 					"durablehandle":         dschema.BoolAttribute{Computed: true},
@@ -82,8 +83,8 @@ func (d *SMBShareDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 				Computed: true,
 				Attributes: map[string]dschema.Attribute{
 					"enable":      dschema.BoolAttribute{Computed: true},
-					"watch_list":  dschema.ListAttribute{Computed: true, ElementType: types.StringType},
-					"ignore_list": dschema.ListAttribute{Computed: true, ElementType: types.StringType},
+					"watch_list":  dschema.ListAttribute{Computed: true, CustomType: normalize.UnorderedListOf(types.StringType), ElementType: types.StringType},
+					"ignore_list": dschema.ListAttribute{Computed: true, CustomType: normalize.UnorderedListOf(types.StringType), ElementType: types.StringType},
 				},
 			},
 			"vuid":   dschema.StringAttribute{Computed: true},
